@@ -1,0 +1,22 @@
+﻿@page
+@model ClosingPreparationModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<section class="placeholder-page">
+    <p class="store-home__eyebrow">締め作業</p>
+    @if (Model.Step is not null)
+    {
+        <div class="workflow-step is-current mb-3">
+            <span class="workflow-step__number">@Model.Step</span>
+            <span class="workflow-step__body">
+                <strong>@Model.Title</strong>
+                <small>このステップを入力します</small>
+            </span>
+        </div>
+    }
+    <h1>@Model.Title</h1>
+    <p>この機能は準備中です。現在はDB更新を行いません。</p>
+    <a class="btn btn-outline-secondary btn-lg" asp-page="/Closing/Index">締め作業へ戻る</a>
+</section>

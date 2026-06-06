@@ -1,0 +1,91 @@
+@page
+@model BusinessModel
+@{
+    ViewData["Title"] = "営業中";
+}
+
+<section class="store-home">
+    <div class="store-home__hero">
+        <p class="store-home__eyebrow">営業中</p>
+        <h1>営業中画面</h1>
+        <p>伝票起こしと当日伝票の確認・編集・会計を行います。</p>
+    </div>
+
+    @if (Model.CurrentBusinessDay is null)
+    {
+        <div class="business-day-status is-closed">
+            <div>
+                <p class="store-home__eyebrow">営業日</p>
+                <h2>営業日は開始されていません</h2>
+                <p>営業中画面を使う前に開け作業を実行してください。</p>
+            </div>
+            <a class="btn btn-primary btn-lg" asp-page="/Opening">開け作業</a>
+        </div>
+    }
+    else
+    {
+        <div class="business-day-status is-open">
+            <div>
+                <p class="store-home__eyebrow">営業日</p>
+                <h2>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") 営業中</h2>
+                <p>開け時刻: @Model.CurrentBusinessDay.OpenedAt.ToLocalTime().ToString("HH:mm")</p>
+            </div>
+            <a class="btn btn-outline-light btn-lg" asp-page="/Closing/Index">締め作業へ</a>
+        </div>
+
+        <div class="business-actions">
+            @if (Model.SlipsEnabled)
+            {
+                <a class="btn btn-primary btn-lg" asp-page="/Slips/Create">伝票起こし</a>
+            }
+            <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">ホームへ戻る</a>
+        </div>
+
+        <section class="slip-list-panel">
+            <div class="slip-list-panel__header">
+                <div>
+                    <p class="store-home__eyebrow">当日伝票</p>
+                    <h2>伝票一覧</h2>
+                </div>
+                <span class="badge text-bg-secondary">@Model.Slips.Count 件</span>
+            </div>
+
+            @if (Model.Slips.Count == 0)
+            {
+                <div class="alert alert-secondary mb-0">
+                    当日の伝票はまだありません。
+                </div>
+            }
+            else
+            {
+                <div class="slip-list">
+                    @foreach (var slip in Model.Slips)
+                    {
+                        <article class="slip-list__row">
+                            <div class="slip-list__main">
+                                <strong>@slip.TableDisplayName</strong>
+                                <span>@slip.OpenedAt.ToLocalTime().ToString("HH:mm") 入店</span>
+                                <span>@slip.CustomerCount 人</span>
+                                <span class="badge @(slip.Status == "open" ? "text-bg-success" : "text-bg-secondary")">@slip.Status</span>
+                            </div>
+                            <div class="slip-list__sub">
+                                <span>伝票ID: @slip.SlipId</span>
+                                @if (!string.IsNullOrWhiteSpace(slip.Memo))
+                                {
+                                    <span>@slip.Memo</span>
+                                }
+                            </div>
+                            <div class="slip-list__actions">
+                                <a class="btn btn-outline-primary" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">詳細表示・編集</a>
+                                @if (Model.CheckoutEnabled && slip.Status == "open")
+                                {
+                                    <a class="btn btn-primary" asp-page="/Checkout/Index" asp-route-slipId="@slip.SlipId">会計処理</a>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    }
+</section>

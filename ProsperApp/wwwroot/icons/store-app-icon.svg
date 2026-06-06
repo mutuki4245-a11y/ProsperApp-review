@@ -1,0 +1,12 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="店舗用アプリアイコン">
+  <rect width="512" height="512" rx="96" fill="#102a43"/>
+  <path d="M116 214h280v210H116z" fill="#f8fafc"/>
+  <path d="M92 186l44-96h240l44 96z" fill="#1f7a8c"/>
+  <path d="M136 90h240l44 96H92z" fill="#2dd4bf" opacity=".35"/>
+  <path d="M116 214h280v54H116z" fill="#e2e8f0"/>
+  <rect x="152" y="296" width="92" height="128" rx="10" fill="#102a43"/>
+  <rect x="276" y="296" width="72" height="58" rx="8" fill="#1f7a8c"/>
+  <circle cx="226" cy="360" r="7" fill="#f8fafc"/>
+  <path d="M156 126h32l-22 60h-38zM224 126h32l-10 60h-40zM292 126h32l10 60h-40zM360 126h32l28 60h-38z" fill="#f8fafc" opacity=".92"/>
+  <text x="256" y="260" text-anchor="middle" font-family="Arial, sans-serif" font-size="38" font-weight="700" fill="#102a43">店舗</text>
+</svg>

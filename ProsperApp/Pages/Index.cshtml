@@ -1,0 +1,63 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "店舗ホーム";
+}
+
+<section class="store-home">
+    <div class="store-home__hero">
+        <p class="store-home__eyebrow">店舗用アプリ</p>
+        <h1>店舗業務メニュー</h1>
+        <p>開け作業、営業中処理、締め作業を順番に進めます。</p>
+    </div>
+
+    <div class="business-day-status @(Model.CurrentBusinessDay is null ? "is-closed" : "is-open")">
+        <div>
+            <p class="store-home__eyebrow">営業日</p>
+            @if (Model.CurrentBusinessDay is null)
+            {
+                <h2>営業日は開始されていません</h2>
+                <p>最初に開け作業を実行してください。</p>
+            }
+            else
+            {
+                <h2>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") 営業中</h2>
+                <p>開始時刻: @Model.CurrentBusinessDay.OpenedAt.ToLocalTime().ToString("HH:mm")</p>
+            }
+        </div>
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <a class="btn btn-primary btn-lg" asp-page="/Opening/Casts">開け作業</a>
+        }
+        else
+        {
+            <a class="btn btn-outline-light btn-lg" asp-page="/Business">営業中画面</a>
+        }
+    </div>
+
+    <div class="home-flow">
+        @if (Model.OpeningEnabled)
+        {
+            <a class="home-flow__card @(Model.CurrentBusinessDay is null ? "is-current" : "is-complete")" asp-page="/Opening/Casts">
+                <span class="home-flow__number">1</span>
+                <strong>開け作業</strong>
+                <small>キャスト情報編集、営業開始</small>
+            </a>
+        }
+
+        <a class="home-flow__card @(Model.CurrentBusinessDay is null ? "is-disabled" : "is-current")" asp-page="/Business">
+            <span class="home-flow__number">2</span>
+            <strong>営業中</strong>
+            <small>伝票起こし、当日伝票一覧、編集、会計</small>
+        </a>
+
+        @if (Model.ClosingEnabled)
+        {
+            <a class="home-flow__card @(Model.CurrentBusinessDay is null ? "is-disabled" : "")" asp-page="/Closing/Index">
+                <span class="home-flow__number">3</span>
+                <strong>締め作業</strong>
+                <small>酒代、勤怠、売上調整、領収書、営業日締め</small>
+            </a>
+        }
+    </div>
+</section>

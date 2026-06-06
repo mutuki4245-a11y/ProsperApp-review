@@ -1,0 +1,16 @@
+﻿@page
+@model SlipEditModel
+@{
+    ViewData["Title"] = "会計伝票編集";
+}
+
+<section class="placeholder-page">
+    <p class="store-home__eyebrow">会計伝票</p>
+    <h1>会計伝票編集</h1>
+    @if (Model.SlipId is not null)
+    {
+        <p>伝票ID: @Model.SlipId</p>
+    }
+    <p>指名追加、客追加、一部客退店、オーダー編集は準備中です。</p>
+    <a class="btn btn-outline-secondary btn-lg" asp-page="/Business">営業中画面へ戻る</a>
+</section>

@@ -1,0 +1,67 @@
+@page
+@model OpeningCastsModel
+@{
+    ViewData["Title"] = "キャスト情報編集";
+}
+
+<section class="opening-page">
+    <div class="store-home__hero">
+        <p class="store-home__eyebrow">開け作業</p>
+        <h1>キャスト情報編集</h1>
+        <p>営業開始前に、当日利用するキャスト情報を確認します。編集機能は後続で実装し、現時点では登録済みキャストの確認画面です。</p>
+    </div>
+
+    <div class="workflow-steps">
+        <div class="workflow-step is-current">
+            <span class="workflow-step__number">1</span>
+            <span class="workflow-step__body">
+                <strong>キャスト情報編集</strong>
+                <small>営業開始前の確認</small>
+            </span>
+        </div>
+        <a class="workflow-step" asp-page="/Opening">
+            <span class="workflow-step__number">2</span>
+            <span class="workflow-step__body">
+                <strong>営業開始</strong>
+                <small>
+                    @(Model.CurrentBusinessDay is null ? "営業日を開始する" : $"営業日 {Model.CurrentBusinessDay.BusinessDate:yyyy-MM-dd} は営業中")
+                </small>
+            </span>
+        </a>
+    </div>
+
+    <div class="slip-create__panel">
+        <h2>登録済みキャスト</h2>
+        @if (Model.Casts.Count == 0)
+        {
+            <p class="text-muted mb-0">キャストマスタが未登録、または現在の店舗設定で表示できるキャストがありません。</p>
+        }
+        else
+        {
+            <div class="cast-picker">
+                @foreach (var cast in Model.Casts)
+                {
+                    <div class="cast-picker__button btn btn-outline-primary disabled">
+                        @cast.DisplayName
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="alert alert-secondary mt-3">
+        このステップは現在、確認用です。出勤状態や当日表示名の編集は後続で追加します。
+    </div>
+
+    <div class="slip-create__actions mt-3">
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <a class="btn btn-primary btn-lg" asp-page="/Opening">営業開始へ進む</a>
+        }
+        else
+        {
+            <a class="btn btn-primary btn-lg" asp-page="/Business">営業中画面へ</a>
+        }
+        <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">ホームへ戻る</a>
+    </div>
+</section>

@@ -1,0 +1,95 @@
+@page
+@model OpeningModel
+@{
+    ViewData["Title"] = "開け作業";
+}
+
+<section class="opening-page">
+    <div class="store-home__hero">
+        <p class="store-home__eyebrow">営業開始</p>
+        <h1>開け作業</h1>
+        <p>開け作業は、キャスト情報を確認してから営業日を開始します。</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    @if (Model.CurrentBusinessDay is not null)
+    {
+        <div class="business-day-status is-open">
+            <div>
+                <p class="store-home__eyebrow">営業中</p>
+                <h2>営業日 @Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</h2>
+                <p>開始時刻: @Model.CurrentBusinessDay.OpenedAt.ToLocalTime().ToString("HH:mm")</p>
+            </div>
+            <a class="btn btn-outline-light btn-lg" asp-page="/Business">営業中画面へ</a>
+        </div>
+
+        <div class="workflow-steps">
+            <a class="workflow-step is-complete" asp-page="/Opening/Casts">
+                <span class="workflow-step__number">1</span>
+                <span class="workflow-step__body">
+                    <strong>キャスト情報編集</strong>
+                    <small>営業開始前の確認完了</small>
+                </span>
+            </a>
+            <a class="workflow-step is-complete" asp-page="/Opening">
+                <span class="workflow-step__number">2</span>
+                <span class="workflow-step__body">
+                    <strong>営業開始</strong>
+                    <small>営業日 @Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") を開始済み</small>
+                </span>
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="workflow-steps">
+            <a class="workflow-step is-complete" asp-page="/Opening/Casts">
+                <span class="workflow-step__number">1</span>
+                <span class="workflow-step__body">
+                    <strong>キャスト情報編集</strong>
+                    <small>営業開始前にキャスト情報を確認する</small>
+                </span>
+            </a>
+            <div class="workflow-step is-current">
+                <span class="workflow-step__number">2</span>
+                <span class="workflow-step__body">
+                    <strong>営業開始</strong>
+                    <small>営業日を開始する</small>
+                </span>
+            </div>
+        </div>
+
+        <form method="post" class="opening-form">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="slip-create__panel">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label asp-for="BusinessDate" class="form-label"></label>
+                        <input asp-for="BusinessDate" class="form-control form-control-lg" type="date" />
+                        <span asp-validation-for="BusinessDate" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-7">
+                        <label asp-for="Memo" class="form-label"></label>
+                        <input asp-for="Memo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら申し送り事項を入力" />
+                        <span asp-validation-for="Memo" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="slip-create__actions">
+                <button class="btn btn-primary btn-lg" type="submit">営業日を開始</button>
+                <a class="btn btn-outline-secondary btn-lg" asp-page="/Opening/Casts">キャスト情報編集へ戻る</a>
+                <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">ホームへ戻る</a>
+            </div>
+        </form>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

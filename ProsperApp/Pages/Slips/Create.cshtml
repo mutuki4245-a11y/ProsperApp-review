@@ -1,0 +1,260 @@
+@page
+@model SlipCreateModel
+@{
+    ViewData["Title"] = "会計伝票起こし";
+}
+
+<section class="slip-create">
+    <div class="slip-create__header">
+        <div>
+            <p class="store-home__eyebrow">会計伝票</p>
+            <h1>会計伝票起こし</h1>
+            <p>
+                入店時刻、卓番、客情報、指名情報を入力して、営業中伝票を作成します。
+                @if (Model.CurrentBusinessDay is not null)
+                {
+                    <span>営業日: @Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</span>
+                }
+                else if (Model.StoreContext is not null)
+                {
+                    <span>店舗: @Model.StoreContext.DepartmentName</span>
+                }
+            </p>
+        </div>
+        <a class="btn btn-outline-secondary" asp-page="/Index">店舗ホーム</a>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    <form method="post" class="slip-create__form">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+        <input asp-for="Input.OpenedAt" type="hidden" />
+        <input asp-for="Input.BusinessDate" type="hidden" />
+        <input asp-for="Input.BusinessDayId" type="hidden" />
+
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <div class="alert alert-warning">
+                営業日が開始されていません。伝票を作成する前に開け作業を実行してください。
+                <a class="alert-link" asp-page="/Opening">開け作業へ</a>
+            </div>
+        }
+
+        <div class="slip-create__panel">
+            <h2>1. 入店情報</h2>
+
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">営業日</label>
+                    <div class="business-date-display">
+                        @(Model.CurrentBusinessDay?.BusinessDate.ToString("yyyy-MM-dd") ?? "未開始")
+                    </div>
+                </div>
+
+                <div class="col-md-7">
+                    <label asp-for="Input.OpenedTime" class="form-label"></label>
+                    <select class="form-select form-select-lg slip-time-select" id="Input_OpenedTime" name="Input.OpenedTime">
+                        @foreach (var time in Model.TimeOptions)
+                        {
+                            if (Model.Input.OpenedTime == time)
+                            {
+                                <option value="@time" selected>@time</option>
+                            }
+                            else
+                            {
+                                <option value="@time">@time</option>
+                            }
+                        }
+                    </select>
+                    <span asp-validation-for="Input.OpenedTime" class="text-danger"></span>
+                    <span asp-validation-for="Input.OpenedAt" class="text-danger"></span>
+                    <div class="form-text">5分単位で選択します。初期値は現在までに経過した最も近い時刻です。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slip-create__panel">
+            <h2>2. 卓番</h2>
+            <input asp-for="Input.TableId" type="hidden" id="selectedTableId" />
+            <span asp-validation-for="Input.TableId" class="text-danger"></span>
+
+            @if (Model.Tables.Count == 0)
+            {
+                <div class="alert alert-warning mb-0">
+                    卓番マスタがありません。`store_table_master` にこの店舗の卓番を登録してください。
+                </div>
+            }
+            else
+            {
+                <div class="table-picker" role="group" aria-label="卓番選択">
+                    @foreach (var table in Model.Tables)
+                    {
+                        var selected = Model.Input.TableId == table.TableId;
+                        <button
+                            class="table-picker__button @(selected ? "is-selected" : "")"
+                            type="button"
+                            data-table-id="@table.TableId">
+                            @table.DisplayName
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="slip-create__panel">
+            <div class="slip-create__panel-title">
+                <h2>3. 客情報</h2>
+                <button class="btn btn-outline-primary" type="button" id="addCustomerButton">客を追加</button>
+            </div>
+
+            <span asp-validation-for="Input.CustomerLabels" class="text-danger"></span>
+            <div class="customer-list" id="customerList">
+                @for (var i = 0; i < Model.Input.CustomerLabels.Count; i++)
+                {
+                    <div class="customer-row" data-customer-row>
+                        <label class="customer-row__index">@(i + 1)</label>
+                        <input
+                            class="form-control form-control-lg"
+                            name="Input.CustomerLabels[@i]"
+                            value="@Model.Input.CustomerLabels[i]"
+                            maxlength="100"
+                            placeholder="客名・特徴など" />
+                        <button class="btn btn-outline-danger customer-row__remove" type="button" data-remove-customer>削除</button>
+                    </div>
+                }
+            </div>
+            <div class="form-text">入力欄1行を1人として登録します。名前は空欄でも登録できます。</div>
+        </div>
+
+        <div class="slip-create__panel">
+            <h2>4. 指名情報</h2>
+            <span asp-validation-for="Input.CastIds" class="text-danger"></span>
+
+            @if (Model.Casts.Count == 0)
+            {
+                <div class="alert alert-secondary mb-0">
+                    キャストマスタが未登録です。指名なしで伝票を作成できます。
+                </div>
+            }
+            else
+            {
+                <div class="cast-picker">
+                    @foreach (var cast in Model.Casts)
+                    {
+                        var id = $"cast_{cast.CastId}";
+                        <input
+                            class="btn-check"
+                            type="checkbox"
+                            id="@id"
+                            name="Input.CastIds"
+                            value="@cast.CastId"
+                            checked="@Model.Input.CastIds.Contains(cast.CastId)" />
+                        <label class="btn btn-outline-primary cast-picker__button" for="@id">
+                            @cast.DisplayName
+                        </label>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="slip-create__panel">
+            <h2>5. メモ</h2>
+            <textarea asp-for="Input.Memo" class="form-control form-control-lg" rows="3" placeholder="共有事項があれば入力"></textarea>
+            <span asp-validation-for="Input.Memo" class="text-danger"></span>
+        </div>
+
+        <div class="slip-create__actions">
+            <button class="btn btn-primary btn-lg" type="submit" @(Model.Tables.Count == 0 || Model.CurrentBusinessDay is null ? "disabled" : null)>伝票を作成</button>
+            <a class="btn btn-outline-secondary btn-lg" asp-page="/Slips/Edit">伝票編集へ</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const hidden = document.getElementById('selectedTableId');
+            if (hidden) {
+                document.querySelectorAll('[data-table-id]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        hidden.value = button.dataset.tableId ?? '';
+                        document.querySelectorAll('[data-table-id]').forEach((target) => {
+                            target.classList.toggle('is-selected', target === button);
+                        });
+                    });
+                });
+            }
+
+            const list = document.getElementById('customerList');
+            const addButton = document.getElementById('addCustomerButton');
+
+            const renumberRows = () => {
+                if (!list) {
+                    return;
+                }
+
+                list.querySelectorAll('[data-customer-row]').forEach((row, index) => {
+                    const label = row.querySelector('.customer-row__index');
+                    const input = row.querySelector('input');
+                    if (label) {
+                        label.textContent = String(index + 1);
+                    }
+                    if (input) {
+                        input.name = `Input.CustomerLabels[${index}]`;
+                    }
+                });
+            };
+
+            const wireRemoveButtons = () => {
+                if (!list) {
+                    return;
+                }
+
+                list.querySelectorAll('[data-remove-customer]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const rows = list.querySelectorAll('[data-customer-row]');
+                        if (rows.length <= 1) {
+                            const input = rows[0]?.querySelector('input');
+                            if (input) {
+                                input.value = '';
+                            }
+                            return;
+                        }
+
+                        button.closest('[data-customer-row]')?.remove();
+                        renumberRows();
+                    });
+                });
+            };
+
+            addButton?.addEventListener('click', () => {
+                if (!list) {
+                    return;
+                }
+
+                const count = list.querySelectorAll('[data-customer-row]').length;
+                if (count >= 20) {
+                    return;
+                }
+
+                const row = document.createElement('div');
+                row.className = 'customer-row';
+                row.dataset.customerRow = '';
+                row.innerHTML = `
+                    <label class="customer-row__index">${count + 1}</label>
+                    <input class="form-control form-control-lg" name="Input.CustomerLabels[${count}]" maxlength="100" placeholder="客名・特徴など" />
+                    <button class="btn btn-outline-danger customer-row__remove" type="button" data-remove-customer>削除</button>
+                `;
+                list.appendChild(row);
+                wireRemoveButtons();
+                row.querySelector('input')?.focus();
+            });
+
+            wireRemoveButtons();
+        })();
+    </script>
+}
