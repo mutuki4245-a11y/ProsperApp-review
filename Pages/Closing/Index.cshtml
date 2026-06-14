@@ -1,0 +1,97 @@
+@page
+@model ClosingModel
+@{
+    ViewData["Title"] = "締め作業";
+}
+
+<section class="store-home">
+    <div class="business-status-bar">
+        <div>
+            <strong>ホーム / 締め作業</strong>
+            @if (Model.CurrentBusinessDay is null)
+            {
+                <span>営業開始前</span>
+            }
+            else
+            {
+                <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 未会計 @Model.OpenSlipCount 件</span>
+            }
+        </div>
+        <div class="business-status-bar__actions">
+            @if (Model.CurrentBusinessDay is not null && Model.OpenSlipCount > 0)
+            {
+                <a class="btn btn-primary" asp-page="/Index">ホーム</a>
+            }
+            else if (Model.CurrentBusinessDay is null)
+            {
+                <a class="btn btn-primary" asp-page="/Opening/Index">営業準備</a>
+                <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+            }
+            else
+            {
+                <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <div class="workflow-steps workflow-steps--closing">
+        <div class="workflow-step is-preparing" aria-disabled="true">
+            <span class="workflow-step__number">1</span>
+            <span class="workflow-step__body">
+                <strong>酒代入力</strong>
+                <small>準備中 / 酒代の注文額・確認額を入力</small>
+            </span>
+        </div>
+        <div class="workflow-step is-preparing" aria-disabled="true">
+            <span class="workflow-step__number">2</span>
+            <span class="workflow-step__body">
+                <strong>勤怠入力</strong>
+                <small>準備中 / キャスト・スタッフの勤務情報を入力</small>
+            </span>
+        </div>
+        <div class="workflow-step is-preparing" aria-disabled="true">
+            <span class="workflow-step__number">3</span>
+            <span class="workflow-step__body">
+                <strong>キャスト売上額調整</strong>
+                <small>準備中 / 会計後のキャスト売上額を確認・調整</small>
+            </span>
+        </div>
+        @if (Model.ReceiptsEnabled)
+        {
+            <a class="workflow-step" asp-page="/Closing/Receipts">
+                <span class="workflow-step__number">4</span>
+                <span class="workflow-step__body">
+                    <strong>領収書入力</strong>
+                    <small>スキャン済み領収書を確認して簡易入力</small>
+                </span>
+            </a>
+        }
+    </div>
+
+    @if (Model.CurrentBusinessDay is not null)
+    {
+        <form method="post" asp-page-handler="CloseBusinessDay" class="closing-business-day mt-3">
+            <input asp-for="BusinessDayId" type="hidden" />
+            <div class="slip-create__panel">
+                @if (Model.OpenSlipCount > 0)
+                {
+                    <div class="alert alert-warning">
+                        未会計伝票が残っています。ホームで会計処理を完了してください。
+                        <a class="alert-link" asp-page="/Index">ホームへ戻る</a>
+                    </div>
+                }
+                <label asp-for="ClosingMemo" class="form-label">締めメモ</label>
+                <input asp-for="ClosingMemo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら共有事項を入力" />
+                <span asp-validation-for="ClosingMemo" class="text-danger"></span>
+            </div>
+            <button class="btn btn-danger btn-lg mt-3" type="submit" @(Model.OpenSlipCount > 0 ? "disabled" : null)>営業日を締める</button>
+        </form>
+    }
+</section>

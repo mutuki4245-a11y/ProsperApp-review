@@ -1,0 +1,76 @@
+@page
+@model OpeningCastsModel
+@{
+    ViewData["Title"] = "キャスト情報編集";
+}
+
+<section class="opening-page">
+    <div class="business-status-bar">
+        <div>
+            <strong>ホーム / 営業準備 / キャスト情報編集</strong>
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <form method="post" asp-page-handler="Create" class="slip-create__panel cast-admin-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div>
+            <label asp-for="Input.DisplayName" class="form-label"></label>
+            <input asp-for="Input.DisplayName" class="form-control form-control-lg" placeholder="キャスト名" />
+            <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
+        </div>
+        <button class="btn btn-primary btn-lg" type="submit">登録</button>
+    </form>
+
+    <div class="slip-create__panel">
+        <div class="opening-attendance__header">
+            <div>
+                <h2>登録済みキャスト</h2>
+                <p class="text-muted mb-0">加入日は登録日で自動設定されます。</p>
+            </div>
+            @if (Model.Casts.Count > 0)
+            {
+                <span class="opening-attendance__count">@Model.Casts.Count 名</span>
+            }
+        </div>
+
+        @if (Model.Casts.Count == 0)
+        {
+            <p class="text-muted mb-0">キャストが未登録です。</p>
+        }
+        else
+        {
+            <div class="cast-admin-table">
+                <div class="cast-admin-table__row cast-admin-table__row--header">
+                    <span>ID</span>
+                    <span>キャスト名</span>
+                    <span>加入日</span>
+                    <span></span>
+                </div>
+                @foreach (var cast in Model.Casts)
+                {
+                    <div class="cast-admin-table__row">
+                        <span>@cast.CastId</span>
+                        <strong>@cast.DisplayName</strong>
+                        <span>@cast.JoinedOn.ToString("yyyy-MM-dd")</span>
+                        <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このキャストを削除しますか？');">
+                            <input type="hidden" asp-for="DeleteCastId" value="@cast.CastId" />
+                            <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
+                        </form>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

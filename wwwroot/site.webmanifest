@@ -1,0 +1,23 @@
+﻿{
+  "name": "店舗用アプリ",
+  "short_name": "店舗アプリ",
+  "description": "会計伝票、会計、締め作業を行う店舗用Webアプリ",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
+  "orientation": "portrait-primary",
+  "background_color": "#102a43",
+  "theme_color": "#102a43",
+  "icons": [
+    {
+      "src": "/icons/store-app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

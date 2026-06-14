@@ -1,0 +1,225 @@
+﻿@page
+@model ReceiptsModel
+@{
+    ViewData["Title"] = "領収書簡易入力";
+}
+
+<div class="tablet-entry">
+    <header class="tablet-entry__header">
+        <div>
+            <h1>領収書簡易入力</h1>
+            @if (Model.CurrentReceipt is not null)
+            {
+                <div class="tablet-entry__meta">
+                    @Model.CurrentPosition / @Model.TotalCount
+                    <span>@Model.CurrentReceipt.FileName</span>
+                </div>
+            }
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.DriveAuthWarning))
+    {
+        <div class="alert alert-warning" role="alert">@Model.DriveAuthWarning</div>
+    }
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    @if (Model.CurrentReceipt is null)
+    {
+        <div class="alert alert-secondary">未入力の証憑はありません。</div>
+    }
+    else
+    {
+        <div class="tablet-entry__workspace">
+            <section class="tablet-entry__preview" aria-label="証憑プレビュー">
+                <div class="preview-toolbar">
+                    <span>@Model.CurrentReceipt.FileName</span>
+                    @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
+                    {
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="@Model.CurrentReceipt.PreviewUrl"
+                           target="_blank"
+                           rel="noopener noreferrer">別タブで開く</a>
+                    }
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
+                {
+                    <iframe id="receiptPreview"
+                            src="@(Model.CurrentReceipt.PreviewUrl)#toolbar=0&navpanes=0&view=Fit&zoom=page-fit"
+                            title="証憑プレビュー"></iframe>
+                }
+                else
+                {
+                    <div class="preview-empty">プレビューできるファイルがありません。</div>
+                }
+            </section>
+
+            <section class="tablet-entry__form" aria-label="簡易入力フォーム">
+                <form method="post" asp-page-handler="Next">
+                    <input type="hidden" asp-for="Index" />
+                    <input type="hidden" asp-for="Input.DocumentId" value="@Model.CurrentReceipt.Id" />
+                    <input type="hidden" asp-for="Input.DriveFileId" value="@Model.CurrentReceipt.DriveFileId" />
+
+                    <div class="mb-3">
+                        <label asp-for="Input.PaymentDate" class="form-label"></label>
+                        <input asp-for="Input.PaymentDate"
+                               type="date"
+                               min="@Model.PaymentDateMin.ToString("yyyy-MM-dd")"
+                               max="@Model.PaymentDateMax.ToString("yyyy-MM-dd")"
+                               class="form-control form-control-lg" />
+                        <span asp-validation-for="Input.PaymentDate" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Amount" class="form-label"></label>
+                        <input asp-for="Input.Amount"
+                               class="form-control form-control-lg"
+                               min="1"
+                               max="9999999"
+                               step="1"
+                               inputmode="numeric"
+                               autocomplete="off" />
+                        <span asp-validation-for="Input.Amount" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.AccountSubject" class="form-label"></label>
+                        <input type="hidden" asp-for="Input.AccountSubject" id="accountSubjectInput" />
+                        <div class="account-subject-picker">
+                            <div class="account-subject-selected" id="accountSubjectSelected">
+                                @(string.IsNullOrWhiteSpace(Model.Input.AccountSubject) ? "科目を選択してください" : Model.Input.AccountSubject)
+                            </div>
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-lg"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#accountSubjectModal">
+                                科目を選ぶ
+                            </button>
+                        </div>
+                        <span asp-validation-for="Input.AccountSubject" class="text-danger"></span>
+                    </div>
+
+                    <div class="modal fade" id="accountSubjectModal" tabindex="-1" aria-labelledby="accountSubjectModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-fullscreen-md-down modal-xl modal-dialog-scrollable">
+                            <div class="modal-content account-modal">
+                                <div class="modal-header">
+                                    <div>
+                                        <h2 class="modal-title" id="accountSubjectModalLabel">科目を選択</h2>
+                                        <p class="account-modal__hint">一覧から該当する項目を選択してください。</p>
+                                    </div>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="account-sheet account-sheet--modal" role="group" aria-label="科目選択">
+                            @foreach (var group in Model.AccountSubjectGroups)
+                            {
+                                <section class="account-sheet__group">
+                                    <h2>@group.Name</h2>
+                                    <div class="account-sheet__items">
+                                        @foreach (var item in group.Items)
+                                        {
+                                            var value = $"{group.Name}: {item}";
+                                            var selected = Model.Input.AccountSubject == value;
+                                            <button type="button"
+                                                    class="account-sheet__item @(selected ? "is-selected" : "")"
+                                                    data-account-value="@value">
+                                                @item
+                                            </button>
+                                        }
+                                    </div>
+                                </section>
+                            }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="Input.Description" class="form-label"></label>
+                        <textarea asp-for="Input.Description"
+                                  class="form-control form-control-lg"
+                                  rows="3"></textarea>
+                        <span asp-validation-for="Input.Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="tablet-entry__actions">
+                        <button type="submit" class="btn btn-primary btn-lg">保存して次へ</button>
+                        <button type="submit"
+                                class="btn btn-outline-secondary btn-lg"
+                                formmethod="post"
+                                asp-page-handler="Skip"
+                                formnovalidate>スキップ</button>
+                        <button type="submit"
+                                class="btn btn-outline-danger btn-lg tablet-entry__delete"
+                                formmethod="post"
+                                asp-page-handler="DeleteScanMistake"
+                                formnovalidate
+                                onclick="return confirm('スキャンミスとして、このPDFをGoogle Driveのゴミ箱へ移動し、DBを対象外にします。実行しますか？');">
+                            スキャンミスとして削除
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const input = document.getElementById('accountSubjectInput');
+            const selected = document.getElementById('accountSubjectSelected');
+            const buttons = document.querySelectorAll('[data-account-value]');
+            const modalElement = document.getElementById('accountSubjectModal');
+
+            buttons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const value = button.dataset.accountValue || '';
+                    input.value = value;
+                    selected.textContent = value;
+                    buttons.forEach((candidate) => candidate.classList.remove('is-selected'));
+                    button.classList.add('is-selected');
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    modal?.hide();
+                });
+            });
+        })();
+
+        (() => {
+            const nextPreviewUrl = '@(Model.NextPreviewUrl ?? string.Empty)';
+            if (!nextPreviewUrl) {
+                return;
+            }
+
+            const prefetch = () => {
+                const separator = nextPreviewUrl.includes('?') ? '&' : '?';
+                fetch(`${nextPreviewUrl}${separator}prefetch=1`, {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                }).catch(() => {
+                    // 先読み失敗は入力作業を妨げない。
+                });
+            };
+
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(prefetch, { timeout: 1500 });
+            } else {
+                window.setTimeout(prefetch, 750);
+            }
+        })();
+    </script>
+}
+
+
+

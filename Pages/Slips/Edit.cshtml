@@ -1,0 +1,111 @@
+@page
+@model SlipEditModel
+@{
+    ViewData["Title"] = "伝票詳細";
+    var activeOrderTotal = Model.Detail?.Orders
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+        .Sum(x => x.Amount) ?? 0;
+}
+
+<section class="slip-create">
+    <div class="business-status-bar">
+        <div>
+            <strong>ホーム / 伝票詳細</strong>
+            @if (Model.Detail is not null)
+            {
+                <span>@Model.Detail.TableDisplayName / 入店 @Model.FormatStoreTime(Model.Detail.OpenedAt)</span>
+            }
+            else
+            {
+                <span>伝票未選択</span>
+            }
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    @if (Model.SlipId is null)
+    {
+        <div class="alert alert-warning">
+            伝票が選択されていません。ホームから対象伝票を選択してください。
+        </div>
+    }
+    else if (Model.Detail is null)
+    {
+        <div class="alert alert-warning">
+            伝票を取得できません。対象伝票が営業中の店舗に存在するか確認してください。
+        </div>
+    }
+    else
+    {
+        <div class="slip-detail-summary">
+            <div>
+                <span>卓番</span>
+                <strong>@Model.Detail.TableDisplayName</strong>
+            </div>
+            <div>
+                <span>入店</span>
+                <strong>@Model.FormatStoreTime(Model.Detail.OpenedAt)</strong>
+            </div>
+            <div>
+                <span>客数</span>
+                <strong>@Model.Detail.CustomerCount</strong>
+            </div>
+            <div>
+                <span>現在合計</span>
+                <strong>@activeOrderTotal.ToString("N0") 円</strong>
+            </div>
+        </div>
+
+        <div id="slipCustomersSection">
+            <partial name="_SlipCustomers" model="Model" />
+        </div>
+
+        <div id="slipNominationsSection">
+            <partial name="_SlipNominations" model="Model" />
+        </div>
+
+        <partial name="_SlipOrders" model="Model" />
+
+        <partial name="_SlipCheckout" model="Model" />
+
+        <div class="modal fade" id="attendingCastSelectModal" tabindex="-1" aria-labelledby="attendingCastSelectModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="attendingCastSelectModalLabel">出勤キャスト選択</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body cast-select-modal">
+                        <div class="cast-select-modal__list" id="attendingCastModalList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script type="application/json" id="slipEditData">
+        @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            castOptions = Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.SearchDisplayName, department = c.DepartmentName }),
+            orderItems = Model.OrderItems.Select(x => new { id = x.ItemId, name = x.ItemName, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
+            initialOrderQueue = Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
+            showOrderModal = Model.ShowOrderModal,
+            showCheckoutModal = Model.ShowCheckoutModal,
+            showAddCustomerModal = Model.ShowAddCustomerModal,
+            showAddNominationModal = Model.ShowAddNominationModal
+        }))
+    </script>
+    <script src="~/js/features/slips-edit.js" asp-append-version="true"></script>
+}

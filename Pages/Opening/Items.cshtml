@@ -1,0 +1,392 @@
+﻿@page
+@model OpeningItemsModel
+@{
+    ViewData["Title"] = "商品管理";
+    var activeCategories = Model.Catalog.Categories
+        .Where(x => x.IsActive)
+        .OrderBy(x => x.SortOrder)
+        .ThenBy(x => x.CategoryName)
+        .ToList();
+    var categoryRows = (Model.IsAdminMode ? Model.Catalog.Categories : activeCategories)
+        .OrderBy(x => x.SortOrder)
+        .ThenBy(x => x.CategoryName)
+        .ToList();
+    var activeItems = Model.Catalog.Items
+        .Where(x => x.IsActive)
+        .OrderBy(x => x.CategoryName)
+        .ThenBy(x => x.SortOrder)
+        .ThenBy(x => x.ItemName)
+        .ToList();
+    var activeCategoryIds = activeCategories.Select(x => x.ItemCategoryId).ToHashSet();
+    var itemGroups = activeCategories
+        .Select(category => new
+        {
+            Category = category,
+            Items = activeItems
+                .Where(item => item.ItemCategoryId == category.ItemCategoryId)
+                .OrderBy(item => item.SortOrder)
+                .ThenBy(item => item.ItemName)
+                .ToList()
+        })
+        .ToList();
+    var uncategorizedItems = activeItems
+        .Where(item => item.ItemCategoryId is null || !activeCategoryIds.Contains(item.ItemCategoryId.Value))
+        .OrderBy(item => item.SortOrder)
+        .ThenBy(item => item.ItemName)
+        .ToList();
+}
+
+<section class="opening-page">
+    <div class="business-status-bar">
+        <div>
+            <strong>ホーム / 営業準備 / 商品編集</strong>
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <div class="item-admin" data-item-admin>
+        @if (Model.IsAdminMode)
+        {
+            <section class="slip-create__panel">
+                <div class="slip-create__panel-title">
+                    <h2>カテゴリ</h2>
+                </div>
+
+                <form method="post" asp-page-handler="SaveCategory" class="item-admin__form item-admin__form--category">
+                    <input type="hidden" asp-for="CategoryInput.ItemCategoryId" />
+                    <div>
+                        <label asp-for="CategoryInput.CategoryCode" class="form-label"></label>
+                        <input asp-for="CategoryInput.CategoryCode" class="form-control" placeholder="例: drink" />
+                        <span asp-validation-for="CategoryInput.CategoryCode" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="CategoryInput.CategoryName" class="form-label"></label>
+                        <input asp-for="CategoryInput.CategoryName" class="form-control" placeholder="例: ドリンク" />
+                        <span asp-validation-for="CategoryInput.CategoryName" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="CategoryInput.SortOrder" class="form-label"></label>
+                        <input asp-for="CategoryInput.SortOrder" class="form-control" type="number" min="0" step="1" />
+                        <span asp-validation-for="CategoryInput.SortOrder" class="text-danger"></span>
+                    </div>
+                    <label class="form-check item-admin__check">
+                        <input asp-for="CategoryInput.IsActive" class="form-check-input" type="checkbox" value="true" />
+                        <span class="form-check-label">有効</span>
+                    </label>
+                    <button class="btn btn-primary" type="submit">カテゴリ追加</button>
+                </form>
+
+                @if (categoryRows.Count == 0)
+                {
+                    <p class="text-muted mb-0">カテゴリが未登録です。</p>
+                }
+                else
+                {
+                    <div class="item-admin__table item-admin__table--category">
+                        @foreach (var category in categoryRows)
+                        {
+                            <form method="post" asp-page-handler="SaveCategory" class="item-admin__row item-admin__row--category">
+                                <input type="hidden" name="CategoryInput.ItemCategoryId" value="@category.ItemCategoryId" />
+                                <div class="item-admin__field">
+                                    <label>コード</label>
+                                    <input class="form-control" name="CategoryInput.CategoryCode" value="@category.CategoryCode" />
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>カテゴリ名</label>
+                                    <input class="form-control" name="CategoryInput.CategoryName" value="@category.CategoryName" />
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>表示順</label>
+                                    <input class="form-control" name="CategoryInput.SortOrder" value="@category.SortOrder" type="number" min="0" step="1" />
+                                </div>
+                                <label class="form-check item-admin__check">
+                                    <input class="form-check-input" name="CategoryInput.IsActive" type="checkbox" value="true" checked="@category.IsActive" />
+                                    <input type="hidden" name="CategoryInput.IsActive" value="false" />
+                                    <span class="form-check-label">有効</span>
+                                </label>
+                                <button class="btn btn-outline-primary" type="submit">保存</button>
+                            </form>
+                        }
+                    </div>
+                }
+            </section>
+        }
+
+        <section class="slip-create__panel">
+            <div class="slip-create__panel-title">
+                <h2>登録済み商品</h2>
+                <div class="item-admin__toolbar">
+                    @if (activeItems.Count > 0)
+                    {
+                        <span class="item-admin__count">@activeItems.Count 件</span>
+                    }
+                    @if (activeItems.Count > 1)
+                    {
+                        <button class="btn btn-outline-primary" type="button" data-item-reorder-toggle>並べ替え</button>
+                        <form method="post" asp-page-handler="ReorderItems" class="item-admin__reorder-actions" id="itemReorderForm" data-item-reorder-actions hidden>
+                            <div id="itemOrderFields"></div>
+                            <button class="btn btn-primary" type="submit">並び順を保存</button>
+                            <button class="btn btn-outline-secondary" type="button" data-item-reorder-cancel>キャンセル</button>
+                        </form>
+                    }
+                </div>
+            </div>
+
+            @if (activeCategories.Count == 0)
+            {
+                <div class="alert alert-warning mb-3">商品を追加する前にカテゴリを登録してください。</div>
+            }
+
+            @if (activeItems.Count == 0)
+            {
+                <p class="text-muted mb-3">商品が未登録です。</p>
+            }
+
+            @if (activeCategories.Count > 0 || uncategorizedItems.Count > 0)
+            {
+                <div class="item-admin__groups">
+                    @for (var groupIndex = 0; groupIndex < itemGroups.Count; groupIndex++)
+                    {
+                        var group = itemGroups[groupIndex];
+                        var isInputCategory = Model.ItemInput.ItemCategoryId == group.Category.ItemCategoryId;
+                        var itemNameInput = isInputCategory ? Model.ItemInput.ItemName : string.Empty;
+                        var defaultPriceInput = isInputCategory && Model.ItemInput.DefaultPrice > 0 ? Model.ItemInput.DefaultPrice.ToString("0") : string.Empty;
+                        var isCastBackTargetInput = isInputCategory && Model.ItemInput.IsCastBackTarget;
+                        var regularBackInput = isInputCategory && Model.ItemInput.CastBackRegularUnitAmount > 0 ? Model.ItemInput.CastBackRegularUnitAmount.ToString("0") : string.Empty;
+                        var nominationBackInput = isInputCategory && Model.ItemInput.CastBackNominationUnitAmount > 0 ? Model.ItemInput.CastBackNominationUnitAmount.ToString("0") : string.Empty;
+                        <details class="item-admin__group" @(groupIndex == 0 || isInputCategory ? "open" : null)>
+                            <summary>
+                                <span>@group.Category.CategoryName</span>
+                                <span>@group.Items.Count 件</span>
+                            </summary>
+                            <div class="item-admin__table item-admin__table--item" data-item-group-body>
+                                @foreach (var item in group.Items)
+                                {
+                                    <div class="item-admin__row item-admin__row--item" data-item-order-row data-item-id="@item.ItemId">
+                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
+                                        </div>
+                                        <div class="item-admin__field item-admin__field--name">
+                                            <label>商品名</label>
+                                            <strong>@item.ItemName</strong>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>価格</label>
+                                            <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>バック対象</label>
+                                            <span>@(item.IsCastBackTarget ? "対象" : "対象外")</span>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>通常バック</label>
+                                            <span>@item.CastBackRegularUnitAmount.ToString("N0") 円</span>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>指名バック</label>
+                                            <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
+                                        </div>
+                                        <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
+                                            <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
+                                            <button class="btn btn-outline-danger" type="submit">削除</button>
+                                        </form>
+                                    </div>
+                                }
+                                <form method="post" asp-page-handler="SaveItem" class="item-admin__row item-admin__row--add" data-item-add-row>
+                                    <input type="hidden" name="ItemInput.ItemCategoryId" value="@group.Category.ItemCategoryId" />
+                                    <div class="item-admin__field item-admin__field--name">
+                                        <label>商品追加</label>
+                                        <input class="form-control" name="ItemInput.ItemName" value="@itemNameInput" placeholder="商品名" maxlength="120" />
+                                    </div>
+                                    <div class="item-admin__field">
+                                        <label>税込価格</label>
+                                        <input class="form-control" name="ItemInput.DefaultPrice" value="@defaultPriceInput" type="number" min="0" step="1" placeholder="0" />
+                                    </div>
+                                    <label class="item-admin__field item-admin__field--check">
+                                        <span>バック対象</span>
+                                        <input class="form-check-input" name="ItemInput.IsCastBackTarget" type="checkbox" value="true" checked="@isCastBackTargetInput" />
+                                        <input type="hidden" name="ItemInput.IsCastBackTarget" value="false" />
+                                    </label>
+                                    <div class="item-admin__field">
+                                        <label>通常バック</label>
+                                        <input class="form-control" name="ItemInput.CastBackRegularUnitAmount" value="@regularBackInput" type="number" min="0" step="1" placeholder="0" />
+                                    </div>
+                                    <div class="item-admin__field">
+                                        <label>指名バック</label>
+                                        <input class="form-control" name="ItemInput.CastBackNominationUnitAmount" value="@nominationBackInput" type="number" min="0" step="1" placeholder="0" />
+                                    </div>
+                                    <button class="btn btn-primary" type="submit">追加</button>
+                                </form>
+                            </div>
+                        </details>
+                    }
+
+                    @if (uncategorizedItems.Count > 0)
+                    {
+                        <details class="item-admin__group" @(itemGroups.Count == 0 ? "open" : null)>
+                            <summary>
+                                <span>未分類</span>
+                                <span>@uncategorizedItems.Count 件</span>
+                            </summary>
+                            <div class="item-admin__table item-admin__table--item" data-item-group-body>
+                                @foreach (var item in uncategorizedItems)
+                                {
+                                    <div class="item-admin__row item-admin__row--item" data-item-order-row data-item-id="@item.ItemId">
+                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
+                                        </div>
+                                        <div class="item-admin__field item-admin__field--name">
+                                            <label>商品名</label>
+                                            <strong>@item.ItemName</strong>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>価格</label>
+                                            <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>バック対象</label>
+                                            <span>@(item.IsCastBackTarget ? "対象" : "対象外")</span>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>通常バック</label>
+                                            <span>@item.CastBackRegularUnitAmount.ToString("N0") 円</span>
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>指名バック</label>
+                                            <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
+                                        </div>
+                                        <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
+                                            <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
+                                            <button class="btn btn-outline-danger" type="submit">削除</button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
+                        </details>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const root = document.querySelector('[data-item-admin]');
+            if (!root) {
+                return;
+            }
+
+            const reorderToggle = root.querySelector('[data-item-reorder-toggle]');
+            const reorderActions = root.querySelector('[data-item-reorder-actions]');
+            const reorderCancel = root.querySelector('[data-item-reorder-cancel]');
+            const reorderForm = document.getElementById('itemReorderForm');
+            const orderFields = document.getElementById('itemOrderFields');
+
+            const isReordering = () => root.classList.contains('is-reordering');
+            const groupRows = (groupBody) => Array.from(groupBody.querySelectorAll(':scope > [data-item-order-row]'));
+
+            const updateMoveButtons = () => {
+                const reordering = isReordering();
+                root.querySelectorAll('[data-item-group-body]').forEach((groupBody) => {
+                    const rows = groupRows(groupBody);
+                    rows.forEach((row, index) => {
+                        const up = row.querySelector('[data-item-move="up"]');
+                        const down = row.querySelector('[data-item-move="down"]');
+                        if (up) {
+                            up.disabled = !reordering || index === 0;
+                        }
+                        if (down) {
+                            down.disabled = !reordering || index === rows.length - 1;
+                        }
+                    });
+                });
+            };
+
+            const setReorderMode = (enabled) => {
+                root.classList.toggle('is-reordering', enabled);
+                if (reorderToggle) {
+                    reorderToggle.hidden = enabled;
+                }
+                if (reorderActions) {
+                    reorderActions.hidden = !enabled;
+                }
+                if (enabled) {
+                    root.querySelectorAll('.item-admin__group').forEach((group) => {
+                        group.open = true;
+                    });
+                }
+                updateMoveButtons();
+            };
+
+            reorderToggle?.addEventListener('click', () => setReorderMode(true));
+            reorderCancel?.addEventListener('click', () => setReorderMode(false));
+
+            root.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-item-move]');
+                if (!button || !isReordering()) {
+                    return;
+                }
+
+                const row = button.closest('[data-item-order-row]');
+                const groupBody = row?.closest('[data-item-group-body]');
+                if (!row || !groupBody) {
+                    return;
+                }
+
+                if (button.dataset.itemMove === 'up' && row.previousElementSibling) {
+                    groupBody.insertBefore(row, row.previousElementSibling);
+                }
+
+                if (button.dataset.itemMove === 'down' && row.nextElementSibling) {
+                    groupBody.insertBefore(row.nextElementSibling, row);
+                }
+
+                updateMoveButtons();
+            });
+
+            reorderForm?.addEventListener('submit', (event) => {
+                if (!orderFields) {
+                    return;
+                }
+
+                orderFields.innerHTML = '';
+                let index = 0;
+                root.querySelectorAll('[data-item-group-body]').forEach((groupBody) => {
+                    groupRows(groupBody).forEach((row, rowIndex) => {
+                        const itemId = row.dataset.itemId;
+                        if (!itemId) {
+                            return;
+                        }
+
+                        orderFields.insertAdjacentHTML('beforeend', `
+                            <input type="hidden" name="ReorderItems[${index}].ItemId" value="${itemId}" />
+                            <input type="hidden" name="ReorderItems[${index}].SortOrder" value="${(rowIndex + 1) * 10}" />
+                        `);
+                        index += 1;
+                    });
+                });
+
+                if (index === 0) {
+                    event.preventDefault();
+                }
+            });
+
+            updateMoveButtons();
+        })();
+    </script>
+}
+

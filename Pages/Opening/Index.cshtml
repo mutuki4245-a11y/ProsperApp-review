@@ -1,0 +1,116 @@
+﻿@page
+@model OpeningModel
+@{
+    ViewData["Title"] = "営業準備";
+    var isBusinessOpen = Model.CurrentBusinessDay is not null;
+    var castReady = Model.AttendanceCasts.Count > 0;
+    var attendanceReady = isBusinessOpen || Model.SelectedAttendanceCount > 0;
+    var itemReady = Model.Items.Count > 0;
+    var castStatusText = castReady ? "確認" : "要確認";
+    var attendanceStatusText = attendanceReady ? "確認" : "要確認";
+    var itemStatusText = itemReady ? "確認" : "要確認";
+}
+
+<section class="opening-page">
+    <div class="business-status-bar opening-status-bar">
+        <div>
+            <strong>ホーム / 営業準備</strong>
+            @if (Model.CurrentBusinessDay is null)
+            {
+                <span>営業開始前</span>
+            }
+            else
+            {
+                <span>営業中 @Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt)</span>
+            }
+        </div>
+        <div class="business-status-bar__actions">
+            @if (Model.CurrentBusinessDay is not null)
+            {
+                <a class="btn btn-primary" asp-page="/Index">ホーム</a>
+            }
+            else
+            {
+                <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <div class="opening-list">
+        <a class="opening-list__card @(castReady ? "is-ready" : "needs-action")" asp-page="/Opening/Casts">
+            <span class="opening-list__body">
+                <strong>キャスト情報編集</strong>
+                <small>@(castReady ? $"{Model.AttendanceCasts.Count}名登録済み" : "未登録・登録が必要")</small>
+            </span>
+            <span class="opening-list__badge @(castReady ? "is-ready" : "needs-action")">@castStatusText</span>
+            <span class="opening-list__action">編集する</span>
+        </a>
+
+        <a class="opening-list__card @(attendanceReady ? "is-ready" : "needs-action")" asp-page="/Opening/Attendance">
+            <span class="opening-list__body">
+                <strong>出勤登録</strong>
+                <small>
+                    @if (isBusinessOpen)
+                    {
+                        <span>営業開始済み・登録内容を確認できます</span>
+                    }
+                    else
+                    {
+                        <span>@(attendanceReady ? $"{Model.SelectedAttendanceCount}名出勤予定" : "未登録・1名以上必要")</span>
+                    }
+                </small>
+            </span>
+            <span class="opening-list__badge @(attendanceReady ? "is-ready" : "needs-action")">@attendanceStatusText</span>
+            <span class="opening-list__action">登録する</span>
+        </a>
+
+        <a class="opening-list__card @(itemReady ? "is-ready" : "needs-action")" asp-page="/Opening/Items">
+            <span class="opening-list__body">
+                <strong>商品編集</strong>
+                <small>@(itemReady ? $"{Model.Items.Count}件登録済み" : "未登録・登録が必要")</small>
+            </span>
+            <span class="opening-list__badge @(itemReady ? "is-ready" : "needs-action")">@itemStatusText</span>
+            <span class="opening-list__action">編集する</span>
+        </a>
+    </div>
+
+    @if (Model.CurrentBusinessDay is null)
+    {
+        <form method="post" class="opening-start-form">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="slip-create__panel opening-start-panel">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label asp-for="BusinessDate" class="form-label"></label>
+                        <input asp-for="BusinessDate" class="form-control form-control-lg" type="date" />
+                        <span asp-validation-for="BusinessDate" class="text-danger"></span>
+                    </div>
+                    <div class="col-md-7">
+                        <label asp-for="Memo" class="form-label"></label>
+                        <input asp-for="Memo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら申し送り事項を入力" />
+                        <span asp-validation-for="Memo" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sticky-action-bar">
+                <button class="btn btn-primary btn-lg" type="submit" disabled="@(Model.SelectedAttendanceCount == 0 ? "disabled" : null)">営業日を開始</button>
+                @if (Model.SelectedAttendanceCount == 0)
+                {
+                    <span class="opening-start-note">出勤登録を1名以上登録すると営業日を開始できます。</span>
+                }
+            </div>
+        </form>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
+

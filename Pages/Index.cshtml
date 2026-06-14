@@ -1,0 +1,533 @@
+@page
+@using ProsperApp.Models
+@model IndexModel
+@{
+    ViewData["Title"] = "ホーム";
+    var nominationOptions = new[]
+    {
+        ("companion_18", "18:00同伴"),
+        ("companion_19", "19:00同伴"),
+        ("companion_20", "20:00同伴"),
+        ("nomination", "本指名"),
+        ("in_store", "場内指名")
+    };
+}
+
+<section class="store-home">
+    <div class="business-status-bar">
+        <div>
+            @if (Model.CurrentBusinessDay is null)
+            {
+                <strong>ホーム</strong>
+                <span>営業開始前</span>
+            }
+            else
+            {
+                <strong>ホーム</strong>
+                <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt) / 在席 @Model.OpenSlipCount 件</span>
+            }
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    @if (Model.CurrentBusinessDay is not null)
+    {
+        <section class="slip-list-panel">
+            <div class="slip-list-panel__header">
+                <div>
+                    <h2>伝票一覧</h2>
+                </div>
+                <div class="slip-list-panel__badges">
+                    <span class="badge text-bg-success">在席 @Model.OpenSlipCount 件</span>
+                    <span class="badge text-bg-secondary">会計済み @Model.CheckedOutSlipCount 件</span>
+                </div>
+            </div>
+
+            @if (Model.Slips.Count == 0)
+            {
+                <div class="slip-list">
+                    <article class="slip-list__row slip-list__row--add">
+                        <div class="slip-list__main">
+                            <strong>当日の伝票はまだありません</strong>
+                            <span>最初の伝票を追加します。</span>
+                        </div>
+                        <div class="slip-list__actions">
+                            @if (Model.SlipsEnabled)
+                            {
+                                <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                            }
+                        </div>
+                    </article>
+                </div>
+            }
+            else
+            {
+                <div class="slip-list">
+                    @foreach (var slip in Model.Slips)
+                    {
+                        <a class="slip-list__row slip-list__row--link" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">
+                            <strong class="slip-list__table">@slip.TableDisplayName</strong>
+                            <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
+                            <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
+                            <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
+                            <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
+                            <strong class="slip-list__amount">@slip.AccountingAmount.ToString("N0") 円</strong>
+                        </a>
+                    }
+                    @if (Model.SlipsEnabled)
+                    {
+                        <article class="slip-list__row slip-list__row--add">
+                            <div class="slip-list__main">
+                                <strong>伝票を追加</strong>
+                                <span>新しい入店伝票を作成します。</span>
+                            </div>
+                            <div class="slip-list__actions">
+                                <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="business-close-panel @(Model.CanMoveToClosing ? "is-ready" : "is-blocked")">
+            <div>
+                <p class="store-home__eyebrow">締め作業</p>
+                @if (Model.CanMoveToClosing)
+                {
+                    <h2>すべて会計済みです</h2>
+                    <p>営業中の伝票がないため、締め作業へ進めます。</p>
+                }
+                else if (!Model.HasAnySlip)
+                {
+                    <h2>伝票はまだありません</h2>
+                    <p>営業を終了する前に、当日の伝票状況を確認してください。</p>
+                }
+                else
+                {
+                    <h2>未会計伝票があります</h2>
+                    <p>在席 @Model.OpenSlipCount 件の会計が完了すると、ここから締め作業へ進めます。</p>
+                }
+            </div>
+            @if (Model.CanMoveToClosing)
+            {
+                <a class="btn btn-primary btn-lg" asp-page="/Closing/Index">締め作業へ</a>
+            }
+            else
+            {
+                <button class="btn btn-outline-secondary btn-lg" type="button" disabled>締め作業は未会計完了後</button>
+            }
+        </section>
+    }
+
+    @if (Model.CurrentBusinessDay is not null && Model.SlipsEnabled)
+    {
+        <div class="modal fade" id="createSlipModal" tabindex="-1" aria-labelledby="createSlipModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <form method="post" asp-page-handler="CreateSlip">
+                        <div class="modal-header">
+                            <div>
+                                <p class="store-home__eyebrow mb-1">会計伝票</p>
+                                <h2 class="modal-title fs-4" id="createSlipModalLabel">伝票追加</h2>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        </div>
+                        <div class="modal-body slip-modal-form">
+                            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                            <input asp-for="CreateSlipInput.OpenedAt" type="hidden" />
+                            <input asp-for="CreateSlipInput.BusinessDate" type="hidden" />
+                            <input asp-for="CreateSlipInput.BusinessDayId" type="hidden" />
+
+                            <section class="slip-create__panel">
+                                <h3>入店情報</h3>
+                                <div class="row g-3">
+                                    <div class="col-md-5">
+                                        <label class="form-label">営業日</label>
+                                        <div class="business-date-display">@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</div>
+                                    </div>
+                                    <div class="col-md-7">
+                                        <label asp-for="CreateSlipInput.OpenedTime" class="form-label"></label>
+                                        <select class="form-select form-select-lg slip-time-select" name="CreateSlipInput.OpenedTime">
+                                            @foreach (var time in Model.TimeOptions)
+                                            {
+                                                if (Model.CreateSlipInput.OpenedTime == time)
+                                                {
+                                                    <option value="@time" selected>@time</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@time">@time</option>
+                                                }
+                                            }
+                                        </select>
+                                        <span asp-validation-for="CreateSlipInput.OpenedTime" class="text-danger"></span>
+                                        <span asp-validation-for="CreateSlipInput.OpenedAt" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="slip-create__panel">
+                                <h3>卓番</h3>
+                                <input asp-for="CreateSlipInput.TableId" type="hidden" id="businessCreateSlipTableId" />
+                                <span asp-validation-for="CreateSlipInput.TableId" class="text-danger"></span>
+                                @if (Model.Tables.Count == 0)
+                                {
+                                    <div class="alert alert-warning mb-0">卓番マスタがありません。</div>
+                                }
+                                else
+                                {
+                                    <div class="table-picker" role="group" aria-label="卓番選択">
+                                        @foreach (var table in Model.Tables)
+                                        {
+                                            var selected = Model.CreateSlipInput.TableId == table.TableId;
+                                            <button class="table-picker__button @(selected ? "is-selected" : "")" type="button" data-business-slip-table-id="@table.TableId">
+                                                @table.DisplayName
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </section>
+
+                            <section class="slip-create__panel">
+                                <div class="slip-create__panel-title">
+                                    <h3>客情報</h3>
+                                    <button class="btn btn-outline-primary" type="button" id="businessAddCustomerButton">客行追加</button>
+                                </div>
+                                <span asp-validation-for="CreateSlipInput.CustomerLabels" class="text-danger"></span>
+                                <div class="customer-list" id="businessCustomerList">
+                                    @for (var i = 0; i < Model.CreateSlipInput.CustomerLabels.Count; i++)
+                                    {
+                                        <div class="customer-row" data-business-customer-row>
+                                            <label class="customer-row__index">@(i + 1)</label>
+                                            <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[@i]" value="@Model.CreateSlipInput.CustomerLabels[i]" maxlength="100" placeholder="客名・特徴など" />
+                                            <button class="btn btn-outline-danger customer-row__remove" type="button" data-business-remove-customer @(i == 0 ? "hidden" : null)>削除</button>
+                                        </div>
+                                    }
+                                </div>
+                            </section>
+
+                            <section class="slip-create__panel">
+                                <div class="slip-create__panel-title">
+                                    <h3>指名情報</h3>
+                                    <button class="btn btn-outline-primary" type="button" id="businessAddNominationButton" @(Model.AttendanceCasts.Count == 0 ? "disabled" : null)>指名行追加</button>
+                                </div>
+                                @if (Model.AttendanceCasts.Count == 0)
+                                {
+                                    <div class="alert alert-secondary mb-0">出勤キャストが未登録です。指名なしで伝票を作成できます。</div>
+                                }
+                                else
+                                {
+                                    <div class="nomination-list" id="businessNominationList">
+                                        @for (var i = 0; i < Model.CreateSlipInput.CastNominations.Count; i++)
+                                        {
+                                            var nomination = Model.CreateSlipInput.CastNominations[i];
+                                            <div class="nomination-row" data-business-nomination-row>
+                                                <label class="customer-row__index nomination-row__index">@(i + 1)</label>
+                                                <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[@i].NominationKind">
+                                                    <option value="">指名区分</option>
+                                                    @foreach (var option in nominationOptions)
+                                                    {
+                                                        if (nomination.NominationKind == option.Item1)
+                                                        {
+                                                            <option value="@option.Item1" selected>@option.Item2</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@option.Item1">@option.Item2</option>
+                                                        }
+                                                    }
+                                                </select>
+                                                <div class="nomination-row__cast">
+                                                    <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastId" value="@nomination.CastId" data-business-cast-id />
+                                                    <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastName" value="@nomination.CastName" data-business-cast-name-hidden />
+                                                    <button class="selected-cast selected-cast--button" type="button" data-business-open-cast-modal>
+                                                        <span data-business-selected-cast>@(nomination.CastName ?? "キャストを選択")</span>
+                                                    </button>
+                                                </div>
+                                                <button class="btn btn-outline-danger nomination-row__remove" type="button" data-business-remove-nomination @(i == 0 ? "hidden" : null)>削除</button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </section>
+
+                            <section class="slip-create__panel">
+                                <h3>メモ</h3>
+                                <textarea asp-for="CreateSlipInput.Memo" class="form-control form-control-lg" rows="2" placeholder="共有事項があれば入力"></textarea>
+                                <span asp-validation-for="CreateSlipInput.Memo" class="text-danger"></span>
+                            </section>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                            <button class="btn btn-primary btn-lg" type="submit" @(Model.Tables.Count == 0 ? "disabled" : null)>伝票を作成</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="businessAttendingCastSelectModal" tabindex="-1" aria-labelledby="businessAttendingCastSelectModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="businessAttendingCastSelectModalLabel">出勤キャスト選択</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body cast-select-modal">
+                        <div class="cast-select-modal__list" id="businessAttendingCastModalList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const createSlipModalElement = document.getElementById('createSlipModal');
+            if (!createSlipModalElement) {
+                return;
+            }
+
+            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.SearchDisplayName, department = c.DepartmentName })));
+            const showCreateSlipModal = @Json.Serialize(Model.ShowCreateSlipModal);
+            const tableIdInput = document.getElementById('businessCreateSlipTableId');
+            const customerList = document.getElementById('businessCustomerList');
+            const addCustomerButton = document.getElementById('businessAddCustomerButton');
+            const nominationList = document.getElementById('businessNominationList');
+            const addNominationButton = document.getElementById('businessAddNominationButton');
+            const castModalElement = document.getElementById('businessAttendingCastSelectModal');
+            const castModalList = document.getElementById('businessAttendingCastModalList');
+            const createSlipModal = new bootstrap.Modal(createSlipModalElement);
+            const castModal = castModalElement ? new bootstrap.Modal(castModalElement) : null;
+            let castModalTargetRow = null;
+            const nominationKindOptions = `
+                <option value="">指名区分</option>
+                <option value="companion_18">18:00同伴</option>
+                <option value="companion_19">19:00同伴</option>
+                <option value="companion_20">20:00同伴</option>
+                <option value="nomination">本指名</option>
+                <option value="in_store">場内指名</option>
+            `;
+
+            document.querySelectorAll('[data-business-slip-table-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    if (tableIdInput) {
+                        tableIdInput.value = button.dataset.businessSlipTableId ?? '';
+                    }
+                    document.querySelectorAll('[data-business-slip-table-id]').forEach((target) => {
+                        target.classList.toggle('is-selected', target === button);
+                    });
+                });
+            });
+
+            const setSelectedCast = (row, cast) => {
+                const hiddenInput = row.querySelector('[data-business-cast-id]');
+                const hiddenName = row.querySelector('[data-business-cast-name-hidden]');
+                const selected = row.querySelector('[data-business-selected-cast]');
+                if (!hiddenInput || !hiddenName || !selected) {
+                    return;
+                }
+
+                hiddenInput.value = cast.id;
+                hiddenName.value = cast.display;
+                selected.textContent = cast.display;
+            };
+
+            const renumberCustomerRows = () => {
+                if (!customerList) {
+                    return;
+                }
+
+                const rows = customerList.querySelectorAll('[data-business-customer-row]');
+                rows.forEach((row, index) => {
+                    const label = row.querySelector('.customer-row__index');
+                    const input = row.querySelector('input');
+                    const remove = row.querySelector('[data-business-remove-customer]');
+                    if (label) {
+                        label.textContent = String(index + 1);
+                    }
+                    if (input) {
+                        input.name = `CreateSlipInput.CustomerLabels[${index}]`;
+                    }
+                    if (remove) {
+                        remove.hidden = index === 0;
+                    }
+                });
+            };
+
+            const addCustomerRow = () => {
+                if (!customerList) {
+                    return;
+                }
+
+                const count = customerList.querySelectorAll('[data-business-customer-row]').length;
+                if (count >= 20) {
+                    return;
+                }
+
+                const row = document.createElement('div');
+                row.className = 'customer-row';
+                row.dataset.businessCustomerRow = '';
+                row.innerHTML = `
+                    <label class="customer-row__index">${count + 1}</label>
+                    <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[${count}]" maxlength="100" placeholder="客名・特徴など" />
+                    <button class="btn btn-outline-danger customer-row__remove" type="button" data-business-remove-customer>削除</button>
+                `;
+                customerList.appendChild(row);
+                row.querySelector('input')?.focus();
+                renumberCustomerRows();
+            };
+
+            const renderCastModal = () => {
+                if (!castModalList) {
+                    return;
+                }
+
+                castModalList.innerHTML = '';
+                const matches = castOptions.slice(0, 80);
+                if (matches.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'text-muted mb-0';
+                    empty.textContent = '出勤キャストが登録されていません。';
+                    castModalList.appendChild(empty);
+                    return;
+                }
+
+                matches.forEach((cast) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'cast-select-modal__item';
+                    const name = document.createElement('strong');
+                    name.textContent = cast.name;
+                    const department = document.createElement('span');
+                    department.textContent = cast.department ?? '';
+                    button.append(name, department);
+                    button.addEventListener('click', () => {
+                        if (castModalTargetRow) {
+                            setSelectedCast(castModalTargetRow, cast);
+                        }
+                        castModal?.hide();
+                    });
+                    castModalList.appendChild(button);
+                });
+            };
+
+            const openCastModal = (row) => {
+                castModalTargetRow = row;
+                renderCastModal();
+                castModal?.show();
+            };
+
+            const wireNominationRow = (row) => {
+                row.querySelector('[data-business-open-cast-modal]')?.addEventListener('click', () => openCastModal(row));
+            };
+
+            const renumberNominationRows = () => {
+                if (!nominationList) {
+                    return;
+                }
+
+                const rows = nominationList.querySelectorAll('[data-business-nomination-row]');
+                rows.forEach((row, index) => {
+                    const label = row.querySelector('.nomination-row__index');
+                    const kind = row.querySelector('.nomination-row__kind');
+                    const castId = row.querySelector('[data-business-cast-id]');
+                    const castName = row.querySelector('[data-business-cast-name-hidden]');
+                    const remove = row.querySelector('[data-business-remove-nomination]');
+                    if (label) {
+                        label.textContent = String(index + 1);
+                    }
+                    if (kind) {
+                        kind.name = `CreateSlipInput.CastNominations[${index}].NominationKind`;
+                    }
+                    if (castId) {
+                        castId.name = `CreateSlipInput.CastNominations[${index}].CastId`;
+                    }
+                    if (castName) {
+                        castName.name = `CreateSlipInput.CastNominations[${index}].CastName`;
+                    }
+                    if (remove) {
+                        remove.hidden = index === 0;
+                    }
+                });
+            };
+
+            const addNominationRow = () => {
+                if (!nominationList) {
+                    return;
+                }
+
+                const count = nominationList.querySelectorAll('[data-business-nomination-row]').length;
+                if (count >= 20) {
+                    return;
+                }
+
+                const row = document.createElement('div');
+                row.className = 'nomination-row';
+                row.dataset.businessNominationRow = '';
+                row.innerHTML = `
+                    <label class="customer-row__index nomination-row__index">${count + 1}</label>
+                    <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[${count}].NominationKind">
+                        ${nominationKindOptions}
+                    </select>
+                    <div class="nomination-row__cast">
+                        <input type="hidden" name="CreateSlipInput.CastNominations[${count}].CastId" data-business-cast-id />
+                        <input type="hidden" name="CreateSlipInput.CastNominations[${count}].CastName" data-business-cast-name-hidden />
+                        <button class="selected-cast selected-cast--button" type="button" data-business-open-cast-modal>
+                            <span data-business-selected-cast>キャストを選択</span>
+                        </button>
+                    </div>
+                    <button class="btn btn-outline-danger nomination-row__remove" type="button" data-business-remove-nomination>削除</button>
+                `;
+                nominationList.appendChild(row);
+                wireNominationRow(row);
+                renumberNominationRows();
+                openCastModal(row);
+            };
+
+            customerList?.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-business-remove-customer]');
+                if (!button || !customerList.contains(button)) {
+                    return;
+                }
+
+                button.closest('[data-business-customer-row]')?.remove();
+                renumberCustomerRows();
+            });
+
+            nominationList?.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-business-remove-nomination]');
+                if (!button || !nominationList.contains(button)) {
+                    return;
+                }
+
+                button.closest('[data-business-nomination-row]')?.remove();
+                renumberNominationRows();
+            });
+
+            addCustomerButton?.addEventListener('click', addCustomerRow);
+            addNominationButton?.addEventListener('click', addNominationRow);
+            renumberCustomerRows();
+            renumberNominationRows();
+            nominationList?.querySelectorAll('[data-business-nomination-row]').forEach(wireNominationRow);
+            castModalElement?.addEventListener('hidden.bs.modal', () => {
+                castModalTargetRow = null;
+            });
+
+            if (showCreateSlipModal) {
+                createSlipModal.show();
+            }
+        })();
+    </script>
+}
