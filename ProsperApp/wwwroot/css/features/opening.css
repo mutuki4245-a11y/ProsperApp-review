@@ -392,17 +392,17 @@
 
 .item-admin__reorder-controls {
   align-items: center;
-  display: none;
+  display: flex;
   gap: 0.35rem;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .item-admin.is-reordering .item-admin__reorder-controls {
-  display: flex;
-}
-
-.item-admin.is-reordering .item-admin__delete-form,
-.item-admin.is-reordering [data-item-add-row] {
-  display: none;
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .item-admin__groups {

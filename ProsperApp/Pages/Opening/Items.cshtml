@@ -300,16 +300,17 @@
             const groupRows = (groupBody) => Array.from(groupBody.querySelectorAll(':scope > [data-item-order-row]'));
 
             const updateMoveButtons = () => {
+                const reordering = isReordering();
                 root.querySelectorAll('[data-item-group-body]').forEach((groupBody) => {
                     const rows = groupRows(groupBody);
                     rows.forEach((row, index) => {
                         const up = row.querySelector('[data-item-move="up"]');
                         const down = row.querySelector('[data-item-move="down"]');
                         if (up) {
-                            up.disabled = index === 0;
+                            up.disabled = !reordering || index === 0;
                         }
                         if (down) {
-                            down.disabled = index === rows.length - 1;
+                            down.disabled = !reordering || index === rows.length - 1;
                         }
                     });
                 });
