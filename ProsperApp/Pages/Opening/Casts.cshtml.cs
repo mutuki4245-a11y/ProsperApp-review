@@ -38,7 +38,7 @@ public class OpeningCastsModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostCreateAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
@@ -46,7 +46,8 @@ public class OpeningCastsModel(
         }
 
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (!ModelState.IsValid)
+        ModelState.Clear();
+        if (!TryValidateModel(Input, nameof(Input)))
         {
             Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
