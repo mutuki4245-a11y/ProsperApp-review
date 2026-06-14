@@ -10,12 +10,16 @@
 
 - DB操作は原則 Supabase RPC 経由で行います。
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
+- Supabase RPCのHTTP送信、API keyヘッダー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。
+- アプリログインはGoogle認証に統一します。共有パスワードの端末ログインは使いません。
+- Googleログインの許可対象は `GoogleAuth:AllowedEmails` または `GoogleAuth:AllowedDomains` で明示します。
 - Google Driveプレビューはアプリサーバー経由で取得します。
-- 秘密情報、ServiceRoleKey、Google認証情報はローカル設定に保存しません。
+- 秘密情報、Supabase SecretKey、Google認証情報はローカル設定に保存しません。
+- 動作確認は毎回Azureへデプロイした環境で行います。ローカル起動やローカル用 `appsettings` 整備は前提にしません。
 
 ## 参照すべきSQLファイル
 
@@ -32,12 +36,37 @@
   - `department_master` から有効店舗一覧を取得します。
 
 - `Sql/store_rpc_functions.sql`
-  - 営業日、伝票作成、領収書入力などのアプリ操作用RPCです。
-  - アプリのDB操作方針上、重要な実行対象です。
+  - 分割済みRPCファイルの実行順を示す非実行インデックスです。
+  - 実行対象は `Sql/store_rpc/*.sql` です。
+
+- `Sql/store_rpc/01_business_day.sql`
+  - 営業日、出勤、営業締め系RPCです。
+
+- `Sql/store_rpc/02_store_masters.sql`
+  - 卓番、キャスト、商品、注文入力向け一覧系RPCです。
+
+- `Sql/store_rpc/03_slips.sql`
+  - 伝票詳細、客、指名、注文取消系RPCです。
+
+- `Sql/store_rpc/04_orders.sql`
+  - 注文登録系RPCです。
+
+- `Sql/store_rpc/05_checkout.sql`
+  - 会計確定、伝票作成系RPCです。
+
+- `Sql/store_rpc/06_receipts.sql`
+  - 領収書入力、スキャンミス除外系RPCです。
+
+- `Sql/store_rpc/99_grants.sql`
+  - 分割RPCの `grant execute` をまとめた実行順最後のSQLです。
 
 - `Sql/quick_entry_account_master_updates.sql`
   - 領収書簡易入力UIで使う科目・補助科目の追加更新SQLです。
   - 文字化けが残っている可能性があるため、実行前に内容確認が必要です。
+
+- `Sql/store_table_master_seed.sql`
+  - mieu本店の卓番マスタ初期データです。
+  - `store_table_master` に卓番 `A1` から `A6`、`B1` から `B6`、`C1` から `C6` を登録します。
 
 ## Supabaseで実行が必要なSQL
 
@@ -45,10 +74,17 @@
 
 1. `Sql/store_order_accounting_tables.sql`
 2. `Sql/store_settings_functions.sql`
-3. `Sql/store_rpc_functions.sql`
-4. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+3. `Sql/store_rpc/01_business_day.sql`
+4. `Sql/store_rpc/02_store_masters.sql`
+5. `Sql/store_rpc/03_slips.sql`
+6. `Sql/store_rpc/04_orders.sql`
+7. `Sql/store_rpc/05_checkout.sql`
+8. `Sql/store_rpc/06_receipts.sql`
+9. `Sql/store_rpc/99_grants.sql`
+10. 必要に応じて `Sql/store_table_master_seed.sql`
+11. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
-`agent_schema_reference.sql` は実行しないでください。
+`agent_schema_reference.sql` と `store_rpc_functions.sql` は実行しないでください。
 
 ## 主要RPC
 
@@ -61,6 +97,7 @@
 - `get_store_context(p_department_id)`
 - `get_current_business_day(p_department_id)`
 - `open_business_day(p_department_id, p_business_date, p_memo)`
+- `add_business_day_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
 - `get_open_slip_count(p_department_id, p_business_day_id)`
 - `close_business_day(p_department_id, p_business_day_id, p_memo)`
 
@@ -68,8 +105,17 @@
 
 - `get_store_tables(p_department_id)`
 - `get_store_casts(p_department_id)`
+  - 指定店舗と同じ会社内の有効店舗に所属する有効キャストを返します。
+  - ヘルプ対応のため、現在店舗所属キャストだけに限定しません。
 - `get_business_day_slips(p_department_id, p_business_day_id)`
-- `create_store_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_ids, p_memo)`
+- `get_order_entry_slips(p_department_id, p_business_day_id)`
+- `get_store_order_items(p_department_id)`
+- `get_store_item_admin_catalog(p_department_id)`
+- `upsert_store_item_category(p_department_id, p_item_category_id, p_category_code, p_category_name, p_sort_order, p_is_active)`
+- `upsert_store_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price, p_is_active, p_is_cast_back_target, p_cast_back_regular_unit_amount, p_cast_back_nomination_unit_amount, p_cast_back_type)`
+- `delete_store_item(p_department_id, p_item_id)`
+- `add_store_order_lines(p_department_id, p_slip_id, p_order_lines)`
+- `create_store_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_nominations, p_memo)`
 
 ### 領収書
 
@@ -79,9 +125,16 @@
 
 ## 画面構成
 
+### 配置ルール
+
+- 利用者にHTML画面として見せるものだけを `Pages/` に置きます。
+- ファイル返却、API的な処理、画面を持たない処理は `Endpoints/` に置きます。
+- 機能専用の部分ビューは、該当機能フォルダ配下に `_*.cshtml` として置きます。
+- 本番例外表示の `/Error` は利用者向けHTML画面なので `Pages/Error.cshtml` に残します。
+
 - `/`
   - 店舗ホーム。
-  - 開け作業、営業中、締め作業への導線を置く方針です。
+  - 開け作業、営業中、締め作業への導線と、営業中の伝票起こしを置きます。
 
 - `/Opening`
   - 開け作業の営業開始画面。
@@ -91,42 +144,77 @@
   - キャスト情報確認/編集導線用。
   - 現時点では登録済みキャスト確認が中心です。
 
-- `/Slips/Create`
-  - 伝票起こし。
-  - 入店時刻は5分単位。
-  - 客数は直接入力せず、客名入力行の数で扱います。
-  - 営業日が開いていない場合は作成不可です。
+- `/Opening/Items`
+  - 商品管理。
+  - 非管理者はカテゴリを編集できません。
+  - 商品名は店舗内uniqueです。
+  - 商品コード、商品表示順など利用者が判断しづらい項目は画面に出しません。
+  - 商品の並び替えが必要になったら専用UIで扱います。
+  - 商品は既存行を直接編集せず、追加と削除で運用します。
+  - 注文履歴は `item_name_snapshot` / `unit_price` / `amount` を保持するため、商品マスタを再参照しません。
+  - 商品削除は `delete_store_item` で商品マスタ行を削除し、既存注文行の `item_id` は切り離します。
+
+- `/Slips/Edit`
+  - 伝票詳細、客追加、指名追加、オーダー追加、会計処理。
+  - ホームの当日伝票一覧から遷移します。
+
+- `/Orders`
+  - オーダー入力。
+  - open伝票を卓番として選択し、カテゴリ別の商品ボタンから注文キューへ追加します。
+  - 同じ商品は数量加算し、一括登録後は卓番選択へ戻ります。
 
 - `/Closing`
   - 締め作業ホーム。
-  - 今後のステップは、酒代入力、勤怠入力、キャスト売上額調整、領収書入力です。
+  - 酒代入力、勤怠入力、キャスト売上額調整は準備中表示のみで、個別プレースホルダーページは置きません。
+  - 現在の実入力導線は領収書入力です。
 
 - `/Closing/Receipts`
   - 領収書簡易入力。
   - Google Driveプレビュー、Supabase RPC更新、スキャンミス除外、PDF先読みキャッシュを含みます。
+  - Driveファイルの取得は画面ではなく `/DrivePreview/{driveFileId}` endpoint で行います。
+
+- `/Login`
+  - Google認証ログイン入口。
+  - Google設定または許可アカウント設定が不足している場合は、OAuthへ進まず設定不足を表示します。
+
+- `/Error`
+  - 本番例外時のフォールバック画面。
+  - `Program.cs` の `UseExceptionHandler("/Error")` から使います。
+  - 通常導線には置きません。
 
 - `/Settings`
   - 管理者設定。
   - パスワードは固定で `4245`。
   - 設定値は端末ローカル保存です。
 
+## 非画面endpoint
+
+- `/DrivePreview/{driveFileId}`
+  - Google Driveファイルをアプリサーバー経由で返す認証付きプロキシです。
+  - Razor Pageではなく `Endpoints/DrivePreviewEndpoints.cs` で定義します。
+  - `prefetch=1` は入力作業を妨げないよう、失敗時も画面遷移を起こしません。
+
 ## Azure / 環境変数
 
 Azure App Serviceでは最低限以下が必要です。
 
 - `Supabase__Url`
-- `Supabase__AnonKey`
+- `Supabase__SecretKey`
 
-RPCが `grant execute to anon, authenticated` 済みなら一覧取得などはAnonKeyで動きます。
-ただし、運用上ServiceRoleKeyを使う実装や直接操作が残っている場合は以下も必要です。
+Supabaseのレガシー `anon` / `service_role` キーは使いません。
+新しいAPI key方式の `sb_secret_...` を `Supabase__SecretKey` に設定してください。
+アプリ側のSupabase RPC呼び出しでは、新キーを `apikey` ヘッダーで送信し、`Authorization: Bearer` には入れません。
 
-- `Supabase__ServiceRoleKey`
+読み取りだけを低権限キーで動かしたい場合のみ、任意で以下を設定できます。
+
+- `Supabase__PublishableKey`
 
 Google Drive OAuth/プレビューを使う場合は以下も必要です。
 
 - `GoogleDrive__ClientId`
 - `GoogleDrive__ClientSecret`
 - `GoogleDrive__Scopes__0` など
+- `GoogleAuth__AllowedEmails__0` または `GoogleAuth__AllowedDomains__0` など
 
 ## 注意点
 
@@ -138,7 +226,7 @@ Google Drive OAuth/プレビューを使う場合は以下も必要です。
 
 ## 次に着手しやすい作業
 
-1. Supabaseで `store_rpc_functions.sql` が実行済みか確認する。
+1. Supabaseで `Sql/store_rpc/*.sql` が順番どおり実行済みか確認する。
 2. `quick_entry_account_master_updates.sql` の文字化けを修正する。
 3. 営業中ホームを「伝票起こしボタン + 当日伝票一覧 + 詳細/会計ボタン」に寄せる。
 4. 締め作業をステップ式に整理する。
