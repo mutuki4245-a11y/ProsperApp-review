@@ -171,6 +171,42 @@ PowerShell 5.1では日本語を含むUTF-8ファイルが文字化けするこ�
 
 ## 推奨ワークフロー
 
+### Git運用
+
+`main` は安定版として扱い、タスクごとに作業ブランチを作る。
+
+基本手順:
+
+1. `git switch main`
+2. `git pull`
+3. `git switch -c task/<task-name>`
+4. 対象タスクを実装する。
+5. `dotnet build --no-restore` など、必要な確認を実行する。
+6. 意味のある単位で `git add` / `git commit` する。
+7. 確認できたら `main` に戻って `git merge task/<task-name>` する。
+8. merge後、不要なら `git branch -d task/<task-name>` で作業ブランチを削除する。
+
+一人開発でも、認証、SQL/RPC、画面構成、構造整理など影響範囲が広い変更は、直接 `main` に積まずタスクブランチで作業する。
+
+コミットの考え方:
+
+- 1コミットは、ひとことで説明できる変更単位にする。
+- 保存ごとではなく、ビルドや最低限の確認ができた区切りでコミットする。
+- `bin/`、`obj/`、一時ビルド出力、秘密情報を含むローカル設定はコミットしない。
+- 複数テーマが混ざった場合は、後で追いやすいようにコミットを分ける。
+
+大きな変更の例:
+
+1. 認証やルート整理。
+2. 画面やPageModelの変更。
+3. RepositoryやInfrastructureの構造整理。
+4. SQL/RPC変更とgrant更新。
+5. HANDOFFや参照SQLの更新。
+
+通常はタスクブランチの最終状態でビルドを通してから `main` にmergeする。チーム運用では、タスクブランチをpushしてPull Requestを作り、レビューとCI確認後に `main` へmergeする。
+
+### Codex作業
+
 複数ファイルにまたがる変更:
 
 1. `code_mapper` で関連範囲を調査する。
