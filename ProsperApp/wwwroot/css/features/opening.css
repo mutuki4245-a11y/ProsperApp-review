@@ -405,6 +405,11 @@
   visibility: visible;
 }
 
+.item-admin.is-reordering .item-admin__delete-form,
+.item-admin.is-reordering [data-item-add-row] {
+  display: none;
+}
+
 .item-admin__groups {
   display: grid;
   gap: 0.65rem;
