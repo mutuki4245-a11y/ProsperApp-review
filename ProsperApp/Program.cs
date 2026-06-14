@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.Extensions.Options;
+using ProsperApp.Endpoints;
 using ProsperApp.Options;
 using ProsperApp.Services;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,44 +14,115 @@ builder.Services.AddRazorPages();
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
 builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
 builder.Services.Configure<GoogleDriveOptions>(builder.Configuration.GetSection("GoogleDrive"));
+builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection("GoogleAuth"));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddMemoryCache();
 builder.Services.AddSession();
 builder.Services.AddSingleton<IFeatureGate, FeatureGate>();
+builder.Services.AddSingleton<IStoreClock, StoreClock>();
+builder.Services.AddSingleton<IOrderQueueService, OrderQueueService>();
 builder.Services.AddScoped<ILocalSettingsProvider, LocalSettingsProvider>();
-builder.Services.AddHttpClient<IStoreSettingsRepository, SupabaseStoreSettingsRepository>();
-builder.Services.AddHttpClient<IReceiptRepository, SupabaseReceiptRepository>();
-builder.Services.AddHttpClient<IBusinessDayRepository, SupabaseBusinessDayRepository>();
-builder.Services.AddHttpClient<IStoreSlipRepository, SupabaseStoreSlipRepository>();
+builder.Services.AddHttpClient<ISupabaseRpcClient, SupabaseRpcClient>();
+builder.Services.AddScoped<IGoogleDriveAuthService, GoogleDriveAuthService>();
+builder.Services.AddScoped<IStoreSettingsRepository, SupabaseStoreSettingsRepository>();
+builder.Services.AddScoped<IReceiptRepository, SupabaseReceiptRepository>();
+builder.Services.AddScoped<IBusinessDayRepository, SupabaseBusinessDayRepository>();
+builder.Services.AddScoped<IStoreSlipRepository, SupabaseStoreSlipRepository>();
+builder.Services.AddScoped<IStoreOrderRepository, SupabaseStoreOrderRepository>();
+builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();
+builder.Services.AddScoped<IStoreItemAdminRepository, SupabaseStoreItemAdminRepository>();
+builder.Services.AddScoped<IStoreCastAdminRepository, SupabaseStoreCastAdminRepository>();
 builder.Services.AddHttpClient<IDriveFileService, GoogleDriveFileService>();
 
 var googleDriveOptions = builder.Configuration.GetSection("GoogleDrive").Get<GoogleDriveOptions>() ?? new();
 var googleAuthConfigured = !string.IsNullOrWhiteSpace(googleDriveOptions.ClientId) &&
                            !string.IsNullOrWhiteSpace(googleDriveOptions.ClientSecret);
 
+var authBuilder = builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = googleAuthConfigured
+            ? GoogleDefaults.AuthenticationScheme
+            : CookieAuthenticationDefaults.AuthenticationScheme;
+    })
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Login";
+        options.AccessDeniedPath = "/Login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(3650);
+        options.SlidingExpiration = true;
+        options.Events.OnValidatePrincipal = context =>
+        {
+            var authOptions = context.HttpContext.RequestServices
+                .GetRequiredService<IOptions<GoogleAuthOptions>>()
+                .Value;
+            var driveOptions = context.HttpContext.RequestServices
+                .GetRequiredService<IOptions<GoogleDriveOptions>>()
+                .Value;
+            var configured = !string.IsNullOrWhiteSpace(driveOptions.ClientId) &&
+                             !string.IsNullOrWhiteSpace(driveOptions.ClientSecret);
+            var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+
+            if (!configured || !authOptions.IsAllowed(email))
+            {
+                context.RejectPrincipal();
+                context.HttpContext.Session.Clear();
+            }
+
+            return Task.CompletedTask;
+        };
+    });
+
 if (googleAuthConfigured)
 {
-    builder.Services
-        .AddAuthentication(options =>
-        {
-            options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = GoogleDefaults.AuthenticationScheme;
-        })
-        .AddCookie()
+    authBuilder
         .AddGoogle(options =>
         {
             options.ClientId = googleDriveOptions.ClientId;
             options.ClientSecret = googleDriveOptions.ClientSecret;
             options.SaveTokens = true;
+            options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
 
             foreach (var scope in googleDriveOptions.Scopes.Where(scope => !string.IsNullOrWhiteSpace(scope)))
             {
-                options.Scope.Add(scope);
+                if (!options.Scope.Contains(scope))
+                {
+                    options.Scope.Add(scope);
+                }
+            }
+
+            if (!options.Scope.Contains("email"))
+            {
+                options.Scope.Add("email");
             }
 
             options.Events.OnCreatingTicket = context =>
             {
+                var authOptions = context.HttpContext.RequestServices
+                    .GetRequiredService<IOptions<GoogleAuthOptions>>()
+                    .Value;
+                var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+                if (string.IsNullOrWhiteSpace(email) &&
+                    context.User.TryGetProperty("email", out var emailProperty))
+                {
+                    email = emailProperty.GetString();
+                    if (!string.IsNullOrWhiteSpace(email) &&
+                        context.Principal?.Identity is ClaimsIdentity identity &&
+                        !identity.HasClaim(claim => claim.Type == ClaimTypes.Email))
+                    {
+                        identity.AddClaim(new Claim(ClaimTypes.Email, email));
+                    }
+                }
+
+                if (!authOptions.IsAllowed(email))
+                {
+                    context.HttpContext.Items["GoogleAuthErrorMessage"] =
+                        "このGoogleアカウントはこのアプリの利用を許可されていません。";
+                    return Task.CompletedTask;
+                }
+
                 var accessToken = context.AccessToken;
                 if (!string.IsNullOrWhiteSpace(accessToken))
                 {
@@ -57,12 +131,27 @@ if (googleAuthConfigured)
 
                 return Task.CompletedTask;
             };
+
+            options.Events.OnTicketReceived = context =>
+            {
+                if (context.HttpContext.Items.TryGetValue("GoogleAuthErrorMessage", out var errorMessage) &&
+                    errorMessage is string message)
+                {
+                    context.Response.Redirect($"/Login?error={Uri.EscapeDataString(message)}");
+                    context.HandleResponse();
+                }
+
+                return Task.CompletedTask;
+            };
+
+            options.Events.OnRemoteFailure = context =>
+            {
+                context.HandleResponse();
+                var message = "Google認証に失敗しました。";
+                context.Response.Redirect($"/Login?error={Uri.EscapeDataString(message)}");
+                return Task.CompletedTask;
+            };
         });
-}
-else
-{
-    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-        .AddCookie();
 }
 
 builder.Services.AddAuthorization();
@@ -86,20 +175,28 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
-var razorPages = app.MapRazorPages()
-   .WithStaticAssets();
-
-if (googleAuthConfigured)
-{
-    razorPages.RequireAuthorization();
-}
+app.MapDrivePreviewEndpoints();
+app.MapRazorPages()
+   .WithStaticAssets()
+   .RequireAuthorization();
 
 app.MapGet("/logout", async (HttpContext context, string? returnUrl) =>
     {
         context.Session.Clear();
         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Results.Redirect(string.IsNullOrWhiteSpace(returnUrl) ? "/" : returnUrl);
+        return Results.Redirect(IsLocalReturnUrl(returnUrl) ? returnUrl! : "/");
     })
     .RequireAuthorization();
 
 app.Run();
+
+static bool IsLocalReturnUrl(string? returnUrl)
+{
+    if (string.IsNullOrWhiteSpace(returnUrl))
+    {
+        return false;
+    }
+
+    return returnUrl[0] == '/' && (returnUrl.Length == 1 || (returnUrl[1] != '/' && returnUrl[1] != '\\')) ||
+           returnUrl.Length > 1 && returnUrl[0] == '~' && returnUrl[1] == '/';
+}

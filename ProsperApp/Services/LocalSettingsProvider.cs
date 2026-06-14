@@ -60,6 +60,7 @@ public class LocalSettingsProvider(
             StoreName = string.IsNullOrWhiteSpace(settings.StoreName) ? "店舗" : settings.StoreName.Trim(),
             StoreDepartmentId = storeDepartmentId,
             ScreenMode = screenMode,
+            IsAdminMode = settings.IsAdminMode,
             AttendanceMinuteStep = attendanceMinuteStep
         };
     }

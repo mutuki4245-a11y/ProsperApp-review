@@ -11,5 +11,7 @@ public class LocalSettings
 
     public string ScreenMode { get; set; } = "sales-management";
 
+    public bool IsAdminMode { get; set; }
+
     public int AttendanceMinuteStep { get; set; } = 15;
 }

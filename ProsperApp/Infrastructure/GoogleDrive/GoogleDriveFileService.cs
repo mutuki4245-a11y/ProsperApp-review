@@ -1,19 +1,18 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace ProsperApp.Services;
 
 public class GoogleDriveFileService(
     HttpClient httpClient,
-    IHttpContextAccessor httpContextAccessor,
+    IGoogleDriveAuthService googleDriveAuthService,
     IReceiptRepository receiptRepository,
     IMemoryCache memoryCache) : IDriveFileService
 {
     private readonly HttpClient _httpClient = httpClient;
-    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
+    private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IMemoryCache _memoryCache = memoryCache;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
@@ -40,14 +39,12 @@ public class GoogleDriveFileService(
             return DriveFileResult.Success(ToDriveFileContent(cachedFile));
         }
 
-        var httpContext = _httpContextAccessor.HttpContext!;
-        var accessToken = httpContext.Session.GetString("GoogleDriveAccessToken") ??
-                          await httpContext.GetTokenAsync("access_token");
+        var accessToken = await _googleDriveAuthService.GetAccessTokenAsync();
         if (string.IsNullOrWhiteSpace(accessToken))
         {
             return DriveFileResult.Failed(
                 "missing_access_token",
-                "Google access token was not found in session or authentication properties. Sign out and sign in again.");
+                "Google access token was not found. Sign in with Google again.");
         }
 
         var metadataResult = await GetMetadataAsync(driveFileId, accessToken, ct);
@@ -109,14 +106,12 @@ public class GoogleDriveFileService(
                 "The drive_file_id is empty or is not included in the current store pending list.");
         }
 
-        var httpContext = _httpContextAccessor.HttpContext!;
-        var accessToken = httpContext.Session.GetString("GoogleDriveAccessToken") ??
-                          await httpContext.GetTokenAsync("access_token");
+        var accessToken = await _googleDriveAuthService.GetAccessTokenAsync();
         if (string.IsNullOrWhiteSpace(accessToken))
         {
             return DriveFileOperationResult.Failed(
                 "missing_access_token",
-                "Google access token was not found in session or authentication properties. Sign out and sign in again.");
+                "Google access token was not found. Sign in with Google again.");
         }
 
         var payload = JsonSerializer.Serialize(new { trashed = true });

@@ -3,8 +3,8 @@ namespace ProsperApp.Options;
 public class SupabaseOptions
 {
     public string Url { get; set; } = string.Empty;
-    public string AnonKey { get; set; } = string.Empty;
-    public string ServiceRoleKey { get; set; } = string.Empty;
+    public string PublishableKey { get; set; } = string.Empty;
+    public string SecretKey { get; set; } = string.Empty;
     public string PendingListEndpointName { get; set; } = string.Empty;
     public string QuickEntryUpdateEndpointName { get; set; } = string.Empty;
     public string Mode { get; set; } = "rpc";
