@@ -1,0 +1,117 @@
+@using ProsperApp.Models
+@model SlipEditModel
+@{
+    var nominationOptions = new[]
+    {
+        ("companion_18", "18:00同伴"),
+        ("companion_19", "19:00同伴"),
+        ("companion_20", "20:00同伴"),
+        ("nomination", "本指名"),
+        ("in_store", "場内指名")
+    };
+    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel();
+}
+
+<div class="slip-create__panel" id="slipNominationsPanel">
+    <div class="slip-create__panel-title">
+        <h2>指名一覧</h2>
+        @if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0)
+        {
+            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addNominationModal">指名を追加</button>
+        }
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>時刻</th>
+                    <th>区分</th>
+                    <th>キャスト</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Detail is null || Model.Detail.Nominations.Count == 0)
+                {
+                    <tr>
+                        <td colspan="3" class="text-muted">指名はまだ登録されていません。</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var nomination in Model.Detail.Nominations.OrderBy(x => x.StartedAt))
+                    {
+                        <tr>
+                            <td>@Model.FormatStoreTime(nomination.StartedAt)</td>
+                            <td>@nomination.NominationDisplayName</td>
+                            <td>@nomination.CastDisplayName</td>
+                        </tr>
+                    }
+                }
+                @if (Model.IsOpenSlip && Model.AttendanceCasts.Count == 0)
+                {
+                    <tr class="slip-detail-add-row">
+                        <td colspan="3">
+                            <div class="alert alert-secondary mb-0">出勤キャストが未登録です。指名を追加するには出勤登録を行ってください。</div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0)
+{
+    <div class="modal fade" id="addNominationModal" tabindex="-1" aria-labelledby="addNominationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <form method="post" asp-page-handler="AddNominations" data-nomination-row>
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1">指名一覧</p>
+                            <h2 class="modal-title fs-5" id="addNominationModalLabel">指名を追加</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form">
+                        <input type="hidden" asp-for="SlipId" />
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                        <span asp-validation-for="AddNominationsInput.CastNominations" class="text-danger"></span>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">指名区分</label>
+                                <select class="form-select form-select-lg nomination-row__kind" name="AddNominationsInput.CastNominations[0].NominationKind">
+                                    <option value="">指名区分</option>
+                                    @foreach (var option in nominationOptions)
+                                    {
+                                        if (addNomination.NominationKind == option.Item1)
+                                        {
+                                            <option value="@option.Item1" selected>@option.Item2</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Item1">@option.Item2</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">キャスト</label>
+                                <input type="hidden" name="AddNominationsInput.CastNominations[0].CastId" value="@addNomination.CastId" data-cast-id />
+                                <input type="hidden" name="AddNominationsInput.CastNominations[0].CastName" value="@addNomination.CastName" data-cast-name-hidden />
+                                <button class="selected-cast selected-cast--button selected-cast--large" type="button" data-open-cast-modal>
+                                    <span data-selected-cast>@(addNomination.CastName ?? "キャストを選択")</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                        <button class="btn btn-primary btn-lg" type="submit">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}

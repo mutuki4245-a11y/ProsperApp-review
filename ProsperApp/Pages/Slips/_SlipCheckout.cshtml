@@ -1,0 +1,236 @@
+@model SlipEditModel
+@{
+    var detail = Model.Detail!;
+    var activeOrders = detail.Orders
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+        .OrderBy(x => x.LineNo)
+        .ToList();
+    var checkoutCashPayment = Model.CheckoutInput.Payments.FirstOrDefault(x => x.MethodCode == "cash");
+    var checkoutCashAmount = checkoutCashPayment?.Amount ?? 0;
+}
+
+        <div class="slip-detail-checkout">
+            <div>
+                <p class="store-home__eyebrow">会計</p>
+                <h2>会計処理</h2>
+                <p>客情報、指名、オーダーを確認してから会計へ進みます。</p>
+            </div>
+            @if (Model.CanCheckout)
+            {
+                <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#slipCheckoutModal">会計処理へ</button>
+            }
+            else
+            {
+                <button class="btn btn-outline-secondary btn-lg" type="button" disabled>会計処理できません</button>
+            }
+        </div>
+
+        @if (Model.CanCheckout)
+        {
+            <div class="modal fade" id="slipCheckoutModal" tabindex="-1" aria-labelledby="slipCheckoutModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div>
+                                <p class="store-home__eyebrow mb-1">@detail.TableDisplayName</p>
+                                <h2 class="modal-title fs-4" id="slipCheckoutModalLabel">会計処理</h2>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        </div>
+                        <div class="modal-body slip-modal-form">
+                            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+                            <section class="checkout-review">
+                                <div class="checkout-review__hero">
+                                    <div>
+                                        <span>卓番</span>
+                                        <strong>@detail.TableDisplayName</strong>
+                                    </div>
+                                    <div>
+                                        <span>入店</span>
+                                        <strong>@Model.FormatStoreTime(detail.OpenedAt)</strong>
+                                    </div>
+                                    <div>
+                                        <span>客数</span>
+                                        <strong>@detail.CustomerCount</strong>
+                                    </div>
+                                    <div>
+                                        <span>合計</span>
+                                        <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                                    </div>
+                                </div>
+
+                                <div class="checkout-review__grid">
+                                    <section class="checkout-review__panel">
+                                        <div class="checkout-review__panel-title">
+                                            <h3>客</h3>
+                                            <span>@detail.Customers.Count 人</span>
+                                        </div>
+                                        @if (detail.Customers.Count == 0)
+                                        {
+                                            <p class="text-muted mb-0">客情報がありません。</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="checkout-review__list">
+                                                @foreach (var customer in detail.Customers.OrderBy(x => x.LineNo))
+                                                {
+                                                    <div class="checkout-review__row">
+                                                        <strong>@customer.DisplayName</strong>
+                                                        <span>@Model.FormatStoreTime(customer.EnteredAt) - @Model.FormatStoreTime(customer.LeftAt, "在席")</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </section>
+
+                                    <section class="checkout-review__panel">
+                                        <div class="checkout-review__panel-title">
+                                            <h3>指名</h3>
+                                            <span>@detail.Nominations.Count 件</span>
+                                        </div>
+                                        @if (detail.Nominations.Count == 0)
+                                        {
+                                            <p class="text-muted mb-0">指名はまだ登録されていません。</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="checkout-review__list">
+                                                @foreach (var nomination in detail.Nominations.OrderBy(x => x.StartedAt))
+                                                {
+                                                    <div class="checkout-review__row">
+                                                        <strong>@nomination.CastDisplayName</strong>
+                                                        <span>@Model.FormatStoreTime(nomination.StartedAt) / @nomination.NominationDisplayName</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </section>
+                                </div>
+
+                                <section class="checkout-review__panel">
+                                    <div class="checkout-review__panel-title">
+                                        <h3>オーダー</h3>
+                                        <span>@activeOrders.Count 件</span>
+                                    </div>
+                                    @if (activeOrders.Count == 0)
+                                    {
+                                        <p class="text-muted mb-0">注文はまだ登録されていません。</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="checkout-review__orders">
+                                            @foreach (var order in activeOrders)
+                                            {
+                                                <div class="checkout-review__order">
+                                                    <span>@Model.FormatStoreTime(order.OrderedAt)</span>
+                                                    <strong>@order.ItemNameSnapshot</strong>
+                                                    <span class="text-end">@order.UnitPrice.ToString("N0") x @order.Quantity.ToString("0.##")</span>
+                                                    <strong class="text-end">@order.Amount.ToString("N0") 円</strong>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    <div class="checkout-review__totals">
+                                        <div>
+                                            <span>小計</span>
+                                            <strong>@Model.CheckoutTotals.SubtotalAmount.ToString("N0") 円</strong>
+                                        </div>
+                                        <div>
+                                            <span>ServiceTax20%</span>
+                                            <strong>@Model.CheckoutTotals.ServiceTaxAmount.ToString("N0") 円</strong>
+                                        </div>
+                                        <div class="checkout-review__total">
+                                            <span>合計</span>
+                                            <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                                        </div>
+                                    </div>
+                                </section>
+                            </section>
+
+                            <section class="slip-create__panel">
+                                <h3>退店時刻</h3>
+                                <select class="form-select form-select-lg" id="detailCheckoutClosedTime">
+                                    @foreach (var time in Model.TimeOptions)
+                                    {
+                                        if (Model.CheckoutInput.ClosedTime == time)
+                                        {
+                                            <option value="@time" selected>@time</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@time">@time</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="CheckoutInput.ClosedTime" class="text-danger"></span>
+                            </section>
+
+                            <section class="slip-create__panel" id="detailPaymentSection" @(Model.ShowCashReceivedStep ? "hidden" : null)>
+                                <h3>決済方法</h3>
+                                <form method="post" asp-page-handler="StartCheckout" id="detailCheckoutForm">
+                                    <input type="hidden" asp-for="SlipId" />
+                                    <input type="hidden" asp-for="CheckoutInput.ClosedTime" data-detail-checkout-closed-time-field />
+                                    <span asp-validation-for="CheckoutInput.Payments" class="text-danger"></span>
+                                    <div class="checkout-payments" data-detail-total-amount="@Model.CheckoutTotals.TotalAmount">
+                                        @for (var i = 0; i < Model.CheckoutInput.Payments.Count; i++)
+                                        {
+                                            var payment = Model.CheckoutInput.Payments[i];
+                                            <div class="checkout-payment-row" data-detail-payment-row>
+                                                <input type="hidden" name="CheckoutInput.Payments[@i].MethodCode" value="@payment.MethodCode" data-detail-payment-method-code />
+                                                <input type="hidden" name="CheckoutInput.Payments[@i].MethodName" value="@payment.MethodName" data-detail-payment-method-name />
+                                                <input class="checkout-payment-row__selected" type="checkbox" name="CheckoutInput.Payments[@i].IsSelected" value="true" @(payment.IsSelected ? "checked" : "") data-detail-payment-selected />
+                                                <input type="hidden" name="CheckoutInput.Payments[@i].IsSelected" value="false" />
+                                                <button class="btn @(payment.IsSelected ? "btn-primary" : "btn-outline-primary") checkout-payment-row__button" type="button" data-detail-payment-toggle>
+                                                    @payment.MethodName
+                                                </button>
+                                                <input class="form-control checkout-payment-row__amount" name="CheckoutInput.Payments[@i].Amount" value="@payment.Amount" type="number" min="0" step="1" placeholder="金額" data-detail-payment-amount />
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="slip-detail-add-actions">
+                                        <button class="btn btn-primary btn-lg" type="submit">会計</button>
+                                    </div>
+                                </form>
+                            </section>
+
+                            <section class="slip-create__panel" id="detailCashSection" @(!Model.ShowCashReceivedStep ? "hidden" : null)>
+                                <h3>現金受取</h3>
+                                <form method="post" asp-page-handler="ConfirmCash" id="detailCashConfirmForm">
+                                    <input type="hidden" asp-for="SlipId" />
+                                    <input type="hidden" asp-for="CheckoutInput.ClosedTime" data-detail-checkout-closed-time-field />
+                                    <div id="detailCashPaymentFields">
+                                        @for (var i = 0; i < Model.CheckoutInput.Payments.Count; i++)
+                                        {
+                                            <input type="hidden" name="CheckoutInput.Payments[@i].MethodCode" value="@Model.CheckoutInput.Payments[i].MethodCode" />
+                                            <input type="hidden" name="CheckoutInput.Payments[@i].MethodName" value="@Model.CheckoutInput.Payments[i].MethodName" />
+                                            <input type="hidden" name="CheckoutInput.Payments[@i].IsSelected" value="@Model.CheckoutInput.Payments[i].IsSelected.ToString().ToLowerInvariant()" />
+                                            <input type="hidden" name="CheckoutInput.Payments[@i].Amount" value="@Model.CheckoutInput.Payments[i].Amount" />
+                                        }
+                                    </div>
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-4">
+                                            <label class="form-label">現金決済額</label>
+                                            <div class="business-date-display" id="detailCashAmountDisplay" data-cash-amount="@checkoutCashAmount">@checkoutCashAmount.ToString("N0") 円</div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" asp-for="CheckoutInput.ReceivedAmount"></label>
+                                            <input class="form-control form-control-lg" asp-for="CheckoutInput.ReceivedAmount" type="number" min="0" step="1" id="detailReceivedAmountInput" />
+                                            <span asp-validation-for="CheckoutInput.ReceivedAmount" class="text-danger"></span>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label">お釣り</label>
+                                            <div class="business-date-display" id="detailChangeAmountDisplay">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="slip-detail-add-actions">
+                                        <button class="btn btn-outline-secondary" type="button" id="detailBackToPaymentsButton">決済方法に戻る</button>
+                                        <button class="btn btn-primary btn-lg" type="submit">会計を確定</button>
+                                    </div>
+                                </form>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }

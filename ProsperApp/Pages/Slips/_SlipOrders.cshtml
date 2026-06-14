@@ -1,0 +1,197 @@
+@model SlipEditModel
+@{
+    var detail = Model.Detail!;
+    var activeOrders = detail.Orders
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+        .OrderBy(x => x.LineNo)
+        .ToList();
+    var activeOrderTotal = activeOrders.Sum(x => x.Amount);
+    var orderItemGroups = Model.OrderItems
+        .GroupBy(x => x.CategoryName)
+        .ToList();
+}
+
+        <div class="slip-create__panel">
+            <div class="slip-create__panel-title">
+                <h2>オーダー一覧</h2>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>時刻</th>
+                            <th>商品</th>
+                            <th class="text-end">単価</th>
+                            <th class="text-end">数量</th>
+                            <th class="text-end">小計</th>
+                            <th class="text-end">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (activeOrders.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="6" class="text-muted">注文はまだ登録されていません。</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var order in activeOrders)
+                            {
+                                <tr>
+                                    <td>@Model.FormatStoreTime(order.OrderedAt)</td>
+                                    <td>@order.ItemNameSnapshot</td>
+                                    <td class="text-end">@order.UnitPrice.ToString("N0")</td>
+                                    <td class="text-end">@order.Quantity.ToString("0.##")</td>
+                                    <td class="text-end">@order.Amount.ToString("N0")</td>
+                                    <td class="text-end">
+                                        <form method="post" asp-page-handler="VoidOrder" class="d-inline">
+                                            <input type="hidden" asp-for="SlipId" />
+                                            <input type="hidden" name="orderLineId" value="@order.OrderLineId" />
+                                            <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        <tr class="slip-detail-add-row">
+                            <td colspan="6">
+                                @if (Model.CanAddOrders)
+                                {
+                                    <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="modal" data-bs-target="#slipOrderModal">オーダー追加</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline-secondary w-100" type="button" disabled>オーダー追加できません</button>
+                                }
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="4">会計額</th>
+                            <th class="text-end">@activeOrderTotal.ToString("N0")</th>
+                            <th>円</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        @if (Model.CanAddOrders)
+        {
+            <div class="modal fade" id="slipOrderModal" tabindex="-1" aria-labelledby="slipOrderModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <form method="post" asp-page-handler="AddOrders" id="slipOrderForm">
+                            <div class="modal-header">
+                                <div>
+                                    <p class="store-home__eyebrow mb-1">@detail.TableDisplayName</p>
+                                    <h2 class="modal-title fs-4" id="slipOrderModalLabel">オーダー追加</h2>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                            </div>
+                            <div class="modal-body slip-modal-form">
+                                <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                                <input type="hidden" asp-for="SlipId" />
+                                <div id="detailOrderQueueFields"></div>
+
+                                @if (Model.OrderItems.Count == 0)
+                                {
+                                    <div class="alert alert-secondary mb-0">商品マスタが未登録です。</div>
+                                }
+                                else
+                                {
+                                    <div class="order-entry__grid order-entry__grid--modal">
+                                        <section class="slip-create__panel order-entry__items">
+                                            <div class="slip-create__panel-title">
+                                                <h3>商品一覧</h3>
+                                                <span class="badge text-bg-secondary">@detail.TableDisplayName</span>
+                                            </div>
+
+                                            <div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ">
+                                                @for (var i = 0; i < orderItemGroups.Count; i++)
+                                                {
+                                                    <button class="order-category-tab @(i == 0 ? "is-active" : "")" type="button" data-detail-category-tab="@i">
+                                                        @orderItemGroups[i].Key
+                                                    </button>
+                                                }
+                                            </div>
+                                            <div class="order-item-groups">
+                                                @for (var groupIndex = 0; groupIndex < orderItemGroups.Count; groupIndex++)
+                                                {
+                                                    var group = orderItemGroups[groupIndex];
+                                                    <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-detail-category-panel="@groupIndex">
+                                                        <h3>@group.Key</h3>
+                                                        <div class="order-item-grid">
+                                                            @foreach (var item in group)
+                                                            {
+                                                                <button
+                                                                    class="order-item-button"
+                                                                    type="button"
+                                                                    data-detail-item-id="@item.ItemId">
+                                                                    <strong>@item.ItemName</strong>
+                                                                    <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                                                    @if (item.IsCastBackTarget)
+                                                                    {
+                                                                        <small>通常 @item.CastBackRegularUnitAmount.ToString("N0") 円 / 指名 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
+                                                                    }
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </section>
+                                                }
+                                            </div>
+                                        </section>
+
+                                        <section class="slip-create__panel order-entry__queue">
+                                            <div class="slip-create__panel-title">
+                                                <div>
+                                                    <h3>注文キュー</h3>
+                                                    <small>@detail.TableDisplayName</small>
+                                                </div>
+                                                <button class="btn btn-outline-secondary" type="button" id="detailClearQueueButton">クリア</button>
+                                            </div>
+                                            <span asp-validation-for="QueueLines" class="text-danger"></span>
+
+                                            <div class="order-queue" id="detailOrderQueueList"></div>
+                                            <div class="order-queue__empty" id="detailOrderQueueEmpty">商品を選択してください。</div>
+
+                                            <div class="order-queue__total">
+                                                <span>合計</span>
+                                                <strong id="detailOrderQueueTotal">0 円</strong>
+                                            </div>
+                                        </section>
+                                    </div>
+                                }
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                                <button
+                                    class="btn btn-primary btn-lg"
+                                    type="submit"
+                                    id="detailSubmitOrderButton"
+                                    @(Model.OrderItems.Count == 0 ? "disabled" : null)>
+                                    オーダー保存
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="orderAttendingCastSelectModal" tabindex="-1" aria-labelledby="orderAttendingCastSelectModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-scrollable modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title fs-5" id="orderAttendingCastSelectModalLabel">バック対象キャスト選択</h2>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        </div>
+                        <div class="modal-body cast-select-modal">
+                            <div class="cast-select-modal__list" id="orderAttendingCastModalList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }

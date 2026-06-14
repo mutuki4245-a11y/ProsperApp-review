@@ -1,0 +1,165 @@
+@model SlipEditModel
+@{
+    var nextCustomerLineNo = (Model.Detail?.Customers.Select(x => x.LineNo).DefaultIfEmpty(0).Max() ?? 0) + 1;
+    var customerColumnCount = Model.IsOpenSlip ? 5 : 4;
+}
+
+<div class="slip-create__panel" id="slipCustomersPanel">
+    <div class="slip-create__panel-title">
+        <h2>客一覧</h2>
+        @if (Model.IsOpenSlip)
+        {
+            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addCustomerModal">客を追加</button>
+        }
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>客</th>
+                    <th>入店</th>
+                    <th>退店</th>
+                    @if (Model.IsOpenSlip)
+                    {
+                        <th>退店登録</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Detail is null || Model.Detail.Customers.Count == 0)
+                {
+                    <tr>
+                        <td colspan="@customerColumnCount" class="text-muted">客情報がありません。</td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var customer in Model.Detail.Customers.OrderBy(x => x.LineNo))
+                    {
+                        var isActive = string.Equals(customer.Status, "active", StringComparison.Ordinal);
+                        <tr>
+                            <td>@customer.LineNo</td>
+                            <td>
+                                @if (Model.CanEditCustomerNames)
+                                {
+                                    <form method="post" asp-page-handler="UpdateCustomer" class="customer-name-form" data-partial-form="customers">
+                                        <input type="hidden" asp-for="SlipId" />
+                                        <input type="hidden" name="UpdateCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
+                                        <input class="form-control form-control-sm" name="UpdateCustomerInput.CustomerLabel" value="@customer.CustomerLabel" maxlength="100" placeholder="@customer.DisplayName" />
+                                        <button class="btn btn-outline-primary btn-sm" type="submit">保存</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    @customer.DisplayName
+                                }
+                            </td>
+                            <td>@Model.FormatStoreTime(customer.EnteredAt)</td>
+                            <td>
+                                @Model.FormatStoreTime(customer.LeftAt)
+                            </td>
+                            @if (Model.IsOpenSlip)
+                            {
+                                <td>
+                                    @if (isActive)
+                                    {
+                                        <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action">
+                                            <input type="hidden" asp-for="SlipId" />
+                                            <input type="hidden" name="LeaveCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
+                                            <select class="form-select form-select-sm slip-time-select" name="LeaveCustomerInput.LeftTime" aria-label="退店時刻">
+                                                @foreach (var time in Model.TimeOptions)
+                                                {
+                                                    if (Model.LeaveCustomerInput.LeftTime == time)
+                                                    {
+                                                        <option value="@time" selected>@time</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@time">@time</option>
+                                                    }
+                                                }
+                                            </select>
+                                            <button class="btn btn-primary btn-sm" type="submit">退店</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+    <span asp-validation-for="UpdateCustomerInput.SlipCustomerId" class="text-danger"></span>
+    <span asp-validation-for="UpdateCustomerInput.CustomerLabel" class="text-danger"></span>
+    <span asp-validation-for="LeaveCustomerInput.SlipCustomerId" class="text-danger"></span>
+    <span asp-validation-for="LeaveCustomerInput.LeftTime" class="text-danger"></span>
+    <span asp-validation-for="LeaveCustomerInput.LeftAt" class="text-danger"></span>
+</div>
+
+@if (Model.IsOpenSlip)
+{
+    <div class="modal fade" id="addCustomerModal" tabindex="-1" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <form method="post" asp-page-handler="AddCustomers">
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1">客一覧</p>
+                            <h2 class="modal-title fs-5" id="addCustomerModalLabel">客を追加</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form">
+                        <input type="hidden" asp-for="SlipId" />
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                        <span asp-validation-for="AddCustomersInput.CustomerLabels" class="text-danger"></span>
+                        <span asp-validation-for="AddCustomersInput.EnteredTime" class="text-danger"></span>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-12">
+                                <label class="form-label">客番号</label>
+                                <div class="business-date-display">@nextCustomerLineNo</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">客名</label>
+                                <input
+                                    class="form-control form-control-lg"
+                                    name="AddCustomersInput.CustomerLabels[0]"
+                                    value="@Model.AddCustomersInput.CustomerLabels.FirstOrDefault()"
+                                    maxlength="100"
+                                    placeholder="客名・特徴など" />
+                                <div class="form-text">名前は空欄でも登録できます。</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">入店時刻</label>
+                                <select class="form-select form-select-lg slip-time-select" name="AddCustomersInput.EnteredTime" aria-label="入店時刻">
+                                    @foreach (var time in Model.TimeOptions)
+                                    {
+                                        if (Model.AddCustomersInput.EnteredTime == time)
+                                        {
+                                            <option value="@time" selected>@time</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@time">@time</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                        <button class="btn btn-primary btn-lg" type="submit">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
