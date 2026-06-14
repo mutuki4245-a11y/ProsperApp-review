@@ -10,7 +10,7 @@
     <div class="store-home__hero">
         <p class="store-home__eyebrow">管理者用</p>
         <h1>設定</h1>
-        <p>店舗設定、機能設定、勤怠入力の時刻刻みをこの端末に保存します。</p>
+        <p>店舗設定、機能設定、管理者モード、勤怠入力の時刻刻みをこの端末に保存します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -87,7 +87,7 @@
                         <input asp-for="Input.ScreenMode" type="radio" value="sales-management" />
                         <span>
                             <strong>営業管理用画面</strong>
-                            <small>開け作業、営業中、締め作業を使う店舗運用画面</small>
+                            <small>営業準備、営業中、締め作業を使う店舗運用画面</small>
                         </span>
                     </label>
                     <label class="settings-radio">
@@ -99,6 +99,13 @@
                     </label>
                 </div>
                 <span asp-validation-for="Input.ScreenMode" class="text-danger"></span>
+                <label class="settings-radio mt-3">
+                    <input asp-for="Input.IsAdminMode" type="checkbox" />
+                    <span>
+                        <strong>管理者モード</strong>
+                        <small>カテゴリ追加など、管理者向けの編集項目を表示する</small>
+                    </span>
+                </label>
             </section>
 
             <section class="settings-card">

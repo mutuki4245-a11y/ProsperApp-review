@@ -5,10 +5,15 @@ using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class ReceiptsModel(IReceiptRepository receiptRepository, IDriveFileService driveFileService, IFeatureGate featureGate) : PageModel
+public class ReceiptsModel(
+    IReceiptRepository receiptRepository,
+    IDriveFileService driveFileService,
+    IGoogleDriveAuthService googleDriveAuthService,
+    IFeatureGate featureGate) : PageModel
 {
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IDriveFileService _driveFileService = driveFileService;
+    private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IFeatureGate _featureGate = featureGate;
 
     [BindProperty]
@@ -50,6 +55,8 @@ public class ReceiptsModel(IReceiptRepository receiptRepository, IDriveFileServi
 
     public string? ErrorMessage { get; set; }
 
+    public string? DriveAuthWarning { get; private set; }
+
     private int CurrentIndex { get; set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -60,6 +67,12 @@ public class ReceiptsModel(IReceiptRepository receiptRepository, IDriveFileServi
         }
 
         await LoadCurrentAsync(Index, cancellationToken);
+        var authRedirect = await RedirectToGoogleLoginIfCurrentReceiptNeedsDriveAsync();
+        if (authRedirect is not null)
+        {
+            return authRedirect;
+        }
+
         return Page();
     }
 
@@ -123,9 +136,32 @@ public class ReceiptsModel(IReceiptRepository receiptRepository, IDriveFileServi
             return Page();
         }
 
+        var configurationError = _googleDriveAuthService.ConfigurationErrorMessage;
+        if (!string.IsNullOrWhiteSpace(configurationError))
+        {
+            ErrorMessage = configurationError;
+            await LoadCurrentAsync(Index, cancellationToken);
+            return Page();
+        }
+
+        if (!await _googleDriveAuthService.HasAccessTokenAsync())
+        {
+            return RedirectToPage(
+                "/Login",
+                new { returnUrl = BuildReceiptsReturnUrl(Index), forceGoogle = true });
+        }
+
         var trashResult = await _driveFileService.TrashFileAsync(Input.DriveFileId, cancellationToken);
         if (!trashResult.Succeeded)
         {
+            if (IsDriveAuthenticationFailure(trashResult.ErrorCode))
+            {
+                _googleDriveAuthService.ClearAccessToken();
+                return RedirectToPage(
+                    "/Login",
+                    new { returnUrl = BuildReceiptsReturnUrl(Index), forceGoogle = true });
+            }
+
             ErrorMessage = $"Driveファイルの削除に失敗しました。{trashResult.ErrorCode}: {trashResult.ErrorMessage}";
             await LoadCurrentAsync(Index, cancellationToken);
             return Page();
@@ -171,6 +207,33 @@ public class ReceiptsModel(IReceiptRepository receiptRepository, IDriveFileServi
                 Amount = CurrentReceipt.Amount
             };
         }
+    }
+
+    private async Task<IActionResult?> RedirectToGoogleLoginIfCurrentReceiptNeedsDriveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentReceipt?.DriveFileId))
+        {
+            return null;
+        }
+
+        var configurationError = _googleDriveAuthService.ConfigurationErrorMessage;
+        if (!string.IsNullOrWhiteSpace(configurationError))
+        {
+            DriveAuthWarning = configurationError;
+            return null;
+        }
+
+        if (await _googleDriveAuthService.HasAccessTokenAsync())
+        {
+            return null;
+        }
+
+        return RedirectToPage("/Login", new { returnUrl = BuildReceiptsReturnUrl(CurrentIndex) });
+    }
+
+    private string BuildReceiptsReturnUrl(int index)
+    {
+        return Url.Page("/Closing/Receipts", new { index }) ?? $"/Closing/Receipts?index={index}";
     }
 
     private static string GenerateGroupCode()
@@ -260,6 +323,12 @@ public class ReceiptsModel(IReceiptRepository receiptRepository, IDriveFileServi
         {
             return TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
         }
+    }
+
+    private static bool IsDriveAuthenticationFailure(string? errorCode)
+    {
+        return errorCode is "missing_access_token" ||
+               errorCode?.EndsWith("_401", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     public sealed record AccountSubjectGroup(string Name, IReadOnlyList<string> Items);

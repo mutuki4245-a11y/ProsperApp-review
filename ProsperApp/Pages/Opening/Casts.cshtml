@@ -5,63 +5,72 @@
 }
 
 <section class="opening-page">
-    <div class="store-home__hero">
-        <p class="store-home__eyebrow">開け作業</p>
-        <h1>キャスト情報編集</h1>
-        <p>営業開始前に、当日利用するキャスト情報を確認します。編集機能は後続で実装し、現時点では登録済みキャストの確認画面です。</p>
+    <div class="business-status-bar">
+        <div>
+            <strong>ホーム / 営業準備 / キャスト情報編集</strong>
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備</a>
+        </div>
     </div>
 
-    <div class="workflow-steps">
-        <div class="workflow-step is-current">
-            <span class="workflow-step__number">1</span>
-            <span class="workflow-step__body">
-                <strong>キャスト情報編集</strong>
-                <small>営業開始前の確認</small>
-            </span>
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <form method="post" class="slip-create__panel cast-admin-form">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div>
+            <label asp-for="Input.DisplayName" class="form-label"></label>
+            <input asp-for="Input.DisplayName" class="form-control form-control-lg" placeholder="キャスト名" />
+            <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
         </div>
-        <a class="workflow-step" asp-page="/Opening">
-            <span class="workflow-step__number">2</span>
-            <span class="workflow-step__body">
-                <strong>営業開始</strong>
-                <small>
-                    @(Model.CurrentBusinessDay is null ? "営業日を開始する" : $"営業日 {Model.CurrentBusinessDay.BusinessDate:yyyy-MM-dd} は営業中")
-                </small>
-            </span>
-        </a>
-    </div>
+        <button class="btn btn-primary btn-lg" type="submit">登録</button>
+    </form>
 
     <div class="slip-create__panel">
-        <h2>登録済みキャスト</h2>
+        <div class="opening-attendance__header">
+            <div>
+                <h2>登録済みキャスト</h2>
+                <p class="text-muted mb-0">加入日は登録日で自動設定されます。</p>
+            </div>
+            @if (Model.Casts.Count > 0)
+            {
+                <span class="opening-attendance__count">@Model.Casts.Count 名</span>
+            }
+        </div>
+
         @if (Model.Casts.Count == 0)
         {
-            <p class="text-muted mb-0">キャストマスタが未登録、または現在の店舗設定で表示できるキャストがありません。</p>
+            <p class="text-muted mb-0">キャストが未登録です。</p>
         }
         else
         {
-            <div class="cast-picker">
+            <div class="cast-admin-table">
+                <div class="cast-admin-table__row cast-admin-table__row--header">
+                    <span>ID</span>
+                    <span>キャスト名</span>
+                    <span>加入日</span>
+                    <span></span>
+                </div>
                 @foreach (var cast in Model.Casts)
                 {
-                    <div class="cast-picker__button btn btn-outline-primary disabled">
-                        @cast.DisplayName
+                    <div class="cast-admin-table__row">
+                        <span>@cast.CastId</span>
+                        <strong>@cast.DisplayName</strong>
+                        <span>@cast.JoinedOn.ToString("yyyy-MM-dd")</span>
+                        <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このキャストを削除しますか？');">
+                            <input type="hidden" asp-for="DeleteCastId" value="@cast.CastId" />
+                            <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
+                        </form>
                     </div>
                 }
             </div>
         }
     </div>
-
-    <div class="alert alert-secondary mt-3">
-        このステップは現在、確認用です。出勤状態や当日表示名の編集は後続で追加します。
-    </div>
-
-    <div class="slip-create__actions mt-3">
-        @if (Model.CurrentBusinessDay is null)
-        {
-            <a class="btn btn-primary btn-lg" asp-page="/Opening">営業開始へ進む</a>
-        }
-        else
-        {
-            <a class="btn btn-primary btn-lg" asp-page="/Business">営業中画面へ</a>
-        }
-        <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">ホームへ戻る</a>
-    </div>
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

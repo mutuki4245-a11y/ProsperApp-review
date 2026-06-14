@@ -112,6 +112,7 @@ public class SettingsModel(
             StoreName = selectedDepartment.DisplayName,
             StoreDepartmentId = selectedDepartment.DepartmentId,
             ScreenMode = Input.ScreenMode,
+            IsAdminMode = Input.IsAdminMode,
             AttendanceMinuteStep = Input.AttendanceMinuteStep
         };
 
@@ -157,6 +158,7 @@ public class SettingsModel(
             StoreName = settings.StoreName,
             StoreDepartmentId = settings.StoreDepartmentId,
             ScreenMode = settings.ScreenMode,
+            IsAdminMode = settings.IsAdminMode,
             AttendanceMinuteStep = settings.AttendanceMinuteStep
         };
     }
@@ -232,6 +234,9 @@ public class SettingsInputModel
 
     [Display(Name = "機能設定")]
     public string ScreenMode { get; set; } = "sales-management";
+
+    [Display(Name = "管理者モード")]
+    public bool IsAdminMode { get; set; }
 
     [Display(Name = "勤怠入力の時刻刻み")]
     public int AttendanceMinuteStep { get; set; } = 15;

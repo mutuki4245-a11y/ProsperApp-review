@@ -1,0 +1,410 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "オーダー入力";
+    var itemGroups = Model.Items
+        .GroupBy(x => x.CategoryName)
+        .ToList();
+}
+
+<section class="store-home order-entry">
+    <div class="store-home__hero">
+        <p class="store-home__eyebrow">営業中</p>
+        <h1>オーダー入力</h1>
+        <p>卓番を選択し、商品をキューに入れて一括登録します。</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    <form method="post" class="order-entry__form" id="orderForm">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+        <input type="hidden" asp-for="SelectedSlipId" id="selectedSlipId" />
+        <div id="queueFields"></div>
+
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <div class="alert alert-warning">
+                営業日が開始されていません。オーダー入力の前に営業準備を実行してください。
+                <a class="alert-link" asp-page="/Opening/Index">営業準備へ</a>
+            </div>
+        }
+        else
+        {
+            <div class="order-entry__grid">
+                <section class="slip-create__panel">
+                    <div class="slip-create__panel-title">
+                        <h2>1. 卓番選択</h2>
+                        <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ</a>
+                    </div>
+                    <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
+
+                    @if (Model.Slips.Count == 0)
+                    {
+                        <div class="alert alert-secondary mb-0">注文登録できるopen伝票がありません。</div>
+                    }
+                    else
+                    {
+                        <div class="order-slip-picker" role="group" aria-label="卓番選択">
+                            @foreach (var slip in Model.Slips)
+                            {
+                                <button
+                                    class="order-slip-picker__button @(Model.SelectedSlipId == slip.SlipId ? "is-selected" : "")"
+                                    type="button"
+                                    data-slip-id="@slip.SlipId">
+                                    <strong>@slip.TableDisplayName</strong>
+                                    <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt) 入店 / @slip.CustomerCount 人</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="slip-create__panel order-entry__items" id="itemPanel">
+                    <div class="slip-create__panel-title">
+                        <h2>2. 商品一覧</h2>
+                        <span class="badge text-bg-secondary" id="selectedSlipBadge">
+                            @(Model.SelectedSlip?.TableDisplayName ?? "卓番未選択")
+                        </span>
+                    </div>
+
+                    @if (Model.Items.Count == 0)
+                    {
+                        <div class="alert alert-secondary mb-0">商品マスタが未登録です。</div>
+                    }
+                    else
+                    {
+                        <div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ">
+                            @for (var i = 0; i < itemGroups.Count; i++)
+                            {
+                                <button class="order-category-tab @(i == 0 ? "is-active" : "")" type="button" data-category-tab="@i">
+                                    @itemGroups[i].Key
+                                </button>
+                            }
+                        </div>
+                        <div class="order-item-groups">
+                            @for (var groupIndex = 0; groupIndex < itemGroups.Count; groupIndex++)
+                            {
+                                var group = itemGroups[groupIndex];
+                                <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-category-panel="@groupIndex">
+                                    <h3>@group.Key</h3>
+                                    <div class="order-item-grid">
+                                        @foreach (var item in group)
+                                        {
+                                            <button
+                                                class="order-item-button"
+                                                type="button"
+                                                data-item-id="@item.ItemId">
+                                                <strong>@item.ItemName</strong>
+                                                <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                                @if (item.IsCastBackTarget)
+                                                {
+                                                    <small>通常 @item.CastBackRegularUnitAmount.ToString("N0") 円 / 指名 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                </section>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <section class="slip-create__panel order-entry__queue">
+                    <div class="slip-create__panel-title">
+                        <div>
+                            <h2>3. 注文キュー</h2>
+                            <small id="selectedSlipQueueLabel">@(Model.SelectedSlip?.TableDisplayName ?? "卓番未選択")</small>
+                        </div>
+                        <button class="btn btn-outline-secondary" type="button" id="clearQueueButton">クリア</button>
+                    </div>
+                    <span asp-validation-for="QueueLines" class="text-danger"></span>
+
+                    <div class="order-queue" id="queueList"></div>
+                    <div class="order-queue__empty" id="queueEmpty">商品を選択してください。</div>
+
+                    <div class="order-queue__total">
+                        <span>合計</span>
+                        <strong id="queueTotal">0 円</strong>
+                    </div>
+
+                    <div class="slip-create__actions">
+                        <button
+                            class="btn btn-primary btn-lg"
+                            type="submit"
+                            id="submitOrderButton"
+                            @(Model.Slips.Count == 0 || Model.Items.Count == 0 ? "disabled" : null)>
+                            一括登録
+                        </button>
+                    </div>
+                </section>
+            </div>
+        }
+    </form>
+
+    <div class="modal fade" id="attendingCastSelectModal" tabindex="-1" aria-labelledby="attendingCastSelectModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="attendingCastSelectModalLabel">出勤キャスト選択</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                </div>
+                <div class="modal-body cast-select-modal">
+                    <div class="cast-select-modal__list" id="attendingCastModalList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const slips = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName })));
+            const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(x => new { id = x.ItemId, name = x.ItemName, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType })));
+            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.SearchDisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true })));
+            const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
+            const initialSlipId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SelectedSlipId));
+
+            const selectedSlipInput = document.getElementById('selectedSlipId');
+            const selectedSlipBadge = document.getElementById('selectedSlipBadge');
+            const selectedSlipQueueLabel = document.getElementById('selectedSlipQueueLabel');
+            const queueFields = document.getElementById('queueFields');
+            const queueList = document.getElementById('queueList');
+            const queueEmpty = document.getElementById('queueEmpty');
+            const queueTotal = document.getElementById('queueTotal');
+            const submitOrderButton = document.getElementById('submitOrderButton');
+            const clearQueueButton = document.getElementById('clearQueueButton');
+            const queue = new Map();
+            const submitBaseDisabled = submitOrderButton?.disabled ?? false;
+            let pendingBackItemId = null;
+            const attendingCastModalElement = document.getElementById('attendingCastSelectModal');
+            const attendingCastModalList = document.getElementById('attendingCastModalList');
+            const attendingCastModal = attendingCastModalElement ? new bootstrap.Modal(attendingCastModalElement) : null;
+
+            initialQueue.forEach((line) => {
+                if (line.itemId > 0 && line.quantity > 0) {
+                    const key = makeQueueKey(line.itemId, line.castBackCastId);
+                    queue.set(key, {
+                        itemId: String(line.itemId),
+                        castBackCastId: line.castBackCastId ? String(line.castBackCastId) : null,
+                        quantity: line.quantity
+                    });
+                }
+            });
+
+            function makeQueueKey(itemId, castBackCastId) {
+                return `${itemId}:${castBackCastId ?? ''}`;
+            }
+
+            const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
+
+            const openBackPicker = (itemId) => {
+                pendingBackItemId = String(itemId);
+                renderAttendingCastModal();
+                attendingCastModal?.show();
+            };
+
+            const closeBackPicker = () => {
+                pendingBackItemId = null;
+                attendingCastModal?.hide();
+            };
+
+            const addToQueue = (itemId, castBackCastId = null) => {
+                const key = makeQueueKey(itemId, castBackCastId);
+                const current = queue.get(key) ?? {
+                    itemId: String(itemId),
+                    castBackCastId: castBackCastId ? String(castBackCastId) : null,
+                    quantity: 0
+                };
+                current.quantity += 1;
+                queue.set(key, current);
+                render();
+            };
+
+            const render = () => {
+                const selectedSlip = slips.find((slip) => String(slip.id) === String(selectedSlipInput?.value ?? ''));
+                if (selectedSlipBadge) {
+                    selectedSlipBadge.textContent = selectedSlip ? selectedSlip.display : '卓番未選択';
+                }
+                if (selectedSlipQueueLabel) {
+                    selectedSlipQueueLabel.textContent = selectedSlip ? selectedSlip.display : '卓番未選択';
+                }
+
+                document.querySelectorAll('[data-slip-id]').forEach((button) => {
+                    button.classList.toggle('is-selected', String(button.dataset.slipId) === String(selectedSlipInput?.value ?? ''));
+                });
+
+                if (queueFields) {
+                    queueFields.innerHTML = '';
+                }
+                if (queueList) {
+                    queueList.innerHTML = '';
+                }
+
+                let index = 0;
+                let total = 0;
+                queue.forEach((line, key) => {
+                    const item = items.find((candidate) => String(candidate.id) === String(line.itemId));
+                    if (!item) {
+                        return;
+                    }
+
+                    const quantity = line.quantity;
+                    const subtotal = Number(item.price) * quantity;
+                    total += subtotal;
+                    const cast = line.castBackCastId
+                        ? castOptions.find((candidate) => String(candidate.id) === String(line.castBackCastId))
+                        : null;
+
+                    if (queueFields) {
+                        queueFields.insertAdjacentHTML('beforeend', `
+                            <input type="hidden" name="QueueLines[${index}].ItemId" value="${item.id}" />
+                            <input type="hidden" name="QueueLines[${index}].Quantity" value="${quantity}" />
+                            ${line.castBackCastId ? `<input type="hidden" name="QueueLines[${index}].CastBackCastId" value="${line.castBackCastId}" />` : ''}
+                        `);
+                    }
+
+                    const row = document.createElement('div');
+                    row.className = 'order-queue__row';
+                    const name = document.createElement('strong');
+                    name.textContent = item.name;
+                    const price = document.createElement('span');
+                    price.textContent = formatYen(Number(item.price));
+                    const quantityText = document.createElement('span');
+                    quantityText.textContent = String(quantity);
+                    const subtotalText = document.createElement('span');
+                    subtotalText.textContent = formatYen(subtotal);
+                    const remove = document.createElement('button');
+                    remove.className = 'btn btn-outline-danger btn-sm';
+                    remove.type = 'button';
+                    remove.dataset.removeItem = key;
+                    remove.textContent = '削除';
+                    row.append(name, price, quantityText, subtotalText, remove);
+                    if (cast) {
+                        const back = document.createElement('small');
+                        back.className = 'order-queue__back';
+                        back.textContent = `${cast.display} / 通常 ${formatYen(Number(item.castBackRegularUnitAmount) * quantity)} / 指名 ${formatYen(Number(item.castBackNominationUnitAmount) * quantity)}`;
+                        row.appendChild(back);
+                    }
+                    queueList?.appendChild(row);
+                    index += 1;
+                });
+
+                const hasQueue = queue.size > 0;
+                if (queueEmpty) {
+                    queueEmpty.hidden = hasQueue;
+                }
+                if (queueTotal) {
+                    queueTotal.textContent = formatYen(total);
+                }
+                if (submitOrderButton) {
+                    submitOrderButton.disabled = submitBaseDisabled || !selectedSlipInput?.value || !hasQueue;
+                }
+            };
+
+            document.querySelectorAll('[data-slip-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    if (selectedSlipInput) {
+                        selectedSlipInput.value = button.dataset.slipId ?? '';
+                    }
+                    queue.clear();
+                    render();
+                });
+            });
+
+            document.querySelectorAll('[data-item-id]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    if (!selectedSlipInput?.value) {
+                        return;
+                    }
+
+                    const itemId = button.dataset.itemId ?? '';
+                    const item = items.find((candidate) => String(candidate.id) === String(itemId));
+                    if (item?.isCastBackTarget) {
+                        openBackPicker(itemId);
+                        return;
+                    }
+
+                    addToQueue(itemId);
+                });
+            });
+
+            queueList?.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-remove-item]');
+                if (!button) {
+                    return;
+                }
+
+                queue.delete(button.dataset.removeItem ?? '');
+                render();
+            });
+
+            clearQueueButton?.addEventListener('click', () => {
+                queue.clear();
+                render();
+            });
+
+            document.querySelectorAll('[data-category-tab]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const index = button.dataset.categoryTab ?? '';
+                    document.querySelectorAll('[data-category-tab]').forEach((tab) => {
+                        tab.classList.toggle('is-active', tab === button);
+                    });
+                    document.querySelectorAll('[data-category-panel]').forEach((panel) => {
+                        panel.classList.toggle('is-active', panel.dataset.categoryPanel === index);
+                    });
+                });
+            });
+
+            const renderAttendingCastModal = () => {
+                if (!attendingCastModalList) {
+                    return;
+                }
+
+                attendingCastModalList.innerHTML = '';
+                const matches = castOptions.slice(0, 80);
+                if (matches.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'text-muted mb-0';
+                    empty.textContent = '出勤キャストが登録されていません。';
+                    attendingCastModalList.appendChild(empty);
+                    return;
+                }
+
+                matches.forEach((cast) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'cast-select-modal__item';
+                    const name = document.createElement('strong');
+                    name.textContent = cast.name;
+                    const department = document.createElement('span');
+                    department.textContent = cast.department ?? '';
+                    button.append(name, department);
+                    button.addEventListener('click', () => {
+                        if (pendingBackItemId) {
+                            addToQueue(pendingBackItemId, cast.id);
+                        }
+                        closeBackPicker();
+                    });
+                    attendingCastModalList.appendChild(button);
+                });
+            };
+
+            attendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
+                pendingBackItemId = null;
+            });
+
+            if (selectedSlipInput && initialSlipId) {
+                selectedSlipInput.value = initialSlipId;
+            }
+
+            render();
+        })();
+    </script>
+}
+
+

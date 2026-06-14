@@ -26,6 +26,10 @@
     {
         <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
     }
+    @if (!string.IsNullOrWhiteSpace(Model.DriveAuthWarning))
+    {
+        <div class="alert alert-warning" role="alert">@Model.DriveAuthWarning</div>
+    }
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     @if (Model.CurrentReceipt is null)
