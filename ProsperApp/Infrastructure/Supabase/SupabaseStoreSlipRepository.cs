@@ -91,6 +91,7 @@ public class SupabaseStoreSlipRepository(
                 Status = ReadString(row, "status") ?? string.Empty,
                 CustomerCount = (int)(ReadLong(row, "customer_count") ?? 0),
                 CustomerNames = ReadString(row, "customer_names"),
+                CastNames = ReadString(row, "cast_names"),
                 AccountingAmount = ReadDecimal(row, "accounting_amount") ?? 0,
                 Memo = ReadString(row, "memo")
             })

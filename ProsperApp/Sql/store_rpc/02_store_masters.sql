@@ -193,6 +193,7 @@ returns table (
     status text,
     customer_count integer,
     customer_names text,
+    cast_names text,
     accounting_amount numeric,
     memo text
 )
@@ -212,6 +213,36 @@ as $$
         from public.store_slip_customers c
         group by c.slip_id
     ),
+    cast_rows as (
+        select
+            sc.slip_id,
+            sc.cast_id,
+            case
+                when nullif(d.department_name, '') is null then cm.display_name
+                else cm.display_name || '：' || d.department_name
+            end as cast_display_name,
+            min(sc.started_at) as first_started_at,
+            min(sc.slip_cast_id) as first_slip_cast_id
+        from public.store_slip_casts sc
+        join public.cast_master cm
+          on cm.cast_id = sc.cast_id
+        left join public.department_master d
+          on d.department_id = cm.department_id
+        where sc.status <> 'cancelled'
+          and sc.nomination_type in ('nomination', 'in_store', 'companion')
+        group by sc.slip_id, sc.cast_id, cm.display_name, d.department_name
+    ),
+    cast_summary as (
+        select
+            cr.slip_id,
+            string_agg(
+                cr.cast_display_name,
+                '、'
+                order by cr.first_started_at asc nulls last, cr.first_slip_cast_id asc
+            ) as cast_names
+        from cast_rows cr
+        group by cr.slip_id
+    ),
     order_summary as (
         select
             l.slip_id,
@@ -229,6 +260,7 @@ as $$
         s.status,
         coalesce(cs.customer_count, s.customer_count) as customer_count,
         coalesce(cs.customer_names, '') as customer_names,
+        coalesce(casts.cast_names, '') as cast_names,
         coalesce(os.accounting_amount, 0) as accounting_amount,
         s.memo
     from public.store_slips s
@@ -236,6 +268,8 @@ as $$
       on t.table_id = s.table_id
     left join customer_summary cs
       on cs.slip_id = s.slip_id
+    left join cast_summary casts
+      on casts.slip_id = s.slip_id
     left join order_summary os
       on os.slip_id = s.slip_id
     where s.department_id = p_department_id
@@ -740,4 +774,3 @@ begin
     select coalesce(v_updated_count, 0);
 end;
 $$;
-

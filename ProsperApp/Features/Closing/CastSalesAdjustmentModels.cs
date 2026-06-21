@@ -33,6 +33,8 @@ public class CastSalesAdjustmentSlip
 
     public decimal TotalAmount { get; init; }
 
+    public string? CastNames { get; init; }
+
     public int RequiredCastCount { get; init; }
 
     public int SavedCastCount { get; init; }

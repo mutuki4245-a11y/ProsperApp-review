@@ -89,6 +89,7 @@
                                 <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
                                 <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
                                 <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
+                                <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames)</span>
                                 <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
                                 <strong class="slip-list__amount">@slip.AccountingAmount.ToString("N0") 円</strong>
                             </a>

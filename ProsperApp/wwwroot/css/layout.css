@@ -607,6 +607,7 @@
 
   .slip-list__table,
   .slip-list__customers,
+  .slip-list__casts,
   .slip-list__memo {
     grid-column: 1 / -1;
   }

@@ -189,6 +189,7 @@ public class BusinessSlipListItem
     public string Status { get; set; } = string.Empty;
     public int CustomerCount { get; set; }
     public string? CustomerNames { get; set; }
+    public string? CastNames { get; set; }
     public decimal AccountingAmount { get; set; }
     public string? Memo { get; set; }
 

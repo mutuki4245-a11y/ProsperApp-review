@@ -116,31 +116,23 @@
                 }
             </span>
             <span class="closing-panel__badge @castSalesAdjustmentPanelClass">@(Model.Readiness.IsCastSalesAdjustmentCompleted ? "調整済" : "要入力")</span>
-            <span class="closing-panel__action">@Model.CastSalesAmountBasisLabel / @Model.CastSalesSplitModeLabel</span>
             <div class="closing-panel__form">
                 @if (hasBusinessDay && Model.CastSalesAdjustmentSlips.Count > 0)
                 {
-                    <div class="cast-sales-adjustment-list" aria-label="キャスト売上額調整対象伝票">
-                        <div class="cast-sales-adjustment-list__row cast-sales-adjustment-list__row--header">
-                            <span>卓番</span>
-                            <span>会計</span>
-                            <span>指名</span>
-                            <span>状態</span>
-                            <span>操作</span>
-                        </div>
+                    <div class="slip-list cast-sales-adjustment-list" aria-label="キャスト売上額調整対象伝票">
                         @foreach (var slip in Model.CastSalesAdjustmentSlips)
                         {
                             var detail = Model.FindCastSalesAdjustmentDetail(slip.SlipId);
-                            <div class="cast-sales-adjustment-list__row">
-                                <strong>@slip.TableDisplayName</strong>
-                                <span>
-                                    小計 @slip.SubtotalAmount.ToString("N0") 円
-                                    <small>会計 @slip.TotalAmount.ToString("N0") 円</small>
-                                </span>
-                                <span>@($"{slip.RequiredCastCount}名")</span>
-                                <span class="cast-sales-adjustment-list__status @(slip.IsAdjusted ? "is-ready" : "has-warning")">
+                            var castNames = Model.GetCastSalesAdjustmentCastNames(slip);
+                            <div class="slip-list__row slip-list__row--action cast-sales-adjustment-list__row">
+                                <strong class="slip-list__table">@slip.TableDisplayName</strong>
+                                <span class="badge @(slip.IsAdjusted ? "text-bg-secondary" : "text-bg-danger")">
                                     @(slip.IsAdjusted ? "調整済" : "未調整")
                                 </span>
+                                <span>@StoreBusinessTime.FormatStoreTime(slip.CheckoutAt)</span>
+                                <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(castNames) ? "指名なし" : castNames)</span>
+                                <span class="slip-list__memo">@($"{slip.RequiredCastCount}名")</span>
+                                <strong class="slip-list__amount">@slip.TotalAmount.ToString("N0") 円</strong>
                                 <span class="cast-sales-adjustment-list__action">
                                     @if (detail is not null)
                                     {
@@ -234,7 +226,7 @@
                         <form method="post" asp-page-handler="SaveCastSalesAdjustment">
                             <div class="modal-header">
                                 <div>
-                                    <p class="store-home__eyebrow mb-1">@detail.TableDisplayName</p>
+                                    <p class="store-home__eyebrow mb-1">配分基準 @baseAmount.ToString("N0") 円</p>
                                     <h2 class="modal-title fs-4" id="castSalesAdjustmentModalLabel-@detail.SlipId">売上額調整</h2>
                                 </div>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
@@ -244,25 +236,6 @@
                                 <input type="hidden" name="CastSalesAdjustmentInput.SlipId" value="@detail.SlipId" />
                                 <input type="hidden" name="CastSalesAdjustmentInput.SourceAmountType" value="@Model.CastSalesAmountBasis" />
                                 <input type="hidden" name="CastSalesAdjustmentInput.SplitMode" value="@Model.CastSalesSplitMode" />
-
-                                <div class="cast-sales-adjustment-modal__summary">
-                                    <div>
-                                        <span>小計</span>
-                                        <strong>@detail.SubtotalAmount.ToString("N0") 円</strong>
-                                    </div>
-                                    <div>
-                                        <span>ServiceTax20%</span>
-                                        <strong>@detail.ServiceTaxAmount.ToString("N0") 円</strong>
-                                    </div>
-                                    <div>
-                                        <span>会計</span>
-                                        <strong>@detail.TotalAmount.ToString("N0") 円</strong>
-                                    </div>
-                                    <div>
-                                        <span>配分基準</span>
-                                        <strong>@Model.CastSalesAmountBasisLabel @baseAmount.ToString("N0") 円</strong>
-                                    </div>
-                                </div>
 
                                 <div class="cast-sales-adjustment-casts">
                                     <div class="cast-sales-adjustment-casts__row cast-sales-adjustment-casts__row--header">

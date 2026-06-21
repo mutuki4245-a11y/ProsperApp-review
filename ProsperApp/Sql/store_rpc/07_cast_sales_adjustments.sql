@@ -64,6 +64,7 @@ returns table (
     subtotal_amount numeric,
     service_tax_amount numeric,
     total_amount numeric,
+    cast_names text,
     required_cast_count integer,
     saved_cast_count integer,
     adjusted_sales_amount_total numeric
@@ -75,7 +76,13 @@ as $$
     with required_casts as (
         select
             s.slip_id,
-            sc.slip_cast_id
+            sc.slip_cast_id,
+            sc.cast_id,
+            case
+                when nullif(d.department_name, '') is null then cm.display_name
+                else cm.display_name || '：' || d.department_name
+            end as cast_display_name,
+            sc.started_at
         from public.store_slips s
         join public.store_checkouts c
           on c.slip_id = s.slip_id
@@ -84,9 +91,34 @@ as $$
           on sc.slip_id = s.slip_id
          and sc.status = 'active'
          and sc.nomination_type in ('nomination', 'in_store', 'companion')
+        join public.cast_master cm
+          on cm.cast_id = sc.cast_id
+        left join public.department_master d
+          on d.department_id = cm.department_id
         where s.department_id = p_department_id
           and s.business_day_id = p_business_day_id
           and s.status = 'checked_out'
+    ),
+    required_cast_names as (
+        select
+            rc.slip_id,
+            rc.cast_id,
+            rc.cast_display_name,
+            min(rc.started_at) as first_started_at,
+            min(rc.slip_cast_id) as first_slip_cast_id
+        from required_casts rc
+        group by rc.slip_id, rc.cast_id, rc.cast_display_name
+    ),
+    cast_name_summary as (
+        select
+            rcn.slip_id,
+            string_agg(
+                rcn.cast_display_name,
+                '、'
+                order by rcn.first_started_at asc nulls last, rcn.first_slip_cast_id asc
+            ) as cast_names
+        from required_cast_names rcn
+        group by rcn.slip_id
     ),
     slip_status as (
         select
@@ -111,6 +143,7 @@ as $$
         c.subtotal_amount,
         c.service_tax_amount,
         c.total_amount,
+        coalesce(cns.cast_names, '') as cast_names,
         ss.required_cast_count,
         ss.saved_cast_count,
         ss.adjusted_sales_amount_total
@@ -120,6 +153,8 @@ as $$
      and c.status = 'confirmed'
     join slip_status ss
       on ss.slip_id = s.slip_id
+    left join cast_name_summary cns
+      on cns.slip_id = s.slip_id
     left join public.store_table_master t
       on t.table_id = s.table_id
     where s.department_id = p_department_id

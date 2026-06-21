@@ -70,6 +70,7 @@ public class SupabaseCastSalesAdjustmentRepository(
                 SubtotalAmount = ReadDecimal(row, "subtotal_amount") ?? 0,
                 ServiceTaxAmount = ReadDecimal(row, "service_tax_amount") ?? 0,
                 TotalAmount = ReadDecimal(row, "total_amount") ?? 0,
+                CastNames = ReadString(row, "cast_names"),
                 RequiredCastCount = (int)(ReadLong(row, "required_cast_count") ?? 0),
                 SavedCastCount = (int)(ReadLong(row, "saved_cast_count") ?? 0),
                 AdjustedSalesAmountTotal = ReadDecimal(row, "adjusted_sales_amount_total") ?? 0

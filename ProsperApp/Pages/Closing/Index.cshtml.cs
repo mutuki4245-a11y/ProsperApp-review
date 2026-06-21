@@ -55,14 +55,6 @@ public class ClosingModel(
 
     public string CastSalesSplitMode { get; private set; } = LocalSettings.CastSalesSplitModeSplit;
 
-    public string CastSalesAmountBasisLabel => CastSalesAmountBasis == LocalSettings.CastSalesAmountBasisSubtotal
-        ? "小計額"
-        : "会計額";
-
-    public string CastSalesSplitModeLabel => CastSalesSplitMode == LocalSettings.CastSalesSplitModeFull
-        ? "割らない"
-        : "人数で割る";
-
     public string? SuccessMessage { get; set; }
 
     public long? ShowCastSalesAdjustmentModalSlipId { get; private set; }
@@ -214,6 +206,19 @@ public class ClosingModel(
     public CastSalesAdjustmentDetail? FindCastSalesAdjustmentDetail(long slipId)
     {
         return CastSalesAdjustmentDetails.FirstOrDefault(x => x.SlipId == slipId);
+    }
+
+    public string? GetCastSalesAdjustmentCastNames(CastSalesAdjustmentSlip slip)
+    {
+        if (!string.IsNullOrWhiteSpace(slip.CastNames))
+        {
+            return slip.CastNames;
+        }
+
+        var detail = FindCastSalesAdjustmentDetail(slip.SlipId);
+        return detail is null
+            ? null
+            : string.Join("、", detail.Casts.Select(x => x.CastDisplayName).Distinct(StringComparer.Ordinal));
     }
 
     public static string FormatAmountValue(decimal amount)
