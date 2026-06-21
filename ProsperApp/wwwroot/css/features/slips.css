@@ -6,6 +6,11 @@
   padding: 1rem;
 }
 
+.slip-list-panel--primary {
+  border-left: 6px solid #0f766e;
+  border-radius: 10px;
+}
+
 .slip-list-panel__header {
   align-items: center;
   display: flex;

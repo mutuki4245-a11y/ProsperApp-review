@@ -50,7 +50,134 @@
         </div>
     }
 
-    <section class="operations-summary" aria-label="随時管理">
+    @if (Model.CurrentBusinessDay is not null || Model.CanCreateSalesInput)
+    {
+        <section class="home-workspace" aria-label="営業中の主操作">
+            <section class="slip-list-panel slip-list-panel--primary" id="slipListPanel">
+                <div class="slip-list-panel__header">
+                    <div>
+                        <p class="store-home__eyebrow">主操作</p>
+                        <h2>伝票編集</h2>
+                    </div>
+                    <div class="slip-list-panel__badges">
+                        <span class="badge text-bg-success">在席 @Model.OpenSlipCount 件</span>
+                        <span class="badge text-bg-secondary">会計済み @Model.CheckedOutSlipCount 件</span>
+                        @if (Model.CanCreateSalesInput)
+                        {
+                            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                        }
+                    </div>
+                </div>
+
+                @if (Model.Slips.Count == 0)
+                {
+                    <div class="slip-list">
+                        <article class="slip-list__row slip-list__row--add">
+                            <div class="slip-list__main">
+                                <strong>当日の伝票はまだありません</strong>
+                                <span>最初の伝票作成時に営業日を自動作成します。</span>
+                            </div>
+                            <div class="slip-list__actions">
+                                @if (Model.CanCreateSalesInput)
+                                {
+                                    <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                                }
+                            </div>
+                        </article>
+                    </div>
+                }
+                else
+                {
+                    <div class="slip-list">
+                        @foreach (var slip in Model.Slips)
+                        {
+                            <a class="slip-list__row slip-list__row--link" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">
+                                <strong class="slip-list__table">@slip.TableDisplayName</strong>
+                                <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
+                                <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
+                                <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
+                                <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
+                                <strong class="slip-list__amount">@slip.AccountingAmount.ToString("N0") 円</strong>
+                            </a>
+                        }
+                    </div>
+                }
+            </section>
+
+            <aside class="home-workspace__side" aria-label="営業中の入力">
+                <a class="closing-panel closing-panel--primary-action @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "needs-action" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")" asp-page="/Closing/Attendance">
+                    <span class="closing-panel__body">
+                        <strong>勤怠入力</strong>
+                        <small>
+                            @if (Model.ClosingAttendanceMissingClockOutCount > 0)
+                            {
+                                @($"{Model.ClosingAttendanceMissingClockOutCount}名の退勤時刻が未入力です。")
+                            }
+                            else if (Model.ClosingAttendanceCount > 0)
+                            {
+                                @($"{Model.ClosingAttendanceCount}名の勤怠を入力済みです。")
+                            }
+                            else
+                            {
+                                @(Model.CurrentBusinessDay is null ? "保存時に営業日を自動作成します。" : "出勤者を登録してください。")
+                            }
+                        </small>
+                    </span>
+                    <span class="closing-panel__badge @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "needs-action" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")">@(Model.ClosingAttendanceMissingClockOutCount > 0 ? "要入力" : Model.ClosingAttendanceCount > 0 ? "入力済" : "要入力")</span>
+                    <span class="closing-panel__action">開く</span>
+                </a>
+
+                <div class="home-secondary-actions">
+                    <a class="closing-panel @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")" asp-page="/Closing/DrinkCost">
+                        <span class="closing-panel__body">
+                            <strong>酒代入力</strong>
+                            <small>
+                                @(Model.CurrentBusinessDay is null
+                                    ? "保存時に営業日を自動作成します。"
+                                    : Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")
+                            </small>
+                        </span>
+                        <span class="closing-panel__badge @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")">@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</span>
+                        <span class="closing-panel__action">開く</span>
+                    </a>
+                    @if (Model.ReceiptsEnabled)
+                    {
+                        <a class="closing-panel @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")" asp-page="/Closing/Receipts">
+                            <span class="closing-panel__body">
+                                <strong>領収書入力</strong>
+                                <small>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</small>
+                            </span>
+                            <span class="closing-panel__badge @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")">@(Model.PendingReceiptCount > 0 ? "要入力" : "確認済")</span>
+                            <span class="closing-panel__action">開く</span>
+                        </a>
+                    }
+                    <a class="closing-panel @(Model.CurrentBusinessDay is null ? "is-preparing" : Model.HasClosingBlockers ? "needs-action" : "is-ready")" asp-page="/Closing/Index">
+                        <span class="closing-panel__body">
+                            <strong>締め前確認</strong>
+                            <small>
+                                @if (Model.CurrentBusinessDay is null)
+                                {
+                                    @("営業日作成後、締め条件を確認できます。")
+                                }
+                                else if (Model.OpenSlipCount > 0)
+                                {
+                                    @($"未会計伝票が {Model.OpenSlipCount} 件あります。")
+                                }
+                                else
+                                {
+                                    @("酒代・勤怠・領収書を確認します。")
+                                }
+                            </small>
+                        </span>
+                        <span class="closing-panel__badge @(Model.CurrentBusinessDay is null ? "is-preparing" : Model.HasClosingBlockers ? "needs-action" : "is-ready")">@(Model.CurrentBusinessDay is null ? "待機" : Model.HasClosingBlockers ? "要確認" : "実行可")</span>
+                        <span class="closing-panel__action">開く</span>
+                    </a>
+                </div>
+            </aside>
+        </section>
+    }
+
+    <section class="operations-summary operations-summary--management" aria-label="随時管理">
         <div class="operations-summary__header">
             <div>
                 <p class="store-home__eyebrow">随時管理</p>
@@ -76,160 +203,6 @@
             </a>
         </div>
     </section>
-
-    @if (Model.CurrentBusinessDay is not null || Model.CanCreateSalesInput)
-    {
-        <section class="operations-summary" aria-label="営業日の未処理サマリ">
-            <div class="operations-summary__header">
-                <div>
-                    <p class="store-home__eyebrow">営業中</p>
-                    <h2>随時入力と締め前チェック</h2>
-                </div>
-            </div>
-            <div class="closing-list operations-summary__list">
-                <a class="closing-panel @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" href="#slipListPanel">
-                    <span class="closing-panel__body">
-                        <strong>伝票一覧</strong>
-                        <small>
-                            @(Model.CurrentBusinessDay is null
-                                ? "最初の伝票作成時に営業日を自動作成します。"
-                                : $"在席 {Model.OpenSlipCount} 件 / 会計済み {Model.CheckedOutSlipCount} 件")
-                        </small>
-                    </span>
-                    <span class="closing-panel__badge @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">@(Model.OpenSlipCount > 0 ? "要会計" : Model.CurrentBusinessDay is null ? "自動作成" : "確認済")</span>
-                    <span class="closing-panel__action">見る</span>
-                </a>
-                <a class="closing-panel @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")" asp-page="/Closing/DrinkCost">
-                    <span class="closing-panel__body">
-                        <strong>酒代入力</strong>
-                        <small>
-                            @(Model.CurrentBusinessDay is null
-                                ? "保存時に営業日を自動作成します。"
-                                : Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")
-                        </small>
-                    </span>
-                    <span class="closing-panel__badge @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")">@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</span>
-                    <span class="closing-panel__action">開く</span>
-                </a>
-                <a class="closing-panel @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "needs-action" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")" asp-page="/Closing/Attendance">
-                    <span class="closing-panel__body">
-                        <strong>勤怠入力</strong>
-                        <small>
-                            @if (Model.ClosingAttendanceMissingClockOutCount > 0)
-                            {
-                                @($"{Model.ClosingAttendanceMissingClockOutCount}名の退勤時刻が未入力です。")
-                            }
-                            else if (Model.ClosingAttendanceCount > 0)
-                            {
-                                @($"{Model.ClosingAttendanceCount}名の退勤時刻を入力済みです。")
-                            }
-                            else
-                            {
-                                @(Model.CurrentBusinessDay is null ? "保存時に営業日を自動作成します。" : "勤怠入力にキャストがいません。")
-                            }
-                        </small>
-                    </span>
-                    <span class="closing-panel__badge @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "needs-action" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")">@(Model.ClosingAttendanceMissingClockOutCount > 0 ? "要入力" : Model.ClosingAttendanceCount > 0 ? "入力済" : "要確認")</span>
-                    <span class="closing-panel__action">開く</span>
-                </a>
-                @if (Model.ReceiptsEnabled)
-                {
-                    <a class="closing-panel @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")" asp-page="/Closing/Receipts">
-                        <span class="closing-panel__body">
-                            <strong>領収書入力</strong>
-                            <small>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</small>
-                        </span>
-                        <span class="closing-panel__badge @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")">@(Model.PendingReceiptCount > 0 ? "要入力" : "確認済")</span>
-                        <span class="closing-panel__action">開く</span>
-                    </a>
-                }
-                <a class="closing-panel @(Model.CurrentBusinessDay is null ? "is-preparing" : Model.HasClosingBlockers ? "needs-action" : "is-ready")" asp-page="/Closing/Index">
-                    <span class="closing-panel__body">
-                        <strong>営業日締め</strong>
-                        <small>
-                            @if (Model.CurrentBusinessDay is null)
-                            {
-                                @("営業日作成後、締め条件を確認できます。")
-                            }
-                            else if (!Model.HasAnySlip)
-                            {
-                                @("締め作業画面で酒代・勤怠・領収書を確認します。")
-                            }
-                            else if (Model.OpenSlipCount > 0)
-                            {
-                                @($"未会計伝票が {Model.OpenSlipCount} 件あります。会計完了後に営業日を締められます。")
-                            }
-                            else
-                            {
-                                @("会計は完了しています。締め条件を確認します。")
-                            }
-                        </small>
-                    </span>
-                    <span class="closing-panel__badge @(Model.CurrentBusinessDay is null ? "is-preparing" : Model.HasClosingBlockers ? "needs-action" : "is-ready")">@(Model.CurrentBusinessDay is null ? "待機" : Model.HasClosingBlockers ? "要確認" : "実行可")</span>
-                    <span class="closing-panel__action">締め作業へ</span>
-                </a>
-            </div>
-        </section>
-
-        <section class="slip-list-panel" id="slipListPanel">
-            <div class="slip-list-panel__header">
-                <div>
-                    <h2>伝票一覧</h2>
-                </div>
-                <div class="slip-list-panel__badges">
-                    <span class="badge text-bg-success">在席 @Model.OpenSlipCount 件</span>
-                    <span class="badge text-bg-secondary">会計済み @Model.CheckedOutSlipCount 件</span>
-                </div>
-            </div>
-
-            @if (Model.Slips.Count == 0)
-            {
-                <div class="slip-list">
-                    <article class="slip-list__row slip-list__row--add">
-                        <div class="slip-list__main">
-                            <strong>当日の伝票はまだありません</strong>
-                            <span>最初の伝票を追加します。</span>
-                        </div>
-                        <div class="slip-list__actions">
-                            @if (Model.CanCreateSalesInput)
-                            {
-                                <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-                            }
-                        </div>
-                    </article>
-                </div>
-            }
-            else
-            {
-                <div class="slip-list">
-                    @foreach (var slip in Model.Slips)
-                    {
-                        <a class="slip-list__row slip-list__row--link" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">
-                            <strong class="slip-list__table">@slip.TableDisplayName</strong>
-                            <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
-                            <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
-                            <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
-                            <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
-                            <strong class="slip-list__amount">@slip.AccountingAmount.ToString("N0") 円</strong>
-                        </a>
-                    }
-                    @if (Model.CanCreateSalesInput)
-                    {
-                        <article class="slip-list__row slip-list__row--add">
-                            <div class="slip-list__main">
-                                <strong>伝票を追加</strong>
-                                <span>新しい入店伝票を作成します。</span>
-                            </div>
-                            <div class="slip-list__actions">
-                                <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-                            </div>
-                        </article>
-                    }
-                </div>
-            }
-        </section>
-
-    }
 
     @if (Model.CanCreateSalesInput)
     {

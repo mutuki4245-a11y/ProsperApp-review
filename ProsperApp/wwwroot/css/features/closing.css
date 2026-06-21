@@ -20,6 +20,18 @@
   text-decoration: none;
 }
 
+.closing-panel--primary-action {
+  min-height: 120px;
+}
+
+.closing-panel--primary-action .closing-panel__body strong {
+  font-size: 1.35rem;
+}
+
+.closing-panel--primary-action .closing-panel__body small {
+  font-size: 0.98rem;
+}
+
 .closing-panel.is-ready {
   border-left-color: #10b981;
 }
