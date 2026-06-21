@@ -3,9 +3,6 @@
 @{
     ViewData["Title"] = "伝票詳細";
     ViewData["HasCurrentBusinessDay"] = Model.Detail is not null;
-    var activeOrderTotal = Model.Detail?.Orders
-        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-        .Sum(x => x.Amount) ?? 0;
 }
 
 <section class="slip-create">
@@ -42,32 +39,6 @@
     }
     else
     {
-        <div class="slip-detail-summary">
-            <div>
-                <span>卓番</span>
-                <strong>@Model.Detail.TableDisplayName</strong>
-            </div>
-            <div>
-                <span>入店</span>
-                <strong>@Model.FormatStoreTime(Model.Detail.OpenedAt)</strong>
-            </div>
-            <div>
-                <span>客数</span>
-                <strong>@Model.Detail.CustomerCount</strong>
-            </div>
-            <div>
-                <span>現在合計</span>
-                <strong>@activeOrderTotal.ToString("N0") 円</strong>
-            </div>
-        </div>
-
-        <nav class="slip-detail-nav" aria-label="伝票詳細メニュー">
-            <a href="#slipCustomersSection">客</a>
-            <a href="#slipNominationsSection">指名</a>
-            <a href="#slipOrdersSection">オーダー</a>
-            <a href="#slipCheckoutSection">会計</a>
-        </nav>
-
         <div id="slipCustomersSection">
             <partial name="_SlipCustomers" model="Model" />
         </div>
