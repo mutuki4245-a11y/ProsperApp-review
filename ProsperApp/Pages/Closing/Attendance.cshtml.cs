@@ -29,6 +29,8 @@ public class ClosingAttendanceModel(
 
     public IReadOnlyList<string> TimeOptions { get; private set; } = [];
 
+    public string DefaultClockInTime { get; private set; } = "18:00";
+
     public string? SuccessMessage { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -78,6 +80,7 @@ public class ClosingAttendanceModel(
         }
 
         var attendanceEntries = Input.Entries
+            .Where(x => x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime)))
             .Select(x => new BusinessDayAttendanceInput
             {
                 CastId = x.CastId,
@@ -148,6 +151,7 @@ public class ClosingAttendanceModel(
     {
         var minuteStep = _localSettingsProvider.GetCurrent().AttendanceMinuteStep is 30 ? 30 : 15;
         TimeOptions = _storeClock.BuildTimeOptions(minuteStep);
+        DefaultClockInTime = ResolveDefaultClockInTime(TimeOptions);
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         var postedByCastId = preserveInput
@@ -170,15 +174,22 @@ public class ClosingAttendanceModel(
             {
                 postedByCastId.TryGetValue(cast.CastId, out var posted);
                 attendanceByCastId.TryGetValue(cast.CastId, out var attendance);
+                var clockInTime = posted?.ClockInTime ??
+                    _storeClock.FormatStoreTime(attendance?.ClockInAt, string.Empty);
+                if (attendance is null && posted is null && string.IsNullOrWhiteSpace(clockInTime))
+                {
+                    clockInTime = DefaultClockInTime;
+                }
+
                 return new BusinessDayAttendanceEntryInput
                 {
                     CastId = cast.CastId,
                     AttendanceId = attendance?.AttendanceId ?? posted?.AttendanceId ?? 0,
                     DisplayName = cast.SearchDisplayName,
                     DepartmentName = cast.DepartmentName,
-                    IsSelected = posted?.IsSelected ?? attendance is not null,
+                    IsSelected = posted?.IsSelected ?? (attendance is not null && !string.IsNullOrWhiteSpace(clockInTime)),
                     IsRegistered = attendance is not null,
-                    ClockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(attendance?.ClockInAt, string.Empty),
+                    ClockInTime = clockInTime,
                     ClockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty),
                     UsesSendService = posted?.UsesSendService ?? attendance?.UsesSendService ?? false
                 };
@@ -190,15 +201,16 @@ public class ClosingAttendanceModel(
             .Select(item =>
             {
                 postedByCastId.TryGetValue(item.CastId, out var posted);
+                var clockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(item.ClockInAt, string.Empty);
                 return new BusinessDayAttendanceEntryInput
                 {
                     CastId = item.CastId,
                     AttendanceId = item.AttendanceId,
                     DisplayName = item.SearchDisplayName,
                     DepartmentName = item.DepartmentName,
-                    IsSelected = posted?.IsSelected ?? true,
+                    IsSelected = posted?.IsSelected ?? !string.IsNullOrWhiteSpace(clockInTime),
                     IsRegistered = true,
-                    ClockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(item.ClockInAt, string.Empty),
+                    ClockInTime = clockInTime,
                     ClockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(item.ClockOutAt, string.Empty),
                     UsesSendService = posted?.UsesSendService ?? item.UsesSendService
                 };
@@ -209,6 +221,13 @@ public class ClosingAttendanceModel(
             BusinessDayId = CurrentBusinessDay?.BusinessDayId,
             Entries = entries
         };
+    }
+
+    private static string ResolveDefaultClockInTime(IReadOnlyList<string> timeOptions)
+    {
+        return timeOptions.Contains("18:00", StringComparer.Ordinal)
+            ? "18:00"
+            : timeOptions.FirstOrDefault() ?? string.Empty;
     }
 
     private void ValidateAttendanceInput()

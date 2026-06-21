@@ -3,6 +3,10 @@
 @{
     ViewData["Title"] = "勤怠入力";
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
+    var attendanceRows = Model.Input.Entries
+        .Select((entry, index) => new { Entry = entry, Index = index })
+        .ToList();
+    var selectedAttendanceCount = attendanceRows.Count(x => x.Entry.IsSelected);
 }
 
 <section class="store-home">
@@ -49,44 +53,41 @@
 
         <form method="post" class="closing-attendance-form">
             <input asp-for="Input.BusinessDayId" type="hidden" />
-            <div class="closing-entry-panel">
-                <div class="closing-entry-panel__body">
-                    <label class="form-label">勤怠入力</label>
-                    <span class="text-muted">出勤者、出勤時刻、退勤時刻、送り利用を営業中に随時保存できます。退勤時刻が空のままでも保存できます。</span>
+            <div class="closing-attendance-toolbar">
+                <div class="closing-attendance-toolbar__summary">
+                    <strong>出勤キャスト</strong>
+                    <span id="selectedAttendanceCount">@selectedAttendanceCount 名</span>
                 </div>
-                <div class="closing-entry-panel__actions">
-                    <button class="btn btn-primary btn-lg" type="submit">勤怠を保存</button>
-                </div>
+                <button class="btn btn-outline-primary" type="button" id="addAttendanceCastButton">出勤キャストを追加</button>
             </div>
 
             <div class="closing-attendance-table">
                 <div class="closing-attendance-table__row closing-attendance-table__row--header">
-                    <span>出勤</span>
+                    <span>キャスト</span>
                     <span>出勤時刻</span>
                     <span>退勤時刻</span>
                     <span>送り</span>
+                    <span></span>
                 </div>
                 @for (var i = 0; i < Model.Input.Entries.Count; i++)
                 {
-                    <div class="closing-attendance-table__row">
+                    <div class="closing-attendance-table__row" data-attendance-row data-attendance-index="@i" data-default-clock-in="@Model.DefaultClockInTime" @(Model.Input.Entries[i].IsSelected ? null : "hidden")>
                         <input asp-for="Input.Entries[i].CastId" type="hidden" />
                         <input asp-for="Input.Entries[i].AttendanceId" type="hidden" />
                         <input asp-for="Input.Entries[i].DisplayName" type="hidden" />
                         <input asp-for="Input.Entries[i].DepartmentName" type="hidden" />
+                        <input asp-for="Input.Entries[i].IsSelected" type="hidden" data-attendance-selected />
                         <input asp-for="Input.Entries[i].IsRegistered" type="hidden" />
-                        <label class="closing-attendance-table__cast form-check">
-                            <input class="form-check-input" asp-for="Input.Entries[i].IsSelected" />
-                            <span class="form-check-label">
-                                @Model.Input.Entries[i].DisplayName
-                                @if (Model.Input.Entries[i].IsRegistered)
-                                {
-                                    <small>登録済み</small>
-                                }
-                            </span>
-                        </label>
+                        <span class="closing-attendance-table__cast">
+                            @Model.Input.Entries[i].DisplayName
+                            @if (Model.Input.Entries[i].IsRegistered)
+                            {
+                                <small>登録済み</small>
+                            }
+                        </span>
                         <label class="closing-attendance-table__field">
                             <span>出勤時刻</span>
-                            <select class="form-select" asp-for="Input.Entries[i].ClockInTime">
+                            <select class="form-select" asp-for="Input.Entries[i].ClockInTime" data-clock-in-select>
                                 <option value="">選択</option>
                                 @foreach (var time in Model.TimeOptions)
                                 {
@@ -110,12 +111,29 @@
                             <input class="form-check-input" asp-for="Input.Entries[i].UsesSendService" />
                             <span class="form-check-label">利用</span>
                         </label>
+                        <button class="btn btn-outline-danger btn-sm closing-attendance-table__remove" type="button" data-remove-attendance>削除</button>
                     </div>
                 }
+                <p class="alert alert-secondary mb-0" id="attendanceEmptyMessage" @(selectedAttendanceCount > 0 ? "hidden" : null)>出勤時刻が入力されたキャストはいません。</p>
             </div>
 
             <div class="closing-entry-panel__actions closing-attendance-actions">
                 <button class="btn btn-primary btn-lg" type="submit">勤怠を保存</button>
+            </div>
+
+            <div class="modal fade" id="castSelectModal" tabindex="-1" aria-labelledby="castSelectModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-scrollable modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title fs-5" id="castSelectModalLabel">出勤キャストを追加</h2>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        </div>
+                        <div class="modal-body closing-attendance-modal">
+                            <input class="form-control form-control-lg closing-attendance-modal__search" id="castSearchInput" type="search" placeholder="キャスト名を入力" autocomplete="off" />
+                            <div class="closing-attendance-modal__list" id="castModalList"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </form>
     }
@@ -123,4 +141,108 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Input.Entries.Select((x, index) => new { index, name = x.DisplayName, department = x.DepartmentName })));
+            const addButton = document.getElementById('addAttendanceCastButton');
+            const modalElement = document.getElementById('castSelectModal');
+            const modalList = document.getElementById('castModalList');
+            const searchInput = document.getElementById('castSearchInput');
+            const emptyMessage = document.getElementById('attendanceEmptyMessage');
+            const selectedCount = document.getElementById('selectedAttendanceCount');
+            const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
+
+            const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
+            const getSelectedInput = (row) => row?.querySelector('[data-attendance-selected]');
+            const getClockInSelect = (row) => row?.querySelector('[data-clock-in-select]');
+            const isSelected = (row) => (getSelectedInput(row)?.value ?? '').toLocaleLowerCase('en-US') === 'true';
+            const normalize = (value) => (value ?? '').toString().trim().toLocaleLowerCase('ja-JP');
+
+            const updateSelectedState = () => {
+                const rows = Array.from(document.querySelectorAll('[data-attendance-row]'));
+                const count = rows.filter((row) => isSelected(row)).length;
+                if (selectedCount) {
+                    selectedCount.textContent = `${count} 名`;
+                }
+                if (emptyMessage) {
+                    emptyMessage.hidden = count > 0;
+                }
+            };
+
+            const renderModal = () => {
+                if (!modalList) {
+                    return;
+                }
+
+                const query = normalize(searchInput?.value);
+                const matches = castOptions
+                    .filter((cast) => !query || normalize(cast.name).includes(query))
+                    .filter((cast) => !isSelected(getRow(cast.index)))
+                    .slice(0, 80);
+
+                modalList.innerHTML = '';
+                if (matches.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'text-muted mb-0';
+                    empty.textContent = '追加できるキャストがいません。';
+                    modalList.appendChild(empty);
+                    return;
+                }
+
+                matches.forEach((cast) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'closing-attendance-modal__item';
+                    const name = document.createElement('strong');
+                    name.textContent = cast.name;
+                    const department = document.createElement('span');
+                    department.textContent = cast.department ?? '';
+                    button.append(name, department);
+                    button.addEventListener('click', () => {
+                        const row = getRow(cast.index);
+                        const selected = getSelectedInput(row);
+                        const clockIn = getClockInSelect(row);
+                        if (!row || !selected) {
+                            return;
+                        }
+
+                        selected.value = 'true';
+                        if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
+                            clockIn.value = row.dataset.defaultClockIn;
+                        }
+                        row.hidden = false;
+                        updateSelectedState();
+                        modal?.hide();
+                    });
+                    modalList.appendChild(button);
+                });
+            };
+
+            addButton?.addEventListener('click', () => {
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+                renderModal();
+                modal?.show();
+            });
+
+            document.querySelectorAll('[data-remove-attendance]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const row = button.closest('[data-attendance-row]');
+                    const selected = getSelectedInput(row);
+                    if (selected) {
+                        selected.value = 'false';
+                    }
+                    if (row) {
+                        row.hidden = true;
+                    }
+                    updateSelectedState();
+                });
+            });
+
+            searchInput?.addEventListener('input', renderModal);
+            modalElement?.addEventListener('shown.bs.modal', () => searchInput?.focus());
+            updateSelectedState();
+        })();
+    </script>
 }
