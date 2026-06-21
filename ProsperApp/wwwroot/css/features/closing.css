@@ -160,6 +160,25 @@ a.closing-panel:focus {
 
 .cast-sales-adjustment-list__row {
   border-radius: 10px;
+  grid-template-columns: minmax(5rem, 0.6fr) 5.5rem minmax(0, 1fr) minmax(0, 1.2fr) 7rem auto;
+}
+
+.cast-sales-adjustment-list__casts,
+.cast-sales-adjustment-list__cast {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.cast-sales-adjustment-list__cast strong {
+  color: #102a43;
+  overflow-wrap: anywhere;
+}
+
+.cast-sales-adjustment-list__cast small {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .cast-sales-adjustment-list__action {
@@ -353,9 +372,9 @@ a.closing-panel:focus {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .slip-list__row--action > span:nth-child(3),
-  .slip-list__row--action .slip-list__casts,
-  .slip-list__row--action .slip-list__memo,
+  .cast-sales-adjustment-list__row > span:nth-child(2),
+  .cast-sales-adjustment-list__row .slip-list__customers,
+  .cast-sales-adjustment-list__casts,
   .slip-list__row--action .slip-list__amount,
   .cast-sales-adjustment-list__action {
     grid-column: 1 / -1;

@@ -111,19 +111,6 @@ public class CastSalesAdjustmentModel(
         return CastSalesAdjustmentDetails.FirstOrDefault(x => x.SlipId == slipId);
     }
 
-    public string? GetCastSalesAdjustmentCastNames(CastSalesAdjustmentSlip slip)
-    {
-        if (!string.IsNullOrWhiteSpace(slip.CastNames))
-        {
-            return slip.CastNames;
-        }
-
-        var detail = FindCastSalesAdjustmentDetail(slip.SlipId);
-        return detail is null
-            ? null
-            : string.Join("、", detail.Casts.Select(x => x.CastDisplayName).Distinct(StringComparer.Ordinal));
-    }
-
     public static string FormatAmountValue(decimal amount)
     {
         return amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture);

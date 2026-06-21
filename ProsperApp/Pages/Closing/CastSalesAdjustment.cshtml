@@ -57,22 +57,31 @@
             @foreach (var slip in Model.CastSalesAdjustmentSlips)
             {
                 var detail = Model.FindCastSalesAdjustmentDetail(slip.SlipId);
-                var castNames = Model.GetCastSalesAdjustmentCastNames(slip);
                 <div class="slip-list__row slip-list__row--action cast-sales-adjustment-list__row">
                     <strong class="slip-list__table">@slip.TableDisplayName</strong>
-                    <span class="badge @(slip.IsAdjusted ? "text-bg-secondary" : "text-bg-danger")">
-                        @(slip.IsAdjusted ? "調整済" : "未調整")
-                    </span>
                     <span>@StoreBusinessTime.FormatStoreTime(slip.CheckoutAt)</span>
-                    <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(castNames) ? "指名なし" : castNames)</span>
-                    <span class="slip-list__memo">@($"{slip.RequiredCastCount}名")</span>
+                    <span class="slip-list__customers">@slip.CustomerDisplayNames</span>
+                    <span class="cast-sales-adjustment-list__casts">
+                        @if (detail is not null)
+                        {
+                            @foreach (var castRow in detail.Casts)
+                            {
+                                <span class="cast-sales-adjustment-list__cast">
+                                    <strong>@castRow.CastDisplayName</strong>
+                                    <small>@($"{castRow.NominationDisplayName} / {castRow.EffectiveSalesAmount:N0} 円")</small>
+                                </span>
+                            }
+                        }
+                        else
+                        {
+                            <small>確認不可</small>
+                        }
+                    </span>
                     <strong class="slip-list__amount">@slip.TotalAmount.ToString("N0") 円</strong>
                     <span class="cast-sales-adjustment-list__action">
                         @if (detail is not null)
                         {
-                            <button class="btn @(slip.IsAdjusted ? "btn-outline-secondary" : "btn-primary") btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#castSalesAdjustmentModal-@slip.SlipId">
-                                @(slip.IsAdjusted ? "再調整" : "売上額調整")
-                            </button>
+                            <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#castSalesAdjustmentModal-@slip.SlipId">売上額調整</button>
                         }
                         else
                         {

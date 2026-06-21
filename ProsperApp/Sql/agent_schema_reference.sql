@@ -507,7 +507,8 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   get_business_day_cast_sales_adjustment_status(p_department_id bigint, p_business_day_id bigint)
 --     returns required_slip_count, completed_slip_count, missing_slip_count.
 --   get_cast_sales_adjustment_slips(p_department_id bigint, p_business_day_id bigint)
---     returns checked-out slips with active nominated casts, cast_names, and their saved adjustment status.
+--     returns checked-out slips with active nominated casts, customer_names, cast_names,
+--     required/saved cast counts, and adjusted_sales_amount_total.
 --   get_cast_sales_adjustment_detail(p_department_id bigint, p_slip_id bigint)
 --     returns checkout snapshot and nominated cast rows for one checked-out slip.
 --   save_cast_sales_adjustment(p_department_id bigint, p_slip_id bigint, p_adjustments jsonb, p_source_amount_type text, p_split_mode text)

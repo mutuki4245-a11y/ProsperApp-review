@@ -64,6 +64,7 @@ returns table (
     subtotal_amount numeric,
     service_tax_amount numeric,
     total_amount numeric,
+    customer_names text,
     cast_names text,
     required_cast_count integer,
     saved_cast_count integer,
@@ -73,7 +74,18 @@ language sql
 security definer
 set search_path = public
 as $$
-    with required_casts as (
+    with customer_summary as (
+        select
+            c.slip_id,
+            string_agg(
+                coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                '、'
+                order by c.line_no
+            ) filter (where c.status <> 'cancelled') as customer_names
+        from public.store_slip_customers c
+        group by c.slip_id
+    ),
+    required_casts as (
         select
             s.slip_id,
             sc.slip_cast_id,
@@ -143,6 +155,7 @@ as $$
         c.subtotal_amount,
         c.service_tax_amount,
         c.total_amount,
+        coalesce(cs.customer_names, '') as customer_names,
         coalesce(cns.cast_names, '') as cast_names,
         ss.required_cast_count,
         ss.saved_cast_count,
@@ -153,6 +166,8 @@ as $$
      and c.status = 'confirmed'
     join slip_status ss
       on ss.slip_id = s.slip_id
+    left join customer_summary cs
+      on cs.slip_id = s.slip_id
     left join cast_name_summary cns
       on cns.slip_id = s.slip_id
     left join public.store_table_master t
