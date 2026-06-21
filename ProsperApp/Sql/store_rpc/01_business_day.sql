@@ -647,6 +647,8 @@ declare
     v_entry jsonb;
     v_attendance record;
     v_attendance_id bigint;
+    v_clock_in_time time;
+    v_clock_in_at timestamp with time zone;
     v_clock_out_time time;
     v_clock_out_at timestamp with time zone;
     v_uses_send_service boolean;
@@ -674,6 +676,16 @@ begin
         end if;
 
         begin
+            v_clock_in_time := nullif(v_entry->>'clock_in_time', '')::time;
+        exception when others then
+            raise exception 'invalid_attendance_clock_in_time';
+        end;
+
+        if v_clock_in_time is null then
+            raise exception 'invalid_attendance_clock_in_time';
+        end if;
+
+        begin
             v_clock_out_time := nullif(v_entry->>'clock_out_time', '')::time;
         exception when others then
             raise exception 'invalid_attendance_clock_out_time';
@@ -684,6 +696,7 @@ begin
         end if;
 
         v_uses_send_service := coalesce((v_entry->>'uses_send_service')::boolean, false);
+        v_clock_in_at := (((v_business_day.business_date + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_in_time) at time zone 'Asia/Tokyo');
         v_clock_out_at := (((v_business_day.business_date + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_out_time) at time zone 'Asia/Tokyo');
 
         select *
@@ -699,12 +712,13 @@ begin
             raise exception 'attendance_not_found';
         end if;
 
-        if v_attendance.clock_in_at is not null and v_clock_out_at < v_attendance.clock_in_at then
+        if v_clock_out_at < v_clock_in_at then
             raise exception 'invalid_attendance_clock_out_time';
         end if;
 
         update public.store_cast_attendance a
            set attendance_status = 'checked_out',
+               clock_in_at = v_clock_in_at,
                clock_out_at = v_clock_out_at,
                uses_send_service = v_uses_send_service,
                updated_at = now()
@@ -737,6 +751,27 @@ as $$
     where s.department_id = p_department_id
       and s.business_day_id = p_business_day_id
       and s.status = 'open';
+$$;
+
+create or replace function public.get_business_day_drink_delivery_status(
+    p_department_id bigint,
+    p_business_day_id bigint
+)
+returns table (
+    drink_delivery_amount numeric,
+    is_entered boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select
+        coalesce(b.drink_delivery_amount, 0) as drink_delivery_amount,
+        coalesce(b.drink_delivery_amount_entered, false) as is_entered
+    from public.store_business_days b
+    where b.department_id = p_department_id
+      and b.business_day_id = p_business_day_id
+    limit 1;
 $$;
 
 create or replace function public.get_business_day_drink_delivery_amount(
@@ -778,6 +813,7 @@ begin
 
     update public.store_business_days b
        set drink_delivery_amount = p_drink_delivery_amount,
+           drink_delivery_amount_entered = true,
            updated_at = now()
      where b.business_day_id = p_business_day_id
        and b.department_id = p_department_id

@@ -100,6 +100,7 @@
 - `add_business_day_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
 - `get_open_slip_count(p_department_id, p_business_day_id)`
 - `get_business_day_drink_delivery_amount(p_department_id, p_business_day_id)`
+- `get_business_day_drink_delivery_status(p_department_id, p_business_day_id)`
 - `save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
 - `get_business_day_closing_attendance(p_department_id, p_business_day_id)`
 - `save_business_day_closing_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
@@ -128,6 +129,14 @@
 - `mark_receipt_scan_mistake(p_department_id, p_document_id, p_status)`
 
 ## 画面構成
+
+### UI設計方針
+
+- 店舗業務の時間順を最優先します。基本導線は `営業準備 -> 営業中 -> 締め作業` とし、全体ナビや各画面の戻り導線もこの順序に合わせます。
+- 新規画面や既存画面の改修では、共通ヘッダー、共通状態パネル、共通ボタンルールを優先して使います。画面ごとに別のカード表現や状態色を増やさないでください。
+- 状態表示の語彙は `is-ready`、`needs-action`、`has-warning`、`is-preparing` を基本にします。緑は完了、橙は要確認/準備中、赤は要入力/ブロックを表します。
+- ボタン階層は、画面の主操作を `btn-primary`、戻る/ホーム/キャンセルを `btn-outline-secondary`、削除や営業日締めなどの危険操作を `danger` 系に固定します。
+- 文言は、未処理、次操作、危険操作がすぐ判断できることを優先します。UI刷新ではなく、店舗スタッフが閉店前の見落としや操作ミスを避けられることを判断基準にします。
 
 ### 配置ルール
 

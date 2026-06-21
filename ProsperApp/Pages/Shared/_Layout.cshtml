@@ -1,5 +1,19 @@
 @inject IFeatureGate FeatureGate
 @inject ILocalSettingsProvider LocalSettingsProvider
+@{
+    var currentPath = Context.Request.Path.Value ?? "/";
+    var hasCurrentBusinessDay = ViewData.TryGetValue("HasCurrentBusinessDay", out var businessDayValue) &&
+        businessDayValue is bool parsedBusinessDayValue
+            ? parsedBusinessDayValue
+            : (bool?)null;
+    var isBeforeBusinessDay = hasCurrentBusinessDay == false;
+    var isOpeningActive = currentPath.StartsWith("/Opening", StringComparison.OrdinalIgnoreCase) ||
+        (currentPath == "/" && isBeforeBusinessDay);
+    var isSalesActive = currentPath == "/" && !isBeforeBusinessDay ||
+        currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase) ||
+        currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase);
+    var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
+}
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -61,6 +75,25 @@
                 </div>
             </div>
         </nav>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <nav class="app-workflow-nav" aria-label="店舗業務フロー">
+                <div class="container app-workflow-nav__inner">
+                    <a class="app-workflow-nav__step @(isOpeningActive ? "is-active" : null)" asp-page="/Opening/Index">
+                        <span>1</span>
+                        <strong>営業準備</strong>
+                    </a>
+                    <a class="app-workflow-nav__step @(isSalesActive ? "is-active" : null) @(isBeforeBusinessDay ? "is-muted" : null)" asp-page="/Index">
+                        <span>2</span>
+                        <strong>営業中</strong>
+                    </a>
+                    <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null) @(isBeforeBusinessDay ? "is-muted" : null)" asp-page="/Closing/Index">
+                        <span>3</span>
+                        <strong>締め作業</strong>
+                    </a>
+                </div>
+            </nav>
+        }
     </header>
     <div class="container-fluid app-shell">
         <main role="main" class="pb-3">

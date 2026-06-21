@@ -2,6 +2,7 @@
 @model IndexModel
 @{
     ViewData["Title"] = "オーダー入力";
+    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
     var itemGroups = Model.Items
         .GroupBy(x => x.CategoryName)
         .ToList();
@@ -37,7 +38,7 @@
                 <section class="slip-create__panel">
                     <div class="slip-create__panel-title">
                         <h2>1. 卓番選択</h2>
-                        <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ</a>
+                        <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
                     </div>
                     <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
 
@@ -406,5 +407,4 @@
         })();
     </script>
 }
-
 

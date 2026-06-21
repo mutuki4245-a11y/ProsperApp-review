@@ -3,6 +3,7 @@
 @model IndexModel
 @{
     ViewData["Title"] = "ホーム";
+    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
     var nominationOptions = new[]
     {
         ("companion_18", "18:00同伴"),
@@ -28,7 +29,7 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備</a>
+            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備へ</a>
         </div>
     </div>
 
@@ -39,6 +40,53 @@
 
     @if (Model.CurrentBusinessDay is not null)
     {
+        <section class="operations-summary" aria-label="営業日の未処理サマリ">
+            <div class="operations-summary__header">
+                <div>
+                    <p class="store-home__eyebrow">本日の確認</p>
+                    <h2>未処理と締め前チェック</h2>
+                </div>
+            </div>
+            <div class="operations-summary__grid">
+                <a class="operations-summary__item @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" asp-page="/Index">
+                    <strong>未会計伝票</strong>
+                    <span>@(Model.OpenSlipCount > 0 ? $"未会計が {Model.OpenSlipCount} 件あります。" : "未会計伝票はありません。")</span>
+                    <em>@(Model.OpenSlipCount > 0 ? "要会計" : "完了")</em>
+                </a>
+                <a class="operations-summary__item @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")" asp-page="/Closing/DrinkCost">
+                    <strong>酒代入力</strong>
+                    <span>@(Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")</span>
+                    <em>@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</em>
+                </a>
+                <a class="operations-summary__item @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "has-warning" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")" asp-page="/Closing/Attendance">
+                    <strong>勤怠入力</strong>
+                    <span>
+                        @if (Model.ClosingAttendanceMissingClockOutCount > 0)
+                        {
+                            @($"{Model.ClosingAttendanceMissingClockOutCount}名の退勤時刻が未入力です。")
+                        }
+                        else if (Model.ClosingAttendanceCount > 0)
+                        {
+                            @($"{Model.ClosingAttendanceCount}名の退勤時刻を入力済みです。")
+                        }
+                        else
+                        {
+                            @("出勤登録済みキャストがいません。")
+                        }
+                    </span>
+                    <em>@(Model.ClosingAttendanceMissingClockOutCount > 0 ? "要入力" : Model.ClosingAttendanceCount > 0 ? "入力済" : "要確認")</em>
+                </a>
+                @if (Model.ReceiptsEnabled)
+                {
+                    <a class="operations-summary__item @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")" asp-page="/Closing/Receipts">
+                        <strong>領収書入力</strong>
+                        <span>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</span>
+                        <em>@(Model.PendingReceiptCount > 0 ? "要入力" : "確認済")</em>
+                    </a>
+                }
+            </div>
+        </section>
+
         <section class="slip-list-panel">
             <div class="slip-list-panel__header">
                 <div>

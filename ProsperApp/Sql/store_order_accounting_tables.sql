@@ -142,6 +142,7 @@ create table if not exists public.store_business_days (
     closed_by text,
     memo text,
     drink_delivery_amount numeric(12, 0) not null default 0,
+    drink_delivery_amount_entered boolean not null default false,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_business_days_status check (status in ('open', 'closed', 'cancelled')),
@@ -199,6 +200,14 @@ alter table public.store_slips
 
 alter table public.store_business_days
     add column if not exists drink_delivery_amount numeric(12, 0) not null default 0;
+
+alter table public.store_business_days
+    add column if not exists drink_delivery_amount_entered boolean not null default false;
+
+update public.store_business_days
+   set drink_delivery_amount_entered = true
+ where drink_delivery_amount > 0
+   and drink_delivery_amount_entered = false;
 
 do $$
 begin

@@ -16,6 +16,9 @@
                 </div>
             }
         </div>
+        <div class="tablet-entry__header-actions">
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+        </div>
     </header>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -220,6 +223,5 @@
         })();
     </script>
 }
-
 
 

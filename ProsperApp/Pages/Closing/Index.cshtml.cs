@@ -5,10 +5,14 @@ using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class ClosingModel(IFeatureGate featureGate, IBusinessDayRepository businessDayRepository) : PageModel
+public class ClosingModel(
+    IFeatureGate featureGate,
+    IBusinessDayRepository businessDayRepository,
+    IReceiptRepository receiptRepository) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
+    private readonly IReceiptRepository _receiptRepository = receiptRepository;
 
     [BindProperty]
     public long? BusinessDayId { get; set; }
@@ -24,7 +28,13 @@ public class ClosingModel(IFeatureGate featureGate, IBusinessDayRepository busin
 
     public decimal DrinkDeliveryAmount { get; set; }
 
+    public bool IsDrinkDeliveryAmountEntered { get; set; }
+
     public int ClosingAttendanceCount { get; set; }
+
+    public int ClosingAttendanceMissingClockOutCount { get; set; }
+
+    public int PendingReceiptCount { get; set; }
 
     public string? SuccessMessage { get; set; }
 
@@ -78,12 +88,20 @@ public class ClosingModel(IFeatureGate featureGate, IBusinessDayRepository busin
         OpenSlipCount = CurrentBusinessDay is null
             ? 0
             : await _businessDayRepository.GetOpenSlipCountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        DrinkDeliveryAmount = CurrentBusinessDay is null
-            ? 0
-            : await _businessDayRepository.GetDrinkDeliveryAmountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        ClosingAttendanceCount = CurrentBusinessDay is null
-            ? 0
-            : (await _businessDayRepository.GetClosingAttendanceAsync(CurrentBusinessDay.BusinessDayId, cancellationToken)).Count;
+        var drinkDeliveryStatus = CurrentBusinessDay is null
+            ? new BusinessDayDrinkDeliveryStatus()
+            : await _businessDayRepository.GetDrinkDeliveryStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        DrinkDeliveryAmount = drinkDeliveryStatus.Amount;
+        IsDrinkDeliveryAmountEntered = drinkDeliveryStatus.IsEntered;
+
+        IReadOnlyList<BusinessDayClosingAttendanceItem> closingAttendance = CurrentBusinessDay is null
+            ? []
+            : await _businessDayRepository.GetClosingAttendanceAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        ClosingAttendanceCount = closingAttendance.Count;
+        ClosingAttendanceMissingClockOutCount = closingAttendance.Count(x => x.ClockOutAt is null);
+        PendingReceiptCount = ReceiptsEnabled
+            ? (await _receiptRepository.GetPendingAsync(cancellationToken)).Count
+            : 0;
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 }

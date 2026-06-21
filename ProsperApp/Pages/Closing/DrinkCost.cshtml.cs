@@ -17,6 +17,8 @@ public class ClosingDrinkCostModel(
 
     public StoreBusinessDay? CurrentBusinessDay { get; private set; }
 
+    public bool IsDrinkDeliveryAmountEntered { get; private set; }
+
     public string? SuccessMessage { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -85,13 +87,14 @@ public class ClosingDrinkCostModel(
             return;
         }
 
-        var amount = await _businessDayRepository.GetDrinkDeliveryAmountAsync(
+        var status = await _businessDayRepository.GetDrinkDeliveryStatusAsync(
             CurrentBusinessDay.BusinessDayId,
             cancellationToken);
+        IsDrinkDeliveryAmountEntered = status.IsEntered;
 
         if (!preserveInput)
         {
-            Input.DrinkDeliveryAmount = amount;
+            Input.DrinkDeliveryAmount = status.Amount;
         }
 
         Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;

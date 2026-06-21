@@ -166,25 +166,35 @@ public class SupabaseBusinessDayRepository(
 
     public async Task<decimal> GetDrinkDeliveryAmountAsync(long businessDayId, CancellationToken ct)
     {
+        return (await GetDrinkDeliveryStatusAsync(businessDayId, ct)).Amount;
+    }
+
+    public async Task<BusinessDayDrinkDeliveryStatus> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct)
+    {
         if (!HasRequiredSettings())
         {
-            return 0;
+            return new BusinessDayDrinkDeliveryStatus();
         }
 
-        var result = await RpcClient.PostScalarAsync(
-            "get_business_day_drink_delivery_amount",
+        var rows = await PostRpcArrayAsync(
+            "get_business_day_drink_delivery_status",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_business_day_id = businessDayId
             },
-            requireSecretKey: false,
             ct);
-        var value = NormalizeScalarBody(result.Succeeded ? result.Body : null);
 
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
-            ? amount
-            : 0;
+        if (rows.Count == 0)
+        {
+            return new BusinessDayDrinkDeliveryStatus();
+        }
+
+        return new BusinessDayDrinkDeliveryStatus
+        {
+            Amount = ReadDecimal(rows[0], "drink_delivery_amount") ?? 0,
+            IsEntered = ReadBool(rows[0], "is_entered") ?? false
+        };
     }
 
     public async Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(
@@ -264,6 +274,7 @@ public class SupabaseBusinessDayRepository(
             .Select(x => x.Last())
             .Select(x => new ClosingAttendanceEntryPayload(
                 x.AttendanceId,
+                x.ClockInTime?.Trim() ?? string.Empty,
                 x.ClockOutTime?.Trim() ?? string.Empty,
                 x.UsesSendService))
             .ToArray();
@@ -302,6 +313,7 @@ public class SupabaseBusinessDayRepository(
 
     private sealed record ClosingAttendanceEntryPayload(
         [property: JsonPropertyName("attendance_id")] long AttendanceId,
+        [property: JsonPropertyName("clock_in_time")] string ClockInTime,
         [property: JsonPropertyName("clock_out_time")] string ClockOutTime,
         [property: JsonPropertyName("uses_send_service")] bool UsesSendService);
 
@@ -410,6 +422,11 @@ public class SupabaseBusinessDayRepository(
         if (rawError.Contains("invalid_attendance_clock_out_time", StringComparison.OrdinalIgnoreCase))
         {
             return "退勤時刻を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))
+        {
+            return "出勤時刻を確認してください。";
         }
 
         if (rawError.Contains("attendance_not_found", StringComparison.OrdinalIgnoreCase))

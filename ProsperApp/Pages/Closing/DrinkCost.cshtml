@@ -2,6 +2,7 @@
 @model ClosingDrinkCostModel
 @{
     ViewData["Title"] = "酒代入力";
+    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
 }
 
 <section class="store-home">
@@ -18,8 +19,8 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業</a>
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
         </div>
     </div>
 
@@ -39,6 +40,13 @@
     }
     else
     {
+        @if (!Model.IsDrinkDeliveryAmountEntered)
+        {
+            <div class="alert alert-warning">
+                納品額が未入力です。酒代がない場合も 0 円で保存してください。
+            </div>
+        }
+
         <form method="post" class="closing-entry-panel">
             <input asp-for="Input.BusinessDayId" type="hidden" />
             <div class="closing-entry-panel__body">

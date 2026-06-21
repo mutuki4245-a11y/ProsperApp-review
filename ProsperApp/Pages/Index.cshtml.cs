@@ -10,6 +10,7 @@ public class IndexModel(
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
     IStoreOrderRepository orderRepository,
+    IReceiptRepository receiptRepository,
     ILocalSettingsProvider localSettingsProvider,
     IStoreClock storeClock) : PageModel
 {
@@ -26,6 +27,7 @@ public class IndexModel(
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
+    private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreClock _storeClock = storeClock;
 
@@ -54,6 +56,8 @@ public class IndexModel(
 
     public bool CheckoutEnabled => _featureGate.IsEnabled(FeatureNames.Checkout);
 
+    public bool ReceiptsEnabled => _featureGate.IsEnabled(FeatureNames.Receipts);
+
     public int OpenSlipCount => Slips.Count(x => x.Status == "open");
 
     public int CheckedOutSlipCount => Slips.Count(x => x.Status == "checked_out");
@@ -61,6 +65,16 @@ public class IndexModel(
     public bool HasAnySlip => Slips.Count > 0;
 
     public bool CanMoveToClosing => CurrentBusinessDay is not null;
+
+    public decimal DrinkDeliveryAmount { get; private set; }
+
+    public bool IsDrinkDeliveryAmountEntered { get; private set; }
+
+    public int ClosingAttendanceCount { get; private set; }
+
+    public int ClosingAttendanceMissingClockOutCount { get; private set; }
+
+    public int PendingReceiptCount { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -122,6 +136,31 @@ public class IndexModel(
         Slips = CurrentBusinessDay is null
             ? []
             : await _slipRepository.GetBusinessDaySlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+
+        if (CurrentBusinessDay is null)
+        {
+            DrinkDeliveryAmount = 0;
+            IsDrinkDeliveryAmountEntered = false;
+            ClosingAttendanceCount = 0;
+            ClosingAttendanceMissingClockOutCount = 0;
+            PendingReceiptCount = 0;
+            return;
+        }
+
+        var drinkDeliveryStatus = await _businessDayRepository.GetDrinkDeliveryStatusAsync(
+            CurrentBusinessDay.BusinessDayId,
+            cancellationToken);
+        DrinkDeliveryAmount = drinkDeliveryStatus.Amount;
+        IsDrinkDeliveryAmountEntered = drinkDeliveryStatus.IsEntered;
+
+        var closingAttendance = await _businessDayRepository.GetClosingAttendanceAsync(
+            CurrentBusinessDay.BusinessDayId,
+            cancellationToken);
+        ClosingAttendanceCount = closingAttendance.Count;
+        ClosingAttendanceMissingClockOutCount = closingAttendance.Count(x => x.ClockOutAt is null);
+        PendingReceiptCount = ReceiptsEnabled
+            ? (await _receiptRepository.GetPendingAsync(cancellationToken)).Count
+            : 0;
     }
 
     private void SetDefaultCreateSlipInput()

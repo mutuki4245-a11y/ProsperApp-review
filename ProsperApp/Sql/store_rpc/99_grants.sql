@@ -2,6 +2,7 @@ grant execute on function public.get_store_context(bigint) to anon, authenticate
 grant execute on function public.get_current_business_day(bigint) to anon, authenticated, service_role;
 grant execute on function public.get_open_slip_count(bigint, bigint) to anon, authenticated, service_role;
 grant execute on function public.get_business_day_drink_delivery_amount(bigint, bigint) to anon, authenticated, service_role;
+grant execute on function public.get_business_day_drink_delivery_status(bigint, bigint) to anon, authenticated, service_role;
 grant execute on function public.get_business_day_closing_attendance(bigint, bigint) to anon, authenticated, service_role;
 grant execute on function public.get_store_tables(bigint) to anon, authenticated, service_role;
 grant execute on function public.get_store_casts(bigint) to anon, authenticated, service_role;

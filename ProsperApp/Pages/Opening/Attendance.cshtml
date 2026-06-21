@@ -2,6 +2,7 @@
 @model OpeningAttendanceModel
 @{
     ViewData["Title"] = "出勤登録";
+    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
 }
 
 <section class="opening-page">
@@ -14,7 +15,7 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備</a>
+            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業準備へ戻る</a>
         </div>
     </div>
 
@@ -235,4 +236,3 @@
         })();
     </script>
 }
-

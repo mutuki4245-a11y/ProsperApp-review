@@ -28,6 +28,11 @@
   border-left-color: #f59e0b;
 }
 
+.closing-panel.has-warning {
+  background: #fff5f5;
+  border-left-color: #dc2626;
+}
+
 .closing-panel.is-preparing {
   background: #fff7ed;
   border-left-color: #fdba74;
@@ -72,6 +77,11 @@ a.closing-panel:focus {
 .closing-panel__badge.needs-action {
   background: #ffedd5;
   color: #9a3412;
+}
+
+.closing-panel__badge.has-warning {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .closing-panel__badge.is-preparing {
@@ -171,7 +181,7 @@ a.closing-panel:focus {
   border-radius: 10px;
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: minmax(160px, 1fr) 6.5rem 10rem 7rem;
+  grid-template-columns: minmax(150px, 1fr) 10rem 10rem 7rem;
   min-height: 4rem;
   padding: 0.65rem;
 }
@@ -188,11 +198,6 @@ a.closing-panel:focus {
   font-weight: 800;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.closing-attendance-table__time {
-  color: #475569;
-  font-weight: 800;
 }
 
 .closing-attendance-table__field {
@@ -281,6 +286,13 @@ a.closing-panel:focus {
 .tablet-entry__header h1 {
   font-size: 1.35rem;
   margin: 0;
+}
+
+.tablet-entry__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .tablet-entry__meta {

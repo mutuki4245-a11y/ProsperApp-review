@@ -2,6 +2,7 @@
 @model ClosingAttendanceModel
 @{
     ViewData["Title"] = "勤怠入力";
+    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
 }
 
 <section class="store-home">
@@ -18,8 +19,8 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業</a>
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
         </div>
     </div>
 
@@ -61,7 +62,17 @@
                         <input asp-for="Input.Entries[i].AttendanceId" type="hidden" />
                         <input asp-for="Input.Entries[i].DisplayName" type="hidden" />
                         <span class="closing-attendance-table__cast">@Model.Input.Entries[i].DisplayName</span>
-                        <span class="closing-attendance-table__time">@Model.Input.Entries[i].ClockInTime</span>
+                        <label class="closing-attendance-table__field">
+                            <span>出勤時刻</span>
+                            <select class="form-select" asp-for="Input.Entries[i].ClockInTime">
+                                <option value="">選択</option>
+                                @foreach (var time in Model.TimeOptions)
+                                {
+                                    <option value="@time">@time</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Input.Entries[i].ClockInTime" class="text-danger"></span>
+                        </label>
                         <label class="closing-attendance-table__field">
                             <span>退勤時刻</span>
                             <select class="form-select" asp-for="Input.Entries[i].ClockOutTime">

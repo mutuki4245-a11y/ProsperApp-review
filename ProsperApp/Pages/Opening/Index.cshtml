@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "営業準備";
     var isBusinessOpen = Model.CurrentBusinessDay is not null;
+    ViewData["HasCurrentBusinessDay"] = isBusinessOpen;
     var castReady = Model.HomeActiveCastCount > 0;
     var attendanceReady = isBusinessOpen ? Model.RegisteredAttendanceCount > 0 : Model.SelectedAttendanceCount > 0;
     var itemReady = Model.Items.Count > 0;
@@ -27,11 +28,11 @@
         <div class="business-status-bar__actions">
             @if (Model.CurrentBusinessDay is not null)
             {
-                <a class="btn btn-primary" asp-page="/Index">ホーム</a>
+                <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
             }
             else
             {
-                <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+                <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
             }
         </div>
     </div>

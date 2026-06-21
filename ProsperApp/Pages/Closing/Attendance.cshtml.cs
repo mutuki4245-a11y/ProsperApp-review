@@ -113,7 +113,7 @@ public class ClosingAttendanceModel(
                         AttendanceId = item.AttendanceId,
                         DisplayName = item.SearchDisplayName,
                         DepartmentName = item.DepartmentName,
-                        ClockInTime = _storeClock.FormatStoreTime(item.ClockInAt, "-"),
+                        ClockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(item.ClockInAt, string.Empty),
                         ClockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(item.ClockOutAt, string.Empty),
                         UsesSendService = posted?.UsesSendService ?? item.UsesSendService
                     };
@@ -134,19 +134,50 @@ public class ClosingAttendanceModel(
         for (var i = 0; i < Input.Entries.Count; i++)
         {
             var entry = Input.Entries[i];
+            TimeOnly? clockInTime = null;
+            TimeOnly? clockOutTime = null;
+
             if (entry.AttendanceId <= 0)
             {
                 ModelState.AddModelError(string.Empty, "出勤登録済みキャストの選択内容を確認してください。");
                 continue;
             }
 
+            if (string.IsNullOrWhiteSpace(entry.ClockInTime) ||
+                !TimeOnly.TryParse(entry.ClockInTime, CultureInfo.InvariantCulture, out var parsedClockInTime) ||
+                !validTimes.Contains(entry.ClockInTime))
+            {
+                ModelState.AddModelError(
+                    $"Input.Entries[{i}].ClockInTime",
+                    $"{entry.DisplayName} の出勤時刻を選択してください。");
+            }
+            else
+            {
+                clockInTime = parsedClockInTime;
+            }
+
             if (string.IsNullOrWhiteSpace(entry.ClockOutTime) ||
-                !TimeOnly.TryParse(entry.ClockOutTime, CultureInfo.InvariantCulture, out _) ||
+                !TimeOnly.TryParse(entry.ClockOutTime, CultureInfo.InvariantCulture, out var parsedClockOutTime) ||
                 !validTimes.Contains(entry.ClockOutTime))
             {
                 ModelState.AddModelError(
                     $"Input.Entries[{i}].ClockOutTime",
                     $"{entry.DisplayName} の退勤時刻を選択してください。");
+            }
+            else
+            {
+                clockOutTime = parsedClockOutTime;
+            }
+
+            if (CurrentBusinessDay is not null &&
+                clockInTime is { } validClockInTime &&
+                clockOutTime is { } validClockOutTime &&
+                _storeClock.ComposeBusinessDateTime(CurrentBusinessDay.BusinessDate, validClockOutTime) <
+                _storeClock.ComposeBusinessDateTime(CurrentBusinessDay.BusinessDate, validClockInTime))
+            {
+                ModelState.AddModelError(
+                    $"Input.Entries[{i}].ClockOutTime",
+                    $"{entry.DisplayName} の退勤時刻は出勤時刻以降にしてください。");
             }
         }
     }

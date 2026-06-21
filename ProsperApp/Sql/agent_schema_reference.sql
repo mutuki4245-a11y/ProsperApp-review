@@ -246,6 +246,7 @@ create table if not exists public.store_business_days (
     closed_by text,
     memo text,
     drink_delivery_amount numeric(12, 0) not null default 0,
+    drink_delivery_amount_entered boolean not null default false,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_business_days_status check (status in ('open', 'closed', 'cancelled')),
@@ -464,13 +465,15 @@ create table if not exists public.store_checkout_payments (
 --     returns integer
 --   get_business_day_drink_delivery_amount(p_department_id bigint, p_business_day_id bigint)
 --     returns numeric. Closing drink-cost entry uses this as the current business-day delivery amount.
+--   get_business_day_drink_delivery_status(p_department_id bigint, p_business_day_id bigint)
+--     returns drink_delivery_amount and is_entered so 0 yen can be distinguished from not entered.
 --   save_business_day_drink_delivery_amount(p_department_id bigint, p_business_day_id bigint, p_drink_delivery_amount numeric)
---     updates store_business_days.drink_delivery_amount for the open business day.
+--     updates store_business_days.drink_delivery_amount and marks drink_delivery_amount_entered for the open business day.
 --   get_business_day_closing_attendance(p_department_id bigint, p_business_day_id bigint)
 --     returns attendance_id, cast_id, cast_display_name, cast_department_name, attendance_status,
 --       clock_in_at, clock_out_at, uses_send_service for closing attendance input.
 --   save_business_day_closing_attendance(p_department_id bigint, p_business_day_id bigint, p_attendance_entries jsonb)
---     updates registered attendance rows with { attendance_id, clock_out_time, uses_send_service }.
+--     updates registered attendance rows with { attendance_id, clock_in_time, clock_out_time, uses_send_service }.
 --   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
 

@@ -28,6 +28,13 @@ public class BusinessDayAmountSaveResult
     }
 }
 
+public class BusinessDayDrinkDeliveryStatus
+{
+    public decimal Amount { get; init; }
+
+    public bool IsEntered { get; init; }
+}
+
 public class BusinessDayClosingAttendanceItem
 {
     public long AttendanceId { get; set; }

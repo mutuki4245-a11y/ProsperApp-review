@@ -2,6 +2,7 @@
 @model SlipEditModel
 @{
     ViewData["Title"] = "伝票詳細";
+    ViewData["HasCurrentBusinessDay"] = Model.Detail is not null;
     var activeOrderTotal = Model.Detail?.Orders
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
         .Sum(x => x.Amount) ?? 0;
@@ -21,7 +22,7 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
         </div>
     </div>
 
@@ -65,6 +66,13 @@
             </div>
         </div>
 
+        <nav class="slip-detail-nav" aria-label="伝票詳細メニュー">
+            <a href="#slipCustomersSection">客</a>
+            <a href="#slipNominationsSection">指名</a>
+            <a href="#slipOrdersSection">オーダー</a>
+            <a href="#slipCheckoutSection">会計</a>
+        </nav>
+
         <div id="slipCustomersSection">
             <partial name="_SlipCustomers" model="Model" />
         </div>
@@ -73,9 +81,13 @@
             <partial name="_SlipNominations" model="Model" />
         </div>
 
-        <partial name="_SlipOrders" model="Model" />
+        <div id="slipOrdersSection">
+            <partial name="_SlipOrders" model="Model" />
+        </div>
 
-        <partial name="_SlipCheckout" model="Model" />
+        <div id="slipCheckoutSection">
+            <partial name="_SlipCheckout" model="Model" />
+        </div>
 
         <div class="modal fade" id="attendingCastSelectModal" tabindex="-1" aria-labelledby="attendingCastSelectModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-scrollable modal-lg">
