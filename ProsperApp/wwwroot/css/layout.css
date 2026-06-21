@@ -236,13 +236,14 @@
 .home-workspace {
   align-items: start;
   display: grid;
-  gap: 1rem;
+  gap: 0.6rem;
   grid-template-columns: minmax(0, 1fr);
   margin-bottom: 1rem;
 }
 
-.home-attendance-panel {
-  margin-bottom: 0;
+.sales-quick-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .opening-list__card.is-ready,
