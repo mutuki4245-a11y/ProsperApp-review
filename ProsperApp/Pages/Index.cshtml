@@ -31,32 +31,37 @@
     @if (Model.CurrentBusinessDay is not null || Model.CanCreateSalesInput)
     {
         <section class="home-workspace" aria-label="営業中の操作">
-            <div class="sales-quick-actions">
+            <div class="sales-summary" aria-label="営業中サマリー">
+                <div class="sales-summary__items">
+                    <span class="sales-summary__item">
+                        <strong>営業日</strong>
+                        @if (Model.CurrentBusinessDay is null)
+                        {
+                            <span>@Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 自動作成待ち</span>
+                        }
+                        else
+                        {
+                            <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</span>
+                        }
+                    </span>
+                    <span class="sales-summary__item">
+                        <strong>未会計</strong>
+                        <span>@Model.OpenSlipCount 件</span>
+                    </span>
+                    <span class="sales-summary__item">
+                        <strong>会計済</strong>
+                        <span>@Model.CheckedOutSlipCount 件</span>
+                    </span>
+                </div>
                 <a class="btn btn-outline-secondary btn-sm" asp-page="/Closing/Attendance">勤怠管理</a>
             </div>
-            <section class="slip-list-panel slip-list-panel--primary" id="slipListPanel">
-                <div class="slip-list-panel__header">
-                    <div>
-                        <h2>伝票編集</h2>
-                        <p class="operation-context">
-                            @if (Model.CurrentBusinessDay is null)
-                            {
-                                <text>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 最初の入力で営業日を自動作成</text>
-                            }
-                            else
-                            {
-                                <text>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt)</text>
-                            }
-                        </p>
-                    </div>
-                    <div class="slip-list-panel__badges">
-                        <span class="badge text-bg-success">在席 @Model.OpenSlipCount 件</span>
-                        <span class="badge text-bg-secondary">会計済み @Model.CheckedOutSlipCount 件</span>
-                        @if (Model.CanCreateSalesInput)
-                        {
-                            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-                        }
-                    </div>
+            <section class="slip-list-section" id="slipListPanel">
+                <div class="slip-list-section__header">
+                    <h2>伝票一覧</h2>
+                    @if (Model.CanCreateSalesInput)
+                    {
+                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                    }
                 </div>
 
                 @if (Model.Slips.Count == 0)
