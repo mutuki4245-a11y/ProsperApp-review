@@ -22,12 +22,17 @@
     </div>
 
     <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
+        <table class="table table-sm align-middle mb-0 slip-detail-table slip-detail-table--nominations">
+            <colgroup>
+                <col class="slip-detail-table__col--time" />
+                <col class="slip-detail-table__col--type" />
+                <col class="slip-detail-table__col--primary" />
+            </colgroup>
             <thead>
                 <tr>
-                    <th>時刻</th>
-                    <th>区分</th>
-                    <th>キャスト</th>
+                    <th class="slip-detail-table__time">時刻</th>
+                    <th class="slip-detail-table__type">区分</th>
+                    <th class="slip-detail-table__primary">キャスト</th>
                 </tr>
             </thead>
             <tbody>
@@ -42,9 +47,9 @@
                     @foreach (var nomination in Model.Detail.Nominations.OrderBy(x => x.StartedAt))
                     {
                         <tr>
-                            <td>@Model.FormatStoreTime(nomination.StartedAt)</td>
-                            <td>@nomination.NominationDisplayName</td>
-                            <td>@nomination.CastDisplayName</td>
+                            <td class="slip-detail-table__time">@Model.FormatStoreTime(nomination.StartedAt)</td>
+                            <td class="slip-detail-table__type">@nomination.NominationDisplayName</td>
+                            <td class="slip-detail-table__primary">@nomination.CastDisplayName</td>
                         </tr>
                     }
                 }

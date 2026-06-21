@@ -14,16 +14,26 @@
     </div>
 
     <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
+        <table class="table table-sm align-middle mb-0 slip-detail-table slip-detail-table--customers">
+            <colgroup>
+                <col class="slip-detail-table__col--number" />
+                <col class="slip-detail-table__col--primary" />
+                <col class="slip-detail-table__col--time" />
+                <col class="slip-detail-table__col--time" />
+                @if (Model.IsOpenSlip)
+                {
+                    <col class="slip-detail-table__col--action-wide" />
+                }
+            </colgroup>
             <thead>
                 <tr>
-                    <th>#</th>
-                    <th>客</th>
-                    <th>入店</th>
-                    <th>退店</th>
+                    <th class="slip-detail-table__number">#</th>
+                    <th class="slip-detail-table__primary">客</th>
+                    <th class="slip-detail-table__time">入店</th>
+                    <th class="slip-detail-table__time">退店</th>
                     @if (Model.IsOpenSlip)
                     {
-                        <th>退店登録</th>
+                        <th class="slip-detail-table__action">退店登録</th>
                     }
                 </tr>
             </thead>
@@ -40,8 +50,8 @@
                     {
                         var isActive = string.Equals(customer.Status, "active", StringComparison.Ordinal);
                         <tr>
-                            <td>@customer.LineNo</td>
-                            <td>
+                            <td class="slip-detail-table__number">@customer.LineNo</td>
+                            <td class="slip-detail-table__primary">
                                 @if (Model.CanEditCustomerNames)
                                 {
                                     <form method="post" asp-page-handler="UpdateCustomer" class="customer-name-form" data-partial-form="customers">
@@ -56,13 +66,13 @@
                                     @customer.DisplayName
                                 }
                             </td>
-                            <td>@Model.FormatStoreTime(customer.EnteredAt)</td>
-                            <td>
+                            <td class="slip-detail-table__time">@Model.FormatStoreTime(customer.EnteredAt)</td>
+                            <td class="slip-detail-table__time">
                                 @Model.FormatStoreTime(customer.LeftAt)
                             </td>
                             @if (Model.IsOpenSlip)
                             {
-                                <td>
+                                <td class="slip-detail-table__action">
                                     @if (isActive)
                                     {
                                         <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action">
