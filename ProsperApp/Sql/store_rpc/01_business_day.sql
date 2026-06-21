@@ -856,8 +856,6 @@ declare
     v_business_day public.store_business_days%rowtype;
     v_attendance_count integer;
     v_missing_clock_out_count integer;
-    v_pending_receipt_count integer;
-    v_pending_receipt_status text := nullif(trim(coalesce(p_pending_receipt_status, '')), '');
 begin
     select *
       into v_business_day
@@ -900,17 +898,7 @@ begin
         raise exception 'attendance_clock_out_required:%', v_missing_clock_out_count;
     end if;
 
-    if v_pending_receipt_status is not null then
-        select count(*)::integer
-          into v_pending_receipt_count
-        from public.documents d
-        where d.department_id = p_department_id
-          and d.status = v_pending_receipt_status;
-
-        if coalesce(v_pending_receipt_count, 0) > 0 then
-            raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
-        end if;
-    end if;
+    raise exception 'cast_sales_adjustment_required';
 
     return query
     update public.store_business_days b

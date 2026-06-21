@@ -94,6 +94,8 @@ public class BusinessDayClosingReadiness
 
     public int MissingClockOutCount { get; init; }
 
+    public bool IsCastSalesAdjustmentCompleted { get; init; }
+
     public int PendingReceiptCount { get; init; }
 
     public bool ReceiptsEnabled { get; init; }
@@ -104,7 +106,7 @@ public class BusinessDayClosingReadiness
         IsDrinkDeliveryAmountEntered &&
         AttendanceCount > 0 &&
         MissingClockOutCount == 0 &&
-        (!ReceiptsEnabled || PendingReceiptCount == 0);
+        IsCastSalesAdjustmentCompleted;
 
     public IReadOnlyList<string> BlockReasons
     {
@@ -136,9 +138,9 @@ public class BusinessDayClosingReadiness
                 reasons.Add($"退勤時刻が未入力のキャストが {MissingClockOutCount} 名います。");
             }
 
-            if (ReceiptsEnabled && PendingReceiptCount > 0)
+            if (!IsCastSalesAdjustmentCompleted)
             {
-                reasons.Add($"未入力領収書が {PendingReceiptCount} 件あります。");
+                reasons.Add("キャスト売上額調整が未完了です。");
             }
 
             return reasons;

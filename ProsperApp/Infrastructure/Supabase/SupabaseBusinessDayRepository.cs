@@ -470,9 +470,14 @@ public class SupabaseBusinessDayRepository(
             return "退勤時刻が未入力のキャストがいます。";
         }
 
+        if (rawError.Contains("cast_sales_adjustment_required", StringComparison.OrdinalIgnoreCase))
+        {
+            return "キャスト売上額調整を完了してください。";
+        }
+
         if (rawError.Contains("pending_receipts_exist", StringComparison.OrdinalIgnoreCase))
         {
-            return "未入力領収書が残っています。領収書入力を完了してください。";
+            return "未入力領収書があります。領収書入力を確認してください。";
         }
 
         if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))

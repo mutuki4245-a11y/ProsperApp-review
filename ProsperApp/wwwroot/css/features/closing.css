@@ -5,6 +5,14 @@
   margin-bottom: 1rem;
 }
 
+.closing-final {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  padding-top: 1rem;
+}
+
 .closing-panel {
   align-items: center;
   background: #fff;
@@ -115,6 +123,14 @@ a.closing-panel:focus {
 
 .closing-panel--form {
   align-items: start;
+}
+
+.closing-final-panel {
+  min-height: 92px;
+}
+
+.closing-final-panel .closing-panel__body strong {
+  font-size: 1.18rem;
 }
 
 .closing-panel__submit {

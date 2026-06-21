@@ -75,8 +75,7 @@ public class IndexModel(
         (OpenSlipCount > 0 ||
          !IsDrinkDeliveryAmountEntered ||
          ClosingAttendanceCount == 0 ||
-         ClosingAttendanceMissingClockOutCount > 0 ||
-         (ReceiptsEnabled && PendingReceiptCount > 0));
+         ClosingAttendanceMissingClockOutCount > 0);
 
     public bool CanMoveToClosing => CurrentBusinessDay is not null;
 

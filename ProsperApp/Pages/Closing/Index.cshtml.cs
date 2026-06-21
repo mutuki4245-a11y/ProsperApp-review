@@ -122,6 +122,7 @@ public class ClosingModel(
             IsDrinkDeliveryAmountEntered = IsDrinkDeliveryAmountEntered,
             AttendanceCount = ClosingAttendanceCount,
             MissingClockOutCount = ClosingAttendanceMissingClockOutCount,
+            IsCastSalesAdjustmentCompleted = false,
             PendingReceiptCount = PendingReceiptCount,
             ReceiptsEnabled = ReceiptsEnabled
         };

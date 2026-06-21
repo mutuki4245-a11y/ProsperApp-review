@@ -477,7 +477,8 @@ create table if not exists public.store_checkout_payments (
 --   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text, p_pending_receipt_status text default 'unprocessed')
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo.
 --     rejects closing when open slips, missing drink delivery input, no attendance,
---     missing clock-out, or pending receipt documents remain.
+--     missing clock-out, or missing cast sales adjustment remain.
+--     Pending receipt documents are UI warnings, not close blockers.
 
 -- Slip creation and listing:
 --   get_store_tables(p_department_id bigint)
