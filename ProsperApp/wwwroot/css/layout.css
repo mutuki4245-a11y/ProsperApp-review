@@ -275,6 +275,18 @@
   font-size: 0.9rem;
 }
 
+.sales-summary__attendance {
+  font-weight: 700;
+  min-width: 5.5rem;
+}
+
+.sales-block-alert {
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 0.55rem;
+  padding: 0.45rem 0.6rem;
+}
+
 .opening-list__card.is-ready,
 .closing-panel.is-ready {
   border-left-color: #10b981;
