@@ -1,0 +1,156 @@
+@page
+@using ProsperApp.Models
+@model CastSalesAdjustmentModel
+@{
+    ViewData["Title"] = "キャスト売上額調整";
+    var hasBusinessDay = Model.CurrentBusinessDay is not null;
+    ViewData["HasCurrentBusinessDay"] = hasBusinessDay;
+}
+
+<section class="store-home">
+    <div class="page-section-heading">
+        <h1>キャスト売上額調整</h1>
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <p>営業中の営業日はありません</p>
+        }
+        else
+        {
+            <p>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 対象 @Model.CastSalesAdjustmentStatus.RequiredSlipCount 件</p>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    @if (!hasBusinessDay)
+    {
+        <div class="closing-panel is-preparing">
+            <span class="closing-panel__body">
+                <strong>調整対象はありません</strong>
+                <small>営業日が作成されると、会計済み伝票の売上額調整を確認できます。</small>
+            </span>
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+        </div>
+    }
+    else if (Model.CastSalesAdjustmentSlips.Count == 0)
+    {
+        <div class="slip-list">
+            <article class="slip-list__row slip-list__row--add">
+                <div class="slip-list__main">
+                    <strong>調整対象の伝票はありません</strong>
+                    <span>会計済みかつ指名キャストがいる伝票が対象です。</span>
+                </div>
+                <div class="slip-list__actions">
+                    <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+                </div>
+            </article>
+        </div>
+    }
+    else
+    {
+        <div class="slip-list cast-sales-adjustment-list" aria-label="キャスト売上額調整対象伝票">
+            @foreach (var slip in Model.CastSalesAdjustmentSlips)
+            {
+                var detail = Model.FindCastSalesAdjustmentDetail(slip.SlipId);
+                var castNames = Model.GetCastSalesAdjustmentCastNames(slip);
+                <div class="slip-list__row slip-list__row--action cast-sales-adjustment-list__row">
+                    <strong class="slip-list__table">@slip.TableDisplayName</strong>
+                    <span class="badge @(slip.IsAdjusted ? "text-bg-secondary" : "text-bg-danger")">
+                        @(slip.IsAdjusted ? "調整済" : "未調整")
+                    </span>
+                    <span>@StoreBusinessTime.FormatStoreTime(slip.CheckoutAt)</span>
+                    <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(castNames) ? "指名なし" : castNames)</span>
+                    <span class="slip-list__memo">@($"{slip.RequiredCastCount}名")</span>
+                    <strong class="slip-list__amount">@slip.TotalAmount.ToString("N0") 円</strong>
+                    <span class="cast-sales-adjustment-list__action">
+                        @if (detail is not null)
+                        {
+                            <button class="btn @(slip.IsAdjusted ? "btn-outline-secondary" : "btn-primary") btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#castSalesAdjustmentModal-@slip.SlipId">
+                                @(slip.IsAdjusted ? "再調整" : "売上額調整")
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-outline-secondary btn-sm" type="button" disabled>確認不可</button>
+                        }
+                    </span>
+                </div>
+            }
+        </div>
+    }
+
+    @if (hasBusinessDay)
+    {
+        @foreach (var detail in Model.CastSalesAdjustmentDetails)
+        {
+            var baseAmount = Model.CastSalesAmountBasis == LocalSettings.CastSalesAmountBasisSubtotal
+                ? detail.SubtotalAmount
+                : detail.TotalAmount;
+            <div class="modal fade" id="castSalesAdjustmentModal-@detail.SlipId" tabindex="-1" aria-labelledby="castSalesAdjustmentModalLabel-@detail.SlipId" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <form method="post" asp-page-handler="SaveCastSalesAdjustment">
+                            <div class="modal-header">
+                                <div>
+                                    <p class="store-home__eyebrow mb-1">配分基準 @baseAmount.ToString("N0") 円</p>
+                                    <h2 class="modal-title fs-4" id="castSalesAdjustmentModalLabel-@detail.SlipId">売上額調整</h2>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                            </div>
+                            <div class="modal-body cast-sales-adjustment-modal">
+                                <input type="hidden" name="CastSalesAdjustmentInput.BusinessDayId" value="@Model.CurrentBusinessDay?.BusinessDayId" />
+                                <input type="hidden" name="CastSalesAdjustmentInput.SlipId" value="@detail.SlipId" />
+                                <input type="hidden" name="CastSalesAdjustmentInput.SourceAmountType" value="@Model.CastSalesAmountBasis" />
+                                <input type="hidden" name="CastSalesAdjustmentInput.SplitMode" value="@Model.CastSalesSplitMode" />
+
+                                <div class="cast-sales-adjustment-casts">
+                                    <div class="cast-sales-adjustment-casts__row cast-sales-adjustment-casts__row--header">
+                                        <span>指名キャスト</span>
+                                        <span>区分</span>
+                                        <span>売上額</span>
+                                    </div>
+                                    @for (var i = 0; i < detail.Casts.Count; i++)
+                                    {
+                                        var castRow = detail.Casts[i];
+                                        <div class="cast-sales-adjustment-casts__row">
+                                            <input type="hidden" name="CastSalesAdjustmentInput.Casts[@i].SlipCastId" value="@castRow.SlipCastId" />
+                                            <strong>@castRow.CastDisplayName</strong>
+                                            <span>@castRow.NominationDisplayName</span>
+                                            <label class="cast-sales-adjustment-casts__amount">
+                                                <input class="form-control" name="CastSalesAdjustmentInput.Casts[@i].SalesAmount" value="@CastSalesAdjustmentModel.FormatAmountValue(castRow.EffectiveSalesAmount)" type="number" min="0" step="1" inputmode="numeric" />
+                                                <span>円</span>
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                <button type="submit" class="btn btn-primary">売上額調整を保存</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</section>
+
+@section Scripts {
+    @if (Model.ShowCastSalesAdjustmentModalSlipId is > 0)
+    {
+        <script>
+            (() => {
+                const modalElement = document.getElementById('castSalesAdjustmentModal-@Model.ShowCastSalesAdjustmentModalSlipId');
+                if (modalElement && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+                }
+            })();
+        </script>
+    }
+}
