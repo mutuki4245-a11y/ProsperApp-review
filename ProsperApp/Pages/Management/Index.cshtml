@@ -1,0 +1,36 @@
+@page
+@model ManagementIndexModel
+@{
+    ViewData["Title"] = "随時管理";
+}
+
+<section class="store-home">
+    <div class="business-status-bar">
+        <div>
+            <strong>随時管理</strong>
+            <span>キャスト情報と商品情報を必要なタイミングで更新します</span>
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
+        </div>
+    </div>
+
+    <div class="closing-list">
+        <a class="closing-panel is-ready" asp-page="/Opening/Casts">
+            <span class="closing-panel__body">
+                <strong>キャスト情報</strong>
+                <small>キャストの追加・確認を行います。</small>
+            </span>
+            <span class="closing-panel__badge is-ready">任意</span>
+            <span class="closing-panel__action">開く</span>
+        </a>
+        <a class="closing-panel is-ready" asp-page="/Opening/Items">
+            <span class="closing-panel__body">
+                <strong>商品情報</strong>
+                <small>商品とカテゴリを管理します。</small>
+            </span>
+            <span class="closing-panel__badge is-ready">任意</span>
+            <span class="closing-panel__action">開く</span>
+        </a>
+    </div>
+</section>

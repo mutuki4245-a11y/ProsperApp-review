@@ -2,10 +2,11 @@
 @inject ILocalSettingsProvider LocalSettingsProvider
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
-    var isDuringSalesInput = currentPath.StartsWith("/Closing/Attendance", StringComparison.OrdinalIgnoreCase) ||
-        currentPath.StartsWith("/Closing/DrinkCost", StringComparison.OrdinalIgnoreCase);
+    var isDuringSalesInput = currentPath.StartsWith("/Closing/Attendance", StringComparison.OrdinalIgnoreCase);
+    var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase) ||
+        currentPath.StartsWith("/Opening/Casts", StringComparison.OrdinalIgnoreCase) ||
+        currentPath.StartsWith("/Opening/Items", StringComparison.OrdinalIgnoreCase);
     var isSalesActive = currentPath == "/" ||
-        currentPath.StartsWith("/Opening", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase) ||
         isDuringSalesInput;
@@ -83,6 +84,10 @@
                     <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null)" asp-page="/Closing/Index">
                         <span>2</span>
                         <strong>締め作業</strong>
+                    </a>
+                    <a class="app-workflow-nav__step @(isManagementActive ? "is-active" : null)" asp-page="/Management/Index">
+                        <span>3</span>
+                        <strong>随時管理</strong>
                     </a>
                 </div>
             </nav>

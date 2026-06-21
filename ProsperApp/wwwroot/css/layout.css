@@ -13,7 +13,7 @@
 .app-workflow-nav__inner {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding-bottom: 0.7rem;
   padding-top: 0.7rem;
 }
@@ -219,27 +219,12 @@
   align-items: start;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.85fr);
+  grid-template-columns: minmax(0, 1fr);
   margin-bottom: 1rem;
 }
 
-.home-workspace__side {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.home-secondary-actions {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.operations-summary--management {
-  margin-top: 1.25rem;
-}
-
-.operations-summary--management .operations-summary__list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.home-attendance-panel {
+  margin-bottom: 0;
 }
 
 .opening-list__card.is-ready,
@@ -504,8 +489,7 @@
     flex-direction: column;
   }
 
-  .home-workspace,
-  .operations-summary--management .operations-summary__list {
+  .home-workspace {
     grid-template-columns: 1fr;
   }
 
