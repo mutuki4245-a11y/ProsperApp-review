@@ -177,9 +177,39 @@ PowerShell 5.1では日本語を含むUTF-8ファイルが文字化けするこ�
 
 ### Git運用
 
-`main` は安定版として扱い、タスクごとに作業ブランチを作る。
+`main` は安定版として扱う。
 
-基本手順:
+低リスクで小さい変更は、`main` で直接作業してよい。
+
+main直でよい例:
+
+- 日本語文言、ボタン名、見出し、軽いCSS調整。
+- 単一Razor画面の表示だけを変える小変更。
+- AGENTS.md、HANDOFF.mdなどの軽い運用メモ更新。
+- ビルドや静的確認で十分に戻せる変更。
+
+main直の基本手順:
+
+1. `git switch main`
+2. `git pull`
+3. 対象タスクを実装する。
+4. `dotnet build --no-restore` など、必要な確認を実行する。
+5. 意味のある単位で `git add` / `git commit` する。
+6. 問題なければ `git push origin main` でリモートへ反映する。
+
+大きな構造変更や本番影響がある変更は、直接 `main` に積まずタスクブランチで作業し、ブランチをpushした時点で止める。メインCodexは、ユーザーから `main` へマージする明示指示があるまで `main` へmergeしない。
+
+ブランチで止める変更の例:
+
+1. 認証やルート整理。
+2. 複数画面の画面構成変更やPageModel変更。
+3. RepositoryやInfrastructureの構造整理。
+4. SQL/RPC変更とgrant更新。
+5. 営業日、会計、伝票、領収書、給与などの業務ロジック変更。
+6. Azureデプロイ、GitHub Actions、本番環境変数など本番影響がある変更。
+7. 影響範囲が読み切れない変更。
+
+ブランチ作業の基本手順:
 
 1. `git switch main`
 2. `git pull`
@@ -188,11 +218,7 @@ PowerShell 5.1では日本語を含むUTF-8ファイルが文字化けするこ�
 5. `dotnet build --no-restore` など、必要な確認を実行する。
 6. 意味のある単位で `git add` / `git commit` する。
 7. 新規ブランチなら `git push -u origin task/<task-name>`、既存ブランチなら `git push` でリモートへ反映する。
-8. 確認できたら `main` に戻って `git merge task/<task-name>` する。
-9. `main` のビルドまたは必要な確認を行い、問題なければ `git push origin main` でリモートへ反映する。
-10. merge後、不要なら `git branch -d task/<task-name>` で作業ブランチを削除する。
-
-一人開発でも、認証、SQL/RPC、画面構成、構造整理など影響範囲が広い変更は、直接 `main` に積まずタスクブランチで作業する。
+8. ブランチ名、commit、確認結果、mainへ入れる前に見るべき点を報告して止める。
 
 コミットの考え方:
 
@@ -202,15 +228,16 @@ PowerShell 5.1では日本語を含むUTF-8ファイルが文字化けするこ�
 - 複数テーマが混ざった場合は、後で追いやすいようにコミットを分ける。
 - ローカルだけに残す明確な理由がない限り、タスク完了時はpushまで行い、GitHub上でブランチやコミットを確認できる状態にする。
 
-大きな変更の例:
+mainへマージする明示指示を受けた後の手順:
 
-1. 認証やルート整理。
-2. 画面やPageModelの変更。
-3. RepositoryやInfrastructureの構造整理。
-4. SQL/RPC変更とgrant更新。
-5. HANDOFFや参照SQLの更新。
+1. `git switch main`
+2. `git pull`
+3. `git merge task/<task-name>`
+4. `main` のビルドまたは必要な確認を行う。
+5. 問題なければ `git push origin main` でリモートへ反映する。
+6. merge後、不要なら `git branch -d task/<task-name>` でローカル作業ブランチを削除する。
 
-通常はタスクブランチの最終状態でビルドを通してからpushし、`main` にmergeする。チーム運用では、タスクブランチをpushしてPull Requestを作り、レビューとCI確認後に `main` へmergeする。merge後の `main` もpushまで行い、GitHub上の状態を最新にする。
+チーム運用では、タスクブランチをpushしてPull Requestを作り、レビューとCI確認後に `main` へmergeする。merge後の `main` もpushまで行い、GitHub上の状態を最新にする。
 
 ### Codex作業
 
