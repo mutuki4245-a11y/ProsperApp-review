@@ -57,6 +57,9 @@
 - `Sql/store_rpc/06_receipts.sql`
   - 領収書入力、スキャンミス除外系RPCです。
 
+- `Sql/store_rpc/07_cast_sales_adjustments.sql`
+  - 締め作業のキャスト売上額調整系RPCです。
+
 - `Sql/store_rpc/99_grants.sql`
   - 分割RPCの `grant execute` をまとめた実行順最後のSQLです。
 
@@ -80,9 +83,10 @@
 6. `Sql/store_rpc/04_orders.sql`
 7. `Sql/store_rpc/05_checkout.sql`
 8. `Sql/store_rpc/06_receipts.sql`
-9. `Sql/store_rpc/99_grants.sql`
-10. 必要に応じて `Sql/store_table_master_seed.sql`
-11. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+9. `Sql/store_rpc/07_cast_sales_adjustments.sql`
+10. `Sql/store_rpc/99_grants.sql`
+11. 必要に応じて `Sql/store_table_master_seed.sql`
+12. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 `agent_schema_reference.sql` と `store_rpc_functions.sql` は実行しないでください。
 
@@ -104,6 +108,10 @@
 - `save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
 - `get_business_day_closing_attendance(p_department_id, p_business_day_id)`
 - `save_business_day_closing_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
+- `get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id)`
+- `get_cast_sales_adjustment_slips(p_department_id, p_business_day_id)`
+- `get_cast_sales_adjustment_detail(p_department_id, p_slip_id)`
+- `save_cast_sales_adjustment(p_department_id, p_slip_id, p_adjustments, p_source_amount_type, p_split_mode)`
 - `close_business_day(p_department_id, p_business_day_id, p_memo, p_pending_receipt_status)`
 
 ### 伝票
@@ -195,7 +203,7 @@
   - 酒代入力、勤怠確認、キャスト売上額調整、領収書入力を縦並びの独立パネルで表示します。
   - 営業日締めは通常の作業パネルから分離し、締め条件と最終実行ボタンを下部にまとめます。
   - 酒代入力、勤怠確認、キャスト売上額調整は締め前の必須作業です。未完了の必須作業は赤、領収書の未入力など確認対象は橙、完了は緑で表示します。
-  - キャスト売上額調整は必須条件として扱いますが、現時点では入力画面が未対応のため営業日締めを完了できません。売上額調整画面の実装後に完了条件へ接続します。
+  - キャスト売上額調整は、会計済みかつ指名キャストがいる伝票を一覧表示し、行末の売上額調整ボタンから指名キャスト別の売上額を保存します。
   - 領収書入力は未入力がある場合に要確認として表示しますが、営業日締めのブロック条件にはしません。
   - 営業日締めは、未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済みを満たした場合だけ実行できます。画面POSTと `close_business_day` RPCの両方で同じ条件を検証します。
 

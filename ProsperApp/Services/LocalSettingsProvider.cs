@@ -55,13 +55,25 @@ public class LocalSettingsProvider(
             ? settings.AttendanceMinuteStep
             : 15;
 
+        var castSalesAmountBasis = settings.CastSalesAmountBasis is
+            LocalSettings.CastSalesAmountBasisSubtotal or LocalSettings.CastSalesAmountBasisTotal
+            ? settings.CastSalesAmountBasis
+            : LocalSettings.CastSalesAmountBasisTotal;
+
+        var castSalesSplitMode = settings.CastSalesSplitMode is
+            LocalSettings.CastSalesSplitModeSplit or LocalSettings.CastSalesSplitModeFull
+            ? settings.CastSalesSplitMode
+            : LocalSettings.CastSalesSplitModeSplit;
+
         return new LocalSettings
         {
             StoreName = string.IsNullOrWhiteSpace(settings.StoreName) ? "店舗" : settings.StoreName.Trim(),
             StoreDepartmentId = storeDepartmentId,
             ScreenMode = screenMode,
             IsAdminMode = settings.IsAdminMode,
-            AttendanceMinuteStep = attendanceMinuteStep
+            AttendanceMinuteStep = attendanceMinuteStep,
+            CastSalesAmountBasis = castSalesAmountBasis,
+            CastSalesSplitMode = castSalesSplitMode
         };
     }
 }

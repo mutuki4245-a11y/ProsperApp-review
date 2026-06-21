@@ -2,6 +2,11 @@ namespace ProsperApp.Models;
 
 public class LocalSettings
 {
+    public const string CastSalesAmountBasisSubtotal = "subtotal";
+    public const string CastSalesAmountBasisTotal = "total";
+    public const string CastSalesSplitModeSplit = "split";
+    public const string CastSalesSplitModeFull = "full";
+
     public const string CookieName = "ProsperApp.LocalSettings";
     public const string LocalStorageKey = "ProsperApp.LocalSettings";
 
@@ -14,4 +19,8 @@ public class LocalSettings
     public bool IsAdminMode { get; set; }
 
     public int AttendanceMinuteStep { get; set; } = 15;
+
+    public string CastSalesAmountBasis { get; set; } = CastSalesAmountBasisTotal;
+
+    public string CastSalesSplitMode { get; set; } = CastSalesSplitModeSplit;
 }
