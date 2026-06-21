@@ -24,4 +24,11 @@ public interface IBusinessDayRepository
     Task<decimal> GetDrinkDeliveryAmountAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(long businessDayId, decimal amount, CancellationToken ct);
+
+    Task<IReadOnlyList<BusinessDayClosingAttendanceItem>> GetClosingAttendanceAsync(long businessDayId, CancellationToken ct);
+
+    Task<BusinessDayAttendanceSaveResult> SaveClosingAttendanceAsync(
+        long businessDayId,
+        IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
+        CancellationToken ct);
 }

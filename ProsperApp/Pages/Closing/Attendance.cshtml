@@ -1,0 +1,92 @@
+@page
+@model ClosingAttendanceModel
+@{
+    ViewData["Title"] = "勤怠入力";
+}
+
+<section class="store-home">
+    <div class="business-status-bar">
+        <div>
+            <strong>ホーム / 締め作業 / 勤怠入力</strong>
+            @if (Model.CurrentBusinessDay is null)
+            {
+                <span>営業開始前</span>
+            }
+            else
+            {
+                <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</span>
+            }
+        </div>
+        <div class="business-status-bar__actions">
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">ホーム</a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    @if (Model.CurrentBusinessDay is null)
+    {
+        <div class="alert alert-warning">
+            営業中の営業日がありません。
+            <a class="alert-link" asp-page="/Opening/Index">営業準備へ</a>
+        </div>
+    }
+    else if (Model.Input.Entries.Count == 0)
+    {
+        <div class="alert alert-secondary">
+            出勤登録済みキャストがいません。
+            <a class="alert-link" asp-page="/Opening/Attendance">出勤登録へ</a>
+        </div>
+    }
+    else
+    {
+        <form method="post" class="closing-attendance-form">
+            <input asp-for="Input.BusinessDayId" type="hidden" />
+            <div class="closing-attendance-table">
+                <div class="closing-attendance-table__row closing-attendance-table__row--header">
+                    <span>キャスト</span>
+                    <span>出勤</span>
+                    <span>退勤</span>
+                    <span>送り</span>
+                </div>
+                @for (var i = 0; i < Model.Input.Entries.Count; i++)
+                {
+                    <div class="closing-attendance-table__row">
+                        <input asp-for="Input.Entries[i].AttendanceId" type="hidden" />
+                        <input asp-for="Input.Entries[i].DisplayName" type="hidden" />
+                        <span class="closing-attendance-table__cast">@Model.Input.Entries[i].DisplayName</span>
+                        <span class="closing-attendance-table__time">@Model.Input.Entries[i].ClockInTime</span>
+                        <label class="closing-attendance-table__field">
+                            <span>退勤時刻</span>
+                            <select class="form-select" asp-for="Input.Entries[i].ClockOutTime">
+                                <option value="">選択</option>
+                                @foreach (var time in Model.TimeOptions)
+                                {
+                                    <option value="@time">@time</option>
+                                }
+                            </select>
+                            <span asp-validation-for="Input.Entries[i].ClockOutTime" class="text-danger"></span>
+                        </label>
+                        <label class="closing-attendance-table__send form-check">
+                            <input class="form-check-input" asp-for="Input.Entries[i].UsesSendService" />
+                            <span class="form-check-label">利用</span>
+                        </label>
+                    </div>
+                }
+            </div>
+            <div class="closing-entry-panel__actions closing-attendance-actions">
+                <button class="btn btn-primary btn-lg" type="submit">保存</button>
+            </div>
+        </form>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

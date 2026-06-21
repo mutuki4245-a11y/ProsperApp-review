@@ -101,6 +101,8 @@
 - `get_open_slip_count(p_department_id, p_business_day_id)`
 - `get_business_day_drink_delivery_amount(p_department_id, p_business_day_id)`
 - `save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
+- `get_business_day_closing_attendance(p_department_id, p_business_day_id)`
+- `save_business_day_closing_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
 - `close_business_day(p_department_id, p_business_day_id, p_memo)`
 
 ### 伝票
@@ -167,8 +169,12 @@
 
 - `/Closing`
   - 締め作業ホーム。
-  - 酒代入力、勤怠入力、キャスト売上額調整は準備中表示のみで、個別プレースホルダーページは置きません。
-  - 現在の実入力導線は領収書入力です。
+  - 酒代入力、勤怠入力、キャスト売上額調整、領収書入力への導線を縦並びの独立パネルで表示します。
+  - 勤怠入力は出勤登録済みキャストの退勤時刻と送り利用有無を保存します。
+
+- `/Closing/Attendance`
+  - 出勤登録済みキャストごとに退勤時刻と送り利用有無を入力します。
+  - 退勤時刻の選択肢は端末設定の `AttendanceMinuteStep` に従います。
 
 - `/Closing/Receipts`
   - 領収書簡易入力。

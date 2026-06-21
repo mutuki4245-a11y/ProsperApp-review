@@ -224,10 +224,86 @@ public class SupabaseBusinessDayRepository(
             : BusinessDayAmountSaveResult.Failed("納品額を保存できませんでした。");
     }
 
+    public async Task<IReadOnlyList<BusinessDayClosingAttendanceItem>> GetClosingAttendanceAsync(
+        long businessDayId,
+        CancellationToken ct)
+    {
+        if (!HasRequiredSettings())
+        {
+            return [];
+        }
+
+        var rows = await PostRpcArrayAsync(
+            "get_business_day_closing_attendance",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId
+            },
+            ct);
+
+        return rows
+            .Select(ParseClosingAttendanceItem)
+            .Where(x => x.AttendanceId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
+            .ToList();
+    }
+
+    public async Task<BusinessDayAttendanceSaveResult> SaveClosingAttendanceAsync(
+        long businessDayId,
+        IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
+        CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return BusinessDayAttendanceSaveResult.Failed("Supabase SecretKeyが未設定です。勤怠入力を保存できません。");
+        }
+
+        var payload = attendanceEntries
+            .Where(x => x.AttendanceId > 0)
+            .GroupBy(x => x.AttendanceId)
+            .Select(x => x.Last())
+            .Select(x => new ClosingAttendanceEntryPayload(
+                x.AttendanceId,
+                x.ClockOutTime?.Trim() ?? string.Empty,
+                x.UsesSendService))
+            .ToArray();
+
+        if (payload.Length == 0)
+        {
+            return BusinessDayAttendanceSaveResult.Failed("退勤情報を1名以上入力してください。");
+        }
+
+        var result = await RpcClient.PostScalarAsync(
+            "save_business_day_closing_attendance",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId,
+                p_attendance_entries = payload
+            },
+            requireSecretKey: true,
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return BusinessDayAttendanceSaveResult.Failed(ToClosingAttendanceFriendlyError(result.ErrorMessage));
+        }
+
+        var value = NormalizeScalarBody(result.Body);
+        return int.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedCount)
+            ? BusinessDayAttendanceSaveResult.Success(savedCount)
+            : BusinessDayAttendanceSaveResult.Failed("勤怠入力を保存できませんでした。");
+    }
+
     private sealed record AttendanceEntryPayload(
         [property: JsonPropertyName("cast_id")] long CastId,
         [property: JsonPropertyName("clock_in_time")] string ClockInTime,
         [property: JsonPropertyName("is_selected")] bool IsSelected);
+
+    private sealed record ClosingAttendanceEntryPayload(
+        [property: JsonPropertyName("attendance_id")] long AttendanceId,
+        [property: JsonPropertyName("clock_out_time")] string ClockOutTime,
+        [property: JsonPropertyName("uses_send_service")] bool UsesSendService);
 
     private static StoreBusinessDay ParseBusinessDay(JsonElement row)
     {
@@ -241,6 +317,21 @@ public class SupabaseBusinessDayRepository(
             ClosedAt = ReadDateTimeOffset(row, "closed_at"),
             Status = ReadString(row, "status") ?? string.Empty,
             Memo = ReadString(row, "memo")
+        };
+    }
+
+    private static BusinessDayClosingAttendanceItem ParseClosingAttendanceItem(JsonElement row)
+    {
+        return new BusinessDayClosingAttendanceItem
+        {
+            AttendanceId = ReadLong(row, "attendance_id") ?? 0,
+            CastId = ReadLong(row, "cast_id") ?? 0,
+            DisplayName = ReadString(row, "cast_display_name") ?? string.Empty,
+            DepartmentName = ReadString(row, "cast_department_name"),
+            AttendanceStatus = ReadString(row, "attendance_status") ?? string.Empty,
+            ClockInAt = ReadDateTimeOffset(row, "clock_in_at"),
+            ClockOutAt = ReadDateTimeOffset(row, "clock_out_at"),
+            UsesSendService = ReadBool(row, "uses_send_service") ?? false
         };
     }
 
@@ -307,5 +398,30 @@ public class SupabaseBusinessDayRepository(
         }
 
         return $"DB更新に失敗しました。{rawError}";
+    }
+
+    private static string ToClosingAttendanceFriendlyError(string? rawError)
+    {
+        if (string.IsNullOrWhiteSpace(rawError))
+        {
+            return "勤怠入力を保存できませんでした。";
+        }
+
+        if (rawError.Contains("invalid_attendance_clock_out_time", StringComparison.OrdinalIgnoreCase))
+        {
+            return "退勤時刻を確認してください。";
+        }
+
+        if (rawError.Contains("attendance_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "出勤登録済みキャストの選択内容を確認してください。";
+        }
+
+        if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))
+        {
+            return "退勤情報を1名以上入力してください。";
+        }
+
+        return ToFriendlyError(rawError);
     }
 }

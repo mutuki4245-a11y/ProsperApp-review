@@ -587,6 +587,142 @@ begin
 end;
 $$;
 
+create or replace function public.get_business_day_closing_attendance(
+    p_department_id bigint,
+    p_business_day_id bigint
+)
+returns table (
+    attendance_id bigint,
+    cast_id bigint,
+    cast_display_name text,
+    cast_department_name text,
+    attendance_status text,
+    clock_in_at timestamp with time zone,
+    clock_out_at timestamp with time zone,
+    uses_send_service boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select
+        a.attendance_id,
+        a.cast_id,
+        c.display_name as cast_display_name,
+        d.department_name as cast_department_name,
+        a.attendance_status,
+        a.clock_in_at,
+        a.clock_out_at,
+        coalesce(a.uses_send_service, false) as uses_send_service
+    from public.store_cast_attendance a
+    join public.store_business_days b
+      on b.business_day_id = a.business_day_id
+     and b.department_id = p_department_id
+    join public.cast_master c
+      on c.cast_id = a.cast_id
+    left join public.department_master d
+      on d.department_id = c.department_id
+    where a.department_id = p_department_id
+      and a.business_day_id = p_business_day_id
+      and a.attendance_status in ('scheduled', 'checked_in', 'checked_out')
+    order by
+        case when c.department_id = p_department_id then 0 else 1 end,
+        c.sort_order asc,
+        c.display_name asc,
+        a.attendance_id asc;
+$$;
+
+create or replace function public.save_business_day_closing_attendance(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_attendance_entries jsonb
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_business_day record;
+    v_entry jsonb;
+    v_attendance record;
+    v_attendance_id bigint;
+    v_clock_out_time time;
+    v_clock_out_at timestamp with time zone;
+    v_uses_send_service boolean;
+    v_updated_count integer := 0;
+begin
+    select *
+      into v_business_day
+    from public.store_business_days b
+    where b.department_id = p_department_id
+      and b.business_day_id = p_business_day_id
+      and b.status = 'open'
+    limit 1;
+
+    if v_business_day.business_day_id is null then
+        raise exception 'business_day_not_open';
+    end if;
+
+    for v_entry in
+        select value from jsonb_array_elements(coalesce(p_attendance_entries, '[]'::jsonb))
+    loop
+        v_attendance_id := nullif(v_entry->>'attendance_id', '')::bigint;
+
+        if v_attendance_id is null then
+            raise exception 'attendance_required';
+        end if;
+
+        begin
+            v_clock_out_time := nullif(v_entry->>'clock_out_time', '')::time;
+        exception when others then
+            raise exception 'invalid_attendance_clock_out_time';
+        end;
+
+        if v_clock_out_time is null then
+            raise exception 'invalid_attendance_clock_out_time';
+        end if;
+
+        v_uses_send_service := coalesce((v_entry->>'uses_send_service')::boolean, false);
+        v_clock_out_at := (((v_business_day.business_date + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_out_time) at time zone 'Asia/Tokyo');
+
+        select *
+          into v_attendance
+        from public.store_cast_attendance a
+        where a.attendance_id = v_attendance_id
+          and a.department_id = p_department_id
+          and a.business_day_id = p_business_day_id
+          and a.attendance_status in ('scheduled', 'checked_in', 'checked_out')
+        for update;
+
+        if v_attendance.attendance_id is null then
+            raise exception 'attendance_not_found';
+        end if;
+
+        if v_attendance.clock_in_at is not null and v_clock_out_at < v_attendance.clock_in_at then
+            raise exception 'invalid_attendance_clock_out_time';
+        end if;
+
+        update public.store_cast_attendance a
+           set attendance_status = 'checked_out',
+               clock_out_at = v_clock_out_at,
+               uses_send_service = v_uses_send_service,
+               updated_at = now()
+         where a.attendance_id = v_attendance_id
+           and a.department_id = p_department_id
+           and a.business_day_id = p_business_day_id;
+
+        v_updated_count := v_updated_count + 1;
+    end loop;
+
+    if v_updated_count = 0 then
+        raise exception 'attendance_required';
+    end if;
+
+    return v_updated_count;
+end;
+$$;
+
 create or replace function public.get_open_slip_count(
     p_department_id bigint,
     p_business_day_id bigint

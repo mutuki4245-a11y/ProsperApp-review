@@ -27,3 +27,60 @@ public class BusinessDayAmountSaveResult
         return new BusinessDayAmountSaveResult { Succeeded = false, ErrorMessage = message };
     }
 }
+
+public class BusinessDayClosingAttendanceItem
+{
+    public long AttendanceId { get; set; }
+
+    public long CastId { get; set; }
+
+    public string DisplayName { get; set; } = string.Empty;
+
+    public string? DepartmentName { get; set; }
+
+    public string AttendanceStatus { get; set; } = string.Empty;
+
+    public DateTimeOffset? ClockInAt { get; set; }
+
+    public DateTimeOffset? ClockOutAt { get; set; }
+
+    public bool UsesSendService { get; set; }
+
+    public string SearchDisplayName => string.IsNullOrWhiteSpace(DepartmentName)
+        ? DisplayName
+        : $"{DisplayName}：{DepartmentName}";
+}
+
+public class BusinessDayClosingAttendanceInput
+{
+    public long AttendanceId { get; set; }
+
+    public string DisplayName { get; set; } = string.Empty;
+
+    public string? DepartmentName { get; set; }
+
+    public string? ClockInTime { get; set; }
+
+    public string? ClockOutTime { get; set; }
+
+    public bool UsesSendService { get; set; }
+}
+
+public class BusinessDayAttendanceSaveResult
+{
+    public bool Succeeded { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public int SavedCount { get; init; }
+
+    public static BusinessDayAttendanceSaveResult Success(int savedCount)
+    {
+        return new BusinessDayAttendanceSaveResult { Succeeded = true, SavedCount = savedCount };
+    }
+
+    public static BusinessDayAttendanceSaveResult Failed(string message)
+    {
+        return new BusinessDayAttendanceSaveResult { Succeeded = false, ErrorMessage = message };
+    }
+}
