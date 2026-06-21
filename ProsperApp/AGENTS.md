@@ -10,6 +10,16 @@
 
 ただし、サブエージェントを使う場合も、メインCodexはこのAGENTS.mdの権限分離、禁止事項、並列実行制限を守る。
 
+## サブエージェント利用の制限
+
+このリポジトリで起動してよいサブエージェントは、`.codex/agents/*.toml` に定義されたOpenRouter系エージェントだけとする。
+
+- 使用してよいサブエージェントは `code_mapper`、`simple_editor`、`sql_rpc_checker`、`ui_copy_fixer`、`build_log_triager`、`light_reviewer` の6つだけ。
+- `default`、`explorer`、`worker` など、親CodexのGPT系モデルを継承するサブエージェントは起動しない。
+- OpenRouterの認証未設定、401エラー、OpenRouter側の障害などでサブエージェントを起動できない場合も、GPT系サブエージェントへフォールバックしない。
+- サブエージェントを使えない場合は、メインCodexが同じ範囲の調査、編集、確認を担当する。
+- サブエージェントを使う場合も、最終判断と最終報告は必ずメインCodexが行う。
+
 ## Windows PowerShellでの文字コード
 
 PowerShell 5.1では日本語を含むUTF-8ファイルが文字化けすることがある。
@@ -20,6 +30,8 @@ PowerShell 5.1では日本語を含むUTF-8ファイルが文字化けするこ�
 - TOML、Razor、C#、SQLの日本語文言はUTF-8として扱う。
 
 ## サブエージェント構成
+
+以下の6つだけをこのリポジトリのサブエージェントとして扱う。
 
 ### code_mapper
 
@@ -248,13 +260,13 @@ main直の基本手順:
 
 複数ファイルにまたがる変更:
 
-1. `code_mapper` で関連範囲を調査する。
+1. `code_mapper` が使える場合は、関連範囲を調査する。使えない場合はメインCodexが調査する。
 2. メインCodexが設計と編集方針を決める。
-3. 低リスク文言修正なら `ui_copy_fixer`、単純編集なら `simple_editor` に限定委任する。
-4. SQL/RPCが絡む場合は `sql_rpc_checker` で互換性確認する。
+3. 低リスク文言修正なら `ui_copy_fixer`、単純編集なら `simple_editor` に限定委任してよい。使えない場合はメインCodexが編集する。
+4. SQL/RPCが絡む場合は `sql_rpc_checker` が使えるなら互換性確認する。使えない場合はメインCodexが確認する。
 5. メインCodexがビルドまたはテストを実行する。
-6. 失敗時は `build_log_triager` でログを整理する。
-7. 実装後に `light_reviewer` で軽量レビューする。
+6. 失敗時は `build_log_triager` が使えるならログを整理する。使えない場合はメインCodexが整理する。
+7. 実装後に `light_reviewer` が使えるなら軽量レビューする。使えない場合はメインCodexが確認する。
 8. メインCodexが最終修正と最終報告を行う。
 
 ## 並列実行の制限
@@ -273,3 +285,4 @@ main直の基本手順:
 - 失敗しても簡単に戻せる単純作業なら任せてよい。
 - DB、認証、権限、業務ロジック、本番影響があるならメインCodexが担当する。
 - 編集範囲を1文で正確に指定できないなら任せない。
+- OpenRouter系サブエージェントを起動できない場合は、GPT系サブエージェントで代替せず、メインCodexが担当する。
