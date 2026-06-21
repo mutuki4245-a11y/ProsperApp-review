@@ -22,9 +22,8 @@
 
     @if (Model.IsPreviousBusinessDayOpen)
     {
-        <div class="alert alert-danger" role="alert">
-            前回営業日 @Model.CurrentBusinessDay?.BusinessDate.ToString("yyyy-MM-dd") の締め作業が未完了です。新しい営業入力の前に締め作業を完了してください。
-            <a class="alert-link" asp-page="/Closing/Index">締め作業へ</a>
+        <div class="alert alert-danger sales-block-alert" role="alert">
+            前回営業日 @Model.CurrentBusinessDay?.BusinessDate.ToString("yyyy-MM-dd") の締め作業が未完了です。
         </div>
     }
 
@@ -53,16 +52,15 @@
                         <span>@Model.CheckedOutSlipCount 件</span>
                     </span>
                 </div>
-                <a class="btn btn-outline-secondary btn-sm" asp-page="/Closing/Attendance">勤怠管理</a>
+                <a class="btn btn-outline-primary btn-sm sales-summary__attendance" asp-page="/Closing/Attendance">勤怠管理</a>
             </div>
             <section class="slip-list-section" id="slipListPanel">
-                <div class="slip-list-section__header">
-                    <h2>伝票一覧</h2>
-                    @if (Model.CanCreateSalesInput)
-                    {
+                @if (Model.CanCreateSalesInput)
+                {
+                    <div class="slip-list-section__actions">
                         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-                    }
-                </div>
+                    </div>
+                }
 
                 @if (Model.Slips.Count == 0)
                 {
