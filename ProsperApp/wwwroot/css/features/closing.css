@@ -185,6 +185,11 @@ a.closing-panel:focus {
   justify-self: end;
 }
 
+.cast-sales-adjustment-confirm {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .cast-sales-adjustment-modal {
   display: grid;
   gap: 1rem;
@@ -440,6 +445,11 @@ a.closing-panel:focus {
   }
 
   .cast-sales-adjustment-list__action .btn {
+    width: 100%;
+  }
+
+  .cast-sales-adjustment-confirm,
+  .cast-sales-adjustment-confirm .btn {
     width: 100%;
   }
 

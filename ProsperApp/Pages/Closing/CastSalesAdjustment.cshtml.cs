@@ -35,6 +35,11 @@ public class CastSalesAdjustmentModel(
 
     public long? ShowCastSalesAdjustmentModalSlipId { get; private set; }
 
+    public bool CanConfirmCastSalesAdjustment =>
+        CurrentBusinessDay is not null &&
+        CastSalesAdjustmentStatus.RequiredSlipCount > 0 &&
+        CastSalesAdjustmentStatus.IsCompleted;
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
@@ -84,15 +89,39 @@ public class CastSalesAdjustmentModel(
             return Page();
         }
 
+        SuccessMessage = "キャスト売上額調整を保存しました。";
         await LoadAsync(cancellationToken);
-        if (CastSalesAdjustmentStatus.IsCompleted)
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostConfirmAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
-            TempData["SuccessMessage"] = "キャスト売上額調整を保存しました。";
+            return NotFound();
+        }
+
+        await LoadAsync(cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
+            return Page();
+        }
+
+        if (CastSalesAdjustmentStatus.RequiredSlipCount == 0)
+        {
+            TempData["SuccessMessage"] = "キャスト売上額調整の対象はありません。";
             return RedirectToPage("/Closing/Index");
         }
 
-        SuccessMessage = "キャスト売上額調整を保存しました。";
-        return Page();
+        if (!CastSalesAdjustmentStatus.IsCompleted)
+        {
+            ModelState.AddModelError(string.Empty, "すべての伝票の売上額調整を保存してから確認してください。");
+            return Page();
+        }
+
+        TempData["SuccessMessage"] = "キャスト売上額調整を確認しました。";
+        return RedirectToPage("/Closing/Index");
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken)
