@@ -267,8 +267,9 @@
         }
 
         hiddenInput.value = cast.id;
-        hiddenName.value = cast.display;
-        selected.textContent = cast.display;
+        const nominationDisplay = cast.nominationDisplay ?? cast.display;
+        hiddenName.value = nominationDisplay;
+        selected.textContent = nominationDisplay;
     };
 
     const renderAttendingCastModal = () => {
@@ -291,7 +292,7 @@
             button.type = 'button';
             button.className = 'cast-select-modal__item';
             const name = document.createElement('strong');
-            name.textContent = cast.name;
+            name.textContent = cast.nominationDisplay ?? cast.display;
             button.append(name);
             button.addEventListener('click', () => {
                 if (castModalTargetRow) {

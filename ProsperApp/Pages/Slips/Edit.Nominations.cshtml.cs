@@ -126,7 +126,7 @@ public partial class SlipEditModel
             var nomination = AddNominationsInput.CastNominations[i];
             if (nomination.CastId is not null && string.IsNullOrWhiteSpace(nomination.CastName))
             {
-                nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.DisplayName;
+                nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.SearchDisplayName;
             }
 
             if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !AllowedNominationKinds.Contains(nomination.NominationKind))
