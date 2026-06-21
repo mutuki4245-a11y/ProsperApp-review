@@ -53,6 +53,7 @@ public class ClosingModel(
         }
 
         await LoadBusinessDayAsync(cancellationToken);
+        ClosingMemo = CurrentBusinessDay?.Memo;
         return Page();
     }
 

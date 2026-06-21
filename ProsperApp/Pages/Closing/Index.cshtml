@@ -127,43 +127,26 @@
     <section class="closing-final" aria-label="営業日締め">
         @if (!hasBusinessDay)
         {
-            <article class="closing-panel closing-final-panel is-preparing">
-                <span class="closing-panel__body">
-                    <strong>営業日締め</strong>
-                    <small>営業中の営業日はありません。最初の業務入力で営業日が自動作成されます。</small>
-                </span>
-                <span class="closing-panel__badge is-preparing">待機</span>
-                <span class="closing-panel__action">待機</span>
+            <article class="closing-panel closing-final-panel closing-final-panel--compact is-preparing">
+                <div class="closing-panel__form">
+                    <label class="form-label" for="closingMemoUnavailable">締めメモ</label>
+                    <input id="closingMemoUnavailable" class="form-control form-control-lg" placeholder="営業中の営業日がありません" disabled />
+                </div>
+                <button class="btn btn-danger closing-panel__submit" type="button" disabled>営業日を締める</button>
             </article>
         }
         else
         {
-            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form closing-final-panel @closingFinalPanelClass">
+            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form closing-final-panel closing-final-panel--compact @closingFinalPanelClass">
                 <input asp-for="BusinessDayId" type="hidden" />
-                <span class="closing-panel__body">
-                    <strong>営業日締め</strong>
-                    <small>@(canCloseBusinessDay ? "すべての締め条件が完了しています。" : "未完了の締め条件があります。")</small>
-                </span>
-                <span class="closing-panel__badge @closingFinalPanelClass">@(canCloseBusinessDay ? "実行可" : "不可")</span>
-                <button class="btn btn-danger closing-panel__submit" type="submit" @(canCloseBusinessDay ? null : "disabled")>営業日を締める</button>
                 <div class="closing-panel__form">
-                    @if (!canCloseBusinessDay)
-                    {
-                        <div class="alert alert-warning mb-0">
-                            <ul class="mb-0">
-                                @foreach (var reason in Model.Readiness.BlockReasons)
-                                {
-                                    <li>@reason</li>
-                                }
-                            </ul>
-                        </div>
-                    }
                     <div>
                         <label asp-for="ClosingMemo" class="form-label">締めメモ</label>
                         <input asp-for="ClosingMemo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら共有事項を入力" />
                         <span asp-validation-for="ClosingMemo" class="text-danger"></span>
                     </div>
                 </div>
+                <button class="btn btn-danger closing-panel__submit" type="submit" @(canCloseBusinessDay ? null : "disabled")>営業日を締める</button>
             </form>
         }
     </section>
