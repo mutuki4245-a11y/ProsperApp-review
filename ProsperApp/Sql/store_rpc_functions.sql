@@ -10,7 +10,8 @@
 --   4. Sql/store_rpc/04_orders.sql
 --   5. Sql/store_rpc/05_checkout.sql
 --   6. Sql/store_rpc/06_receipts.sql
---   7. Sql/store_rpc/99_grants.sql
+--   7. Sql/store_rpc/07_cast_sales_adjustments.sql
+--   8. Sql/store_rpc/99_grants.sql
 --
 -- Keep function names, argument lists, return columns, and grants in the split
 -- files compatible with existing C# RPC callers.

@@ -830,6 +830,7 @@ end;
 $$;
 
 drop function if exists public.close_business_day(bigint, bigint, text);
+drop function if exists public.close_business_day(bigint, bigint, text, text);
 
 create or replace function public.close_business_day(
     p_department_id bigint,
@@ -856,8 +857,7 @@ declare
     v_business_day public.store_business_days%rowtype;
     v_attendance_count integer;
     v_missing_clock_out_count integer;
-    v_pending_receipt_count integer;
-    v_pending_receipt_status text := nullif(trim(coalesce(p_pending_receipt_status, '')), '');
+    v_cast_sales_adjustment_missing_count integer;
 begin
     select *
       into v_business_day
@@ -900,16 +900,13 @@ begin
         raise exception 'attendance_clock_out_required:%', v_missing_clock_out_count;
     end if;
 
-    if v_pending_receipt_status is not null then
-        select count(*)::integer
-          into v_pending_receipt_count
-        from public.documents d
-        where d.department_id = p_department_id
-          and d.status = v_pending_receipt_status;
+    select s.missing_slip_count
+      into v_cast_sales_adjustment_missing_count
+    from public.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id) s
+    limit 1;
 
-        if coalesce(v_pending_receipt_count, 0) > 0 then
-            raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
-        end if;
+    if coalesce(v_cast_sales_adjustment_missing_count, 0) > 0 then
+        raise exception 'cast_sales_adjustment_required:%', v_cast_sales_adjustment_missing_count;
     end if;
 
     return query

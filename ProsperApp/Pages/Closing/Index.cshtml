@@ -1,15 +1,18 @@
 @page
+@using ProsperApp.Models
 @model ClosingModel
 @{
     ViewData["Title"] = "締め作業";
     var hasBusinessDay = Model.CurrentBusinessDay is not null;
     ViewData["HasCurrentBusinessDay"] = hasBusinessDay;
     var canCloseBusinessDay = Model.Readiness.CanClose;
-    var drinkDeliveryPanelClass = Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning";
-    var attendancePanelClass = Model.ClosingAttendanceMissingClockOutCount > 0
-        ? "needs-action"
-        : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action";
-    var receiptsPanelClass = Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready";
+    var drinkDeliveryPanelClass = hasBusinessDay && Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning";
+    var attendancePanelClass = hasBusinessDay && Model.ClosingAttendanceMissingClockOutCount == 0 && Model.ClosingAttendanceCount > 0
+        ? "is-ready"
+        : "has-warning";
+    var castSalesAdjustmentPanelClass = Model.Readiness.IsCastSalesAdjustmentCompleted ? "is-ready" : "has-warning";
+    var receiptsPanelClass = Model.PendingReceiptCount > 0 ? "needs-action" : "is-ready";
+    var closingFinalPanelClass = canCloseBusinessDay ? "is-ready" : "has-warning";
 }
 
 <section class="store-home">
@@ -52,7 +55,7 @@
                     <small>酒代保存時に営業日を自動作成できます。</small>
                 </span>
                 <span class="closing-panel__badge has-warning">要入力</span>
-                <span class="closing-panel__action">開く</span>
+                <span class="closing-panel__action">入力</span>
             </a>
         }
 
@@ -60,7 +63,7 @@
         {
             <a class="closing-panel @attendancePanelClass" asp-page="/Closing/Attendance">
                 <span class="closing-panel__body">
-                    <strong>勤怠入力</strong>
+                    <strong>勤怠確認</strong>
                     <small>
                         @if (Model.ClosingAttendanceMissingClockOutCount > 0)
                         {
@@ -72,33 +75,93 @@
                         }
                         else
                         {
-                            @("勤怠入力にキャストがいません。")
+                            @("出勤キャストが登録されていません。")
                         }
                     </small>
                 </span>
-                <span class="closing-panel__badge @attendancePanelClass">@(Model.ClosingAttendanceMissingClockOutCount > 0 ? "要入力" : Model.ClosingAttendanceCount > 0 ? "入力済" : "要確認")</span>
-                <span class="closing-panel__action">開く</span>
+                <span class="closing-panel__badge @attendancePanelClass">@(Model.ClosingAttendanceMissingClockOutCount == 0 && Model.ClosingAttendanceCount > 0 ? "確認済" : "要入力")</span>
+                <span class="closing-panel__action">確認/修正</span>
             </a>
         }
         else
         {
-            <a class="closing-panel needs-action" asp-page="/Closing/Attendance">
+            <a class="closing-panel has-warning" asp-page="/Closing/Attendance">
                 <span class="closing-panel__body">
-                    <strong>勤怠入力</strong>
+                    <strong>勤怠確認</strong>
                     <small>勤怠保存時に営業日を自動作成できます。</small>
                 </span>
-                <span class="closing-panel__badge needs-action">要入力</span>
-                <span class="closing-panel__action">開く</span>
+                <span class="closing-panel__badge has-warning">要入力</span>
+                <span class="closing-panel__action">入力</span>
             </a>
         }
 
-        <div class="closing-panel is-preparing" aria-disabled="true">
+        <div class="closing-panel closing-panel--section @castSalesAdjustmentPanelClass">
             <span class="closing-panel__body">
                 <strong>キャスト売上額調整</strong>
-                <small>準備中 / 会計後のキャスト売上額を確認・調整</small>
+                @if (!hasBusinessDay)
+                {
+                    <small>会計済み伝票ができたら、指名キャストへの売上額を調整します。</small>
+                }
+                else if (Model.CastSalesAdjustmentStatus.RequiredSlipCount == 0)
+                {
+                    <small>調整が必要な会計済み伝票はありません。</small>
+                }
+                else if (Model.Readiness.IsCastSalesAdjustmentCompleted)
+                {
+                    <small>@($"{Model.CastSalesAdjustmentStatus.CompletedSlipCount}件の伝票を調整済みです。")</small>
+                }
+                else
+                {
+                    <small>@($"{Model.CastSalesAdjustmentStatus.MissingSlipCount}件の伝票で売上額調整が未完了です。")</small>
+                }
             </span>
-            <span class="closing-panel__badge is-preparing">準備中</span>
-            <span class="closing-panel__action">未対応</span>
+            <span class="closing-panel__badge @castSalesAdjustmentPanelClass">@(Model.Readiness.IsCastSalesAdjustmentCompleted ? "調整済" : "要入力")</span>
+            <span class="closing-panel__action">@Model.CastSalesAmountBasisLabel / @Model.CastSalesSplitModeLabel</span>
+            <div class="closing-panel__form">
+                @if (hasBusinessDay && Model.CastSalesAdjustmentSlips.Count > 0)
+                {
+                    <div class="cast-sales-adjustment-list" aria-label="キャスト売上額調整対象伝票">
+                        <div class="cast-sales-adjustment-list__row cast-sales-adjustment-list__row--header">
+                            <span>卓番</span>
+                            <span>会計</span>
+                            <span>指名</span>
+                            <span>状態</span>
+                            <span>操作</span>
+                        </div>
+                        @foreach (var slip in Model.CastSalesAdjustmentSlips)
+                        {
+                            var detail = Model.FindCastSalesAdjustmentDetail(slip.SlipId);
+                            <div class="cast-sales-adjustment-list__row">
+                                <strong>@slip.TableDisplayName</strong>
+                                <span>
+                                    小計 @slip.SubtotalAmount.ToString("N0") 円
+                                    <small>会計 @slip.TotalAmount.ToString("N0") 円</small>
+                                </span>
+                                <span>@($"{slip.RequiredCastCount}名")</span>
+                                <span class="cast-sales-adjustment-list__status @(slip.IsAdjusted ? "is-ready" : "has-warning")">
+                                    @(slip.IsAdjusted ? "調整済" : "未調整")
+                                </span>
+                                <span class="cast-sales-adjustment-list__action">
+                                    @if (detail is not null)
+                                    {
+                                        <button class="btn @(slip.IsAdjusted ? "btn-outline-secondary" : "btn-primary") btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#castSalesAdjustmentModal-@slip.SlipId">
+                                            @(slip.IsAdjusted ? "再調整" : "売上額調整")
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" disabled>確認不可</button>
+                                    }
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+                else if (hasBusinessDay)
+                {
+                    <p class="text-muted mb-0">会計済みかつ指名キャストがいる伝票が対象です。</p>
+                }
+            </div>
         </div>
 
         @if (Model.ReceiptsEnabled)
@@ -108,14 +171,16 @@
                     <strong>領収書入力</strong>
                     <small>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</small>
                 </span>
-                <span class="closing-panel__badge @receiptsPanelClass">@(Model.PendingReceiptCount > 0 ? "要入力" : "確認済")</span>
-                <span class="closing-panel__action">開く</span>
+                <span class="closing-panel__badge @receiptsPanelClass">@(Model.PendingReceiptCount > 0 ? "要確認" : "確認済")</span>
+                <span class="closing-panel__action">確認</span>
             </a>
         }
+    </div>
 
+    <section class="closing-final" aria-label="営業日締め">
         @if (!hasBusinessDay)
         {
-            <a class="closing-panel is-preparing" asp-page="/Index">
+            <a class="closing-panel closing-final-panel is-preparing" asp-page="/Index">
                 <span class="closing-panel__body">
                     <strong>営業日締め</strong>
                     <small>営業中の営業日はありません。最初の業務入力で営業日が自動作成されます。</small>
@@ -126,13 +191,13 @@
         }
         else
         {
-            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form @(canCloseBusinessDay ? "is-ready" : "needs-action")">
+            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form closing-final-panel @closingFinalPanelClass">
                 <input asp-for="BusinessDayId" type="hidden" />
                 <span class="closing-panel__body">
                     <strong>営業日締め</strong>
                     <small>@(canCloseBusinessDay ? "すべての締め条件が完了しています。" : "未完了の締め条件があります。")</small>
                 </span>
-                <span class="closing-panel__badge @(canCloseBusinessDay ? "is-ready" : "needs-action")">@(canCloseBusinessDay ? "実行可" : "要確認")</span>
+                <span class="closing-panel__badge @closingFinalPanelClass">@(canCloseBusinessDay ? "実行可" : "不可")</span>
                 <button class="btn btn-danger closing-panel__submit" type="submit" @(canCloseBusinessDay ? null : "disabled")>営業日を締める</button>
                 <div class="closing-panel__form">
                     @if (!canCloseBusinessDay)
@@ -154,5 +219,94 @@
                 </div>
             </form>
         }
-    </div>
+    </section>
+
+    @if (hasBusinessDay)
+    {
+        @foreach (var detail in Model.CastSalesAdjustmentDetails)
+        {
+            var baseAmount = Model.CastSalesAmountBasis == LocalSettings.CastSalesAmountBasisSubtotal
+                ? detail.SubtotalAmount
+                : detail.TotalAmount;
+            <div class="modal fade" id="castSalesAdjustmentModal-@detail.SlipId" tabindex="-1" aria-labelledby="castSalesAdjustmentModalLabel-@detail.SlipId" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <form method="post" asp-page-handler="SaveCastSalesAdjustment">
+                            <div class="modal-header">
+                                <div>
+                                    <p class="store-home__eyebrow mb-1">@detail.TableDisplayName</p>
+                                    <h2 class="modal-title fs-4" id="castSalesAdjustmentModalLabel-@detail.SlipId">売上額調整</h2>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                            </div>
+                            <div class="modal-body cast-sales-adjustment-modal">
+                                <input type="hidden" name="CastSalesAdjustmentInput.BusinessDayId" value="@Model.CurrentBusinessDay?.BusinessDayId" />
+                                <input type="hidden" name="CastSalesAdjustmentInput.SlipId" value="@detail.SlipId" />
+                                <input type="hidden" name="CastSalesAdjustmentInput.SourceAmountType" value="@Model.CastSalesAmountBasis" />
+                                <input type="hidden" name="CastSalesAdjustmentInput.SplitMode" value="@Model.CastSalesSplitMode" />
+
+                                <div class="cast-sales-adjustment-modal__summary">
+                                    <div>
+                                        <span>小計</span>
+                                        <strong>@detail.SubtotalAmount.ToString("N0") 円</strong>
+                                    </div>
+                                    <div>
+                                        <span>ServiceTax20%</span>
+                                        <strong>@detail.ServiceTaxAmount.ToString("N0") 円</strong>
+                                    </div>
+                                    <div>
+                                        <span>会計</span>
+                                        <strong>@detail.TotalAmount.ToString("N0") 円</strong>
+                                    </div>
+                                    <div>
+                                        <span>配分基準</span>
+                                        <strong>@Model.CastSalesAmountBasisLabel @baseAmount.ToString("N0") 円</strong>
+                                    </div>
+                                </div>
+
+                                <div class="cast-sales-adjustment-casts">
+                                    <div class="cast-sales-adjustment-casts__row cast-sales-adjustment-casts__row--header">
+                                        <span>指名キャスト</span>
+                                        <span>区分</span>
+                                        <span>売上額</span>
+                                    </div>
+                                    @for (var i = 0; i < detail.Casts.Count; i++)
+                                    {
+                                        var castRow = detail.Casts[i];
+                                        <div class="cast-sales-adjustment-casts__row">
+                                            <input type="hidden" name="CastSalesAdjustmentInput.Casts[@i].SlipCastId" value="@castRow.SlipCastId" />
+                                            <strong>@castRow.CastDisplayName</strong>
+                                            <span>@castRow.NominationDisplayName</span>
+                                            <label class="cast-sales-adjustment-casts__amount">
+                                                <input class="form-control" name="CastSalesAdjustmentInput.Casts[@i].SalesAmount" value="@ClosingModel.FormatAmountValue(castRow.EffectiveSalesAmount)" type="number" min="0" step="1" inputmode="numeric" />
+                                                <span>円</span>
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                <button type="submit" class="btn btn-primary">売上額調整を保存</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    }
 </section>
+
+@section Scripts {
+    @if (Model.ShowCastSalesAdjustmentModalSlipId is > 0)
+    {
+        <script>
+            (() => {
+                const modalElement = document.getElementById('castSalesAdjustmentModal-@Model.ShowCastSalesAdjustmentModalSlipId');
+                if (modalElement && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+                }
+            })();
+        </script>
+    }
+}

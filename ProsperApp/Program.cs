@@ -28,6 +28,7 @@ builder.Services.AddScoped<IGoogleDriveAuthService, GoogleDriveAuthService>();
 builder.Services.AddScoped<IStoreSettingsRepository, SupabaseStoreSettingsRepository>();
 builder.Services.AddScoped<IReceiptRepository, SupabaseReceiptRepository>();
 builder.Services.AddScoped<IBusinessDayRepository, SupabaseBusinessDayRepository>();
+builder.Services.AddScoped<ICastSalesAdjustmentRepository, SupabaseCastSalesAdjustmentRepository>();
 builder.Services.AddScoped<IStoreSlipRepository, SupabaseStoreSlipRepository>();
 builder.Services.AddScoped<IStoreOrderRepository, SupabaseStoreOrderRepository>();
 builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();
