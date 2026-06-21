@@ -47,47 +47,80 @@
                     <h2>未処理と締め前チェック</h2>
                 </div>
             </div>
-            <div class="operations-summary__grid">
-                <a class="operations-summary__item @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" asp-page="/Index">
-                    <strong>未会計伝票</strong>
-                    <span>@(Model.OpenSlipCount > 0 ? $"未会計が {Model.OpenSlipCount} 件あります。" : "未会計伝票はありません。")</span>
-                    <em>@(Model.OpenSlipCount > 0 ? "要会計" : "完了")</em>
-                </a>
-                <a class="operations-summary__item @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")" asp-page="/Closing/DrinkCost">
-                    <strong>酒代入力</strong>
-                    <span>@(Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")</span>
-                    <em>@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</em>
-                </a>
-                <a class="operations-summary__item @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "has-warning" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")" asp-page="/Closing/Attendance">
-                    <strong>勤怠入力</strong>
-                    <span>
-                        @if (Model.ClosingAttendanceMissingClockOutCount > 0)
-                        {
-                            @($"{Model.ClosingAttendanceMissingClockOutCount}名の退勤時刻が未入力です。")
-                        }
-                        else if (Model.ClosingAttendanceCount > 0)
-                        {
-                            @($"{Model.ClosingAttendanceCount}名の退勤時刻を入力済みです。")
-                        }
-                        else
-                        {
-                            @("出勤登録済みキャストがいません。")
-                        }
+            <div class="closing-list operations-summary__list">
+                <a class="closing-panel @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" href="#slipListPanel">
+                    <span class="closing-panel__body">
+                        <strong>伝票一覧</strong>
+                        <small>在席 @Model.OpenSlipCount 件 / 会計済み @Model.CheckedOutSlipCount 件</small>
                     </span>
-                    <em>@(Model.ClosingAttendanceMissingClockOutCount > 0 ? "要入力" : Model.ClosingAttendanceCount > 0 ? "入力済" : "要確認")</em>
+                    <span class="closing-panel__badge @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">@(Model.OpenSlipCount > 0 ? "要会計" : "確認済")</span>
+                    <span class="closing-panel__action">見る</span>
+                </a>
+                <a class="closing-panel @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")" asp-page="/Closing/DrinkCost">
+                    <span class="closing-panel__body">
+                        <strong>酒代入力</strong>
+                        <small>@(Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")</small>
+                    </span>
+                    <span class="closing-panel__badge @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")">@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</span>
+                    <span class="closing-panel__action">開く</span>
+                </a>
+                <a class="closing-panel @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "has-warning" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")" asp-page="/Closing/Attendance">
+                    <span class="closing-panel__body">
+                        <strong>勤怠入力</strong>
+                        <small>
+                            @if (Model.ClosingAttendanceMissingClockOutCount > 0)
+                            {
+                                @($"{Model.ClosingAttendanceMissingClockOutCount}名の退勤時刻が未入力です。")
+                            }
+                            else if (Model.ClosingAttendanceCount > 0)
+                            {
+                                @($"{Model.ClosingAttendanceCount}名の退勤時刻を入力済みです。")
+                            }
+                            else
+                            {
+                                @("出勤登録済みキャストがいません。")
+                            }
+                        </small>
+                    </span>
+                    <span class="closing-panel__badge @(Model.ClosingAttendanceMissingClockOutCount > 0 ? "has-warning" : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action")">@(Model.ClosingAttendanceMissingClockOutCount > 0 ? "要入力" : Model.ClosingAttendanceCount > 0 ? "入力済" : "要確認")</span>
+                    <span class="closing-panel__action">開く</span>
                 </a>
                 @if (Model.ReceiptsEnabled)
                 {
-                    <a class="operations-summary__item @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")" asp-page="/Closing/Receipts">
-                        <strong>領収書入力</strong>
-                        <span>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</span>
-                        <em>@(Model.PendingReceiptCount > 0 ? "要入力" : "確認済")</em>
+                    <a class="closing-panel @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")" asp-page="/Closing/Receipts">
+                        <span class="closing-panel__body">
+                            <strong>領収書入力</strong>
+                            <small>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</small>
+                        </span>
+                        <span class="closing-panel__badge @(Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready")">@(Model.PendingReceiptCount > 0 ? "要入力" : "確認済")</span>
+                        <span class="closing-panel__action">開く</span>
                     </a>
                 }
+                <a class="closing-panel @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" asp-page="/Closing/Index">
+                    <span class="closing-panel__body">
+                        <strong>営業日締め</strong>
+                        <small>
+                            @if (!Model.HasAnySlip)
+                            {
+                                @("伝票はまだありません。必要に応じて締め作業画面で営業日を締められます。")
+                            }
+                            else if (Model.OpenSlipCount > 0)
+                            {
+                                @($"未会計伝票が {Model.OpenSlipCount} 件あります。会計完了後に営業日を締められます。")
+                            }
+                            else
+                            {
+                                @("すべて会計済みです。営業日を締められます。")
+                            }
+                        </small>
+                    </span>
+                    <span class="closing-panel__badge @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">@(Model.OpenSlipCount > 0 ? "要会計" : "実行可")</span>
+                    <span class="closing-panel__action">締め作業へ</span>
+                </a>
             </div>
         </section>
 
-        <section class="slip-list-panel">
+        <section class="slip-list-panel" id="slipListPanel">
             <div class="slip-list-panel__header">
                 <div>
                     <h2>伝票一覧</h2>
@@ -145,39 +178,6 @@
             }
         </section>
 
-        <section class="business-close-panel @(Model.CurrentBusinessDay is null ? "is-blocked" : Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">
-            <div>
-                <p class="store-home__eyebrow">締め作業</p>
-                @if (Model.CurrentBusinessDay is null)
-                {
-                    <h2>営業開始前です</h2>
-                    <p>営業準備を開始すると、締め作業画面を確認できます。</p>
-                }
-                else if (!Model.HasAnySlip)
-                {
-                    <h2>伝票はまだありません</h2>
-                    <p>必要に応じて締め作業画面で営業日を締められます。</p>
-                }
-                else if (Model.OpenSlipCount > 0)
-                {
-                    <h2>未会計伝票があります</h2>
-                    <p>締め作業画面は確認できます。営業日締めは未会計 @Model.OpenSlipCount 件の会計完了後に実行できます。</p>
-                }
-                else
-                {
-                    <h2>すべて会計済みです</h2>
-                    <p>営業中の伝票がないため、締め作業へ進めます。</p>
-                }
-            </div>
-            @if (Model.CanMoveToClosing)
-            {
-                <a class="btn btn-primary btn-lg" asp-page="/Closing/Index">締め作業へ</a>
-            }
-            else
-            {
-                <button class="btn btn-outline-secondary btn-lg" type="button" disabled>営業準備後に利用可能</button>
-            }
-        </section>
     }
 
     @if (Model.CurrentBusinessDay is not null && Model.SlipsEnabled)

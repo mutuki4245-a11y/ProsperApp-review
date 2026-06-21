@@ -211,100 +211,50 @@
   margin: 0;
 }
 
-.operations-summary__grid {
-  display: grid;
-  gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+.operations-summary__list {
+  margin-bottom: 0;
 }
 
-.operations-summary__item {
-  background: #fff;
-  border: 1px solid #d9e2ec;
-  border-left: 5px solid #cbd5e1;
-  border-radius: 8px;
-  color: #102a43;
-  display: grid;
-  gap: 0.25rem;
-  min-height: 6rem;
-  padding: 0.75rem;
-  text-decoration: none;
-}
-
-.operations-summary__item:hover,
-.operations-summary__item:focus {
-  border-color: #0f766e;
-  border-left-color: #0f766e;
-  color: #102a43;
-}
-
-.operations-summary__item strong {
-  font-size: 1rem;
-  font-weight: 800;
-}
-
-.operations-summary__item span {
-  color: #52606d;
-  font-size: 0.9rem;
-}
-
-.operations-summary__item em {
-  align-self: end;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-style: normal;
-  font-weight: 800;
-  justify-self: start;
-  padding: 0.2rem 0.55rem;
-}
-
-.operations-summary__item.is-ready,
 .opening-list__card.is-ready,
 .closing-panel.is-ready {
   border-left-color: #10b981;
 }
 
-.operations-summary__item.is-ready em,
 .opening-list__badge.is-ready,
 .closing-panel__badge.is-ready {
   background: #dcfce7;
   color: #166534;
 }
 
-.operations-summary__item.needs-action,
 .opening-list__card.needs-action,
 .closing-panel.needs-action {
   border-left-color: #f59e0b;
 }
 
-.operations-summary__item.needs-action em,
 .opening-list__badge.needs-action,
 .closing-panel__badge.needs-action {
   background: #ffedd5;
   color: #9a3412;
 }
 
-.operations-summary__item.has-warning,
 .opening-list__card.has-warning,
 .closing-panel.has-warning {
   background: #fff5f5;
   border-left-color: #dc2626;
 }
 
-.operations-summary__item.has-warning em,
 .opening-list__badge.has-warning,
 .closing-panel__badge.has-warning {
   background: #fee2e2;
   color: #991b1b;
 }
 
-.operations-summary__item.is-preparing,
 .opening-list__card.is-preparing,
 .closing-panel.is-preparing {
   background: #fff7ed;
   border-left-color: #fdba74;
 }
 
-.operations-summary__item.is-preparing em,
 .opening-list__badge.is-preparing,
 .closing-panel__badge.is-preparing {
   background: #fed7aa;
@@ -611,11 +561,6 @@
   }
 
   .business-day-status {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .business-close-panel {
     align-items: stretch;
     flex-direction: column;
   }

@@ -131,43 +131,6 @@
   margin-bottom: 1rem;
 }
 
-.business-close-panel {
-  align-items: center;
-  border: 1px solid #d9e2ec;
-  border-radius: 14px;
-  display: flex;
-  gap: 1rem;
-  justify-content: space-between;
-  margin-top: 1rem;
-  padding: 1rem;
-}
-
-.business-close-panel h2 {
-  color: #102a43;
-  font-size: 1.35rem;
-  font-weight: 800;
-  margin: 0 0 0.25rem;
-}
-
-.business-close-panel p {
-  color: #475569;
-  margin: 0;
-}
-
-.business-close-panel.is-ready {
-  background: #ecfdf5;
-  border-color: #86efac;
-}
-
-.business-close-panel.needs-action {
-  background: #fff7ed;
-  border-color: #fdba74;
-}
-
-.business-close-panel.is-blocked {
-  background: #f8fafc;
-}
-
 .sticky-action-bar {
   align-items: center;
   background: rgba(255, 255, 255, 0.96);
