@@ -292,9 +292,7 @@
             button.className = 'cast-select-modal__item';
             const name = document.createElement('strong');
             name.textContent = cast.name;
-            const department = document.createElement('span');
-            department.textContent = cast.department ?? '';
-            button.append(name, department);
+            button.append(name);
             button.addEventListener('click', () => {
                 if (castModalTargetRow) {
                     setSelectedCast(castModalTargetRow, cast);
@@ -349,9 +347,7 @@
             button.className = 'cast-select-modal__item';
             const name = document.createElement('strong');
             name.textContent = cast.name;
-            const department = document.createElement('span');
-            department.textContent = cast.department ?? '';
-            button.append(name, department);
+            button.append(name);
             button.addEventListener('click', () => {
                 if (pendingBackItemId) {
                     addToOrderQueue(pendingBackItemId, cast.id);

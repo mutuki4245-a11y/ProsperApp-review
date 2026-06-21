@@ -272,7 +272,7 @@
                 return;
             }
 
-            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.SearchDisplayName, department = c.DepartmentName })));
+            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.DisplayName, department = c.DepartmentName })));
             const showCreateSlipModal = @Json.Serialize(Model.ShowCreateSlipModal);
             const tableIdInput = document.getElementById('businessCreateSlipTableId');
             const customerList = document.getElementById('businessCustomerList');
@@ -383,9 +383,7 @@
                     button.className = 'cast-select-modal__item';
                     const name = document.createElement('strong');
                     name.textContent = cast.name;
-                    const department = document.createElement('span');
-                    department.textContent = cast.department ?? '';
-                    button.append(name, department);
+                    button.append(name);
                     button.addEventListener('click', () => {
                         if (castModalTargetRow) {
                             setSelectedCast(castModalTargetRow, cast);

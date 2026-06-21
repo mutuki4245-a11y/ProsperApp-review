@@ -261,9 +261,7 @@ public class SlipDetailNomination
     public DateTimeOffset StartedAt { get; set; }
     public string Status { get; set; } = string.Empty;
 
-    public string CastDisplayName => string.IsNullOrWhiteSpace(DepartmentName)
-        ? DisplayName
-        : $"{DisplayName}：{DepartmentName}";
+    public string CastDisplayName => DisplayName;
 
     public string NominationDisplayName => NominationType switch
     {

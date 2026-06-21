@@ -44,9 +44,7 @@ public class StoreOrderAttendanceCastOption
     public string? DepartmentName { get; set; }
     public string? ClockInTime { get; set; }
 
-    public string SearchDisplayName => string.IsNullOrWhiteSpace(DepartmentName)
-        ? DisplayName
-        : $"{DisplayName}：{DepartmentName}";
+    public string SearchDisplayName => DisplayName;
 }
 
 public class OrderQueueInputModel

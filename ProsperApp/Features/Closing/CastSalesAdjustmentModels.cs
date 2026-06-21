@@ -127,9 +127,7 @@ public class CastSalesAdjustmentCastRow
 
     public decimal EffectiveSalesAmount => SalesAmount ?? InitialSalesAmount;
 
-    public string CastDisplayName => string.IsNullOrWhiteSpace(DepartmentName)
-        ? DisplayName
-        : $"{DisplayName}：{DepartmentName}";
+    public string CastDisplayName => DisplayName;
 
     public string NominationDisplayName => NominationType switch
     {

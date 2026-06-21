@@ -166,7 +166,7 @@
         (() => {
             const slips = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName })));
             const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(x => new { id = x.ItemId, name = x.ItemName, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType })));
-            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.SearchDisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true })));
+            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true })));
             const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
             const initialSlipId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SelectedSlipId));
 
@@ -382,9 +382,7 @@
                     button.className = 'cast-select-modal__item';
                     const name = document.createElement('strong');
                     name.textContent = cast.name;
-                    const department = document.createElement('span');
-                    department.textContent = cast.department ?? '';
-                    button.append(name, department);
+                    button.append(name);
                     button.addEventListener('click', () => {
                         if (pendingBackItemId) {
                             addToQueue(pendingBackItemId, cast.id);

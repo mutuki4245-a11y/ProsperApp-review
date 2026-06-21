@@ -267,7 +267,7 @@ public class IndexModel(
             var nomination = CreateSlipInput.CastNominations[i];
             if (nomination.CastId is not null && string.IsNullOrWhiteSpace(nomination.CastName))
             {
-                nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.SearchDisplayName;
+                nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.DisplayName;
             }
 
             if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !AllowedNominationKinds.Contains(nomination.NominationKind))

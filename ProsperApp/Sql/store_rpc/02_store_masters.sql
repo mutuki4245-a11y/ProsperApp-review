@@ -217,20 +217,15 @@ as $$
         select
             sc.slip_id,
             sc.cast_id,
-            case
-                when nullif(d.department_name, '') is null then cm.display_name
-                else cm.display_name || '：' || d.department_name
-            end as cast_display_name,
+            cm.display_name as cast_display_name,
             min(sc.started_at) as first_started_at,
             min(sc.slip_cast_id) as first_slip_cast_id
         from public.store_slip_casts sc
         join public.cast_master cm
           on cm.cast_id = sc.cast_id
-        left join public.department_master d
-          on d.department_id = cm.department_id
         where sc.status <> 'cancelled'
           and sc.nomination_type in ('nomination', 'in_store', 'companion')
-        group by sc.slip_id, sc.cast_id, cm.display_name, d.department_name
+        group by sc.slip_id, sc.cast_id, cm.display_name
     ),
     cast_summary as (
         select

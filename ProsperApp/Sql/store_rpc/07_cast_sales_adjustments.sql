@@ -90,10 +90,7 @@ as $$
             s.slip_id,
             sc.slip_cast_id,
             sc.cast_id,
-            case
-                when nullif(d.department_name, '') is null then cm.display_name
-                else cm.display_name || '：' || d.department_name
-            end as cast_display_name,
+            cm.display_name as cast_display_name,
             sc.started_at
         from public.store_slips s
         join public.store_checkouts c
@@ -105,8 +102,6 @@ as $$
          and sc.nomination_type in ('nomination', 'in_store', 'companion')
         join public.cast_master cm
           on cm.cast_id = sc.cast_id
-        left join public.department_master d
-          on d.department_id = cm.department_id
         where s.department_id = p_department_id
           and s.business_day_id = p_business_day_id
           and s.status = 'checked_out'
