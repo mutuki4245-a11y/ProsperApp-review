@@ -8,8 +8,7 @@
 }
 
 
-.opening-form,
-.closing-business-day {
+.opening-form {
   display: grid;
   gap: 1rem;
 }

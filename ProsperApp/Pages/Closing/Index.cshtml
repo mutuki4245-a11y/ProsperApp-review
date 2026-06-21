@@ -2,6 +2,8 @@
 @model ClosingModel
 @{
     ViewData["Title"] = "締め作業";
+    var hasBusinessDay = Model.CurrentBusinessDay is not null;
+    var canCloseBusinessDay = hasBusinessDay && Model.OpenSlipCount == 0;
 }
 
 <section class="store-home">
@@ -41,57 +43,82 @@
 
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    <div class="workflow-steps workflow-steps--closing">
-        <div class="workflow-step is-preparing" aria-disabled="true">
-            <span class="workflow-step__number">1</span>
-            <span class="workflow-step__body">
+    <div class="closing-list">
+        <div class="closing-panel is-preparing" aria-disabled="true">
+            <span class="closing-panel__body">
                 <strong>酒代入力</strong>
                 <small>準備中 / 酒代の注文額・確認額を入力</small>
             </span>
+            <span class="closing-panel__badge is-preparing">準備中</span>
+            <span class="closing-panel__action">未対応</span>
         </div>
-        <div class="workflow-step is-preparing" aria-disabled="true">
-            <span class="workflow-step__number">2</span>
-            <span class="workflow-step__body">
+
+        <div class="closing-panel is-preparing" aria-disabled="true">
+            <span class="closing-panel__body">
                 <strong>勤怠入力</strong>
                 <small>準備中 / キャスト・スタッフの勤務情報を入力</small>
             </span>
+            <span class="closing-panel__badge is-preparing">準備中</span>
+            <span class="closing-panel__action">未対応</span>
         </div>
-        <div class="workflow-step is-preparing" aria-disabled="true">
-            <span class="workflow-step__number">3</span>
-            <span class="workflow-step__body">
+
+        <div class="closing-panel is-preparing" aria-disabled="true">
+            <span class="closing-panel__body">
                 <strong>キャスト売上額調整</strong>
                 <small>準備中 / 会計後のキャスト売上額を確認・調整</small>
             </span>
+            <span class="closing-panel__badge is-preparing">準備中</span>
+            <span class="closing-panel__action">未対応</span>
         </div>
+
         @if (Model.ReceiptsEnabled)
         {
-            <a class="workflow-step" asp-page="/Closing/Receipts">
-                <span class="workflow-step__number">4</span>
-                <span class="workflow-step__body">
+            <a class="closing-panel is-ready" asp-page="/Closing/Receipts">
+                <span class="closing-panel__body">
                     <strong>領収書入力</strong>
                     <small>スキャン済み領収書を確認して簡易入力</small>
                 </span>
+                <span class="closing-panel__badge is-ready">利用可能</span>
+                <span class="closing-panel__action">開く</span>
             </a>
         }
-    </div>
 
-    @if (Model.CurrentBusinessDay is not null)
-    {
-        <form method="post" asp-page-handler="CloseBusinessDay" class="closing-business-day mt-3">
-            <input asp-for="BusinessDayId" type="hidden" />
-            <div class="slip-create__panel">
-                @if (Model.OpenSlipCount > 0)
-                {
-                    <div class="alert alert-warning">
-                        未会計伝票が残っています。ホームで会計処理を完了してください。
-                        <a class="alert-link" asp-page="/Index">ホームへ戻る</a>
+        @if (!hasBusinessDay)
+        {
+            <a class="closing-panel needs-action" asp-page="/Opening/Index">
+                <span class="closing-panel__body">
+                    <strong>営業日締め</strong>
+                    <small>営業中の営業日がありません。営業準備から開始してください。</small>
+                </span>
+                <span class="closing-panel__badge needs-action">要準備</span>
+                <span class="closing-panel__action">営業準備へ</span>
+            </a>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form @(canCloseBusinessDay ? "is-ready" : "needs-action")">
+                <input asp-for="BusinessDayId" type="hidden" />
+                <span class="closing-panel__body">
+                    <strong>営業日締め</strong>
+                    <small>@(canCloseBusinessDay ? "未会計伝票がないため、営業日を締められます。" : $"未会計伝票が {Model.OpenSlipCount} 件あります。")</small>
+                </span>
+                <span class="closing-panel__badge @(canCloseBusinessDay ? "is-ready" : "needs-action")">@(canCloseBusinessDay ? "実行可" : "要確認")</span>
+                <button class="btn btn-danger closing-panel__submit" type="submit" @(canCloseBusinessDay ? null : "disabled")>営業日を締める</button>
+                <div class="closing-panel__form">
+                    @if (Model.OpenSlipCount > 0)
+                    {
+                        <div class="alert alert-warning mb-0">
+                            未会計伝票が残っています。ホームで会計処理を完了してください。
+                            <a class="alert-link" asp-page="/Index">ホームへ戻る</a>
+                        </div>
+                    }
+                    <div>
+                        <label asp-for="ClosingMemo" class="form-label">締めメモ</label>
+                        <input asp-for="ClosingMemo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら共有事項を入力" />
+                        <span asp-validation-for="ClosingMemo" class="text-danger"></span>
                     </div>
-                }
-                <label asp-for="ClosingMemo" class="form-label">締めメモ</label>
-                <input asp-for="ClosingMemo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら共有事項を入力" />
-                <span asp-validation-for="ClosingMemo" class="text-danger"></span>
-            </div>
-            <button class="btn btn-danger btn-lg mt-3" type="submit" @(Model.OpenSlipCount > 0 ? "disabled" : null)>営業日を締める</button>
-        </form>
-    }
+                </div>
+            </form>
+        }
+    </div>
 </section>
