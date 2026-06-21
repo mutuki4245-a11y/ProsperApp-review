@@ -233,6 +233,21 @@ Google Drive OAuth/プレビューを使う場合は以下も必要です。
 - `GoogleDrive__Scopes__0` など
 - `GoogleAuth__AllowedEmails__0` または `GoogleAuth__AllowedDomains__0` など
 
+## GitHub Actions / Azure自動デプロイ
+
+`.github/workflows/azure-app-service.yml` は `main` へのpush、または手動実行でAzure App Serviceへデプロイします。
+
+GitHub側に以下を設定してください。
+
+- Repository variable `AZURE_WEBAPP_NAME`
+  - Azure App Serviceのアプリ名です。
+- Repository secret `AZURE_WEBAPP_PUBLISH_PROFILE`
+  - Azure PortalのApp Serviceから取得したPublish profile XML全文です。
+
+ワークフローは .NET `10.0.x` をセットアップし、`dotnet restore`、`dotnet build -c Release`、`dotnet publish -c Release /p:UseAppHost=false` の後、`azure/webapps-deploy@v3` で発行します。
+
+Azure App Service側のアプリ設定には、上記の `Supabase__...`、`GoogleDrive__...`、`GoogleAuth__...` などを設定してください。秘密情報やPublish profileはリポジトリへコミットしません。
+
 ## 注意点
 
 - `AGENTS.md` は現在PowerShell表示上で文字化けして見える場合があります。UTF-8前提で扱ってください。
