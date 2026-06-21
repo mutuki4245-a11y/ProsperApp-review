@@ -15,28 +15,6 @@
 }
 
 <section class="store-home">
-    <div class="business-status-bar">
-        <div>
-            @if (Model.CurrentBusinessDay is null)
-            {
-                <strong>営業中</strong>
-                <span>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 最初の入力で営業日を自動作成</span>
-            }
-            else
-            {
-                <strong>営業中</strong>
-                <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt) / 在席 @Model.OpenSlipCount 件</span>
-            }
-        </div>
-        <div class="business-status-bar__actions">
-            @if (Model.CanCreateSalesInput)
-            {
-                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-            }
-            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ</a>
-        </div>
-    </div>
-
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
     {
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
@@ -58,6 +36,16 @@
                     <div>
                         <p class="store-home__eyebrow">主操作</p>
                         <h2>伝票編集</h2>
+                        <p class="operation-context">
+                            @if (Model.CurrentBusinessDay is null)
+                            {
+                                <text>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 最初の入力で営業日を自動作成</text>
+                            }
+                            else
+                            {
+                                <text>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt)</text>
+                            }
+                        </p>
                     </div>
                     <div class="slip-list-panel__badges">
                         <span class="badge text-bg-success">在席 @Model.OpenSlipCount 件</span>

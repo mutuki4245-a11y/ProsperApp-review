@@ -211,6 +211,24 @@
   margin: 0;
 }
 
+.operation-context,
+.page-section-heading p {
+  color: #64748b;
+  font-size: 0.92rem;
+  margin: 0.2rem 0 0;
+}
+
+.page-section-heading {
+  margin-bottom: 0.85rem;
+}
+
+.page-section-heading h1 {
+  color: #102a43;
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0;
+}
+
 .operations-summary__list {
   margin-bottom: 0;
 }

@@ -13,21 +13,16 @@
 }
 
 <section class="store-home">
-    <div class="business-status-bar">
-        <div>
-            <strong>締め作業</strong>
-            @if (Model.CurrentBusinessDay is null)
-            {
-                <span>営業中の営業日はありません</span>
-            }
-            else
-            {
-                <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 未会計 @Model.OpenSlipCount 件</span>
-            }
-        </div>
-        <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
-        </div>
+    <div class="page-section-heading">
+        <h1>締め作業</h1>
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <p>営業中の営業日はありません</p>
+        }
+        else
+        {
+            <p>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 未会計 @Model.OpenSlipCount 件</p>
+        }
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
