@@ -84,8 +84,14 @@ public class CastSalesAdjustmentModel(
             return Page();
         }
 
-        SuccessMessage = "キャスト売上額調整を保存しました。";
         await LoadAsync(cancellationToken);
+        if (CastSalesAdjustmentStatus.IsCompleted)
+        {
+            TempData["SuccessMessage"] = "キャスト売上額調整を保存しました。";
+            return RedirectToPage("/Closing/Index");
+        }
+
+        SuccessMessage = "キャスト売上額調整を保存しました。";
         return Page();
     }
 

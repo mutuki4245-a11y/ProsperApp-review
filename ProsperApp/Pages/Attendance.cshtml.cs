@@ -148,7 +148,9 @@ public class AttendanceModel(
 
         var selectedCount = Input.Entries.Count(x => x.IsSelected);
         TempData["SuccessMessage"] = $"勤怠入力を保存しました。出勤 {selectedCount}名 / 退勤 {savedClockOutCount}名";
-        return RedirectToCurrentPath();
+        return IsClosingContext
+            ? RedirectToPage("/Closing/Index")
+            : RedirectToCurrentPath();
     }
 
     private IActionResult RedirectToCurrentPath()

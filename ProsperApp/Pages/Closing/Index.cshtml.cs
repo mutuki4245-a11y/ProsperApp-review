@@ -42,6 +42,7 @@ public class ClosingModel(
 
     public CastSalesAdjustmentStatus CastSalesAdjustmentStatus { get; private set; } = new();
 
+    [TempData]
     public string? SuccessMessage { get; set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -94,8 +95,7 @@ public class ClosingModel(
         }
 
         SuccessMessage = $"営業日 {result.BusinessDay?.BusinessDate:yyyy-MM-dd} を締めました。";
-        await LoadBusinessDayAsync(cancellationToken);
-        return Page();
+        return RedirectToPage("/Index");
     }
 
     private async Task LoadBusinessDayAsync(CancellationToken cancellationToken)

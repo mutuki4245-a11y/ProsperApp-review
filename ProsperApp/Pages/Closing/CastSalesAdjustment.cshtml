@@ -34,7 +34,7 @@
                 <strong>調整対象はありません</strong>
                 <small>営業日が作成されると、会計済み伝票の売上額調整を確認できます。</small>
             </span>
-            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+            <span class="closing-panel__action">待機</span>
         </div>
     }
     else if (Model.CastSalesAdjustmentSlips.Count == 0)
@@ -44,9 +44,6 @@
                 <div class="slip-list__main">
                     <strong>調整対象の伝票はありません</strong>
                     <span>会計済みかつ指名キャストがいる伝票が対象です。</span>
-                </div>
-                <div class="slip-list__actions">
-                    <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
                 </div>
             </article>
         </div>

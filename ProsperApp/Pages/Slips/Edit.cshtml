@@ -9,21 +9,16 @@
 }
 
 <section class="slip-create">
-    <div class="business-status-bar">
-        <div>
-            <strong>営業中 / 伝票詳細</strong>
-            @if (Model.Detail is not null)
-            {
-                <span>@Model.Detail.TableDisplayName / 入店 @Model.FormatStoreTime(Model.Detail.OpenedAt)</span>
-            }
-            else
-            {
-                <span>伝票未選択</span>
-            }
-        </div>
-        <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
-        </div>
+    <div class="page-section-heading">
+        <h1>伝票詳細</h1>
+        @if (Model.Detail is not null)
+        {
+            <p>@Model.Detail.TableDisplayName / 入店 @Model.FormatStoreTime(Model.Detail.OpenedAt)</p>
+        }
+        else
+        {
+            <p>伝票未選択</p>
+        }
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))

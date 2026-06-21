@@ -37,13 +37,9 @@
 }
 
 <section class="opening-page">
-    <div class="business-status-bar">
-        <div>
-            <strong>マスタ設定 / 商品情報</strong>
-        </div>
-        <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Management/Index">マスタ設定へ戻る</a>
-        </div>
+    <div class="page-section-heading">
+        <h1>商品情報</h1>
+        <p>商品とカテゴリを管理します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))

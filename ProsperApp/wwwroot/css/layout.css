@@ -118,49 +118,6 @@
   justify-content: flex-end;
 }
 
-.business-status-bar {
-  align-items: center;
-  background: #eef6f5;
-  border: 1px solid #cbd5e1;
-  border-top: 4px solid #0f766e;
-  border-radius: 10px;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04);
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  padding: 0.7rem 0.9rem;
-}
-
-.business-status-bar > div:first-child {
-  align-items: center;
-  color: #475569;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.business-status-bar strong {
-  color: #0f172a;
-  font-size: 1rem;
-  font-weight: 800;
-}
-
-.business-status-bar span {
-  color: #475569;
-  font-size: 0.92rem;
-}
-
-.business-status-bar__actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
-.business-status-bar__actions .btn {
-  min-height: 2.35rem;
-}
-
 .store-home__hero {
   background: #fff;
   border: 1px solid #d9e2ec;
@@ -566,16 +523,6 @@
     display: grid;
     grid-template-columns: 1fr;
     justify-content: stretch;
-  }
-
-  .business-status-bar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .business-status-bar__actions {
-    display: grid;
-    grid-template-columns: 1fr;
   }
 
   .sticky-action-bar {

@@ -86,7 +86,7 @@ public class ClosingDrinkCostModel(
         }
 
         TempData["SuccessMessage"] = $"納品額 {result.Amount:N0} 円を保存しました。";
-        return RedirectToPage();
+        return RedirectToPage("/Closing/Index");
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)

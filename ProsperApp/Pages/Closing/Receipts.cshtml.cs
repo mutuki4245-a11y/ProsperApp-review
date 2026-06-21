@@ -107,14 +107,20 @@ public class ReceiptsModel(
         }
 
         SuccessMessage = "保存しました。";
-        return RedirectToPage(new { index = Index });
+        return await RedirectAfterReceiptChangeAsync(Index, cancellationToken);
     }
 
-    public IActionResult OnPostSkip()
+    public async Task<IActionResult> OnPostSkipAsync(CancellationToken cancellationToken)
     {
         if (!IsReceiptsEnabled())
         {
             return NotFound();
+        }
+
+        var pendingReceipts = await _receiptRepository.GetPendingAsync(cancellationToken);
+        if (Index + 1 >= pendingReceipts.Count)
+        {
+            return RedirectToPage("/Closing/Index");
         }
 
         return RedirectToPage(new { index = Index + 1 });
@@ -178,7 +184,19 @@ public class ReceiptsModel(
         }
 
         SuccessMessage = "スキャンミスとして削除しました。";
-        return RedirectToPage(new { index = Index });
+        return await RedirectAfterReceiptChangeAsync(Index, cancellationToken);
+    }
+
+    private async Task<IActionResult> RedirectAfterReceiptChangeAsync(int requestedIndex, CancellationToken cancellationToken)
+    {
+        var pendingReceipts = await _receiptRepository.GetPendingAsync(cancellationToken);
+        if (pendingReceipts.Count == 0)
+        {
+            return RedirectToPage("/Closing/Index");
+        }
+
+        var nextIndex = Math.Clamp(requestedIndex, 0, pendingReceipts.Count - 1);
+        return RedirectToPage(new { index = nextIndex });
     }
 
     private async Task LoadCurrentAsync(int requestedIndex, CancellationToken cancellationToken)
@@ -333,5 +351,3 @@ public class ReceiptsModel(
 
     public sealed record AccountSubjectGroup(string Name, IReadOnlyList<string> Items);
 }
-
-

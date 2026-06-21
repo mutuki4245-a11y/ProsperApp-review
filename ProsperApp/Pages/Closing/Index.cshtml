@@ -135,14 +135,14 @@
     <section class="closing-final" aria-label="営業日締め">
         @if (!hasBusinessDay)
         {
-            <a class="closing-panel closing-final-panel is-preparing" asp-page="/Index">
+            <article class="closing-panel closing-final-panel is-preparing">
                 <span class="closing-panel__body">
                     <strong>営業日締め</strong>
                     <small>営業中の営業日はありません。最初の業務入力で営業日が自動作成されます。</small>
                 </span>
                 <span class="closing-panel__badge is-preparing">待機</span>
-                <span class="closing-panel__action">営業中へ戻る</span>
-            </a>
+                <span class="closing-panel__action">待機</span>
+            </article>
         }
         else
         {

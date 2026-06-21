@@ -6,13 +6,8 @@
 }
 
 <section class="opening-page">
-    <div class="business-status-bar">
-        <div>
-            <strong>マスタ設定 / キャスト情報</strong>
-        </div>
-        <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Management/Index">マスタ設定へ戻る</a>
-        </div>
+    <div class="page-section-heading">
+        <h1>キャスト情報</h1>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
