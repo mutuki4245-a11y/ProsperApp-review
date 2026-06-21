@@ -195,9 +195,29 @@ a.closing-panel:focus {
 }
 
 .closing-attendance-table__cast {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
   font-weight: 800;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.closing-attendance-table__cast .form-check-input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.closing-attendance-table__cast .form-check-label {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.closing-attendance-table__cast small {
+  color: #0f766e;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .closing-attendance-table__field {

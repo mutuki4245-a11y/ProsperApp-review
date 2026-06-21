@@ -1,6 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Globalization;
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Models;
@@ -11,18 +9,10 @@ namespace ProsperApp.Pages;
 public class OpeningModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
-    IStoreSlipRepository slipRepository,
-    IStoreOrderRepository orderRepository,
-    IStoreCastAdminRepository castAdminRepository,
     IStoreClock storeClock) : PageModel
 {
-    private const string AttendanceDraftSessionKey = "OpeningAttendanceDraft";
-
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
-    private readonly IStoreSlipRepository _slipRepository = slipRepository;
-    private readonly IStoreOrderRepository _orderRepository = orderRepository;
-    private readonly IStoreCastAdminRepository _castAdminRepository = castAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
@@ -37,18 +27,7 @@ public class OpeningModel(
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
-    public StoreContext? StoreContext { get; set; }
-
     public string? SuccessMessage { get; set; }
-
-    [BindProperty]
-    public List<OpeningAttendanceCastInputModel> AttendanceCasts { get; set; } = [];
-
-    public IReadOnlyList<StoreOrderItemOption> Items { get; set; } = [];
-
-    public int SelectedAttendanceCount => AttendanceCasts.Count(x => x.IsSelected);
-    public int RegisteredAttendanceCount => AttendanceCasts.Count(x => x.IsRegistered);
-    public int HomeActiveCastCount { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -59,7 +38,6 @@ public class OpeningModel(
 
         BusinessDate ??= DateOnly.FromDateTime(_storeClock.GetStoreNow());
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        await LoadOpeningOptionsAsync(cancellationToken);
         SuccessMessage = TempData["SuccessMessage"] as string;
         return Page();
     }
@@ -73,7 +51,6 @@ public class OpeningModel(
 
         BusinessDate ??= DateOnly.FromDateTime(_storeClock.GetStoreNow());
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        await LoadOpeningOptionsAsync(cancellationToken);
         if (CurrentBusinessDay is not null)
         {
             ModelState.AddModelError(string.Empty, $"営業日 {CurrentBusinessDay.BusinessDate:yyyy-MM-dd} は既に営業中です。");
@@ -81,13 +58,6 @@ public class OpeningModel(
         }
 
         if (!ModelState.IsValid || BusinessDate is null)
-        {
-            return Page();
-        }
-
-        ValidateOpeningReadiness();
-        ValidateAttendanceInput();
-        if (!ModelState.IsValid)
         {
             return Page();
         }
@@ -105,23 +75,7 @@ public class OpeningModel(
             return Page();
         }
 
-        var attendanceEntries = AttendanceCasts
-            .Where(x => x.IsSelected)
-            .Select(x => new BusinessDayAttendanceInput
-            {
-                CastId = x.CastId,
-                ClockInTime = x.ClockInTime?.Trim() ?? string.Empty
-            })
-            .ToArray();
-
-        var validCastIds = AttendanceCasts.Select(x => x.CastId).ToHashSet();
-        if (attendanceEntries.Any(x => !validCastIds.Contains(x.CastId)))
-        {
-            ModelState.AddModelError(string.Empty, "出勤キャストの選択内容を確認してください。");
-            return Page();
-        }
-
-        var result = await _businessDayRepository.OpenAsync(BusinessDate.Value, Memo, attendanceEntries, cancellationToken);
+        var result = await _businessDayRepository.OpenAsync(BusinessDate.Value, Memo, [], cancellationToken);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "営業日を開始できませんでした。");
@@ -129,96 +83,7 @@ public class OpeningModel(
         }
 
         CurrentBusinessDay = result.BusinessDay;
-        HttpContext.Session.Remove(AttendanceDraftSessionKey);
         TempData["SuccessMessage"] = $"営業日 {CurrentBusinessDay?.BusinessDate:yyyy-MM-dd} を開始しました。";
         return RedirectToPage("/Index");
     }
-
-    private async Task LoadOpeningOptionsAsync(CancellationToken cancellationToken, bool preserveAttendance = false)
-    {
-        var draft = preserveAttendance
-            ? AttendanceCasts.Where(x => x.IsSelected).Select(x => new AttendanceDraftEntry(x.CastId, x.ClockInTime)).ToList()
-            : CurrentBusinessDay is null
-                ? LoadAttendanceDraft()
-                : [];
-        var registeredCastIds = CurrentBusinessDay is null
-            ? []
-            : (await _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken))
-                .Select(x => x.CastId)
-                .ToHashSet();
-        HashSet<long> selectedCastIds = draft.Select(x => x.CastId).Concat(registeredCastIds).ToHashSet();
-        Dictionary<long, string?> clockInTimes = draft.ToDictionary(x => x.CastId, x => x.ClockInTime);
-        var defaultClockInTime = _storeClock.GetStoreNow().ToString("HH:mm");
-
-        StoreContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
-        HomeActiveCastCount = (await _castAdminRepository.GetCastsAsync(cancellationToken)).Count;
-        var casts = await _slipRepository.GetCastsAsync(cancellationToken);
-        AttendanceCasts = casts
-            .Select(cast => new OpeningAttendanceCastInputModel
-            {
-                CastId = cast.CastId,
-                DisplayName = cast.SearchDisplayName,
-                DepartmentName = cast.DepartmentName,
-                IsSelected = selectedCastIds.Contains(cast.CastId),
-                IsRegistered = registeredCastIds.Contains(cast.CastId),
-                ClockInTime = clockInTimes.TryGetValue(cast.CastId, out var preservedTime)
-                    ? preservedTime
-                    : defaultClockInTime
-            })
-            .ToList();
-        Items = await _orderRepository.GetItemsAsync(cancellationToken);
-    }
-
-    private List<AttendanceDraftEntry> LoadAttendanceDraft()
-    {
-        var json = HttpContext.Session.GetString(AttendanceDraftSessionKey);
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return [];
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<List<AttendanceDraftEntry>>(json) ?? [];
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
-
-    private sealed record AttendanceDraftEntry(long CastId, string? ClockInTime);
-
-    private void ValidateOpeningReadiness()
-    {
-        if (AttendanceCasts.Count == 0)
-        {
-            ModelState.AddModelError(string.Empty, "キャストマスタが未登録です。営業開始前にキャスト一覧を登録してください。");
-        }
-
-        if (Items.Count == 0)
-        {
-            ModelState.AddModelError(string.Empty, "商品マスタが未登録です。営業開始前に商品一覧を登録してください。");
-        }
-    }
-
-    private void ValidateAttendanceInput()
-    {
-        var selectedRows = AttendanceCasts.Where(x => x.IsSelected).ToList();
-        if (selectedRows.Count == 0)
-        {
-            ModelState.AddModelError(nameof(AttendanceCasts), "出勤キャストを1名以上選択してください。");
-            return;
-        }
-
-        foreach (var row in selectedRows)
-        {
-            if (string.IsNullOrWhiteSpace(row.ClockInTime) ||
-                !TimeOnly.TryParse(row.ClockInTime, CultureInfo.InvariantCulture, out _))
-            {
-                ModelState.AddModelError(nameof(AttendanceCasts), $"{row.DisplayName} の出勤時刻を入力してください。");
-            }
-        }
-    }
-
 }

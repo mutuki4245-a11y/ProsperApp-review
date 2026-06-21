@@ -107,7 +107,7 @@ public class IndexModel(
     {
         if (CurrentBusinessDay is null)
         {
-            ModelState.AddModelError(string.Empty, "営業日が開始されていません。営業準備を実行してください。");
+            ModelState.AddModelError(string.Empty, "営業日が開始されていません。営業日開始を実行してください。");
             return;
         }
 

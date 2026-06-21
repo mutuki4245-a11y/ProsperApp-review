@@ -7,7 +7,7 @@
     var canCloseBusinessDay = hasBusinessDay && Model.OpenSlipCount == 0;
     var drinkDeliveryPanelClass = Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning";
     var attendancePanelClass = Model.ClosingAttendanceMissingClockOutCount > 0
-        ? "has-warning"
+        ? "needs-action"
         : Model.ClosingAttendanceCount > 0 ? "is-ready" : "needs-action";
     var receiptsPanelClass = Model.PendingReceiptCount > 0 ? "has-warning" : "is-ready";
 }
@@ -32,7 +32,7 @@
             }
             else if (Model.CurrentBusinessDay is null)
             {
-                <a class="btn btn-primary" asp-page="/Opening/Index">営業準備へ</a>
+                <a class="btn btn-primary" asp-page="/Opening/Index">営業日開始へ</a>
                 <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
             }
             else
@@ -85,11 +85,11 @@
                         }
                         else if (Model.ClosingAttendanceCount > 0)
                         {
-                            @($"{Model.ClosingAttendanceCount}名の退勤時刻を入力済みです。")
+                            @($"{Model.ClosingAttendanceCount}名の勤怠を入力済みです。")
                         }
                         else
                         {
-                            @("出勤登録済みキャストがいません。")
+                            @("勤怠入力にキャストがいません。")
                         }
                     </small>
                 </span>
@@ -102,7 +102,7 @@
             <div class="closing-panel is-preparing" aria-disabled="true">
                 <span class="closing-panel__body">
                     <strong>勤怠入力</strong>
-                    <small>営業開始後に退勤時刻と送り利用を入力できます。</small>
+                    <small>営業開始後に出勤者、出勤時刻、退勤時刻、送り利用を入力できます。</small>
                 </span>
                 <span class="closing-panel__badge is-preparing">待機</span>
                 <span class="closing-panel__action">未対応</span>
@@ -135,10 +135,10 @@
             <a class="closing-panel needs-action" asp-page="/Opening/Index">
                 <span class="closing-panel__body">
                     <strong>営業日締め</strong>
-                    <small>営業中の営業日がありません。営業準備から開始してください。</small>
+                    <small>営業中の営業日がありません。営業日開始から開始してください。</small>
                 </span>
                 <span class="closing-panel__badge needs-action">要準備</span>
-                <span class="closing-panel__action">営業準備へ</span>
+                <span class="closing-panel__action">営業日開始へ</span>
             </a>
         }
         else

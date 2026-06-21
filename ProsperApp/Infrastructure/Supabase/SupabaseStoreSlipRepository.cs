@@ -205,7 +205,7 @@ public class SupabaseStoreSlipRepository(
         var businessDay = await _businessDayRepository.GetCurrentAsync(ct);
         if (businessDay is null)
         {
-            return CreateSlipResult.Failed("営業日が開始されていません。営業準備を実行してください。");
+            return CreateSlipResult.Failed("営業日が開始されていません。営業日開始を実行してください。");
         }
 
         var openedAt = storeClock.ToStoreDateTimeOffset(input.OpenedAt.Value);

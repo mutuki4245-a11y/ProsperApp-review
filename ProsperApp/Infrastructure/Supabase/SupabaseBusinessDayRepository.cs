@@ -36,22 +36,36 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("Supabase SecretKeyが未設定です。営業日を更新できません。");
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "open_business_day_with_attendance",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_date = businessDate,
-                p_attendance_entries = attendanceEntries?
-                    .Where(x => x.CastId > 0 && x.IsSelected && !string.IsNullOrWhiteSpace(x.ClockInTime))
-                    .GroupBy(x => x.CastId)
-                    .Select(x => x.First())
-                    .Select(x => new AttendanceEntryPayload(x.CastId, x.ClockInTime, x.IsSelected))
-                    .ToArray() ?? [],
-                p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim()
-            },
-            requireSecretKey: true,
-            ct);
+        var attendancePayload = attendanceEntries?
+            .Where(x => x.CastId > 0 && x.IsSelected && !string.IsNullOrWhiteSpace(x.ClockInTime))
+            .GroupBy(x => x.CastId)
+            .Select(x => x.First())
+            .Select(x => new AttendanceEntryPayload(x.CastId, x.ClockInTime, x.IsSelected))
+            .ToArray() ?? [];
+        var trimmedMemo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim();
+
+        var result = attendancePayload.Length == 0
+            ? await RpcClient.PostArrayAsync(
+                "open_business_day",
+                new
+                {
+                    p_department_id = CurrentStoreDepartmentId,
+                    p_business_date = businessDate,
+                    p_memo = trimmedMemo
+                },
+                requireSecretKey: true,
+                ct)
+            : await RpcClient.PostArrayAsync(
+                "open_business_day_with_attendance",
+                new
+                {
+                    p_department_id = CurrentStoreDepartmentId,
+                    p_business_date = businessDate,
+                    p_attendance_entries = attendancePayload,
+                    p_memo = trimmedMemo
+                },
+                requireSecretKey: true,
+                ct);
 
         if (!result.Succeeded)
         {
@@ -104,11 +118,11 @@ public class SupabaseBusinessDayRepository(
     {
         if (!HasMutationSettings())
         {
-            return BusinessDayOperationResult.Failed("Supabase SecretKeyが未設定です。出勤登録を更新できません。");
+            return BusinessDayOperationResult.Failed("Supabase SecretKeyが未設定です。勤怠入力を更新できません。");
         }
 
         var payload = attendanceEntries
-            .Where(x => x.CastId > 0 && (x.IsSelected || !string.IsNullOrWhiteSpace(x.ClockInTime)))
+            .Where(x => x.CastId > 0)
             .GroupBy(x => x.CastId)
             .Select(x => x.Last())
             .Select(x => new AttendanceEntryPayload(x.CastId, x.ClockInTime, x.IsSelected))
@@ -137,7 +151,7 @@ public class SupabaseBusinessDayRepository(
 
         if (result.Rows.Count == 0)
         {
-            return BusinessDayOperationResult.Failed("出勤登録を更新できませんでした。");
+            return BusinessDayOperationResult.Failed("勤怠入力を更新できませんでした。");
         }
 
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
@@ -431,7 +445,7 @@ public class SupabaseBusinessDayRepository(
 
         if (rawError.Contains("attendance_not_found", StringComparison.OrdinalIgnoreCase))
         {
-            return "出勤登録済みキャストの選択内容を確認してください。";
+            return "勤怠入力のキャスト選択内容を確認してください。";
         }
 
         if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))

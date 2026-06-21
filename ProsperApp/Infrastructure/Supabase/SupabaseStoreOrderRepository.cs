@@ -154,7 +154,7 @@ public class SupabaseStoreOrderRepository(
 
         if (rawError.Contains("store_order_attendance_cast_not_found", StringComparison.OrdinalIgnoreCase))
         {
-            return "選択したバック対象キャストは出勤登録されていません。";
+            return "選択したバック対象キャストは勤怠入力で出勤登録されていません。";
         }
 
         if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
