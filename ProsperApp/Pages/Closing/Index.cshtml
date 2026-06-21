@@ -61,7 +61,7 @@
 
         @if (hasBusinessDay)
         {
-            <a class="closing-panel @attendancePanelClass" asp-page="/Closing/Attendance">
+            <a class="closing-panel @attendancePanelClass" href="@Url.Content("~/Closing/Attendance")">
                 <span class="closing-panel__body">
                     <strong>勤怠確認</strong>
                     <small>
@@ -85,7 +85,7 @@
         }
         else
         {
-            <a class="closing-panel has-warning" asp-page="/Closing/Attendance">
+            <a class="closing-panel has-warning" href="@Url.Content("~/Closing/Attendance")">
                 <span class="closing-panel__body">
                     <strong>勤怠確認</strong>
                     <small>勤怠保存時に営業日を自動作成できます。</small>

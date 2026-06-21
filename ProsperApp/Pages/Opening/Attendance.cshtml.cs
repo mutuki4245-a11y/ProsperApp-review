@@ -15,7 +15,7 @@ public class OpeningAttendanceModel(IFeatureGate featureGate) : PageModel
             return NotFound();
         }
 
-        return RedirectToPage("/Closing/Attendance");
+        return RedirectToPage("/Attendance");
     }
 
     public IActionResult OnPost()
@@ -25,6 +25,6 @@ public class OpeningAttendanceModel(IFeatureGate featureGate) : PageModel
             return NotFound();
         }
 
-        return RedirectToPage("/Closing/Attendance");
+        return RedirectToPage("/Attendance");
     }
 }

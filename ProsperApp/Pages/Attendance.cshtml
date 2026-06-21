@@ -1,5 +1,5 @@
 @page
-@model ClosingAttendanceModel
+@model AttendanceModel
 @{
     ViewData["Title"] = "勤怠入力";
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
@@ -12,7 +12,7 @@
 <section class="store-home">
     <div class="business-status-bar">
         <div>
-            <strong>営業中 / 勤怠入力</strong>
+            <strong>@Model.WorkflowLabel / 勤怠入力</strong>
             @if (Model.CurrentBusinessDay is null)
             {
                 <span>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 保存時に自動作成</span>
@@ -23,8 +23,16 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
-            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ</a>
+            @if (Model.IsClosingContext)
+            {
+                <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
+                <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ</a>
+            }
+            else
+            {
+                <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
+                <a class="btn btn-outline-secondary" href="@Url.Content("~/Closing/Attendance")">締め作業の勤怠へ</a>
+            }
         </div>
     </div>
 

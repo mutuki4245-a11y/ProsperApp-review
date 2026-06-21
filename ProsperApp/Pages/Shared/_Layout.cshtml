@@ -2,15 +2,15 @@
 @inject ILocalSettingsProvider LocalSettingsProvider
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
-    var isDuringSalesInput = currentPath.StartsWith("/Closing/Attendance", StringComparison.OrdinalIgnoreCase);
+    var isSalesAttendance = currentPath.StartsWith("/Attendance", StringComparison.OrdinalIgnoreCase);
     var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Opening/Casts", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Opening/Items", StringComparison.OrdinalIgnoreCase);
     var isSalesActive = currentPath == "/" ||
         currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase) ||
-        isDuringSalesInput;
-    var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase) && !isDuringSalesInput;
+        isSalesAttendance;
+    var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="ja">

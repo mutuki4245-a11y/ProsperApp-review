@@ -7,7 +7,7 @@ using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class ClosingAttendanceModel(
+public class AttendanceModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
@@ -32,6 +32,10 @@ public class ClosingAttendanceModel(
     public string DefaultClockInTime { get; private set; } = "18:00";
 
     public string? SuccessMessage { get; private set; }
+
+    public bool IsClosingContext => Request.Path.StartsWithSegments("/Closing/Attendance", StringComparison.OrdinalIgnoreCase);
+
+    public string WorkflowLabel => IsClosingContext ? "締め作業" : "営業中";
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -144,7 +148,12 @@ public class ClosingAttendanceModel(
 
         var selectedCount = Input.Entries.Count(x => x.IsSelected);
         TempData["SuccessMessage"] = $"勤怠入力を保存しました。出勤 {selectedCount}名 / 退勤 {savedClockOutCount}名";
-        return RedirectToPage();
+        return RedirectToCurrentPath();
+    }
+
+    private IActionResult RedirectToCurrentPath()
+    {
+        return LocalRedirect(Request.PathBase.Add(Request.Path).Value ?? "/Attendance");
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
