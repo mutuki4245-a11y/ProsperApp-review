@@ -28,8 +28,8 @@
         @if (Model.CurrentBusinessDay is null)
         {
             <div class="alert alert-warning">
-                オーダー入力の前にホームで伝票を作成してください。最初の伝票作成時に営業日を自動作成します。
-                <a class="alert-link" asp-page="/Index">ホームへ戻る</a>
+                オーダー入力の前に営業中画面で伝票を作成してください。最初の伝票作成時に営業日を自動作成します。
+                <a class="alert-link" asp-page="/Index">営業中へ戻る</a>
             </div>
         }
         else
@@ -38,7 +38,7 @@
                 <section class="slip-create__panel">
                     <div class="slip-create__panel-title">
                         <h2>1. 卓番選択</h2>
-                        <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
+                        <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
                     </div>
                     <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
 

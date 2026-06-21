@@ -43,8 +43,14 @@
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">ホーム</a>
+                            <a class="nav-link text-dark @(isSalesActive ? "fw-bold" : null)" asp-area="" asp-page="/Index">営業中</a>
                         </li>
+                        @if (FeatureGate.IsEnabled(FeatureNames.Opening))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark @(isManagementActive ? "fw-bold" : null)" asp-area="" asp-page="/Management/Index">マスタ設定</a>
+                            </li>
+                        }
                         @if (FeatureGate.IsEnabled(FeatureNames.Settings))
                         {
                             <li class="nav-item">
@@ -84,10 +90,6 @@
                     <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null)" asp-page="/Closing/Index">
                         <span>2</span>
                         <strong>締め作業</strong>
-                    </a>
-                    <a class="app-workflow-nav__step @(isManagementActive ? "is-active" : null)" asp-page="/Management/Index">
-                        <span>3</span>
-                        <strong>随時管理</strong>
                     </a>
                 </div>
             </nav>

@@ -11,7 +11,7 @@
 <section class="slip-create">
     <div class="business-status-bar">
         <div>
-            <strong>ホーム / 伝票詳細</strong>
+            <strong>営業中 / 伝票詳細</strong>
             @if (Model.Detail is not null)
             {
                 <span>@Model.Detail.TableDisplayName / 入店 @Model.FormatStoreTime(Model.Detail.OpenedAt)</span>
@@ -22,7 +22,7 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
         </div>
     </div>
 
@@ -36,7 +36,7 @@
     @if (Model.SlipId is null)
     {
         <div class="alert alert-warning">
-            伝票が選択されていません。ホームから対象伝票を選択してください。
+            伝票が選択されていません。営業中画面から対象伝票を選択してください。
         </div>
     }
     else if (Model.Detail is null)

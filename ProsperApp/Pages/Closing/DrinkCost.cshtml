@@ -8,7 +8,7 @@
 <section class="store-home">
     <div class="business-status-bar">
         <div>
-            <strong>ホーム / 営業中 / 酒代入力</strong>
+            <strong>締め作業 / 酒代入力</strong>
             @if (Model.CurrentBusinessDay is null)
             {
                 <span>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 保存時に自動作成</span>
@@ -19,8 +19,8 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
-            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ戻る</a>
         </div>
     </div>
 

@@ -2,7 +2,7 @@
 @using ProsperApp.Models
 @model IndexModel
 @{
-    ViewData["Title"] = "ホーム";
+    ViewData["Title"] = "営業中";
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
     var nominationOptions = new[]
     {
@@ -19,12 +19,12 @@
         <div>
             @if (Model.CurrentBusinessDay is null)
             {
-                <strong>ホーム</strong>
+                <strong>営業中</strong>
                 <span>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 最初の入力で営業日を自動作成</span>
             }
             else
             {
-                <strong>ホーム</strong>
+                <strong>営業中</strong>
                 <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt) / 在席 @Model.OpenSlipCount 件</span>
             }
         </div>

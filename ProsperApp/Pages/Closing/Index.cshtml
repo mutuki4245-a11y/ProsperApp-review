@@ -15,7 +15,7 @@
 <section class="store-home">
     <div class="business-status-bar">
         <div>
-            <strong>ホーム / 締め作業</strong>
+            <strong>締め作業</strong>
             @if (Model.CurrentBusinessDay is null)
             {
                 <span>営業中の営業日はありません</span>
@@ -26,7 +26,7 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
+            <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
         </div>
     </div>
 
@@ -126,7 +126,7 @@
                     <small>営業中の営業日はありません。最初の業務入力で営業日が自動作成されます。</small>
                 </span>
                 <span class="closing-panel__badge is-preparing">待機</span>
-                <span class="closing-panel__action">ホームへ戻る</span>
+                <span class="closing-panel__action">営業中へ戻る</span>
             </a>
         }
         else

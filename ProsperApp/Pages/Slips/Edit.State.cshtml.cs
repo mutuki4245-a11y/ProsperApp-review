@@ -30,7 +30,7 @@ public partial class SlipEditModel
 
         if (Detail is null)
         {
-            ModelState.AddModelError(string.Empty, "伝票を取得できません。ホームから対象伝票を選択してください。");
+            ModelState.AddModelError(string.Empty, "伝票を取得できません。営業中画面から対象伝票を選択してください。");
             return false;
         }
 
