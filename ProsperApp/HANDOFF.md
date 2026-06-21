@@ -235,7 +235,7 @@ Google Drive OAuth/プレビューを使う場合は以下も必要です。
 
 ## GitHub Actions / Azure自動デプロイ
 
-`.github/workflows/azure-app-service.yml` は `main` へのpush、または手動実行でAzure App Serviceへデプロイします。
+リポジトリルートの `.github/workflows/azure-app-service.yml` は `main` へのpush、または手動実行でAzure App Serviceへデプロイします。
 
 GitHub側に以下を設定してください。
 
