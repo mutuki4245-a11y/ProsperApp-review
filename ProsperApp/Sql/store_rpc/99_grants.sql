@@ -22,7 +22,14 @@ revoke execute on function public.add_business_day_attendance(bigint, bigint, js
 revoke execute on function public.save_business_day_attendance(bigint, bigint, jsonb) from public, anon;
 revoke execute on function public.save_business_day_drink_delivery_amount(bigint, bigint, numeric) from public, anon;
 revoke execute on function public.save_business_day_closing_attendance(bigint, bigint, jsonb) from public, anon;
-revoke execute on function public.close_business_day(bigint, bigint, text) from public, anon;
+do $revoke_close_business_day_v3$
+begin
+    if to_regprocedure('public.close_business_day(bigint,bigint,text)') is not null then
+        revoke execute on function public.close_business_day(bigint, bigint, text) from public, anon;
+    end if;
+end;
+$revoke_close_business_day_v3$;
+revoke execute on function public.close_business_day(bigint, bigint, text, text) from public, anon;
 revoke execute on function public.create_store_cast(bigint, text) from public, anon;
 revoke execute on function public.delete_store_cast(bigint, bigint) from public, anon;
 revoke execute on function public.upsert_store_item_category(bigint, bigint, text, text, integer, boolean) from public, anon;
@@ -47,7 +54,7 @@ grant execute on function public.add_business_day_attendance(bigint, bigint, jso
 grant execute on function public.save_business_day_attendance(bigint, bigint, jsonb) to authenticated, service_role;
 grant execute on function public.save_business_day_drink_delivery_amount(bigint, bigint, numeric) to authenticated, service_role;
 grant execute on function public.save_business_day_closing_attendance(bigint, bigint, jsonb) to authenticated, service_role;
-grant execute on function public.close_business_day(bigint, bigint, text) to authenticated, service_role;
+grant execute on function public.close_business_day(bigint, bigint, text, text) to authenticated, service_role;
 grant execute on function public.create_store_cast(bigint, text) to authenticated, service_role;
 grant execute on function public.delete_store_cast(bigint, bigint) to authenticated, service_role;
 grant execute on function public.upsert_store_item_category(bigint, bigint, text, text, integer, boolean) to authenticated, service_role;

@@ -6,6 +6,8 @@ public interface IBusinessDayRepository
 {
     Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct);
 
+    Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct);
+
     Task<BusinessDayOperationResult> OpenAsync(
         DateOnly businessDate,
         string? memo,

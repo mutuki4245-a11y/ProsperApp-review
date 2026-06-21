@@ -9,6 +9,16 @@ public sealed class StoreClock : IStoreClock
         return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, GetStoreTimeZone());
     }
 
+    public DateOnly GetCurrentBusinessDate()
+    {
+        var now = GetStoreNow();
+        var businessDate = now.TimeOfDay < BusinessDaySwitchTime.ToTimeSpan()
+            ? now.AddDays(-1)
+            : now;
+
+        return DateOnly.FromDateTime(businessDate);
+    }
+
     public DateTime FloorToMinuteStep(DateTime value, int minuteStep)
     {
         if (minuteStep <= 0)

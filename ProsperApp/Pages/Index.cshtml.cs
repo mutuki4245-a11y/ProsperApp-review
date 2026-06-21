@@ -36,6 +36,8 @@ public class IndexModel(
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
+    public DateOnly CurrentBusinessDate { get; private set; }
+
     public StoreContext? StoreContext { get; set; }
 
     public IReadOnlyList<BusinessSlipListItem> Slips { get; set; } = [];
@@ -63,6 +65,18 @@ public class IndexModel(
     public int CheckedOutSlipCount => Slips.Count(x => x.Status == "checked_out");
 
     public bool HasAnySlip => Slips.Count > 0;
+
+    public bool IsPreviousBusinessDayOpen => CurrentBusinessDay is not null &&
+        CurrentBusinessDay.BusinessDate < CurrentBusinessDate;
+
+    public bool CanCreateSalesInput => SlipsEnabled && !IsPreviousBusinessDayOpen;
+
+    public bool HasClosingBlockers => CurrentBusinessDay is not null &&
+        (OpenSlipCount > 0 ||
+         !IsDrinkDeliveryAmountEntered ||
+         ClosingAttendanceCount == 0 ||
+         ClosingAttendanceMissingClockOutCount > 0 ||
+         (ReceiptsEnabled && PendingReceiptCount > 0));
 
     public bool CanMoveToClosing => CurrentBusinessDay is not null;
 
@@ -127,6 +141,7 @@ public class IndexModel(
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         StoreContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
+        CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         Tables = await _slipRepository.GetTablesAsync(cancellationToken);
         AttendanceCasts = CurrentBusinessDay is null
@@ -143,7 +158,9 @@ public class IndexModel(
             IsDrinkDeliveryAmountEntered = false;
             ClosingAttendanceCount = 0;
             ClosingAttendanceMissingClockOutCount = 0;
-            PendingReceiptCount = 0;
+            PendingReceiptCount = ReceiptsEnabled
+                ? (await _receiptRepository.GetPendingAsync(cancellationToken)).Count
+                : 0;
             return;
         }
 
@@ -183,7 +200,7 @@ public class IndexModel(
 
     private void SetBusinessDayInput()
     {
-        CreateSlipInput.BusinessDate = CurrentBusinessDay?.BusinessDate;
+        CreateSlipInput.BusinessDate = CurrentBusinessDay?.BusinessDate ?? CurrentBusinessDate;
         CreateSlipInput.BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 
@@ -212,15 +229,15 @@ public class IndexModel(
 
     private void ComposeOpenedAt()
     {
-        if (CurrentBusinessDay is null ||
-            string.IsNullOrWhiteSpace(CreateSlipInput.OpenedTime) ||
+        if (string.IsNullOrWhiteSpace(CreateSlipInput.OpenedTime) ||
+            CreateSlipInput.BusinessDate is null ||
             !TimeOnly.TryParse(CreateSlipInput.OpenedTime, out var openedTime))
         {
             CreateSlipInput.OpenedAt = null;
             return;
         }
 
-        CreateSlipInput.OpenedAt = _storeClock.ComposeBusinessDateTime(CurrentBusinessDay.BusinessDate, openedTime);
+        CreateSlipInput.OpenedAt = _storeClock.ComposeBusinessDateTime(CreateSlipInput.BusinessDate.Value, openedTime);
     }
 
     private void ValidateCreateSlip()
@@ -230,9 +247,9 @@ public class IndexModel(
             ModelState.AddModelError(string.Empty, "店舗設定を取得できません。Supabase設定とStoreDepartmentIdを確認してください。");
         }
 
-        if (CurrentBusinessDay is null)
+        if (IsPreviousBusinessDayOpen)
         {
-            ModelState.AddModelError(string.Empty, "営業日が開始されていません。営業日開始を実行してください。");
+            ModelState.AddModelError(string.Empty, $"前回営業日 {CurrentBusinessDay?.BusinessDate:yyyy-MM-dd} の締め作業が未完了です。締め作業を完了してから新しい営業入力を開始してください。");
         }
 
         if (Tables.Count == 0)

@@ -202,10 +202,10 @@ public class SupabaseStoreSlipRepository(
             return CreateSlipResult.Failed("伝票作成に必要な入力が不足しています。");
         }
 
-        var businessDay = await _businessDayRepository.GetCurrentAsync(ct);
-        if (businessDay is null)
+        var ensureResult = await _businessDayRepository.EnsureCurrentAsync(ct);
+        if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
         {
-            return CreateSlipResult.Failed("営業日が開始されていません。営業日開始を実行してください。");
+            return CreateSlipResult.Failed(ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
         }
 
         var openedAt = storeClock.ToStoreDateTimeOffset(input.OpenedAt.Value);
@@ -449,7 +449,7 @@ public class SupabaseStoreSlipRepository(
 
         if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
         {
-            return "営業日が開始されていません。";
+            return "営業中の営業日がありません。";
         }
 
         if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))

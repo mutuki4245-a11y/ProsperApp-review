@@ -25,6 +25,8 @@ public class ClosingAttendanceModel(
 
     public StoreBusinessDay? CurrentBusinessDay { get; private set; }
 
+    public DateOnly CurrentBusinessDate { get; private set; }
+
     public IReadOnlyList<string> TimeOptions { get; private set; } = [];
 
     public string? SuccessMessage { get; private set; }
@@ -50,13 +52,7 @@ public class ClosingAttendanceModel(
 
         var postedBusinessDayId = Input.BusinessDayId;
         await LoadAsync(cancellationToken, preserveInput: true);
-        if (CurrentBusinessDay is null)
-        {
-            ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
-            return Page();
-        }
-
-        if (postedBusinessDayId != CurrentBusinessDay.BusinessDayId)
+        if (CurrentBusinessDay is not null && postedBusinessDayId != CurrentBusinessDay.BusinessDayId)
         {
             ModelState.AddModelError(string.Empty, "営業日情報が更新されています。画面を再読み込みしてください。");
             return Page();
@@ -66,6 +62,19 @@ public class ClosingAttendanceModel(
         if (!ModelState.IsValid)
         {
             return Page();
+        }
+
+        if (CurrentBusinessDay is null)
+        {
+            var ensureResult = await _businessDayRepository.EnsureCurrentAsync(cancellationToken);
+            if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
+            {
+                ModelState.AddModelError(string.Empty, ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
+                return Page();
+            }
+
+            CurrentBusinessDay = ensureResult.BusinessDay;
+            Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;
         }
 
         var attendanceEntries = Input.Entries
@@ -139,22 +148,19 @@ public class ClosingAttendanceModel(
     {
         var minuteStep = _localSettingsProvider.GetCurrent().AttendanceMinuteStep is 30 ? 30 : 15;
         TimeOptions = _storeClock.BuildTimeOptions(minuteStep);
+        CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (CurrentBusinessDay is null)
-        {
-            Input = new ClosingAttendanceInputModel();
-            return;
-        }
-
         var postedByCastId = preserveInput
             ? Input.Entries
                 .Where(x => x.CastId > 0)
                 .GroupBy(x => x.CastId)
                 .ToDictionary(x => x.Key, x => x.Last())
             : [];
-        var attendanceItems = await _businessDayRepository.GetClosingAttendanceAsync(
-            CurrentBusinessDay.BusinessDayId,
-            cancellationToken);
+        IReadOnlyList<BusinessDayClosingAttendanceItem> attendanceItems = CurrentBusinessDay is null
+            ? []
+            : await _businessDayRepository.GetClosingAttendanceAsync(
+                CurrentBusinessDay.BusinessDayId,
+                cancellationToken);
         var attendanceByCastId = attendanceItems
             .GroupBy(x => x.CastId)
             .ToDictionary(x => x.Key, x => x.Last());
@@ -200,7 +206,7 @@ public class ClosingAttendanceModel(
 
         Input = new ClosingAttendanceInputModel
         {
-            BusinessDayId = CurrentBusinessDay.BusinessDayId,
+            BusinessDayId = CurrentBusinessDay?.BusinessDayId,
             Entries = entries
         };
     }

@@ -829,10 +829,13 @@ begin
 end;
 $$;
 
+drop function if exists public.close_business_day(bigint, bigint, text);
+
 create or replace function public.close_business_day(
     p_department_id bigint,
     p_business_day_id bigint,
-    p_memo text default null
+    p_memo text default null,
+    p_pending_receipt_status text default 'unprocessed'
 )
 returns table (
     business_day_id bigint,
@@ -850,12 +853,63 @@ set search_path = public
 as $$
 declare
     v_open_slip_count integer;
+    v_business_day public.store_business_days%rowtype;
+    v_attendance_count integer;
+    v_missing_clock_out_count integer;
+    v_pending_receipt_count integer;
+    v_pending_receipt_status text := nullif(trim(coalesce(p_pending_receipt_status, '')), '');
 begin
+    select *
+      into v_business_day
+    from public.store_business_days b
+    where b.business_day_id = p_business_day_id
+      and b.department_id = p_department_id
+      and b.status = 'open'
+    limit 1;
+
+    if v_business_day.business_day_id is null then
+        raise exception 'business_day_not_open';
+    end if;
+
     select public.get_open_slip_count(p_department_id, p_business_day_id)
       into v_open_slip_count;
 
     if coalesce(v_open_slip_count, 0) > 0 then
         raise exception 'open_slips_exist:%', v_open_slip_count;
+    end if;
+
+    if coalesce(v_business_day.drink_delivery_amount_entered, false) = false then
+        raise exception 'drink_delivery_required';
+    end if;
+
+    select
+        count(*)::integer,
+        count(*) filter (where a.clock_out_at is null)::integer
+      into v_attendance_count,
+           v_missing_clock_out_count
+    from public.store_cast_attendance a
+    where a.business_day_id = p_business_day_id
+      and a.department_id = p_department_id
+      and a.attendance_status in ('scheduled', 'checked_in', 'checked_out');
+
+    if coalesce(v_attendance_count, 0) = 0 then
+        raise exception 'attendance_required';
+    end if;
+
+    if coalesce(v_missing_clock_out_count, 0) > 0 then
+        raise exception 'attendance_clock_out_required:%', v_missing_clock_out_count;
+    end if;
+
+    if v_pending_receipt_status is not null then
+        select count(*)::integer
+          into v_pending_receipt_count
+        from public.documents d
+        where d.department_id = p_department_id
+          and d.status = v_pending_receipt_status;
+
+        if coalesce(v_pending_receipt_count, 0) > 0 then
+            raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
+        end if;
     end if;
 
     return query

@@ -2,17 +2,10 @@
 @inject ILocalSettingsProvider LocalSettingsProvider
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
-    var hasCurrentBusinessDay = ViewData.TryGetValue("HasCurrentBusinessDay", out var businessDayValue) &&
-        businessDayValue is bool parsedBusinessDayValue
-            ? parsedBusinessDayValue
-            : (bool?)null;
-    var isBeforeBusinessDay = hasCurrentBusinessDay == false;
-    var isOpeningActive = (currentPath.Equals("/Opening", StringComparison.OrdinalIgnoreCase) ||
-        currentPath.Equals("/Opening/Index", StringComparison.OrdinalIgnoreCase)) ||
-        (currentPath == "/" && isBeforeBusinessDay);
     var isDuringSalesInput = currentPath.StartsWith("/Closing/Attendance", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Closing/DrinkCost", StringComparison.OrdinalIgnoreCase);
-    var isSalesActive = currentPath == "/" && !isBeforeBusinessDay ||
+    var isSalesActive = currentPath == "/" ||
+        currentPath.StartsWith("/Opening", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase) ||
         isDuringSalesInput;
@@ -83,16 +76,12 @@
         {
             <nav class="app-workflow-nav" aria-label="店舗業務フロー">
                 <div class="container app-workflow-nav__inner">
-                    <a class="app-workflow-nav__step @(isOpeningActive ? "is-active" : null)" asp-page="/Opening/Index">
+                    <a class="app-workflow-nav__step @(isSalesActive ? "is-active" : null)" asp-page="/Index">
                         <span>1</span>
-                        <strong>営業日開始</strong>
-                    </a>
-                    <a class="app-workflow-nav__step @(isSalesActive ? "is-active" : null) @(isBeforeBusinessDay ? "is-muted" : null)" asp-page="/Index">
-                        <span>2</span>
                         <strong>営業中</strong>
                     </a>
-                    <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null) @(isBeforeBusinessDay ? "is-muted" : null)" asp-page="/Closing/Index">
-                        <span>3</span>
+                    <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null)" asp-page="/Closing/Index">
+                        <span>2</span>
                         <strong>締め作業</strong>
                     </a>
                 </div>

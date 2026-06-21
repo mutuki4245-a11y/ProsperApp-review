@@ -1,78 +1,12 @@
 @page
 @model OpeningModel
 @{
-    ViewData["Title"] = "営業日開始";
-    var isBusinessOpen = Model.CurrentBusinessDay is not null;
-    ViewData["HasCurrentBusinessDay"] = isBusinessOpen;
+    ViewData["Title"] = "営業中";
 }
 
-<section class="opening-page">
-    <div class="business-status-bar opening-status-bar">
-        <div>
-            <strong>ホーム / 営業日開始</strong>
-            @if (Model.CurrentBusinessDay is null)
-            {
-                <span>営業開始前</span>
-            }
-            else
-            {
-                <span>営業中 @Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd") / 開始 @StoreBusinessTime.FormatStoreTime(Model.CurrentBusinessDay.OpenedAt)</span>
-            }
-        </div>
-        <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Index">ホームへ戻る</a>
-        </div>
+<section class="store-home">
+    <div class="alert alert-info">
+        営業日は最初の業務入力で自動作成されます。
+        <a class="alert-link" asp-page="/Index">ホームへ戻る</a>
     </div>
-
-    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
-    {
-        <div class="alert alert-success">@Model.SuccessMessage</div>
-    }
-
-    @if (Model.CurrentBusinessDay is null)
-    {
-        <form method="post" class="opening-start-form">
-            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-            <div class="slip-create__panel opening-start-panel">
-                <div class="slip-create__panel-title">
-                    <h2>営業日を開始</h2>
-                </div>
-                <div class="row g-3">
-                    <div class="col-md-5">
-                        <label asp-for="BusinessDate" class="form-label"></label>
-                        <input asp-for="BusinessDate" class="form-control form-control-lg" type="date" />
-                        <span asp-validation-for="BusinessDate" class="text-danger"></span>
-                    </div>
-                    <div class="col-md-7">
-                        <label asp-for="Memo" class="form-label"></label>
-                        <input asp-for="Memo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら申し送り事項を入力" />
-                        <span asp-validation-for="Memo" class="text-danger"></span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sticky-action-bar">
-                <button class="btn btn-primary btn-lg" type="submit">営業日を開始</button>
-                <span class="opening-start-note">出勤・退勤は営業中の勤怠入力で随時登録できます。</span>
-            </div>
-        </form>
-    }
-    else
-    {
-        <div class="closing-list">
-            <a class="closing-panel is-ready" asp-page="/Index">
-                <span class="closing-panel__body">
-                    <strong>営業中</strong>
-                    <small>現在の営業日はすでに開始されています。伝票、勤怠、酒代はホームから入力できます。</small>
-                </span>
-                <span class="closing-panel__badge is-ready">営業中</span>
-                <span class="closing-panel__action">ホームへ戻る</span>
-            </a>
-        </div>
-    }
 </section>
-
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}

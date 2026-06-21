@@ -1,15 +1,22 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 using ProsperApp.Models;
+using ProsperApp.Options;
 using static ProsperApp.Services.SupabaseJson;
 
 namespace ProsperApp.Services;
 
 public class SupabaseBusinessDayRepository(
     ISupabaseRpcClient rpcClient,
-    ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
+    ILocalSettingsProvider localSettingsProvider,
+    IStoreClock storeClock,
+    IOptions<SupabaseOptions> options) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
 {
+    private readonly IStoreClock _storeClock = storeClock;
+    private readonly SupabaseOptions _options = options.Value;
+
     public async Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct)
     {
         if (!HasRequiredSettings())
@@ -23,6 +30,52 @@ public class SupabaseBusinessDayRepository(
             ct);
 
         return rows.Count == 0 ? null : ParseBusinessDay(rows[0]);
+    }
+
+    public async Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct)
+    {
+        var currentBusinessDate = _storeClock.GetCurrentBusinessDate();
+        var current = await GetCurrentAsync(ct);
+        if (current is not null)
+        {
+            if (current.BusinessDate == currentBusinessDate)
+            {
+                return BusinessDayEnsureResult.Success(current, currentBusinessDate);
+            }
+
+            if (current.BusinessDate < currentBusinessDate)
+            {
+                return BusinessDayEnsureResult.ClosingRequired(current, currentBusinessDate);
+            }
+
+            return BusinessDayEnsureResult.Failed(
+                $"営業日 {current.BusinessDate:yyyy-MM-dd} が現在時刻から見た営業日 {currentBusinessDate:yyyy-MM-dd} より未来です。店舗設定と時刻を確認してください。",
+                currentBusinessDate);
+        }
+
+        var openResult = await OpenAsync(currentBusinessDate, null, [], ct);
+        if (openResult.Succeeded && openResult.BusinessDay is not null)
+        {
+            return BusinessDayEnsureResult.Success(openResult.BusinessDay, currentBusinessDate);
+        }
+
+        var afterOpen = await GetCurrentAsync(ct);
+        if (afterOpen is not null)
+        {
+            if (afterOpen.BusinessDate == currentBusinessDate)
+            {
+                return BusinessDayEnsureResult.Success(afterOpen, currentBusinessDate);
+            }
+
+            if (afterOpen.BusinessDate < currentBusinessDate)
+            {
+                return BusinessDayEnsureResult.ClosingRequired(afterOpen, currentBusinessDate);
+            }
+        }
+
+        return BusinessDayEnsureResult.Failed(
+            openResult.ErrorMessage ?? "営業日を自動作成できませんでした。",
+            currentBusinessDate);
     }
 
     public async Task<BusinessDayOperationResult> OpenAsync(
@@ -93,7 +146,8 @@ public class SupabaseBusinessDayRepository(
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_business_day_id = businessDayId,
-                p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim()
+                p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
+                p_pending_receipt_status = _options.PendingStatus
             },
             requireSecretKey: true,
             ct);
@@ -401,9 +455,24 @@ public class SupabaseBusinessDayRepository(
             return "未会計の伝票があります。すべて会計してから締めてください。";
         }
 
+        if (rawError.Contains("drink_delivery_required", StringComparison.OrdinalIgnoreCase))
+        {
+            return "酒代を入力してください。酒代がない場合も0円で保存してください。";
+        }
+
         if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))
         {
             return "出勤キャストを1名以上入力してください。";
+        }
+
+        if (rawError.Contains("attendance_clock_out_required", StringComparison.OrdinalIgnoreCase))
+        {
+            return "退勤時刻が未入力のキャストがいます。";
+        }
+
+        if (rawError.Contains("pending_receipts_exist", StringComparison.OrdinalIgnoreCase))
+        {
+            return "未入力領収書が残っています。領収書入力を完了してください。";
         }
 
         if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))

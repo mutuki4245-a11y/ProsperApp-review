@@ -11,7 +11,7 @@
             <strong>ホーム / 営業中 / 勤怠入力</strong>
             @if (Model.CurrentBusinessDay is null)
             {
-                <span>営業開始前</span>
+                <span>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 保存時に自動作成</span>
             }
             else
             {
@@ -31,14 +31,7 @@
 
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    @if (Model.CurrentBusinessDay is null)
-    {
-        <div class="alert alert-warning">
-            営業中の営業日がありません。
-            <a class="alert-link" asp-page="/Opening/Index">営業日開始へ</a>
-        </div>
-    }
-    else if (Model.Input.Entries.Count == 0)
+    @if (Model.Input.Entries.Count == 0)
     {
         <div class="alert alert-secondary">
             キャスト情報が未登録です。
@@ -47,6 +40,13 @@
     }
     else
     {
+        @if (Model.CurrentBusinessDay is null)
+        {
+            <div class="alert alert-info">
+                保存すると営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") を自動作成します。
+            </div>
+        }
+
         <form method="post" class="closing-attendance-form">
             <input asp-for="Input.BusinessDayId" type="hidden" />
             <div class="closing-entry-panel">

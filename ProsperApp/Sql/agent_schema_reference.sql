@@ -474,8 +474,10 @@ create table if not exists public.store_checkout_payments (
 --       clock_in_at, clock_out_at, uses_send_service for closing attendance input.
 --   save_business_day_closing_attendance(p_department_id bigint, p_business_day_id bigint, p_attendance_entries jsonb)
 --     updates registered attendance rows with { attendance_id, clock_in_time, clock_out_time, uses_send_service }.
---   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text)
---     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
+--   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text, p_pending_receipt_status text default 'unprocessed')
+--     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo.
+--     rejects closing when open slips, missing drink delivery input, no attendance,
+--     missing clock-out, or pending receipt documents remain.
 
 -- Slip creation and listing:
 --   get_store_tables(p_department_id bigint)

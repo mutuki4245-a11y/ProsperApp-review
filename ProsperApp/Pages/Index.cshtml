@@ -20,7 +20,7 @@
             @if (Model.CurrentBusinessDay is null)
             {
                 <strong>ホーム</strong>
-                <span>営業開始前</span>
+                <span>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 最初の入力で営業日を自動作成</span>
             }
             else
             {
@@ -29,13 +29,25 @@
             }
         </div>
         <div class="business-status-bar__actions">
-            <a class="btn btn-outline-secondary" asp-page="/Opening/Index">営業日開始へ</a>
+            @if (Model.CanCreateSalesInput)
+            {
+                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+            }
+            <a class="btn btn-outline-secondary" asp-page="/Closing/Index">締め作業へ</a>
         </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
     {
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    @if (Model.IsPreviousBusinessDayOpen)
+    {
+        <div class="alert alert-danger" role="alert">
+            前回営業日 @Model.CurrentBusinessDay?.BusinessDate.ToString("yyyy-MM-dd") の締め作業が未完了です。新しい営業入力の前に締め作業を完了してください。
+            <a class="alert-link" asp-page="/Closing/Index">締め作業へ</a>
+        </div>
     }
 
     <section class="operations-summary" aria-label="随時管理">
@@ -65,7 +77,7 @@
         </div>
     </section>
 
-    @if (Model.CurrentBusinessDay is not null)
+    @if (Model.CurrentBusinessDay is not null || Model.CanCreateSalesInput)
     {
         <section class="operations-summary" aria-label="営業日の未処理サマリ">
             <div class="operations-summary__header">
@@ -78,15 +90,23 @@
                 <a class="closing-panel @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" href="#slipListPanel">
                     <span class="closing-panel__body">
                         <strong>伝票一覧</strong>
-                        <small>在席 @Model.OpenSlipCount 件 / 会計済み @Model.CheckedOutSlipCount 件</small>
+                        <small>
+                            @(Model.CurrentBusinessDay is null
+                                ? "最初の伝票作成時に営業日を自動作成します。"
+                                : $"在席 {Model.OpenSlipCount} 件 / 会計済み {Model.CheckedOutSlipCount} 件")
+                        </small>
                     </span>
-                    <span class="closing-panel__badge @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">@(Model.OpenSlipCount > 0 ? "要会計" : "確認済")</span>
+                    <span class="closing-panel__badge @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">@(Model.OpenSlipCount > 0 ? "要会計" : Model.CurrentBusinessDay is null ? "自動作成" : "確認済")</span>
                     <span class="closing-panel__action">見る</span>
                 </a>
                 <a class="closing-panel @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")" asp-page="/Closing/DrinkCost">
                     <span class="closing-panel__body">
                         <strong>酒代入力</strong>
-                        <small>@(Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")</small>
+                        <small>
+                            @(Model.CurrentBusinessDay is null
+                                ? "保存時に営業日を自動作成します。"
+                                : Model.IsDrinkDeliveryAmountEntered ? $"納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")
+                        </small>
                     </span>
                     <span class="closing-panel__badge @(Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning")">@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</span>
                     <span class="closing-panel__action">開く</span>
@@ -105,7 +125,7 @@
                             }
                             else
                             {
-                                @("勤怠入力にキャストがいません。")
+                                @(Model.CurrentBusinessDay is null ? "保存時に営業日を自動作成します。" : "勤怠入力にキャストがいません。")
                             }
                         </small>
                     </span>
@@ -123,13 +143,17 @@
                         <span class="closing-panel__action">開く</span>
                     </a>
                 }
-                <a class="closing-panel @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")" asp-page="/Closing/Index">
+                <a class="closing-panel @(Model.CurrentBusinessDay is null ? "is-preparing" : Model.HasClosingBlockers ? "needs-action" : "is-ready")" asp-page="/Closing/Index">
                     <span class="closing-panel__body">
                         <strong>営業日締め</strong>
                         <small>
-                            @if (!Model.HasAnySlip)
+                            @if (Model.CurrentBusinessDay is null)
                             {
-                                @("伝票はまだありません。必要に応じて締め作業画面で営業日を締められます。")
+                                @("営業日作成後、締め条件を確認できます。")
+                            }
+                            else if (!Model.HasAnySlip)
+                            {
+                                @("締め作業画面で酒代・勤怠・領収書を確認します。")
                             }
                             else if (Model.OpenSlipCount > 0)
                             {
@@ -137,11 +161,11 @@
                             }
                             else
                             {
-                                @("すべて会計済みです。営業日を締められます。")
+                                @("会計は完了しています。締め条件を確認します。")
                             }
                         </small>
                     </span>
-                    <span class="closing-panel__badge @(Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">@(Model.OpenSlipCount > 0 ? "要会計" : "実行可")</span>
+                    <span class="closing-panel__badge @(Model.CurrentBusinessDay is null ? "is-preparing" : Model.HasClosingBlockers ? "needs-action" : "is-ready")">@(Model.CurrentBusinessDay is null ? "待機" : Model.HasClosingBlockers ? "要確認" : "実行可")</span>
                     <span class="closing-panel__action">締め作業へ</span>
                 </a>
             </div>
@@ -167,7 +191,7 @@
                             <span>最初の伝票を追加します。</span>
                         </div>
                         <div class="slip-list__actions">
-                            @if (Model.SlipsEnabled)
+                            @if (Model.CanCreateSalesInput)
                             {
                                 <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
                             }
@@ -189,7 +213,7 @@
                             <strong class="slip-list__amount">@slip.AccountingAmount.ToString("N0") 円</strong>
                         </a>
                     }
-                    @if (Model.SlipsEnabled)
+                    @if (Model.CanCreateSalesInput)
                     {
                         <article class="slip-list__row slip-list__row--add">
                             <div class="slip-list__main">
@@ -207,7 +231,7 @@
 
     }
 
-    @if (Model.CurrentBusinessDay is not null && Model.SlipsEnabled)
+    @if (Model.CanCreateSalesInput)
     {
         <div class="modal fade" id="createSlipModal" tabindex="-1" aria-labelledby="createSlipModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -231,7 +255,7 @@
                                 <div class="row g-3">
                                     <div class="col-md-5">
                                         <label class="form-label">営業日</label>
-                                        <div class="business-date-display">@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</div>
+                                        <div class="business-date-display">@Model.CreateSlipInput.BusinessDate?.ToString("yyyy-MM-dd")</div>
                                     </div>
                                     <div class="col-md-7">
                                         <label asp-for="CreateSlipInput.OpenedTime" class="form-label"></label>

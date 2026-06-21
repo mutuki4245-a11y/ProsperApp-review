@@ -24,6 +24,8 @@ public class ClosingModel(
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
+    public BusinessDayClosingReadiness Readiness { get; private set; } = new();
+
     public int OpenSlipCount { get; set; }
 
     public decimal DrinkDeliveryAmount { get; set; }
@@ -69,6 +71,16 @@ public class ClosingModel(
             return Page();
         }
 
+        if (!Readiness.CanClose)
+        {
+            foreach (var reason in Readiness.BlockReasons)
+            {
+                ModelState.AddModelError(string.Empty, reason);
+            }
+
+            return Page();
+        }
+
         var result = await _businessDayRepository.CloseAsync(CurrentBusinessDay.BusinessDayId, ClosingMemo, cancellationToken);
         if (!result.Succeeded)
         {
@@ -102,6 +114,17 @@ public class ClosingModel(
         PendingReceiptCount = ReceiptsEnabled
             ? (await _receiptRepository.GetPendingAsync(cancellationToken)).Count
             : 0;
+        Readiness = new BusinessDayClosingReadiness
+        {
+            BusinessDay = CurrentBusinessDay,
+            OpenSlipCount = OpenSlipCount,
+            DrinkDeliveryAmount = DrinkDeliveryAmount,
+            IsDrinkDeliveryAmountEntered = IsDrinkDeliveryAmountEntered,
+            AttendanceCount = ClosingAttendanceCount,
+            MissingClockOutCount = ClosingAttendanceMissingClockOutCount,
+            PendingReceiptCount = PendingReceiptCount,
+            ReceiptsEnabled = ReceiptsEnabled
+        };
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 }

@@ -7,15 +7,19 @@ namespace ProsperApp.Pages;
 
 public class ClosingDrinkCostModel(
     IFeatureGate featureGate,
-    IBusinessDayRepository businessDayRepository) : PageModel
+    IBusinessDayRepository businessDayRepository,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
     public DrinkDeliveryInputModel Input { get; set; } = new();
 
     public StoreBusinessDay? CurrentBusinessDay { get; private set; }
+
+    public DateOnly CurrentBusinessDate { get; private set; }
 
     public bool IsDrinkDeliveryAmountEntered { get; private set; }
 
@@ -41,13 +45,7 @@ public class ClosingDrinkCostModel(
         }
 
         await LoadAsync(cancellationToken, preserveInput: true);
-        if (CurrentBusinessDay is null)
-        {
-            ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
-            return Page();
-        }
-
-        if (Input.BusinessDayId != CurrentBusinessDay.BusinessDayId)
+        if (CurrentBusinessDay is not null && Input.BusinessDayId != CurrentBusinessDay.BusinessDayId)
         {
             ModelState.AddModelError(string.Empty, "営業日情報が更新されています。画面を再読み込みしてください。");
             return Page();
@@ -61,6 +59,19 @@ public class ClosingDrinkCostModel(
         if (!ModelState.IsValid)
         {
             return Page();
+        }
+
+        if (CurrentBusinessDay is null)
+        {
+            var ensureResult = await _businessDayRepository.EnsureCurrentAsync(cancellationToken);
+            if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
+            {
+                ModelState.AddModelError(string.Empty, ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
+                return Page();
+            }
+
+            CurrentBusinessDay = ensureResult.BusinessDay;
+            Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;
         }
 
         var result = await _businessDayRepository.SaveDrinkDeliveryAmountAsync(
@@ -80,10 +91,16 @@ public class ClosingDrinkCostModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
     {
+        CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         if (CurrentBusinessDay is null)
         {
-            Input = new DrinkDeliveryInputModel();
+            if (!preserveInput)
+            {
+                Input = new DrinkDeliveryInputModel();
+            }
+
+            Input.BusinessDayId = null;
             return;
         }
 
