@@ -126,7 +126,7 @@
   align-items: start;
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: 3rem minmax(140px, 0.35fr) minmax(220px, 1fr) auto auto;
+  grid-template-columns: 3rem minmax(120px, 0.4fr) minmax(0, 1fr) auto;
 }
 
 .nomination-row__index {
@@ -135,7 +135,12 @@
 }
 
 .nomination-row__cast {
+  min-width: 0;
   position: relative;
+}
+
+.nomination-row__kind {
+  min-width: 0;
 }
 
 .selected-cast {
@@ -680,7 +685,7 @@
   align-items: center;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: 3rem minmax(0, 1fr) auto auto;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
 }
 
 .customer-row__index {
@@ -795,6 +800,7 @@
 .slip-modal-form {
   display: grid;
   gap: 0.85rem;
+  min-width: 0;
 }
 
 #createSlipModal .modal-dialog,
@@ -813,6 +819,12 @@
   max-height: calc(100vh - 1rem);
 }
 
+#createSlipModal .modal-content,
+#createSlipModal form,
+#createSlipModal .slip-create__panel {
+  min-width: 0;
+}
+
 #createSlipModal form,
 #slipOrderModal form {
   display: flex;
@@ -826,6 +838,7 @@
 #slipCheckoutModal .modal-body {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

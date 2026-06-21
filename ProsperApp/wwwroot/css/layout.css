@@ -435,11 +435,15 @@
   }
 
   .customer-row {
-    grid-template-columns: 2.7rem minmax(0, 1fr) auto auto;
+    grid-template-columns: 2.7rem minmax(0, 1fr) auto;
   }
 
   .nomination-row {
-    grid-template-columns: 2.7rem minmax(7rem, 0.8fr) minmax(8rem, 1fr) auto auto;
+    grid-template-columns: 2.7rem minmax(0, 1fr) auto;
+  }
+
+  .nomination-row__cast {
+    grid-column: 2 / -1;
   }
 
   .cast-admin-form,

@@ -394,6 +394,7 @@
   align-items: center;
   display: flex;
   gap: 0.35rem;
+  justify-self: end;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -486,7 +487,7 @@
 }
 
 .item-admin__row--item {
-  grid-template-columns: auto minmax(180px, 1.2fr) repeat(4, minmax(110px, 0.8fr)) auto;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(4, minmax(110px, 0.8fr)) auto auto;
 }
 
 .item-admin__row--add {

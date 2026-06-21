@@ -172,10 +172,6 @@
                                 @foreach (var item in group.Items)
                                 {
                                     <div class="item-admin__row item-admin__row--item" data-item-order-row data-item-id="@item.ItemId">
-                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
-                                        </div>
                                         <div class="item-admin__field item-admin__field--name">
                                             <label>商品名</label>
                                             <strong>@item.ItemName</strong>
@@ -200,6 +196,10 @@
                                             <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
                                             <button class="btn btn-outline-danger" type="submit">削除</button>
                                         </form>
+                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
+                                        </div>
                                     </div>
                                 }
                                 <form method="post" asp-page-handler="SaveItem" class="item-admin__row item-admin__row--add" data-item-add-row>
@@ -242,10 +242,6 @@
                                 @foreach (var item in uncategorizedItems)
                                 {
                                     <div class="item-admin__row item-admin__row--item" data-item-order-row data-item-id="@item.ItemId">
-                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
-                                        </div>
                                         <div class="item-admin__field item-admin__field--name">
                                             <label>商品名</label>
                                             <strong>@item.ItemName</strong>
@@ -270,6 +266,10 @@
                                             <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
                                             <button class="btn btn-outline-danger" type="submit">削除</button>
                                         </form>
+                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
+                                        </div>
                                     </div>
                                 }
                             </div>
@@ -389,4 +389,3 @@
         })();
     </script>
 }
-

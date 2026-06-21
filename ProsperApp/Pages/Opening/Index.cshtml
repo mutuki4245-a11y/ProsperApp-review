@@ -3,8 +3,8 @@
 @{
     ViewData["Title"] = "営業準備";
     var isBusinessOpen = Model.CurrentBusinessDay is not null;
-    var castReady = Model.AttendanceCasts.Count > 0;
-    var attendanceReady = isBusinessOpen || Model.SelectedAttendanceCount > 0;
+    var castReady = Model.HomeActiveCastCount > 0;
+    var attendanceReady = isBusinessOpen ? Model.RegisteredAttendanceCount > 0 : Model.SelectedAttendanceCount > 0;
     var itemReady = Model.Items.Count > 0;
     var castStatusText = castReady ? "確認" : "要確認";
     var attendanceStatusText = attendanceReady ? "確認" : "要確認";
@@ -45,7 +45,7 @@
         <a class="opening-list__card @(castReady ? "is-ready" : "needs-action")" asp-page="/Opening/Casts">
             <span class="opening-list__body">
                 <strong>キャスト情報編集</strong>
-                <small>@(castReady ? $"{Model.AttendanceCasts.Count}名登録済み" : "未登録・登録が必要")</small>
+                <small>@(castReady ? $"{Model.HomeActiveCastCount}名登録済み" : "未登録・登録が必要")</small>
             </span>
             <span class="opening-list__badge @(castReady ? "is-ready" : "needs-action")">@castStatusText</span>
             <span class="opening-list__action">編集する</span>
@@ -57,7 +57,7 @@
                 <small>
                     @if (isBusinessOpen)
                     {
-                        <span>営業開始済み・登録内容を確認できます</span>
+                        <span>@(Model.RegisteredAttendanceCount > 0 ? $"{Model.RegisteredAttendanceCount}名出勤登録済み" : "出勤登録なし")</span>
                     }
                     else
                     {
@@ -113,4 +113,3 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
 }
-

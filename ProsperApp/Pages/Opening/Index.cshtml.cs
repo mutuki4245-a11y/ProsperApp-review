@@ -13,6 +13,7 @@ public class OpeningModel(
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
     IStoreOrderRepository orderRepository,
+    IStoreCastAdminRepository castAdminRepository,
     IStoreClock storeClock) : PageModel
 {
     private const string AttendanceDraftSessionKey = "OpeningAttendanceDraft";
@@ -21,6 +22,7 @@ public class OpeningModel(
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
+    private readonly IStoreCastAdminRepository _castAdminRepository = castAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
@@ -45,6 +47,8 @@ public class OpeningModel(
     public IReadOnlyList<StoreOrderItemOption> Items { get; set; } = [];
 
     public int SelectedAttendanceCount => AttendanceCasts.Count(x => x.IsSelected);
+    public int RegisteredAttendanceCount => AttendanceCasts.Count(x => x.IsRegistered);
+    public int HomeActiveCastCount { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -147,6 +151,7 @@ public class OpeningModel(
         var defaultClockInTime = _storeClock.GetStoreNow().ToString("HH:mm");
 
         StoreContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
+        HomeActiveCastCount = (await _castAdminRepository.GetCastsAsync(cancellationToken)).Count;
         var casts = await _slipRepository.GetCastsAsync(cancellationToken);
         AttendanceCasts = casts
             .Select(cast => new OpeningAttendanceCastInputModel

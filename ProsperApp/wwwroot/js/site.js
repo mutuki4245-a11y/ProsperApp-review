@@ -58,15 +58,81 @@
         return submitter.id;
     };
 
-    window.AppLoading = { show, hide };
+    const closest = (target, selector) => target instanceof Element ? target.closest(selector) : null;
 
-    document.addEventListener('click', (event) => {
-        const submitter = event.target.closest('button[type="submit"], input[type="submit"]');
-        if (!submitter || !submitter.form) {
+    const isLoadingDisabled = (element) => element?.closest('[data-loading-lock="false"]') !== null;
+
+    const deferAfterClickHandlers = (callback) => {
+        if (typeof window.queueMicrotask === 'function') {
+            window.queueMicrotask(callback);
             return;
         }
 
-        submitter.form.dataset.appLoadingSubmitter = ensureSubmitterId(submitter);
+        window.setTimeout(callback, 0);
+    };
+
+    const shouldLockForNavigation = (anchor, event) => {
+        if (
+            isLocked ||
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey ||
+            isLoadingDisabled(anchor) ||
+            anchor.hasAttribute('download')
+        ) {
+            return false;
+        }
+
+        const target = anchor.getAttribute('target');
+        if (target && target.toLowerCase() !== '_self') {
+            return false;
+        }
+
+        const rawHref = anchor.getAttribute('href')?.trim();
+        if (!rawHref || rawHref === '#') {
+            return false;
+        }
+
+        const lowerHref = rawHref.toLowerCase();
+        if (
+            lowerHref.startsWith('javascript:') ||
+            lowerHref.startsWith('mailto:') ||
+            lowerHref.startsWith('tel:')
+        ) {
+            return false;
+        }
+
+        const url = new URL(anchor.href, window.location.href);
+        const isSamePageHash =
+            url.origin === window.location.origin &&
+            url.pathname === window.location.pathname &&
+            url.search === window.location.search &&
+            url.hash;
+
+        return !isSamePageHash;
+    };
+
+    window.AppLoading = { show, hide };
+
+    document.addEventListener('click', (event) => {
+        const submitter = closest(event.target, 'button[type="submit"], input[type="submit"]');
+        if (submitter?.form) {
+            submitter.form.dataset.appLoadingSubmitter = ensureSubmitterId(submitter);
+        }
+
+        const anchor = closest(event.target, 'a[href]');
+        if (!anchor || !shouldLockForNavigation(anchor, event)) {
+            return;
+        }
+
+        deferAfterClickHandlers(() => {
+            if (!event.defaultPrevented) {
+                show();
+            }
+        });
     });
 
     document.addEventListener('submit', (event) => {
