@@ -125,10 +125,6 @@ a.closing-panel:focus {
   align-items: start;
 }
 
-.closing-panel--section {
-  align-items: start;
-}
-
 .closing-final-panel {
   min-height: 92px;
 }
@@ -166,7 +162,7 @@ a.closing-panel:focus {
   border-radius: 8px;
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: minmax(8rem, 1fr) minmax(11rem, 1.1fr) 4.5rem 5.5rem auto;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(9rem, 1fr) minmax(14rem, 1.6fr) auto;
   min-height: 3.4rem;
   padding: 0.55rem;
 }
@@ -190,23 +186,21 @@ a.closing-panel:focus {
   font-weight: 700;
 }
 
-.cast-sales-adjustment-list__status {
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 800;
-  justify-self: start;
-  padding: 0.2rem 0.55rem;
-  white-space: nowrap;
+.cast-sales-adjustment-list__slip,
+.cast-sales-adjustment-list__casts,
+.cast-sales-adjustment-list__cast {
+  display: grid;
+  gap: 0.15rem;
 }
 
-.cast-sales-adjustment-list__status.is-ready {
-  background: #dcfce7;
-  color: #166534;
+.cast-sales-adjustment-list__slip strong,
+.cast-sales-adjustment-list__cast strong {
+  color: #102a43;
 }
 
-.cast-sales-adjustment-list__status.has-warning {
-  background: #fee2e2;
-  color: #991b1b;
+.cast-sales-adjustment-list__customers {
+  color: #102a43;
+  font-weight: 700;
 }
 
 .cast-sales-adjustment-list__action {
@@ -290,6 +284,10 @@ a.closing-panel:focus {
   gap: 1rem;
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 1rem;
+}
+
+.closing-entry-panel--stack {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .closing-entry-panel__body {

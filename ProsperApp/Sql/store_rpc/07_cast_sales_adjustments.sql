@@ -59,6 +59,7 @@ returns table (
     table_id bigint,
     table_code text,
     table_name text,
+    customer_names text,
     checkout_id bigint,
     checkout_at timestamp with time zone,
     subtotal_amount numeric,
@@ -72,7 +73,18 @@ language sql
 security definer
 set search_path = public
 as $$
-    with required_casts as (
+    with customer_summary as (
+        select
+            c.slip_id,
+            string_agg(
+                coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                '、'
+                order by c.line_no
+            ) filter (where c.status <> 'cancelled') as customer_names
+        from public.store_slip_customers c
+        group by c.slip_id
+    ),
+    required_casts as (
         select
             s.slip_id,
             sc.slip_cast_id
@@ -106,6 +118,7 @@ as $$
         s.table_id,
         t.table_code,
         t.table_name,
+        coalesce(cs.customer_names, '') as customer_names,
         c.checkout_id,
         c.checkout_at,
         c.subtotal_amount,
@@ -122,6 +135,8 @@ as $$
       on ss.slip_id = s.slip_id
     left join public.store_table_master t
       on t.table_id = s.table_id
+    left join customer_summary cs
+      on cs.slip_id = s.slip_id
     where s.department_id = p_department_id
       and s.business_day_id = p_business_day_id
       and s.status = 'checked_out'

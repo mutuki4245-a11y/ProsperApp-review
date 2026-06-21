@@ -66,6 +66,7 @@ public class SupabaseCastSalesAdjustmentRepository(
                 TableId = ReadLong(row, "table_id"),
                 TableCode = ReadString(row, "table_code"),
                 TableName = ReadString(row, "table_name"),
+                CustomerNames = ReadString(row, "customer_names"),
                 CheckoutAt = ReadDateTimeOffset(row, "checkout_at") ?? DateTimeOffset.MinValue,
                 SubtotalAmount = ReadDecimal(row, "subtotal_amount") ?? 0,
                 ServiceTaxAmount = ReadDecimal(row, "service_tax_amount") ?? 0,

@@ -25,6 +25,8 @@ public class CastSalesAdjustmentSlip
 
     public string? TableName { get; init; }
 
+    public string? CustomerNames { get; init; }
+
     public DateTimeOffset CheckoutAt { get; init; }
 
     public decimal SubtotalAmount { get; init; }
@@ -53,6 +55,10 @@ public class CastSalesAdjustmentSlip
             return TableCode ?? TableName ?? "-";
         }
     }
+
+    public string CustomerDisplayNames => string.IsNullOrWhiteSpace(CustomerNames)
+        ? "客名なし"
+        : CustomerNames;
 }
 
 public class CastSalesAdjustmentDetail
