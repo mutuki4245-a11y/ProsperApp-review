@@ -38,7 +38,8 @@ public class CastSalesAdjustmentModel(
     public bool CanConfirmCastSalesAdjustment =>
         CurrentBusinessDay is not null &&
         CastSalesAdjustmentStatus.RequiredSlipCount > 0 &&
-        CastSalesAdjustmentStatus.IsCompleted;
+        CastSalesAdjustmentSlips.Count > 0 &&
+        CastSalesAdjustmentDetails.Count == CastSalesAdjustmentSlips.Count;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -114,10 +115,39 @@ public class CastSalesAdjustmentModel(
             return RedirectToPage("/Closing/Index");
         }
 
-        if (!CastSalesAdjustmentStatus.IsCompleted)
+        if (CastSalesAdjustmentDetails.Count != CastSalesAdjustmentSlips.Count)
         {
-            ModelState.AddModelError(string.Empty, "すべての伝票の売上額調整を保存してから確認してください。");
+            ModelState.AddModelError(string.Empty, "確認できない伝票があります。画面を再読み込みしてから再実行してください。");
             return Page();
+        }
+
+        foreach (var detail in CastSalesAdjustmentDetails)
+        {
+            var result = await _castSalesAdjustmentRepository.SaveAsync(
+                new CastSalesAdjustmentSaveInput
+                {
+                    BusinessDayId = CurrentBusinessDay.BusinessDayId,
+                    SlipId = detail.SlipId,
+                    SourceAmountType = CastSalesAmountBasis,
+                    SplitMode = CastSalesSplitMode,
+                    Casts = detail.Casts
+                        .Select(cast => new CastSalesAdjustmentCastInput
+                        {
+                            SlipCastId = cast.SlipCastId,
+                            SalesAmount = cast.EffectiveSalesAmount
+                        })
+                        .ToList()
+                },
+                cancellationToken);
+
+            if (!result.Succeeded)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    $"{detail.TableDisplayName} の売上額調整を確認できませんでした。{result.ErrorMessage}");
+                await LoadAsync(cancellationToken);
+                return Page();
+            }
         }
 
         TempData["SuccessMessage"] = "キャスト売上額調整を確認しました。";
