@@ -159,6 +159,11 @@
   border-color: #86efac;
 }
 
+.business-close-panel.needs-action {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
 .business-close-panel.is-blocked {
   background: #f8fafc;
 }

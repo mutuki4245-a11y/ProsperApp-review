@@ -60,7 +60,7 @@ public class IndexModel(
 
     public bool HasAnySlip => Slips.Count > 0;
 
-    public bool CanMoveToClosing => CurrentBusinessDay is not null && HasAnySlip && OpenSlipCount == 0;
+    public bool CanMoveToClosing => CurrentBusinessDay is not null;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {

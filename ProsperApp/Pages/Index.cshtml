@@ -97,23 +97,28 @@
             }
         </section>
 
-        <section class="business-close-panel @(Model.CanMoveToClosing ? "is-ready" : "is-blocked")">
+        <section class="business-close-panel @(Model.CurrentBusinessDay is null ? "is-blocked" : Model.OpenSlipCount > 0 ? "needs-action" : "is-ready")">
             <div>
                 <p class="store-home__eyebrow">締め作業</p>
-                @if (Model.CanMoveToClosing)
+                @if (Model.CurrentBusinessDay is null)
                 {
-                    <h2>すべて会計済みです</h2>
-                    <p>営業中の伝票がないため、締め作業へ進めます。</p>
+                    <h2>営業開始前です</h2>
+                    <p>営業準備を開始すると、締め作業画面を確認できます。</p>
                 }
                 else if (!Model.HasAnySlip)
                 {
                     <h2>伝票はまだありません</h2>
-                    <p>営業を終了する前に、当日の伝票状況を確認してください。</p>
+                    <p>必要に応じて締め作業画面で営業日を締められます。</p>
+                }
+                else if (Model.OpenSlipCount > 0)
+                {
+                    <h2>未会計伝票があります</h2>
+                    <p>締め作業画面は確認できます。営業日締めは未会計 @Model.OpenSlipCount 件の会計完了後に実行できます。</p>
                 }
                 else
                 {
-                    <h2>未会計伝票があります</h2>
-                    <p>在席 @Model.OpenSlipCount 件の会計が完了すると、ここから締め作業へ進めます。</p>
+                    <h2>すべて会計済みです</h2>
+                    <p>営業中の伝票がないため、締め作業へ進めます。</p>
                 }
             </div>
             @if (Model.CanMoveToClosing)
@@ -122,7 +127,7 @@
             }
             else
             {
-                <button class="btn btn-outline-secondary btn-lg" type="button" disabled>締め作業は未会計完了後</button>
+                <button class="btn btn-outline-secondary btn-lg" type="button" disabled>営業準備後に利用可能</button>
             }
         </section>
     }
