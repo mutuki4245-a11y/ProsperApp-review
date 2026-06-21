@@ -245,9 +245,11 @@ create table if not exists public.store_business_days (
     opened_by text,
     closed_by text,
     memo text,
+    drink_delivery_amount numeric(12, 0) not null default 0,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_business_days_status check (status in ('open', 'closed', 'cancelled')),
+    constraint chk_store_business_days_drink_delivery_amount check (drink_delivery_amount >= 0),
     constraint chk_store_business_days_closed_at check (closed_at is null or closed_at >= opened_at)
 );
 
@@ -459,6 +461,10 @@ create table if not exists public.store_checkout_payments (
 --     adds checked_in attendance rows after the business day has already opened.
 --   get_open_slip_count(p_department_id bigint, p_business_day_id bigint)
 --     returns integer
+--   get_business_day_drink_delivery_amount(p_department_id bigint, p_business_day_id bigint)
+--     returns numeric. Closing drink-cost entry uses this as the current business-day delivery amount.
+--   save_business_day_drink_delivery_amount(p_department_id bigint, p_business_day_id bigint, p_drink_delivery_amount numeric)
+--     updates store_business_days.drink_delivery_amount for the open business day.
 --   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
 

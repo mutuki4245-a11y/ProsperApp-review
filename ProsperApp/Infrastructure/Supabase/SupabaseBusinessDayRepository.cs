@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
@@ -163,6 +164,66 @@ public class SupabaseBusinessDayRepository(
         return int.TryParse(value, out var count) ? count : 0;
     }
 
+    public async Task<decimal> GetDrinkDeliveryAmountAsync(long businessDayId, CancellationToken ct)
+    {
+        if (!HasRequiredSettings())
+        {
+            return 0;
+        }
+
+        var result = await RpcClient.PostScalarAsync(
+            "get_business_day_drink_delivery_amount",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId
+            },
+            requireSecretKey: false,
+            ct);
+        var value = NormalizeScalarBody(result.Succeeded ? result.Body : null);
+
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
+            ? amount
+            : 0;
+    }
+
+    public async Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(
+        long businessDayId,
+        decimal amount,
+        CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return BusinessDayAmountSaveResult.Failed("Supabase SecretKeyが未設定です。納品額を保存できません。");
+        }
+
+        if (amount < 0 || decimal.Truncate(amount) != amount)
+        {
+            return BusinessDayAmountSaveResult.Failed("納品額は0円以上の整数で入力してください。");
+        }
+
+        var result = await RpcClient.PostScalarAsync(
+            "save_business_day_drink_delivery_amount",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId,
+                p_drink_delivery_amount = amount
+            },
+            requireSecretKey: true,
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return BusinessDayAmountSaveResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var value = NormalizeScalarBody(result.Body);
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedAmount)
+            ? BusinessDayAmountSaveResult.Success(savedAmount)
+            : BusinessDayAmountSaveResult.Failed("納品額を保存できませんでした。");
+    }
+
     private sealed record AttendanceEntryPayload(
         [property: JsonPropertyName("cast_id")] long CastId,
         [property: JsonPropertyName("clock_in_time")] string ClockInTime,
@@ -181,6 +242,13 @@ public class SupabaseBusinessDayRepository(
             Status = ReadString(row, "status") ?? string.Empty,
             Memo = ReadString(row, "memo")
         };
+    }
+
+    private static string? NormalizeScalarBody(string? body)
+    {
+        return string.IsNullOrWhiteSpace(body)
+            ? null
+            : body.Trim().Trim('"');
     }
 
     private static string ToFriendlyError(string? rawError)
@@ -204,6 +272,11 @@ public class SupabaseBusinessDayRepository(
         if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
         {
             return "営業中の営業日がありません。";
+        }
+
+        if (rawError.Contains("invalid_drink_delivery_amount", StringComparison.OrdinalIgnoreCase))
+        {
+            return "納品額は0円以上の整数で入力してください。";
         }
 
         if (rawError.Contains("open_slips_exist", StringComparison.OrdinalIgnoreCase))

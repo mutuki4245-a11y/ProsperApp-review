@@ -1,6 +1,7 @@
 grant execute on function public.get_store_context(bigint) to anon, authenticated, service_role;
 grant execute on function public.get_current_business_day(bigint) to anon, authenticated, service_role;
 grant execute on function public.get_open_slip_count(bigint, bigint) to anon, authenticated, service_role;
+grant execute on function public.get_business_day_drink_delivery_amount(bigint, bigint) to anon, authenticated, service_role;
 grant execute on function public.get_store_tables(bigint) to anon, authenticated, service_role;
 grant execute on function public.get_store_casts(bigint) to anon, authenticated, service_role;
 grant execute on function public.get_store_cast_admin_list(bigint) to anon, authenticated, service_role;
@@ -17,6 +18,7 @@ revoke execute on function public.open_business_day_with_attendance(bigint, date
 revoke execute on function public.open_business_day_with_attendance(bigint, date, jsonb, text) from public, anon;
 revoke execute on function public.add_business_day_attendance(bigint, bigint, jsonb) from public, anon;
 revoke execute on function public.save_business_day_attendance(bigint, bigint, jsonb) from public, anon;
+revoke execute on function public.save_business_day_drink_delivery_amount(bigint, bigint, numeric) from public, anon;
 revoke execute on function public.close_business_day(bigint, bigint, text) from public, anon;
 revoke execute on function public.create_store_cast(bigint, text) from public, anon;
 revoke execute on function public.delete_store_cast(bigint, bigint) from public, anon;
@@ -40,6 +42,7 @@ grant execute on function public.open_business_day_with_attendance(bigint, date,
 grant execute on function public.open_business_day_with_attendance(bigint, date, jsonb, text) to authenticated, service_role;
 grant execute on function public.add_business_day_attendance(bigint, bigint, jsonb) to authenticated, service_role;
 grant execute on function public.save_business_day_attendance(bigint, bigint, jsonb) to authenticated, service_role;
+grant execute on function public.save_business_day_drink_delivery_amount(bigint, bigint, numeric) to authenticated, service_role;
 grant execute on function public.close_business_day(bigint, bigint, text) to authenticated, service_role;
 grant execute on function public.create_store_cast(bigint, text) to authenticated, service_role;
 grant execute on function public.delete_store_cast(bigint, bigint) to authenticated, service_role;

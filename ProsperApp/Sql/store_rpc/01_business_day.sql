@@ -603,6 +603,60 @@ as $$
       and s.status = 'open';
 $$;
 
+create or replace function public.get_business_day_drink_delivery_amount(
+    p_department_id bigint,
+    p_business_day_id bigint
+)
+returns numeric
+language sql
+security definer
+set search_path = public
+as $$
+    select coalesce((
+        select b.drink_delivery_amount
+        from public.store_business_days b
+        where b.department_id = p_department_id
+          and b.business_day_id = p_business_day_id
+        limit 1
+    ), 0);
+$$;
+
+create or replace function public.save_business_day_drink_delivery_amount(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_drink_delivery_amount numeric
+)
+returns numeric
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_drink_delivery_amount numeric(12, 0);
+begin
+    if p_drink_delivery_amount is null or
+       p_drink_delivery_amount < 0 or
+       p_drink_delivery_amount <> trunc(p_drink_delivery_amount) then
+        raise exception 'invalid_drink_delivery_amount';
+    end if;
+
+    update public.store_business_days b
+       set drink_delivery_amount = p_drink_delivery_amount,
+           updated_at = now()
+     where b.business_day_id = p_business_day_id
+       and b.department_id = p_department_id
+       and b.status = 'open'
+     returning b.drink_delivery_amount
+      into v_drink_delivery_amount;
+
+    if v_drink_delivery_amount is null then
+        raise exception 'business_day_not_open';
+    end if;
+
+    return v_drink_delivery_amount;
+end;
+$$;
+
 create or replace function public.close_business_day(
     p_department_id bigint,
     p_business_day_id bigint,
@@ -651,4 +705,3 @@ begin
         b.memo;
 end;
 $$;
-

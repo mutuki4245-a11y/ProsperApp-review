@@ -20,4 +20,8 @@ public interface IBusinessDayRepository
     Task<BusinessDayOperationResult> CloseAsync(long businessDayId, string? memo, CancellationToken ct);
 
     Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);
+
+    Task<decimal> GetDrinkDeliveryAmountAsync(long businessDayId, CancellationToken ct);
+
+    Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(long businessDayId, decimal amount, CancellationToken ct);
 }

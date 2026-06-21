@@ -22,6 +22,8 @@ public class ClosingModel(IFeatureGate featureGate, IBusinessDayRepository busin
 
     public int OpenSlipCount { get; set; }
 
+    public decimal DrinkDeliveryAmount { get; set; }
+
     public string? SuccessMessage { get; set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -74,6 +76,9 @@ public class ClosingModel(IFeatureGate featureGate, IBusinessDayRepository busin
         OpenSlipCount = CurrentBusinessDay is null
             ? 0
             : await _businessDayRepository.GetOpenSlipCountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        DrinkDeliveryAmount = CurrentBusinessDay is null
+            ? 0
+            : await _businessDayRepository.GetDrinkDeliveryAmountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 }

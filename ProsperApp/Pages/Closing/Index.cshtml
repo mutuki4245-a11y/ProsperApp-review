@@ -44,14 +44,28 @@
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     <div class="closing-list">
-        <div class="closing-panel is-preparing" aria-disabled="true">
-            <span class="closing-panel__body">
-                <strong>酒代入力</strong>
-                <small>準備中 / 酒代の注文額・確認額を入力</small>
-            </span>
-            <span class="closing-panel__badge is-preparing">準備中</span>
-            <span class="closing-panel__action">未対応</span>
-        </div>
+        @if (hasBusinessDay)
+        {
+            <a class="closing-panel is-ready" asp-page="/Closing/DrinkCost">
+                <span class="closing-panel__body">
+                    <strong>酒代入力</strong>
+                    <small>営業日ごとの納品額 @Model.DrinkDeliveryAmount.ToString("N0") 円</small>
+                </span>
+                <span class="closing-panel__badge is-ready">入力可</span>
+                <span class="closing-panel__action">開く</span>
+            </a>
+        }
+        else
+        {
+            <div class="closing-panel is-preparing" aria-disabled="true">
+                <span class="closing-panel__body">
+                    <strong>酒代入力</strong>
+                    <small>営業開始後に納品額を入力できます。</small>
+                </span>
+                <span class="closing-panel__badge is-preparing">待機</span>
+                <span class="closing-panel__action">未対応</span>
+            </div>
+        }
 
         <div class="closing-panel is-preparing" aria-disabled="true">
             <span class="closing-panel__body">

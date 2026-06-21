@@ -99,6 +99,8 @@
 - `open_business_day(p_department_id, p_business_date, p_memo)`
 - `add_business_day_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
 - `get_open_slip_count(p_department_id, p_business_day_id)`
+- `get_business_day_drink_delivery_amount(p_department_id, p_business_day_id)`
+- `save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
 - `close_business_day(p_department_id, p_business_day_id, p_memo)`
 
 ### 伝票
