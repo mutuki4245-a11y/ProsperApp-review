@@ -580,6 +580,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --       p_account_subject text,
 --       p_description text,
 --       p_group_code text,
+--       p_journal_payload jsonb default null,
 --       p_status text default 'quick_entered'
 --     )
 --     returns document_id

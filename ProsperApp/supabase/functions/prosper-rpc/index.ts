@@ -396,6 +396,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_account_subject", type: "text" },
         { name: "p_description", type: "text" },
         { name: "p_group_code", type: "text" },
+        { name: "p_journal_payload", type: "jsonb" },
         { name: "p_status", type: "text" },
       ],
     },
@@ -510,8 +511,6 @@ function getAllowedClientKeys(): string[] {
   const keys = new Set<string>();
   addClientKey(keys, Deno.env.get("PROSPER_RPC_API_KEY"));
   addClientKeys(keys, Deno.env.get("PROSPER_RPC_API_KEYS"));
-  addClientKey(keys, Deno.env.get("DOCUMENT_API_KEY"));
-  addClientKeys(keys, Deno.env.get("DOCUMENT_API_KEYS"));
   return [...keys];
 }
 

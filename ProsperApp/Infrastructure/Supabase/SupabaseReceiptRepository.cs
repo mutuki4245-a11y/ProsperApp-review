@@ -9,11 +9,9 @@ namespace ProsperApp.Services;
 public class SupabaseReceiptRepository(
     ISupabaseRpcClient rpcClient,
     IOptions<SupabaseOptions> options,
-    IDocumentApiClient documentApiClient,
     ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IReceiptRepository
 {
     private readonly SupabaseOptions _options = options.Value;
-    private readonly IDocumentApiClient _documentApiClient = documentApiClient;
 
     public async Task<IReadOnlyList<PendingReceiptItem>> GetPendingAsync(CancellationToken ct)
     {
@@ -62,12 +60,7 @@ public class SupabaseReceiptRepository(
             return SaveReceiptResult.Failed("店舗の会社IDを取得できません。店舗設定とget_store_context RPCを確認してください。");
         }
 
-        var payload = BuildJournalPayload(input, companyId.Value, CurrentStoreDepartmentId);
-        var documentApiResult = await _documentApiClient.SaveJournalPayloadAsync(payload, ct);
-        if (!documentApiResult.Succeeded)
-        {
-            return SaveReceiptResult.Failed(documentApiResult.ErrorMessage ?? "DocManagement連携保存に失敗しました。");
-        }
+        var journalPayload = BuildJournalPayload(input, companyId.Value, CurrentStoreDepartmentId);
 
         var result = await RpcClient.PostArrayAsync(
             "quick_enter_receipt",
@@ -80,6 +73,7 @@ public class SupabaseReceiptRepository(
                 p_account_subject = input.AccountSubject.Trim(),
                 p_description = input.Description.Trim(),
                 p_group_code = input.GroupCode,
+                p_journal_payload = journalPayload,
                 p_status = _options.CompletedStatus
             },
             ct);

@@ -134,9 +134,9 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 ### 領収書
 
 - `get_pending_receipts(p_department_id, p_status)`
-- `quick_enter_receipt(p_department_id, p_document_id, p_payment_date, p_amount, p_account_subject, p_description, p_group_code, p_status)`
+- `quick_enter_receipt(p_department_id, p_document_id, p_payment_date, p_amount, p_account_subject, p_description, p_group_code, p_journal_payload, p_status)`
 - `mark_receipt_scan_mistake(p_department_id, p_document_id, p_status)`
-  - 領収書の管理入力は、保存前にDocManagementの `document-api` / `save_journal_payload` 契約へ送信します。
+  - 領収書の管理入力は、DocManagementの `save_journal_payload` 契約に従ったpayloadを作成し、ProsperAppの `quick_enter_receipt` RPCへ渡します。DocManagementアプリや `document-api` へ直接送信しません。
   - スキャンミス除外はDriveファイルを削除せず、DB上のステータス更新で入力対象から外します。
 
 ## 画面構成
@@ -214,8 +214,8 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 
 - `/Closing/Receipts`
   - 領収書簡易入力。
-  - Google Driveプレビュー、DocManagement `document-api` への `save_journal_payload` 送信、Supabase RPC更新、スキャンミス除外、PDF先読みキャッシュを含みます。
-  - 入力保存時はDocManagement契約の `journal_entries`、`journal_entry_lines`、`document_journal_links` を先に保存し、成功後に領収書ステータスを完了へ更新します。
+  - Google Driveプレビュー、DocManagement契約payload作成、Supabase RPC更新、スキャンミス除外、PDF先読みキャッシュを含みます。
+  - 入力保存時はDocManagement契約の `journal_entries`、`journal_entry_lines`、`document_journal_links` を `quick_enter_receipt` RPC payloadに含め、領収書ステータスを完了へ更新します。
   - スキャンミス除外はDB上の論理削除として扱い、Driveファイルは削除しません。
   - Driveファイルの取得は画面ではなく `/DrivePreview/{driveFileId}` endpoint で行います。
 
@@ -249,7 +249,6 @@ Azure App Serviceでは最低限以下が必要です。
 - `SUPABASE_RPC_EDGE_FUNCTION_KEY` または `Supabase__RpcEdgeFunctionKey`
 
 `SUPABASE_RPC_EDGE_FUNCTION_URL` 未設定時は `Supabase__Url` と `Supabase__RpcProxyFunctionName` から `/functions/v1/prosper-rpc` を組み立てます。
-`SUPABASE_RPC_EDGE_FUNCTION_KEY` 未設定時は、既存環境変数 `DOCUMENT_API_KEY` / `DOCUMENT_API_KEYS` も互換キーとして利用できます。
 アプリ側のSupabase RPC呼び出しでは、Edge Functionキーを `x-prosper-rpc-api-key`、`apikey`、`Authorization: Bearer` に設定します。
 
 `prosper-rpc` Edge Function側では以下が必要です。

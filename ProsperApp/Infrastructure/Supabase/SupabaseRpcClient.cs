@@ -151,14 +151,10 @@ public sealed class SupabaseRpcClient(
 
     private string? GetRpcEdgeFunctionKey()
     {
-        var documentApiKeys = SplitConfiguredKeys(_configuration["DOCUMENT_API_KEYS"]);
         return FirstNonEmpty(
             _configuration["SUPABASE_RPC_EDGE_FUNCTION_KEY"],
             _configuration["Supabase:RpcEdgeFunctionKey"],
-            _options.RpcEdgeFunctionKey,
-            _configuration["DOCUMENT_API_KEY"],
-            _configuration["DocManagement:DocumentApiKey"],
-            documentApiKeys.FirstOrDefault());
+            _options.RpcEdgeFunctionKey);
     }
 
     private static string NormalizeEdgeFunctionBody(string body)
@@ -197,47 +193,6 @@ public sealed class SupabaseRpcClient(
     private static string? FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
-    }
-
-    private static IReadOnlyList<string> SplitConfiguredKeys(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return [];
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(raw);
-            if (document.RootElement.ValueKind == JsonValueKind.Array)
-            {
-                return document.RootElement
-                    .EnumerateArray()
-                    .Where(x => x.ValueKind == JsonValueKind.String)
-                    .Select(x => x.GetString())
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Select(x => x!.Trim())
-                    .ToArray();
-            }
-
-            if (document.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                return document.RootElement
-                    .EnumerateObject()
-                    .Select(x => x.Value.ValueKind == JsonValueKind.String ? x.Value.GetString() : null)
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Select(x => x!.Trim())
-                    .ToArray();
-            }
-        }
-        catch (JsonException)
-        {
-        }
-
-        return raw
-            .Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .ToArray();
     }
 
     private static string Shorten(string value)

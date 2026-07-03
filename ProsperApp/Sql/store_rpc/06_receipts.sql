@@ -1,3 +1,6 @@
+drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
+drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
+
 create or replace function public.get_pending_receipts(
     p_department_id bigint,
     p_status text default 'unprocessed'
@@ -43,6 +46,7 @@ create or replace function public.quick_enter_receipt(
     p_account_subject text,
     p_description text,
     p_group_code text,
+    p_journal_payload jsonb default null,
     p_status text default 'quick_entered'
 )
 returns table (
@@ -92,4 +96,3 @@ begin
     returning d.document_id::text;
 end;
 $$;
-
