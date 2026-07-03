@@ -45,7 +45,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var businessDay = ParseBusinessDay(rows[0]);
-        _memoryCache.Set(cacheKey, businessDay, StoreMasterCacheKeys.CreateShortOptions());
+        _memoryCache.Set(cacheKey, businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
         return businessDay;
     }
 
@@ -146,7 +146,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var businessDay = ParseBusinessDay(result.Rows[0]);
-        _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(CurrentStoreDepartmentId), businessDay, StoreMasterCacheKeys.CreateShortOptions());
+        _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(CurrentStoreDepartmentId), businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
         return BusinessDayOperationResult.Success(businessDay);
     }
 

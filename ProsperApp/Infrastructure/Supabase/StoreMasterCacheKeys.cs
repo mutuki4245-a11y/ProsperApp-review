@@ -28,11 +28,11 @@ internal static class StoreMasterCacheKeys
         };
     }
 
-    public static MemoryCacheEntryOptions CreateShortOptions()
+    public static MemoryCacheEntryOptions CreateRuntimeOptions()
     {
         return new MemoryCacheEntryOptions
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(10)
+            Priority = CacheItemPriority.NeverRemove
         };
     }
 
