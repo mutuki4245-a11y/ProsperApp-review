@@ -116,8 +116,8 @@ public partial class SlipEditModel
             return;
         }
 
-        var quantity = Detail.ChargeLines
-            .Where(x => string.Equals(x.ChargeType, "karaoke", StringComparison.Ordinal) &&
+        var quantity = Detail.Orders
+            .Where(x => x.IsKaraoke &&
                         string.Equals(x.Status, "active", StringComparison.Ordinal))
             .Sum(x => x.Quantity);
 

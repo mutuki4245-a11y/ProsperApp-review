@@ -104,7 +104,7 @@
                                     </a>
                                     @if (string.Equals(slip.Status, "open", StringComparison.Ordinal))
                                     {
-                                        <div class="slip-list__karaoke" data-business-karaoke-row data-slip-id="@slip.SlipId" data-initial-quantity="@slip.KaraokeQuantity">
+                                        <div class="slip-list__karaoke" data-business-karaoke-row data-slip-id="@slip.SlipId" data-initial-quantity="@slip.KaraokeQuantity" data-accounting-base-amount="@(slip.AccountingAmount - (slip.KaraokeQuantity * 240))" data-karaoke-accounting-unit="240">
                                             <span>カラオケ</span>
                                             <button class="btn btn-outline-secondary" type="button" data-business-karaoke-decrement>-</button>
                                             <strong data-business-karaoke-display>@slip.KaraokeQuantity.ToString("0")</strong>
@@ -359,6 +359,12 @@
                 const display = row.querySelector('[data-business-karaoke-display]');
                 if (display) {
                     display.textContent = String(normalized);
+                }
+                const amountValue = row.closest('.slip-list__row')?.querySelector('.slip-list__amount-value');
+                if (amountValue) {
+                    const baseAmount = Number(row.dataset.accountingBaseAmount ?? 0);
+                    const accountingUnit = Number(row.dataset.karaokeAccountingUnit ?? 240);
+                    amountValue.textContent = `${Math.round(baseAmount + normalized * accountingUnit).toLocaleString('ja-JP')} 円`;
                 }
                 row.classList.toggle('is-dirty', normalized !== getInitialQuantity(row));
             };

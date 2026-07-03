@@ -5,18 +5,35 @@
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
         .OrderBy(x => x.LineNo)
         .ToList();
+    var activeNonKaraokeOrders = activeOrders
+        .Where(x => !x.IsKaraoke)
+        .ToList();
+    var activeKaraokeOrder = activeOrders
+        .Where(x => x.IsKaraoke)
+        .OrderBy(x => x.LineNo)
+        .FirstOrDefault();
+    var activeKaraokeQuantity = activeOrders
+        .Where(x => x.IsKaraoke)
+        .Sum(x => x.Quantity);
+    var karaokeItem = Model.OrderItems.FirstOrDefault(x => x.IsKaraoke);
+    var karaokeUnitPrice = activeKaraokeOrder?.UnitPrice ?? karaokeItem?.DefaultPrice ?? 200;
+    var karaokeAmount = activeKaraokeQuantity * karaokeUnitPrice;
     var activeOrderTotal = activeOrders.Sum(x => x.Amount);
+    var nonKaraokeOrderTotal = activeOrderTotal - (activeKaraokeOrder?.Amount ?? 0);
+    var firstCustomer = detail.Customers
+        .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.Ordinal))
+        .OrderBy(x => x.EnteredAt)
+        .FirstOrDefault();
+    var karaokeOrderedAt = activeKaraokeOrder?.OrderedAt ?? firstCustomer?.EnteredAt ?? detail.OpenedAt;
+    var showKaraokeOrderRow = Model.IsOpenSlip || activeKaraokeQuantity > 0;
     var activeCharges = detail.ChargeLines
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
         .OrderBy(x => x.LineNo)
         .ToList();
-    var activeKaraokeQuantity = activeCharges
-        .Where(x => string.Equals(x.ChargeType, "karaoke", StringComparison.Ordinal))
-        .Sum(x => x.Quantity);
     var activeAdjustments = activeCharges
         .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
         .ToList();
-    var chargeTotal = activeCharges.Sum(x => x.Amount);
+    var chargeTotal = activeAdjustments.Sum(x => x.Amount);
     var orderItemGroups = Model.OrderItems
         .GroupBy(x => x.CategoryName)
         .ToList();
@@ -26,6 +43,11 @@
             <div class="slip-create__panel-title">
                 <h2>オーダー一覧</h2>
             </div>
+
+            @if (showKaraokeOrderRow && Model.IsOpenSlip)
+            {
+                <form method="post" asp-page-handler="SaveKaraoke" id="detailKaraokeForm" data-detail-karaoke-form></form>
+            }
 
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0 slip-detail-table slip-detail-table--orders">
@@ -48,7 +70,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (activeOrders.Count == 0)
+                        @if (activeNonKaraokeOrders.Count == 0 && !showKaraokeOrderRow)
                         {
                             <tr>
                                 <td colspan="6" class="text-muted">注文はまだ登録されていません。</td>
@@ -56,7 +78,7 @@
                         }
                         else
                         {
-                            @foreach (var order in activeOrders)
+                            @foreach (var order in activeNonKaraokeOrders)
                             {
                                 <tr>
                                     <td class="slip-detail-table__time">@Model.FormatStoreTime(order.OrderedAt)</td>
@@ -70,6 +92,39 @@
                                             <input type="hidden" name="orderLineId" value="@order.OrderLineId" />
                                             <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
                                         </form>
+                                    </td>
+                                </tr>
+                            }
+
+                            @if (showKaraokeOrderRow)
+                            {
+                                <tr>
+                                    <td class="slip-detail-table__time">@Model.FormatStoreTime(karaokeOrderedAt)</td>
+                                    <td class="slip-detail-table__primary">カラオケ</td>
+                                    <td class="slip-detail-table__amount text-end">@karaokeUnitPrice.ToString("N0")</td>
+                                    <td class="slip-detail-table__quantity text-end">
+                                        @if (Model.IsOpenSlip)
+                                        {
+                                            <input form="detailKaraokeForm" type="hidden" name="SlipId" value="@detail.SlipId" />
+                                            <input form="detailKaraokeForm" type="hidden" name="KaraokeLines[0].SlipId" value="@detail.SlipId" />
+                                            <input form="detailKaraokeForm" type="hidden" name="KaraokeLines[0].Quantity" value="@activeKaraokeQuantity" data-detail-karaoke-input />
+                                            <div class="quantity-stepper quantity-stepper--compact">
+                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-detail-karaoke-decrement>-</button>
+                                                <strong data-detail-karaoke-display>@activeKaraokeQuantity.ToString("0")</strong>
+                                                <button class="btn btn-outline-primary btn-sm" type="button" data-detail-karaoke-increment>+</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @activeKaraokeQuantity.ToString("0.##")
+                                        }
+                                    </td>
+                                    <td class="slip-detail-table__amount text-end" data-detail-karaoke-amount data-detail-karaoke-unit-price="@karaokeUnitPrice">@karaokeAmount.ToString("N0")</td>
+                                    <td class="slip-detail-table__action text-end">
+                                        @if (Model.IsOpenSlip)
+                                        {
+                                            <button class="btn btn-primary btn-sm" type="submit" form="detailKaraokeForm" data-detail-karaoke-save disabled>保存</button>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -89,8 +144,8 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th colspan="4">会計額</th>
-                            <th class="slip-detail-table__amount text-end">@activeOrderTotal.ToString("N0")</th>
+                            <th colspan="4">商品小計</th>
+                            <th class="slip-detail-table__amount text-end" data-detail-order-total data-detail-order-base-total="@nonKaraokeOrderTotal">@activeOrderTotal.ToString("N0")</th>
                             <th class="slip-detail-table__action">円</th>
                         </tr>
                     </tfoot>
@@ -100,7 +155,7 @@
 
         <div class="slip-create__panel">
             <div class="slip-create__panel-title">
-                <h2>別枠明細</h2>
+                <h2>自由入力明細</h2>
                 <span class="badge text-bg-secondary">@chargeTotal.ToString("N0") 円</span>
             </div>
 
@@ -121,15 +176,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (activeCharges.Count == 0)
+                        @if (activeAdjustments.Count == 0)
                         {
                             <tr>
-                                <td colspan="4" class="text-muted">別枠明細はまだ登録されていません。</td>
+                                <td colspan="4" class="text-muted">自由入力明細はまだ登録されていません。</td>
                             </tr>
                         }
                         else
                         {
-                            @foreach (var charge in activeCharges)
+                            @foreach (var charge in activeAdjustments)
                             {
                                 <tr>
                                     <td>@charge.ChargeTypeDisplayName</td>
@@ -146,20 +201,6 @@
             @if (Model.IsOpenSlip)
             {
                 <div class="slip-charge-editor">
-                    <form method="post" asp-page-handler="SaveKaraoke" class="slip-charge-editor__karaoke" data-detail-karaoke-form>
-                        <input type="hidden" asp-for="SlipId" />
-                        <input type="hidden" name="KaraokeLines[0].SlipId" value="@detail.SlipId" />
-                        <input type="hidden" name="KaraokeLines[0].Quantity" value="@activeKaraokeQuantity" data-detail-karaoke-input />
-                        <span>カラオケ</span>
-                        <div class="quantity-stepper">
-                            <button class="btn btn-outline-secondary" type="button" data-detail-karaoke-decrement>-</button>
-                            <strong data-detail-karaoke-display>@activeKaraokeQuantity.ToString("0")</strong>
-                            <button class="btn btn-outline-primary" type="button" data-detail-karaoke-increment>+</button>
-                        </div>
-                        <span>200 円/回</span>
-                        <button class="btn btn-primary" type="submit" data-detail-karaoke-save disabled>保存</button>
-                    </form>
-
                     <form method="post" asp-page-handler="SaveAdjustments" data-adjustment-form>
                         <input type="hidden" asp-for="SlipId" />
                         <div class="slip-create__panel-title">

@@ -65,6 +65,7 @@ public class SupabaseStoreOrderRepository(
             {
                 ItemId = ReadLong(row, "item_id") ?? 0,
                 ItemName = ReadString(row, "item_name") ?? string.Empty,
+                ItemType = ReadString(row, "item_type") ?? "standard",
                 DefaultPrice = ReadDecimal(row, "default_price") ?? 0,
                 CategoryCode = ReadString(row, "category_code"),
                 CategoryName = ReadString(row, "category_name") ?? "未分類",

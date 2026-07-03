@@ -6,7 +6,8 @@
         .OrderBy(x => x.LineNo)
         .ToList();
     var activeCharges = detail.ChargeLines
-        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) &&
+                    string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
         .OrderBy(x => x.LineNo)
         .ToList();
     var checkoutCashPayment = Model.CheckoutInput.Payments.FirstOrDefault(x => x.MethodCode == "cash");
@@ -149,10 +150,6 @@
                                             <strong>@Model.CheckoutTotals.NominationAmount.ToString("N0") 円</strong>
                                         </div>
                                         <div>
-                                            <span>カラオケ</span>
-                                            <strong>@Model.CheckoutTotals.KaraokeAmount.ToString("N0") 円</strong>
-                                        </div>
-                                        <div>
                                             <span>調整</span>
                                             <strong>@Model.CheckoutTotals.AdjustmentAmount.ToString("N0") 円</strong>
                                         </div>
@@ -165,12 +162,12 @@
 
                                 <section class="checkout-review__panel">
                                     <div class="checkout-review__panel-title">
-                                        <h3>別枠明細</h3>
+                                        <h3>自由入力明細</h3>
                                         <span>@activeCharges.Count 件</span>
                                     </div>
                                     @if (activeCharges.Count == 0)
                                     {
-                                        <p class="text-muted mb-0">別枠明細はありません。</p>
+                                        <p class="text-muted mb-0">自由入力明細はありません。</p>
                                     }
                                     else
                                     {

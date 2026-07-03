@@ -263,10 +263,13 @@ as $$
     order_summary as (
         select
             l.slip_id,
-            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount
+            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount,
+            coalesce(sum(l.quantity) filter (where l.status = 'active' and i.item_type = 'karaoke'), 0) as karaoke_quantity
         from target_slips s
         join public.store_order_lines l
           on l.slip_id = s.slip_id
+        left join public.store_item_master i
+          on i.item_id = l.item_id
         group by l.slip_id
     ),
     nomination_summary as (
@@ -281,8 +284,7 @@ as $$
     charge_summary as (
         select
             cl.slip_id,
-            coalesce(sum(cl.amount) filter (where cl.status = 'active'), 0) as charge_amount,
-            coalesce(sum(cl.quantity) filter (where cl.charge_type = 'karaoke' and cl.status = 'active'), 0) as karaoke_quantity
+            coalesce(sum(cl.amount) filter (where cl.charge_type = 'adjustment' and cl.status = 'active'), 0) as charge_amount
         from target_slips s
         join public.store_slip_charge_lines cl
           on cl.slip_id = s.slip_id
@@ -306,7 +308,7 @@ as $$
             coalesce(charges.charge_amount, 0),
             0
         ) as accounting_amount,
-        coalesce(charges.karaoke_quantity, 0) as karaoke_quantity,
+        coalesce(os.karaoke_quantity, 0) as karaoke_quantity,
         ts.memo
     from target_slips ts
     left join customer_summary cs
@@ -362,6 +364,7 @@ create or replace function public.get_store_order_items(p_department_id bigint)
 returns table (
     item_id bigint,
     item_name text,
+    item_type text,
     default_price numeric,
     category_code text,
     category_name text,
@@ -377,6 +380,7 @@ as $$
     select
         i.item_id,
         i.item_name,
+        i.item_type,
         i.default_price,
         c.category_code,
         coalesce(c.category_name, '未分類') as category_name,
@@ -404,6 +408,7 @@ returns table (
     category_name text,
     item_id bigint,
     item_name text,
+    item_type text,
     default_price numeric,
     sort_order integer,
     is_active boolean,
@@ -425,6 +430,7 @@ as $$
             c.category_name,
             null::bigint as item_id,
             null::text as item_name,
+            null::text as item_type,
             null::numeric as default_price,
             c.sort_order,
             c.is_active,
@@ -444,6 +450,7 @@ as $$
             c.category_name,
             i.item_id,
             i.item_name,
+            i.item_type,
             i.default_price,
             i.sort_order,
             i.is_active,
@@ -587,6 +594,17 @@ begin
         raise exception 'store_department_not_found';
     end if;
 
+    if coalesce(p_item_id, 0) > 0 and exists (
+        select 1
+        from public.store_item_master i
+        where i.item_id = p_item_id
+          and i.company_id = v_company_id
+          and i.department_id = p_department_id
+          and i.item_type = 'karaoke'
+    ) then
+        raise exception 'store_item_locked';
+    end if;
+
     if not exists (
         select 1
         from public.store_item_category_master c
@@ -696,6 +714,16 @@ as $$
 declare
     v_deleted_item_id bigint;
 begin
+    if exists (
+        select 1
+        from public.store_item_master i
+        where i.department_id = p_department_id
+          and i.item_id = p_item_id
+          and i.item_type = 'karaoke'
+    ) then
+        raise exception 'store_item_locked';
+    end if;
+
     if not exists (
         select 1
         from public.store_item_master i

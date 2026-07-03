@@ -79,7 +79,7 @@
             slipId = Model.SlipId,
             businessDayId = Model.CurrentBusinessDay?.BusinessDayId,
             castOptions = Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.DisplayName, nominationDisplay = c.SearchDisplayName, department = c.DepartmentName }),
-            orderItems = Model.OrderItems.Select(x => new { id = x.ItemId, name = x.ItemName, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
+            orderItems = Model.OrderItems.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
             initialOrderQueue = Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
             showOrderModal = Model.ShowOrderModal,
             showCheckoutModal = Model.ShowCheckoutModal,

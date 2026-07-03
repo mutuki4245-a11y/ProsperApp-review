@@ -32,6 +32,7 @@ returns table (
     nomination_price numeric,
     order_line_id bigint,
     item_name_snapshot text,
+    item_type text,
     quantity numeric,
     unit_price numeric,
     amount numeric,
@@ -72,6 +73,7 @@ as $$
         null::numeric as nomination_price,
         null::bigint as order_line_id,
         null::text as item_name_snapshot,
+        null::text as item_type,
         null::numeric as quantity,
         null::numeric as unit_price,
         null::numeric as amount,
@@ -114,6 +116,7 @@ as $$
         null::text,
         null::numeric,
         null::bigint,
+        null::text,
         null::text,
         null::numeric,
         null::numeric,
@@ -159,6 +162,7 @@ as $$
         sc.status,
         coalesce(sc.nomination_price, 0),
         null::bigint,
+        null::text,
         null::text,
         null::numeric,
         null::numeric,
@@ -209,6 +213,7 @@ as $$
         null::numeric,
         ol.order_line_id,
         ol.item_name_snapshot,
+        coalesce(i.item_type, 'standard'),
         ol.quantity,
         ol.unit_price,
         ol.amount,
@@ -219,6 +224,8 @@ as $$
     from public.store_slips s
     join public.store_order_lines ol
       on ol.slip_id = s.slip_id
+    left join public.store_item_master i
+      on i.item_id = ol.item_id
     left join public.store_table_master t
       on t.table_id = s.table_id
     where s.slip_id = p_slip_id
@@ -254,6 +261,7 @@ as $$
         null::numeric,
         null::bigint,
         cl.line_name,
+        null::text,
         cl.quantity,
         cl.unit_price,
         cl.amount,
@@ -268,6 +276,7 @@ as $$
       on t.table_id = s.table_id
     where s.slip_id = p_slip_id
       and s.department_id = p_department_id
+      and cl.charge_type = 'adjustment'
     order by row_type desc, line_no asc nulls first, ordered_at asc nulls first, started_at asc nulls first;
 $$;
 
@@ -642,13 +651,28 @@ security definer
 set search_path = public
 as $$
 declare
+    v_company_id bigint;
     v_line jsonb;
     v_slip public.store_slips%rowtype;
+    v_karaoke_item public.store_item_master%rowtype;
     v_slip_id bigint;
     v_quantity numeric(10, 2);
     v_line_no integer;
+    v_order_line_id bigint;
+    v_entered_at timestamp with time zone;
     v_saved_count integer := 0;
 begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
     if not exists (
         select 1
         from public.store_business_days b
@@ -657,6 +681,20 @@ begin
           and b.status = 'open'
     ) then
         raise exception 'business_day_not_open';
+    end if;
+
+    select *
+      into v_karaoke_item
+    from public.store_item_master i
+    where i.company_id = v_company_id
+      and i.department_id = p_department_id
+      and i.item_type = 'karaoke'
+      and i.is_active = true
+    order by i.sort_order asc, i.item_id asc
+    limit 1;
+
+    if v_karaoke_item.item_id is null then
+        raise exception 'store_karaoke_item_not_found';
     end if;
 
     for v_line in
@@ -682,49 +720,91 @@ begin
             raise exception 'store_slip_not_found';
         end if;
 
+        select coalesce(min(c.entered_at), v_slip.opened_at)
+          into v_entered_at
+        from public.store_slip_customers c
+        where c.slip_id = v_slip_id
+          and c.status <> 'cancelled';
+
+        select ol.order_line_id
+          into v_order_line_id
+        from public.store_order_lines ol
+        join public.store_item_master i
+          on i.item_id = ol.item_id
+        where ol.slip_id = v_slip_id
+          and ol.status = 'active'
+          and i.item_type = 'karaoke'
+        order by ol.line_no asc
+        limit 1;
+
+        update public.store_order_lines ol
+           set status = 'voided',
+               voided_at = coalesce(ol.voided_at, now()),
+               updated_at = now()
+        from public.store_item_master i
+        where i.item_id = ol.item_id
+          and ol.slip_id = v_slip_id
+          and ol.status = 'active'
+          and i.item_type = 'karaoke'
+          and (v_order_line_id is null or ol.order_line_id <> v_order_line_id);
+
+        if v_quantity <= 0 then
+            if v_order_line_id is not null then
+                update public.store_order_lines ol
+                   set status = 'voided',
+                       voided_at = coalesce(ol.voided_at, now()),
+                       updated_at = now()
+                 where ol.order_line_id = v_order_line_id;
+            end if;
+        elsif v_order_line_id is null then
+            v_line_no := coalesce((
+                select max(ol.line_no)
+                from public.store_order_lines ol
+                where ol.slip_id = v_slip_id
+            ), 0) + 1;
+
+            insert into public.store_order_lines (
+                slip_id,
+                line_no,
+                item_id,
+                item_name_snapshot,
+                quantity,
+                unit_price,
+                amount,
+                ordered_at,
+                status
+            )
+            values (
+                v_slip_id,
+                v_line_no,
+                v_karaoke_item.item_id,
+                v_karaoke_item.item_name,
+                v_quantity,
+                v_karaoke_item.default_price,
+                v_karaoke_item.default_price * v_quantity,
+                v_entered_at,
+                'active'
+            );
+        else
+            update public.store_order_lines ol
+               set item_id = v_karaoke_item.item_id,
+                   item_name_snapshot = v_karaoke_item.item_name,
+                   quantity = v_quantity,
+                   unit_price = v_karaoke_item.default_price,
+                   amount = v_karaoke_item.default_price * v_quantity,
+                   ordered_at = v_entered_at,
+                   status = 'active',
+                   voided_at = null,
+                   updated_at = now()
+             where ol.order_line_id = v_order_line_id;
+        end if;
+
         update public.store_slip_charge_lines cl
            set status = 'voided',
                updated_at = now()
          where cl.slip_id = v_slip_id
            and cl.charge_type = 'karaoke'
            and cl.status = 'active';
-
-        if v_quantity > 0 then
-            v_line_no := coalesce((
-                select max(cl.line_no)
-                from public.store_slip_charge_lines cl
-                where cl.slip_id = v_slip_id
-            ), 0) + 1;
-
-            insert into public.store_slip_charge_lines (
-                slip_id,
-                business_day_id,
-                business_date,
-                company_id,
-                department_id,
-                line_no,
-                charge_type,
-                line_name,
-                quantity,
-                unit_price,
-                amount,
-                status
-            )
-            values (
-                v_slip_id,
-                v_slip.business_day_id,
-                v_slip.business_date,
-                v_slip.company_id,
-                v_slip.department_id,
-                v_line_no,
-                'karaoke',
-                'カラオケ',
-                v_quantity,
-                200,
-                v_quantity * 200,
-                'active'
-            );
-        end if;
 
         v_saved_count := v_saved_count + 1;
     end loop;

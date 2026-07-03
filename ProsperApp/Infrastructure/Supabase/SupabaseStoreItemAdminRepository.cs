@@ -58,6 +58,7 @@ public class SupabaseStoreItemAdminRepository(
                 CategoryCode = ReadString(row, "category_code") ?? string.Empty,
                 CategoryName = ReadString(row, "category_name") ?? string.Empty,
                 ItemName = ReadString(row, "item_name") ?? string.Empty,
+                ItemType = ReadString(row, "item_type") ?? "standard",
                 DefaultPrice = ReadDecimal(row, "default_price") ?? 0,
                 SortOrder = (int)(ReadLong(row, "sort_order") ?? 0),
                 IsActive = ReadBool(row, "is_active") ?? false,
@@ -263,6 +264,11 @@ public class SupabaseStoreItemAdminRepository(
         if (rawError.Contains("store_item_not_found", StringComparison.OrdinalIgnoreCase))
         {
             return "削除対象の商品が見つかりません。";
+        }
+
+        if (rawError.Contains("store_item_locked", StringComparison.OrdinalIgnoreCase))
+        {
+            return "カラオケ商品は削除できません。";
         }
 
         if (rawError.Contains("invalid_store_item_order", StringComparison.OrdinalIgnoreCase))

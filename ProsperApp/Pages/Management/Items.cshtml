@@ -171,6 +171,10 @@
                                         <div class="item-admin__field item-admin__field--name">
                                             <label>商品名</label>
                                             <strong>@item.ItemName</strong>
+                                            @if (item.IsKaraoke)
+                                            {
+                                                <span class="badge text-bg-secondary">システム商品</span>
+                                            }
                                         </div>
                                         <div class="item-admin__field">
                                             <label>価格</label>
@@ -188,10 +192,17 @@
                                             <label>指名バック</label>
                                             <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
                                         </div>
-                                        <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
-                                            <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
-                                            <button class="btn btn-outline-danger" type="submit">削除</button>
-                                        </form>
+                                        @if (item.IsKaraoke)
+                                        {
+                                            <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
+                                        }
+                                        else
+                                        {
+                                            <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
+                                                <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
+                                                <button class="btn btn-outline-danger" type="submit">削除</button>
+                                            </form>
+                                        }
                                         <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
@@ -241,6 +252,10 @@
                                         <div class="item-admin__field item-admin__field--name">
                                             <label>商品名</label>
                                             <strong>@item.ItemName</strong>
+                                            @if (item.IsKaraoke)
+                                            {
+                                                <span class="badge text-bg-secondary">システム商品</span>
+                                            }
                                         </div>
                                         <div class="item-admin__field">
                                             <label>価格</label>
@@ -258,10 +273,17 @@
                                             <label>指名バック</label>
                                             <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
                                         </div>
-                                        <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
-                                            <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
-                                            <button class="btn btn-outline-danger" type="submit">削除</button>
-                                        </form>
+                                        @if (item.IsKaraoke)
+                                        {
+                                            <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
+                                        }
+                                        else
+                                        {
+                                            <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
+                                                <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
+                                                <button class="btn btn-outline-danger" type="submit">削除</button>
+                                            </form>
+                                        }
                                         <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>

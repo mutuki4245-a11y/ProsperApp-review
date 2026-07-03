@@ -36,7 +36,7 @@ public class CheckoutTotals
     public decimal NominationAmount { get; set; }
     public decimal KaraokeAmount { get; set; }
     public decimal AdjustmentAmount { get; set; }
-    public decimal ChargeAmount => KaraokeAmount + AdjustmentAmount;
+    public decimal ChargeAmount => AdjustmentAmount;
     public decimal TotalAmount { get; set; }
 }
 

@@ -296,11 +296,13 @@ public class SlipDetailOrderLine
     public long OrderLineId { get; set; }
     public int LineNo { get; set; }
     public string ItemNameSnapshot { get; set; } = string.Empty;
+    public string ItemType { get; set; } = "standard";
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal Amount { get; set; }
     public DateTimeOffset OrderedAt { get; set; }
     public string Status { get; set; } = string.Empty;
+    public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
 }
 
 public class SlipDetailChargeLine

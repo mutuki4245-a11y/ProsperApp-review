@@ -222,22 +222,18 @@ public partial class SlipEditModel
         var nominationAmount = Detail?.Nominations
             .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
             .Sum(x => x.NominationPrice) ?? 0;
-        var karaokeAmount = Detail?.ChargeLines
-            .Where(x => string.Equals(x.ChargeType, "karaoke", StringComparison.Ordinal) &&
-                        string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .Sum(x => x.Amount) ?? 0;
         var adjustmentAmount = Detail?.ChargeLines
             .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal) &&
                         string.Equals(x.Status, "active", StringComparison.Ordinal))
             .Sum(x => x.Amount) ?? 0;
-        var total = subtotal + serviceTax + nominationAmount + karaokeAmount + adjustmentAmount;
+        var total = subtotal + serviceTax + nominationAmount + adjustmentAmount;
 
         return new CheckoutTotals
         {
             SubtotalAmount = subtotal,
             ServiceTaxAmount = serviceTax,
             NominationAmount = nominationAmount,
-            KaraokeAmount = karaokeAmount,
+            KaraokeAmount = 0,
             AdjustmentAmount = adjustmentAmount,
             TotalAmount = Math.Max(total, 0)
         };

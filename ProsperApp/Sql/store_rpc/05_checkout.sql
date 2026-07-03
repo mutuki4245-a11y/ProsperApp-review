@@ -105,6 +105,7 @@ begin
       into v_charge_amount
     from public.store_slip_charge_lines cl
     where cl.slip_id = p_slip_id
+      and cl.charge_type = 'adjustment'
       and cl.status = 'active';
 
     v_service_tax_amount := round(v_subtotal_amount * 0.20, 0);

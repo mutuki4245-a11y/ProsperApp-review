@@ -111,6 +111,8 @@
     const detailKaraokeForm = document.querySelector('[data-detail-karaoke-form]');
     const detailKaraokeInput = document.querySelector('[data-detail-karaoke-input]');
     const detailKaraokeDisplay = document.querySelector('[data-detail-karaoke-display]');
+    const detailKaraokeAmount = document.querySelector('[data-detail-karaoke-amount]');
+    const detailOrderTotal = document.querySelector('[data-detail-order-total]');
     const detailKaraokeSave = document.querySelector('[data-detail-karaoke-save]');
     const adjustmentForm = document.querySelector('[data-adjustment-form]');
     const adjustmentList = document.querySelector('[data-adjustment-list]');
@@ -146,6 +148,15 @@
         }
         if (detailKaraokeDisplay) {
             detailKaraokeDisplay.textContent = String(normalized);
+        }
+        if (detailKaraokeAmount) {
+            const unitPrice = Number(detailKaraokeAmount.dataset.detailKaraokeUnitPrice ?? 200);
+            detailKaraokeAmount.textContent = formatYen(unitPrice * normalized).replace(' 円', '');
+        }
+        if (detailOrderTotal) {
+            const baseTotal = Number(detailOrderTotal.dataset.detailOrderBaseTotal ?? 0);
+            const unitPrice = Number(detailKaraokeAmount?.dataset.detailKaraokeUnitPrice ?? 200);
+            detailOrderTotal.textContent = formatYen(baseTotal + unitPrice * normalized).replace(' 円', '');
         }
         if (detailKaraokeSave) {
             detailKaraokeSave.disabled = !markDirty;

@@ -16,12 +16,12 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 
 | ファイル | 役割 |
 | --- | --- |
-| `Sql/store_order_accounting_tables.sql` | 店舗営業、伝票、客行、指名、注文、自由入力/カラオケ、会計、締め調整のテーブル定義。RLS有効化、`updated_at` トリガー、主要インデックスを含む。 |
+| `Sql/store_order_accounting_tables.sql` | 店舗営業、伝票、客行、指名、注文、自由入力調整、会計、締め調整のテーブル定義。RLS有効化、`updated_at` トリガー、主要インデックスを含む。 |
 | `Sql/store_settings_functions.sql` | 店舗設定画面用RPC。`get_store_departments()` で有効店舗一覧を返す。 |
 | `Sql/store_rpc_functions.sql` | 分割済みRPCファイルの実行順を示す非実行インデックス。実行対象ではない。 |
 | `Sql/store_rpc/01_business_day.sql` | 店舗コンテキスト、営業日開始/取得/締め、勤怠、酒代、未会計伝票数を扱う。 |
 | `Sql/store_rpc/02_store_masters.sql` | 卓、キャスト、商品、商品管理、営業中/注文入力向け伝票一覧を扱う。 |
-| `Sql/store_rpc/03_slips.sql` | 伝票詳細、客追加/退店、指名追加、自由入力/カラオケ、客名更新、注文取消を扱う。 |
+| `Sql/store_rpc/03_slips.sql` | 伝票詳細、客追加/退店、指名追加、自由入力調整、カラオケ商品数量、客名更新、注文取消を扱う。 |
 | `Sql/store_rpc/04_orders.sql` | 注文登録と、バックキャスト候補用の当日出勤キャスト取得を扱う。 |
 | `Sql/store_rpc/05_checkout.sql` | 会計確定と伝票作成を扱う。 |
 | `Sql/store_rpc/06_receipts.sql` | 領収書入力、簡易入力、スキャンミス除外を扱う。 |
@@ -53,7 +53,7 @@ DB反映時の基本順序は以下。
 | マスタ | `store_table_master` | 店舗ごとの卓番。 |
 | マスタ | `cast_master` | キャスト。店舗所属と表示順を持つ。 |
 | マスタ | `store_item_category_master` | 商品カテゴリ。 |
-| マスタ | `store_item_master` | 商品マスタ。価格、キャストバック対象、バック単価、バック種別を持つ。 |
+| マスタ | `store_item_master` | 商品マスタ。価格、商品種別、キャストバック対象、バック単価、バック種別を持つ。カラオケは `item_type = 'karaoke'` のシステム商品。 |
 | マスタ | `payment_method_master` | 支払方法マスタ。 |
 | 営業日/勤怠 | `store_business_days` | 店舗ごとの営業日。営業開始/締め状態、メモ、酒代などを持つ。 |
 | 営業日/勤怠 | `store_cast_attendance` | 営業日ごとのキャスト出退勤。 |
@@ -62,7 +62,7 @@ DB反映時の基本順序は以下。
 | 伝票 | `store_slip_casts` | 伝票に紐づく指名。指名種別、同伴時刻区分、指名価格を持つ。 |
 | 注文/バック | `store_order_lines` | 商品注文行。数量、単価、取消状態を持つ。 |
 | 注文/バック | `store_order_line_cast_backs` | 注文行に紐づくバック対象キャスト。 |
-| 自由入力/カラオケ | `store_slip_charge_lines` | 商品マスタとは別枠の伝票調整行。`adjustment` と `karaoke` を扱う。 |
+| 自由入力調整 | `store_slip_charge_lines` | 商品マスタとは別枠の伝票調整行。現行運用では `adjustment` を扱い、旧カラオケ別枠行は注文行へ移行してvoid化する。 |
 | 会計 | `store_checkouts` | 会計確定結果。会計時点の小計、サービス料、合計を保存する。 |
 | 会計 | `store_checkout_payments` | 会計に紐づく支払方法別明細。 |
 | 締め調整 | `store_slip_cast_sales_adjustments` | 締め作業で行うキャスト売上額調整。 |
@@ -78,11 +78,11 @@ DB反映時の基本順序は以下。
 - 有効な `store_order_lines` の注文小計
 - 注文小計に対する20%サービス料
 - 有効な `store_slip_casts` の `nomination_price`
-- 有効な `store_slip_charge_lines` の合計
+- 有効な `store_slip_charge_lines` のうち自由入力調整の合計
 
-`store_slip_charge_lines` は商品マスタとは別枠で、会計額の調整や値引きに使う `adjustment` と、1回200円の `karaoke` を扱う。カラオケは伝票/会計上は商品注文とは別枠で表示する。
+カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、`store_order_lines` に1伝票1行で集約する。単価は1回200円固定で、注文小計に含まれるためサービス料20%の対象になる。`ordered_at` は入店時刻に合わせ、異なるタイミングで追加したカラオケも同一伝票では数量だけを更新する。
 
-会計確定時は `confirm_store_checkout` が注文、指名、自由入力/カラオケを再集計し、支払合計と照合したうえで `store_checkouts.subtotal_amount`、`store_checkouts.service_tax_amount`、`store_checkouts.total_amount` と `store_checkout_payments` を保存する。営業中一覧の表示額を確定額として信用しない。
+会計確定時は `confirm_store_checkout` が注文、指名、自由入力調整を再集計し、支払合計と照合したうえで `store_checkouts.subtotal_amount`、`store_checkouts.service_tax_amount`、`store_checkouts.total_amount` と `store_checkout_payments` を保存する。営業中一覧の表示額を確定額として信用しない。
 
 ## 5. RPC概要
 
@@ -130,13 +130,13 @@ DB反映時の基本順序は以下。
 
 | RPC | 主な用途 |
 | --- | --- |
-| `get_store_slip_detail` | 伝票詳細、客行、指名、注文、自由入力/カラオケ、会計候補を返す。 |
+| `get_store_slip_detail` | 伝票詳細、客行、指名、注文、自由入力調整、会計候補を返す。カラオケは注文行の `item_type = 'karaoke'` で判定する。 |
 | `create_store_slip` | 伝票を作成する。 |
 | `add_store_slip_customers` | 既存伝票へ客行を追加する。 |
 | `add_store_slip_nominations` | 既存伝票へ指名を追加する。 |
 | `leave_store_slip_customer` | 客行を退店扱いにする。 |
 | `save_store_slip_adjustments` | 自由入力の会計調整行を保存する。 |
-| `save_store_karaoke_lines` | 営業日内のカラオケ回数を伝票単位のJSON payloadで保存する。 |
+| `save_store_karaoke_lines` | 営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
 | `update_store_slip_customer_label` | 客行の表示名を更新する。 |
 | `void_store_order_line` | 注文行を取消する。 |
 

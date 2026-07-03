@@ -58,8 +58,10 @@ declare
     v_quantity numeric(10, 2);
     v_cast_back_cast_id bigint;
     v_order_line_id bigint;
+    v_existing_order_line_id bigint;
     v_back_unit_amount numeric(12, 0);
     v_line_no integer;
+    v_entered_at timestamp with time zone;
     v_inserted_count integer := 0;
 begin
     select d.company_id
@@ -110,7 +112,7 @@ begin
             raise exception 'store_order_item_not_found';
         end if;
 
-        if v_cast_back_cast_id is not null and not exists (
+        if v_cast_back_cast_id is not null and v_item.is_cast_back_target and not exists (
             select 1
             from public.store_cast_attendance a
             join public.cast_master c
@@ -124,6 +126,89 @@ begin
               and c.status = 'active'
         ) then
             raise exception 'store_order_attendance_cast_not_found';
+        end if;
+
+        if v_item.item_type = 'karaoke' then
+            select coalesce(min(c.entered_at), v_slip.opened_at)
+              into v_entered_at
+            from public.store_slip_customers c
+            where c.slip_id = v_line_slip_id
+              and c.status <> 'cancelled';
+
+            select ol.order_line_id
+              into v_existing_order_line_id
+            from public.store_order_lines ol
+            join public.store_item_master i
+              on i.item_id = ol.item_id
+            where ol.slip_id = v_line_slip_id
+              and ol.status = 'active'
+              and i.item_type = 'karaoke'
+            order by ol.line_no asc
+            limit 1;
+
+            update public.store_order_lines ol
+               set status = 'voided',
+                   voided_at = coalesce(ol.voided_at, now()),
+                   updated_at = now()
+            from public.store_item_master i
+            where i.item_id = ol.item_id
+              and ol.slip_id = v_line_slip_id
+              and ol.status = 'active'
+              and i.item_type = 'karaoke'
+              and (v_existing_order_line_id is null or ol.order_line_id <> v_existing_order_line_id);
+
+            if v_existing_order_line_id is null then
+                v_line_no := coalesce((
+                    select max(l.line_no)
+                    from public.store_order_lines l
+                    where l.slip_id = v_line_slip_id
+                ), 0) + 1;
+
+                insert into public.store_order_lines (
+                    slip_id,
+                    line_no,
+                    item_id,
+                    item_name_snapshot,
+                    quantity,
+                    unit_price,
+                    amount,
+                    ordered_at,
+                    status
+                )
+                values (
+                    v_line_slip_id,
+                    v_line_no,
+                    v_item.item_id,
+                    v_item.item_name,
+                    v_quantity,
+                    v_item.default_price,
+                    v_item.default_price * v_quantity,
+                    v_entered_at,
+                    'active'
+                );
+            else
+                update public.store_order_lines ol
+                   set item_id = v_item.item_id,
+                       item_name_snapshot = v_item.item_name,
+                       quantity = ol.quantity + v_quantity,
+                       unit_price = v_item.default_price,
+                       amount = v_item.default_price * (ol.quantity + v_quantity),
+                       ordered_at = v_entered_at,
+                       status = 'active',
+                       voided_at = null,
+                       updated_at = now()
+                 where ol.order_line_id = v_existing_order_line_id;
+            end if;
+
+            update public.store_slip_charge_lines cl
+               set status = 'voided',
+                   updated_at = now()
+             where cl.slip_id = v_line_slip_id
+               and cl.charge_type = 'karaoke'
+               and cl.status = 'active';
+
+            v_inserted_count := v_inserted_count + 1;
+            continue;
         end if;
 
         v_line_no := coalesce((

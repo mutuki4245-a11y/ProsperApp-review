@@ -28,6 +28,7 @@ public class StoreOrderItemOption
 {
     public long ItemId { get; set; }
     public string ItemName { get; set; } = string.Empty;
+    public string ItemType { get; set; } = "standard";
     public decimal DefaultPrice { get; set; }
     public string? CategoryCode { get; set; }
     public string CategoryName { get; set; } = "未分類";
@@ -35,6 +36,7 @@ public class StoreOrderItemOption
     public decimal CastBackRegularUnitAmount { get; set; }
     public decimal CastBackNominationUnitAmount { get; set; }
     public string CastBackType { get; set; } = "drink";
+    public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
 }
 
 public class StoreOrderAttendanceCastOption

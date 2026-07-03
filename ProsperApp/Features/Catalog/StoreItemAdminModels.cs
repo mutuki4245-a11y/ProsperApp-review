@@ -34,6 +34,8 @@ public class StoreItemAdminItem
 
     public string ItemName { get; set; } = string.Empty;
 
+    public string ItemType { get; set; } = "standard";
+
     public decimal DefaultPrice { get; set; }
 
     public int SortOrder { get; set; }
@@ -47,6 +49,8 @@ public class StoreItemAdminItem
     public decimal CastBackNominationUnitAmount { get; set; }
 
     public string CastBackType { get; set; } = "drink";
+
+    public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
 }
 
 public class StoreItemOrderInputModel

@@ -231,6 +231,7 @@ public class SupabaseStoreSlipRepository(
                     OrderLineId = ReadLong(row, "order_line_id") ?? 0,
                     LineNo = (int)(ReadLong(row, "line_no") ?? 0),
                     ItemNameSnapshot = ReadString(row, "item_name_snapshot") ?? string.Empty,
+                    ItemType = ReadString(row, "item_type") ?? "standard",
                     Quantity = ReadDecimal(row, "quantity") ?? 0,
                     UnitPrice = ReadDecimal(row, "unit_price") ?? 0,
                     Amount = ReadDecimal(row, "amount") ?? 0,
@@ -670,6 +671,11 @@ public class SupabaseStoreSlipRepository(
         if (rawError.Contains("invalid_karaoke_quantity", StringComparison.OrdinalIgnoreCase))
         {
             return "カラオケ回数を確認してください。";
+        }
+
+        if (rawError.Contains("store_karaoke_item_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "商品マスタのカラオケ商品を確認してください。";
         }
 
         if (rawError.Contains("invalid_customer_count", StringComparison.OrdinalIgnoreCase))
