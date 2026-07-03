@@ -130,6 +130,14 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `delete_store_item(p_department_id, p_item_id)`
 - `add_store_order_lines(p_department_id, p_slip_id, p_order_lines)`
 - `create_store_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_nominations, p_memo)`
+  - `p_cast_nominations` は `cast_id`, `nomination_type`, `companion_time`, `nomination_price` を持つJSON配列です。
+  - `nomination_price` は1000円から20000円まで1000円刻みで、会計額へ加算します。
+- `save_store_slip_adjustments(p_department_id, p_slip_id, p_adjustment_lines)`
+  - 通常商品とは別枠の自由入力明細を保存します。商品マスタへは登録しません。
+  - `amount` は負値を許容し、会計合計額へ直接加減します。
+- `save_store_karaoke_lines(p_department_id, p_business_day_id, p_karaoke_lines)`
+  - 通常商品とは別枠のカラオケ明細を一括保存します。
+  - カラオケは1回200円固定で、数量0はアクティブ行を残しません。
 
 ### 領収書
 
@@ -168,6 +176,8 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - 営業中の営業日がない場合は「最初の入力で営業日を自動作成」と表示し、明示的な営業日開始ボタンは置きません。
   - 酒代、領収書、営業日締めなど勤怠以外の締め作業は `/Closing` に集約します。
   - 伝票一覧は大きな枠付きパネルにまとめず、スタッフが一覧からすぐ伝票へ入れる構成を優先します。
+  - 伝票一覧の会計額は常に隠し、右下寄りの固定オーバーレイボタンに触れている間だけ表示します。
+  - 営業中カラオケは伝票行の `+` / `-` で画面内ドラフトを即時更新し、最後の操作から短時間後に差分だけ自動保存します。手動保存ボタンは置かず、伝票詳細へ遷移する前にも未保存分の保存を短く試みます。失敗時は `localStorage` の未送信ドラフトを残します。
 
 - `/Management`
   - 上部タブの `マスタ設定` 入口です。
@@ -191,6 +201,9 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `/Slips/Edit`
   - 伝票詳細、客追加、指名追加、オーダー追加、会計処理。
   - 営業中画面の当日伝票一覧から遷移します。
+  - 指名追加は本指名をデフォルトにし、指名種別の次に1000円から20000円までの指名価格を選択します。
+  - 自由入力明細とカラオケは通常商品とは別枠で伝票/会計に表示します。
+  - 会計確定後は `ReceiptPrinter` 設定が有効な場合だけ、SII向け端末側ブリッジへ領収書印刷要求を非同期送信します。印刷失敗で会計確定は取り消しません。
 
 - `/Orders`
   - オーダー入力。
