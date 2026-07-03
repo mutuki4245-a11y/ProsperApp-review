@@ -101,7 +101,7 @@ public class ReceiptsModel(
         var result = await _receiptRepository.SaveQuickEntryAsync(Input, cancellationToken);
         if (!result.Succeeded)
         {
-            ErrorMessage = "保存に失敗しました。時間をおいて再実行してください。";
+            ErrorMessage = result.ErrorMessage ?? "保存に失敗しました。時間をおいて再実行してください。";
             await LoadCurrentAsync(Index, cancellationToken);
             return Page();
         }
@@ -135,55 +135,27 @@ public class ReceiptsModel(
 
         ModelState.Clear();
 
-        if (string.IsNullOrWhiteSpace(Input.DocumentId) || string.IsNullOrWhiteSpace(Input.DriveFileId))
+        if (string.IsNullOrWhiteSpace(Input.DocumentId))
         {
-            ErrorMessage = "証憑またはDriveファイルIDが取得できません。";
+            ErrorMessage = "証憑IDが取得できません。";
             await LoadCurrentAsync(Index, cancellationToken);
             return Page();
         }
-
-        var configurationError = _googleDriveAuthService.ConfigurationErrorMessage;
-        if (!string.IsNullOrWhiteSpace(configurationError))
-        {
-            ErrorMessage = configurationError;
-            await LoadCurrentAsync(Index, cancellationToken);
-            return Page();
-        }
-
-        if (!await _googleDriveAuthService.HasAccessTokenAsync())
-        {
-            return RedirectToPage(
-                "/Login",
-                new { returnUrl = BuildReceiptsReturnUrl(Index), forceGoogle = true });
-        }
-
-        var trashResult = await _driveFileService.TrashFileAsync(Input.DriveFileId, cancellationToken);
-        if (!trashResult.Succeeded)
-        {
-            if (IsDriveAuthenticationFailure(trashResult.ErrorCode))
-            {
-                _googleDriveAuthService.ClearAccessToken();
-                return RedirectToPage(
-                    "/Login",
-                    new { returnUrl = BuildReceiptsReturnUrl(Index), forceGoogle = true });
-            }
-
-            ErrorMessage = $"Driveファイルの削除に失敗しました。{trashResult.ErrorCode}: {trashResult.ErrorMessage}";
-            await LoadCurrentAsync(Index, cancellationToken);
-            return Page();
-        }
-
-        _driveFileService.RemoveCachedFile(Input.DriveFileId);
 
         var updateResult = await _receiptRepository.MarkScanMistakeAsync(Input.DocumentId, cancellationToken);
         if (!updateResult.Succeeded)
         {
-            ErrorMessage = updateResult.ErrorMessage ?? "Driveファイルはゴミ箱へ移動しましたが、DBステータス更新に失敗しました。";
+            ErrorMessage = updateResult.ErrorMessage ?? "DBステータス更新に失敗しました。";
             await LoadCurrentAsync(Index, cancellationToken);
             return Page();
         }
 
-        SuccessMessage = "スキャンミスとして削除しました。";
+        if (!string.IsNullOrWhiteSpace(Input.DriveFileId))
+        {
+            _driveFileService.RemoveCachedFile(Input.DriveFileId);
+        }
+
+        SuccessMessage = "スキャンミスとして対象外にしました。";
         return await RedirectAfterReceiptChangeAsync(Index, cancellationToken);
     }
 
@@ -341,12 +313,6 @@ public class ReceiptsModel(
         {
             return TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
         }
-    }
-
-    private static bool IsDriveAuthenticationFailure(string? errorCode)
-    {
-        return errorCode is "missing_access_token" ||
-               errorCode?.EndsWith("_401", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     public sealed record AccountSubjectGroup(string Name, IReadOnlyList<string> Items);

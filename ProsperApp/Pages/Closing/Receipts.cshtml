@@ -164,8 +164,8 @@
                                 formmethod="post"
                                 asp-page-handler="DeleteScanMistake"
                                 formnovalidate
-                                onclick="return confirm('スキャンミスとして、このPDFをGoogle Driveのゴミ箱へ移動し、DBを対象外にします。実行しますか？');">
-                            スキャンミスとして削除
+                                onclick="return confirm('スキャンミスとしてDB上で対象外にします。実行しますか？');">
+                            スキャンミスとして対象外
                         </button>
                     </div>
                 </form>
@@ -220,4 +220,3 @@
         })();
     </script>
 }
-

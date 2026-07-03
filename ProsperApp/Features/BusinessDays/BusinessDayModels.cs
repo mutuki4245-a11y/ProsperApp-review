@@ -106,7 +106,8 @@ public class BusinessDayClosingReadiness
         IsDrinkDeliveryAmountEntered &&
         AttendanceCount > 0 &&
         MissingClockOutCount == 0 &&
-        IsCastSalesAdjustmentCompleted;
+        IsCastSalesAdjustmentCompleted &&
+        (!ReceiptsEnabled || PendingReceiptCount == 0);
 
     public IReadOnlyList<string> BlockReasons
     {
@@ -141,6 +142,11 @@ public class BusinessDayClosingReadiness
             if (!IsCastSalesAdjustmentCompleted)
             {
                 reasons.Add("キャスト売上額調整が未完了です。");
+            }
+
+            if (ReceiptsEnabled && PendingReceiptCount > 0)
+            {
+                reasons.Add($"未入力領収書が {PendingReceiptCount} 件あります。");
             }
 
             return reasons;

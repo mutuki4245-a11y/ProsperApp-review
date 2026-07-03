@@ -5,7 +5,7 @@ using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class OpeningCastsModel(
+public class ManagementCastsModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     IStoreCastAdminRepository castAdminRepository) : PageModel

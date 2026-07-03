@@ -858,6 +858,7 @@ declare
     v_attendance_count integer;
     v_missing_clock_out_count integer;
     v_cast_sales_adjustment_missing_count integer;
+    v_pending_receipt_count integer;
 begin
     select *
       into v_business_day
@@ -907,6 +908,18 @@ begin
 
     if coalesce(v_cast_sales_adjustment_missing_count, 0) > 0 then
         raise exception 'cast_sales_adjustment_required:%', v_cast_sales_adjustment_missing_count;
+    end if;
+
+    if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
+        select count(*)::integer
+          into v_pending_receipt_count
+        from public.documents d
+        where d.department_id = p_department_id
+          and d.status = p_pending_receipt_status;
+
+        if coalesce(v_pending_receipt_count, 0) > 0 then
+            raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
+        end if;
     end if;
 
     return query

@@ -10,12 +10,12 @@
 
 - DB操作は原則 Supabase RPC 経由で行います。
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
-- Supabase RPCのHTTP送信、API keyヘッダー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。
+- Supabase RPCのHTTP送信、API keyヘッダー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。`SUPABASE_RPC_EDGE_FUNCTION_URL` または `Supabase:Mode=edge-function` が設定されている場合はEdge Function経由で呼び出します。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。
-- アプリログインはGoogle認証に統一します。共有パスワードの端末ログインは使いません。
+- アプリログインはGoogle認証に統一します。
 - Googleログインの許可対象は `GoogleAuth:AllowedEmails` または `GoogleAuth:AllowedDomains` で明示します。
 - Google Driveプレビューはアプリサーバー経由で取得します。
 - 秘密情報、Supabase SecretKey、Google認証情報はローカル設定に保存しません。
@@ -71,9 +71,11 @@
   - mieu本店の卓番マスタ初期データです。
   - `store_table_master` に卓番 `A1` から `A6`、`B1` から `B6`、`C1` から `C6` を登録します。
 
-## Supabaseで実行が必要なSQL
+## SQL参照とDB反映
 
-本番/開発DBに未反映の場合、Supabase SQL Editorで以下を実行してください。
+SQLファイルは現在のDB定義を確認するための参照資料です。DB定義の変更はCodexがSupabase CLIまたはSupabaseコネクタで実行し、実行後にSQLファイルを現在定義へ合わせます。
+
+参照時の順序は以下です。
 
 1. `Sql/store_order_accounting_tables.sql`
 2. `Sql/store_settings_functions.sql`
@@ -88,7 +90,7 @@
 11. 必要に応じて `Sql/store_table_master_seed.sql`
 12. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
-`agent_schema_reference.sql` と `store_rpc_functions.sql` は実行しないでください。
+`agent_schema_reference.sql` と `store_rpc_functions.sql` は実行対象ではありません。
 
 ## 主要RPC
 
@@ -135,6 +137,8 @@
 - `get_pending_receipts(p_department_id, p_status)`
 - `quick_enter_receipt(p_department_id, p_document_id, p_payment_date, p_amount, p_account_subject, p_description, p_group_code, p_status)`
 - `mark_receipt_scan_mistake(p_department_id, p_document_id, p_status)`
+  - 領収書の管理入力は、保存前にDocManagementの `document-api` / `save_journal_payload` 契約へ送信します。
+  - スキャンミス除外はDriveファイルを削除せず、DB上のステータス更新で入力対象から外します。
 
 ## 画面構成
 
@@ -171,16 +175,12 @@
   - キャスト情報と商品情報は、営業日前の必須作業ではなく、ここから任意のタイミングで開く導線にします。
   - 管理メニューも操作パネルの縦並びを維持します。
 
-- `/Opening`
-  - 旧URL互換用です。
-  - 営業日は自動作成するため、GET/POSTとも営業中画面へリダイレクトします。
+- `/Management/Casts`
+  - マスタ設定タブから開くキャスト情報確認/編集導線用です。
+  - 登録済みキャスト確認、キャスト作成、キャスト削除を扱います。
 
-- `/Opening/Casts`
-  - マスタ設定タブから開くキャスト情報確認/編集導線用。
-  - 現時点では登録済みキャスト確認が中心です。
-
-- `/Opening/Items`
-  - マスタ設定タブから開く商品管理。
+- `/Management/Items`
+  - マスタ設定タブから開く商品管理です。
   - 非管理者はカテゴリを編集できません。
   - 商品名は店舗内uniqueです。
   - 商品コード、商品表示順など利用者が判断しづらい項目は画面に出しません。
@@ -202,10 +202,10 @@
   - 締め作業画面。
   - 酒代入力、勤怠確認、キャスト売上額調整、領収書入力を縦並びの独立パネルで表示します。
   - 営業日締めは通常の作業パネルから分離し、締め条件と最終実行ボタンを下部にまとめます。
-  - 酒代入力、勤怠確認、キャスト売上額調整は締め前の必須作業です。未完了の必須作業は赤、領収書の未入力など確認対象は橙、完了は緑で表示します。
+  - 酒代入力、勤怠確認、キャスト売上額調整、領収書入力は締め前の必須作業です。未完了の必須作業は赤、確認対象は橙、完了は緑で表示します。
   - キャスト売上額調整は `/Closing/CastSalesAdjustment` の専用ページで、会計済みかつ指名キャストがいる伝票を一覧表示し、客名とキャストごとの売上分配額を一覧上で確認できるようにします。売上額調整は行末のボタンから開くモーダルで保存します。
-  - 領収書入力は未入力がある場合に要確認として表示しますが、営業日締めのブロック条件にはしません。
-  - 営業日締めは、未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済みを満たした場合だけ実行できます。画面POSTと `close_business_day` RPCの両方で同じ条件を検証します。
+  - 領収書入力は未入力がある場合に要入力として表示し、営業日締めのブロック条件にします。
+  - 営業日締めは、未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済み、領収書入力完了を満たした場合だけ実行できます。画面POSTと `close_business_day` RPCの両方で同じ条件を検証します。
 
 - `/Closing/Attendance`
   - 出勤登録を統合した勤怠入力画面。
@@ -215,7 +215,9 @@
 
 - `/Closing/Receipts`
   - 領収書簡易入力。
-  - Google Driveプレビュー、Supabase RPC更新、スキャンミス除外、PDF先読みキャッシュを含みます。
+  - Google Driveプレビュー、DocManagement `document-api` への `save_journal_payload` 送信、Supabase RPC更新、スキャンミス除外、PDF先読みキャッシュを含みます。
+  - 入力保存時はDocManagement契約の `journal_entries`、`journal_entry_lines`、`document_journal_links` を先に保存し、成功後に領収書ステータスを完了へ更新します。
+  - スキャンミス除外はDB上の論理削除として扱い、Driveファイルは削除しません。
   - Driveファイルの取得は画面ではなく `/DrivePreview/{driveFileId}` endpoint で行います。
 
 - `/Login`

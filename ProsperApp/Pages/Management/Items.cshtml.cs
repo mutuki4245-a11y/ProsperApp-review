@@ -5,7 +5,7 @@ using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class OpeningItemsModel(
+public class ManagementItemsModel(
     IFeatureGate featureGate,
     IStoreItemAdminRepository itemAdminRepository,
     ILocalSettingsProvider localSettingsProvider) : PageModel

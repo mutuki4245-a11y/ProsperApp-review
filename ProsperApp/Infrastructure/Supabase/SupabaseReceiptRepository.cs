@@ -9,9 +9,11 @@ namespace ProsperApp.Services;
 public class SupabaseReceiptRepository(
     ISupabaseRpcClient rpcClient,
     IOptions<SupabaseOptions> options,
+    IDocumentApiClient documentApiClient,
     ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IReceiptRepository
 {
     private readonly SupabaseOptions _options = options.Value;
+    private readonly IDocumentApiClient _documentApiClient = documentApiClient;
 
     public async Task<IReadOnlyList<PendingReceiptItem>> GetPendingAsync(CancellationToken ct)
     {
@@ -43,6 +45,28 @@ public class SupabaseReceiptRepository(
         if (!HasMutationSettings())
         {
             return SaveReceiptResult.Failed("Supabase SecretKeyが未設定です。領収書を更新できません。");
+        }
+
+        if (string.IsNullOrWhiteSpace(input.DocumentId) ||
+            input.PaymentDate is null ||
+            input.Amount is not > 0 ||
+            string.IsNullOrWhiteSpace(input.AccountSubject) ||
+            string.IsNullOrWhiteSpace(input.Description))
+        {
+            return SaveReceiptResult.Failed("領収書保存に必要な入力が不足しています。");
+        }
+
+        var companyId = await GetCompanyIdAsync(ct);
+        if (companyId is null)
+        {
+            return SaveReceiptResult.Failed("店舗の会社IDを取得できません。店舗設定とget_store_context RPCを確認してください。");
+        }
+
+        var payload = BuildJournalPayload(input, companyId.Value, CurrentStoreDepartmentId);
+        var documentApiResult = await _documentApiClient.SaveJournalPayloadAsync(payload, ct);
+        if (!documentApiResult.Succeeded)
+        {
+            return SaveReceiptResult.Failed(documentApiResult.ErrorMessage ?? "DocManagement連携保存に失敗しました。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -119,6 +143,91 @@ public class SupabaseReceiptRepository(
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.Id))
             .ToList();
+    }
+
+    private async Task<long?> GetCompanyIdAsync(CancellationToken ct)
+    {
+        var rows = await PostRpcArrayAsync(
+            "get_store_context",
+            new { p_department_id = CurrentStoreDepartmentId },
+            ct);
+
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var companyId = ReadLong(rows[0], "company_id");
+        return companyId is > 0 ? companyId : null;
+    }
+
+    private static DocumentJournalSavePayload BuildJournalPayload(
+        QuickEntryInputModel input,
+        long companyId,
+        long departmentId)
+    {
+        var documentId = input.DocumentId.Trim();
+        var amount = input.Amount ?? 0;
+        var memo = input.Description.Trim();
+        var journalEntryId = BuildJournalEntryId(documentId);
+
+        var payload = new DocumentJournalSavePayload();
+        payload.JournalEntries.Add(new DocumentJournalEntryRecord
+        {
+            JournalEntryId = journalEntryId,
+            JournalDate = input.PaymentDate ?? DateOnly.FromDateTime(DateTime.Today),
+            Status = "confirmed"
+        });
+        payload.JournalEntryLines.Add(new DocumentJournalEntryLineRecord
+        {
+            JournalEntryId = journalEntryId,
+            LineNo = 1,
+            Side = "debit",
+            AccountCode = ExtractDebitAccountCode(input.AccountSubject),
+            CompanyId = companyId,
+            DepartmentId = departmentId,
+            IsReducedTaxRate = false,
+            LineMemo = memo,
+            Amount = amount
+        });
+        payload.JournalEntryLines.Add(new DocumentJournalEntryLineRecord
+        {
+            JournalEntryId = journalEntryId,
+            LineNo = 2,
+            Side = "credit",
+            AccountCode = "現金",
+            CompanyId = companyId,
+            DepartmentId = null,
+            IsReducedTaxRate = false,
+            LineMemo = memo,
+            Amount = amount
+        });
+        payload.DocumentJournalLinks.Add(new DocumentJournalLinkRecord
+        {
+            JournalEntryId = journalEntryId,
+            DocumentId = documentId
+        });
+
+        return payload;
+    }
+
+    private static string BuildJournalEntryId(string documentId)
+    {
+        return $"prosper-receipt-{documentId}";
+    }
+
+    private static string ExtractDebitAccountCode(string accountSubject)
+    {
+        var normalized = accountSubject.Trim();
+        var separatorIndex = normalized.IndexOf(':');
+        if (separatorIndex < 0)
+        {
+            separatorIndex = normalized.IndexOf('：');
+        }
+
+        return separatorIndex > 0
+            ? normalized[..separatorIndex].Trim()
+            : normalized;
     }
 
     private static string ToFriendlyError(string? rawError)

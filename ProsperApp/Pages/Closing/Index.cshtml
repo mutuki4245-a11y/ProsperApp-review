@@ -118,8 +118,8 @@
                     <strong>領収書入力</strong>
                     <small>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</small>
                 </span>
-                <span class="closing-panel__badge @receiptsPanelClass">@(Model.PendingReceiptCount > 0 ? "要確認" : "確認済")</span>
-                <span class="closing-panel__action">確認</span>
+                <span class="closing-panel__badge @receiptsPanelClass">@(Model.PendingReceiptCount > 0 ? "要入力" : "入力済")</span>
+                <span class="closing-panel__action">入力</span>
             </a>
         }
     </div>

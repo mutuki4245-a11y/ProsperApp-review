@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using ProsperApp.Options;
 
@@ -26,11 +27,13 @@ public interface ISupabaseRpcClient
 
 public sealed class SupabaseRpcClient(
     HttpClient httpClient,
+    IConfiguration configuration,
     IOptions<SupabaseOptions> options) : ISupabaseRpcClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient = httpClient;
+    private readonly IConfiguration _configuration = configuration;
     private readonly SupabaseOptions _options = options.Value;
 
     public bool HasReadAccess => SupabaseApiKeyHeaders.HasReadAccess(_options);
@@ -95,13 +98,10 @@ public sealed class SupabaseRpcClient(
                 : "Supabaseキーが未設定です。");
         }
 
-        using var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{_options.Url.TrimEnd('/')}/rest/v1/rpc/{functionName}")
-        {
-            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
-        };
-        SupabaseApiKeyHeaders.Apply(request, accessKey);
+        var edgeFunctionUrl = GetRpcEdgeFunctionUrl();
+        using var request = string.IsNullOrWhiteSpace(edgeFunctionUrl)
+            ? BuildRestRpcRequest(functionName, payload, accessKey)
+            : BuildEdgeFunctionRequest(edgeFunctionUrl, functionName, payload, requireSecretKey, accessKey);
 
         try
         {
@@ -112,12 +112,113 @@ public sealed class SupabaseRpcClient(
                 return SupabaseRpcResult.Failed(body, $"HTTP {(int)response.StatusCode} {Shorten(body)}");
             }
 
-            return SupabaseRpcResult.Success(body);
+            return SupabaseRpcResult.Success(string.IsNullOrWhiteSpace(edgeFunctionUrl) ? body : NormalizeEdgeFunctionBody(body));
         }
         catch (Exception ex)
         {
             return SupabaseRpcResult.Failed($"RPC exception: {ex.GetType().Name} {ex.Message}");
         }
+    }
+
+    private HttpRequestMessage BuildRestRpcRequest<TPayload>(
+        string functionName,
+        TPayload payload,
+        string accessKey)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{_options.Url.TrimEnd('/')}/rest/v1/rpc/{functionName}")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
+        };
+        SupabaseApiKeyHeaders.Apply(request, accessKey);
+        return request;
+    }
+
+    private static HttpRequestMessage BuildEdgeFunctionRequest<TPayload>(
+        string edgeFunctionUrl,
+        string functionName,
+        TPayload payload,
+        bool requireSecretKey,
+        string accessKey)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, edgeFunctionUrl)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        function_name = functionName,
+                        payload,
+                        require_secret_key = requireSecretKey
+                    },
+                    JsonOptions),
+                Encoding.UTF8,
+                "application/json")
+        };
+        SupabaseApiKeyHeaders.Apply(request, accessKey);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessKey);
+        return request;
+    }
+
+    private string? GetRpcEdgeFunctionUrl()
+    {
+        var configuredUrl = FirstNonEmpty(
+            _configuration["SUPABASE_RPC_EDGE_FUNCTION_URL"],
+            _configuration["Supabase:RpcEdgeFunctionUrl"],
+            _options.RpcEdgeFunctionUrl);
+        if (!string.IsNullOrWhiteSpace(configuredUrl))
+        {
+            return configuredUrl.Trim();
+        }
+
+        if (!string.Equals(_options.Mode, "edge-function", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var functionName = FirstNonEmpty(_options.RpcProxyFunctionName, "prosper-rpc");
+        return string.IsNullOrWhiteSpace(_options.Url) || string.IsNullOrWhiteSpace(functionName)
+            ? null
+            : $"{_options.Url.TrimEnd('/')}/functions/v1/{functionName}";
+    }
+
+    private static string NormalizeEdgeFunctionBody(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return body;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return body;
+            }
+
+            if (document.RootElement.TryGetProperty("data", out var data))
+            {
+                return data.GetRawText();
+            }
+
+            if (document.RootElement.TryGetProperty("result", out var result))
+            {
+                return result.GetRawText();
+            }
+        }
+        catch (JsonException)
+        {
+            return body;
+        }
+
+        return body;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
     }
 
     private static string Shorten(string value)

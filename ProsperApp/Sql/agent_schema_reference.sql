@@ -538,7 +538,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     returns item_id, item_name, default_price, category_code, category_name,
 --       is_cast_back_target, cast_back_regular_unit_amount, cast_back_nomination_unit_amount, cast_back_type
 --   get_store_item_admin_catalog(p_department_id bigint)
---     returns category and item rows for Opening/Items management.
+--     returns category and item rows for Management/Items management.
 --   upsert_store_item_category(p_department_id, p_item_category_id, p_category_code, p_category_name, p_sort_order, p_is_active)
 --     inserts/updates store_item_category_master for the current store.
 --   upsert_store_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price,
