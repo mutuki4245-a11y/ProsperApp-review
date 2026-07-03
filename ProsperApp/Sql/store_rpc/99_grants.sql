@@ -38,6 +38,8 @@ declare
         'add_store_order_lines',
         'add_store_slip_customers',
         'add_store_slip_nominations',
+        'save_store_slip_adjustments',
+        'save_store_karaoke_lines',
         'leave_store_slip_customer',
         'update_store_slip_customer_label',
         'void_store_order_line',

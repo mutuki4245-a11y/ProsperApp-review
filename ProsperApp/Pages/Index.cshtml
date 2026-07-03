@@ -6,12 +6,14 @@
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
     var nominationOptions = new[]
     {
-        ("companion_18", "18:00同伴"),
-        ("companion_19", "19:00同伴"),
-        ("companion_20", "20:00同伴"),
         ("nomination", "本指名"),
-        ("in_store", "場内指名")
+        ("in_store", "場内指名"),
+        ("companion_until_1929", "同伴 19:29まで"),
+        ("companion_until_1959", "同伴 19:59まで"),
+        ("companion_until_2059", "同伴 20:59まで"),
+        ("companion_after_2100", "同伴 21:00以降")
     };
+    var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
 }
 
 <section class="store-home">
@@ -81,20 +83,42 @@
                 }
                 else
                 {
-                    <div class="slip-list">
-                        @foreach (var slip in Model.Slips)
-                        {
-                            <a class="slip-list__row slip-list__row--link" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">
-                                <strong class="slip-list__table">@slip.TableDisplayName</strong>
-                                <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
-                                <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
-                                <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
-                                <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames)</span>
-                                <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
-                                <strong class="slip-list__amount">@slip.AccountingAmount.ToString("N0") 円</strong>
-                            </a>
-                        }
-                    </div>
+                    <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDay?.BusinessDayId">
+                        <div id="businessKaraokeFields"></div>
+                        <output class="visually-hidden" data-business-karaoke-status aria-live="polite"></output>
+                        <div class="slip-list">
+                            @foreach (var slip in Model.Slips)
+                            {
+                                <article class="slip-list__row slip-list__row--action">
+                                    <a class="slip-list__row-main" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">
+                                        <strong class="slip-list__table">@slip.TableDisplayName</strong>
+                                        <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
+                                        <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
+                                        <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
+                                        <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames)</span>
+                                        <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
+                                        <span class="slip-list__amount slip-list__amount--concealed" aria-label="会計額">
+                                            <span class="slip-list__amount-mask">**** 円</span>
+                                            <strong class="slip-list__amount-value">@slip.AccountingAmount.ToString("N0") 円</strong>
+                                        </span>
+                                    </a>
+                                    @if (string.Equals(slip.Status, "open", StringComparison.Ordinal))
+                                    {
+                                        <div class="slip-list__karaoke" data-business-karaoke-row data-slip-id="@slip.SlipId" data-initial-quantity="@slip.KaraokeQuantity">
+                                            <span>カラオケ</span>
+                                            <button class="btn btn-outline-secondary" type="button" data-business-karaoke-decrement>-</button>
+                                            <strong data-business-karaoke-display>@slip.KaraokeQuantity.ToString("0")</strong>
+                                            <button class="btn btn-outline-primary" type="button" data-business-karaoke-increment>+</button>
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    </form>
+                    <button class="slip-amount-reveal" type="button" data-slip-amount-reveal aria-label="会計額を表示" aria-pressed="false">
+                        <span class="slip-amount-reveal__mark">¥</span>
+                        <span class="visually-hidden">会計額</span>
+                    </button>
                 }
             </section>
         </section>
@@ -218,6 +242,19 @@
                                                         }
                                                     }
                                                 </select>
+                                                <select class="form-select nomination-row__price" name="CreateSlipInput.CastNominations[@i].NominationPrice">
+                                                    @foreach (var price in nominationPriceOptions)
+                                                    {
+                                                        if (nomination.NominationPrice == price)
+                                                        {
+                                                            <option value="@price" selected>@price.ToString("N0") 円</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@price">@price.ToString("N0") 円</option>
+                                                        }
+                                                    }
+                                                </select>
                                                 <div class="nomination-row__cast">
                                                     <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastId" value="@nomination.CastId" data-business-cast-id />
                                                     <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastName" value="@nomination.CastName" data-business-cast-name-hidden />
@@ -267,6 +304,299 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
+            const revealButton = document.querySelector('[data-slip-amount-reveal]');
+            if (!revealButton) {
+                return;
+            }
+
+            const setAmountVisible = (visible) => {
+                document.body.classList.toggle('slip-amounts-visible', visible);
+                revealButton.setAttribute('aria-pressed', visible ? 'true' : 'false');
+            };
+
+            revealButton.addEventListener('pointerdown', () => setAmountVisible(true));
+            document.addEventListener('pointerup', () => setAmountVisible(false));
+            document.addEventListener('pointercancel', () => setAmountVisible(false));
+            revealButton.addEventListener('blur', () => setAmountVisible(false));
+            revealButton.addEventListener('keydown', (event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    setAmountVisible(true);
+                }
+            });
+            revealButton.addEventListener('keyup', (event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    setAmountVisible(false);
+                }
+            });
+        })();
+
+        (() => {
+            const form = document.querySelector('[data-business-karaoke-form]');
+            if (!form) {
+                return;
+            }
+
+            const fields = document.getElementById('businessKaraokeFields');
+            const status = form.querySelector('[data-business-karaoke-status]');
+            const rows = Array.from(form.querySelectorAll('[data-business-karaoke-row]'));
+            const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
+            const autoSaveDelay = 700;
+            let saveTimer = 0;
+            let isSaving = false;
+            let resaveAfterCurrent = false;
+
+            const getQuantity = (row) => Number(row.dataset.quantity ?? row.dataset.initialQuantity ?? 0) || 0;
+            const getInitialQuantity = (row) => Number(row.dataset.initialQuantity ?? 0) || 0;
+
+            const setStatus = (message) => {
+                if (status) {
+                    status.textContent = message;
+                }
+            };
+
+            const setQuantity = (row, quantity) => {
+                const normalized = Math.max(0, Math.trunc(Number(quantity) || 0));
+                row.dataset.quantity = String(normalized);
+                const display = row.querySelector('[data-business-karaoke-display]');
+                if (display) {
+                    display.textContent = String(normalized);
+                }
+                row.classList.toggle('is-dirty', normalized !== getInitialQuantity(row));
+            };
+
+            const getDirtyRows = () => rows.filter((row) => getQuantity(row) !== getInitialQuantity(row));
+
+            const saveDraft = () => {
+                const draft = {};
+                getDirtyRows().forEach((row) => {
+                    draft[row.dataset.slipId] = getQuantity(row);
+                });
+
+                if (Object.keys(draft).length === 0) {
+                    localStorage.removeItem(draftKey);
+                } else {
+                    localStorage.setItem(draftKey, JSON.stringify(draft));
+                }
+            };
+
+            const restoreDraft = () => {
+                const raw = localStorage.getItem(draftKey);
+                if (!raw) {
+                    rows.forEach((row) => setQuantity(row, getInitialQuantity(row)));
+                    saveDraft();
+                    return;
+                }
+
+                try {
+                    const draft = JSON.parse(raw);
+                    rows.forEach((row) => {
+                        const slipId = row.dataset.slipId;
+                        setQuantity(row, Object.prototype.hasOwnProperty.call(draft, slipId)
+                            ? draft[slipId]
+                            : getInitialQuantity(row));
+                    });
+                    saveDraft();
+                } catch {
+                    localStorage.removeItem(draftKey);
+                    rows.forEach((row) => setQuantity(row, getInitialQuantity(row)));
+                    saveDraft();
+                }
+            };
+
+            const collectDirtyPayload = () => getDirtyRows().map((row) => ({
+                row,
+                slipId: row.dataset.slipId,
+                quantity: getQuantity(row)
+            }));
+
+            const buildFields = (payloadRows) => {
+                if (!fields) {
+                    return;
+                }
+
+                fields.innerHTML = '';
+                payloadRows.forEach((line, index) => {
+                    const slipInput = document.createElement('input');
+                    slipInput.type = 'hidden';
+                    slipInput.name = `KaraokeLines[${index}].SlipId`;
+                    slipInput.value = line.slipId;
+                    fields.appendChild(slipInput);
+
+                    const quantityInput = document.createElement('input');
+                    quantityInput.type = 'hidden';
+                    quantityInput.name = `KaraokeLines[${index}].Quantity`;
+                    quantityInput.value = String(line.quantity);
+                    fields.appendChild(quantityInput);
+                });
+            };
+
+            const markSaved = (payloadRows) => {
+                payloadRows.forEach((line) => {
+                    if (getQuantity(line.row) === line.quantity) {
+                        line.row.dataset.initialQuantity = String(line.quantity);
+                        setQuantity(line.row, line.quantity);
+                    }
+                });
+                saveDraft();
+            };
+
+            const submitDraft = async (options = {}) => {
+                window.clearTimeout(saveTimer);
+
+                const payloadRows = collectDirtyPayload();
+                if (payloadRows.length === 0) {
+                    saveDraft();
+                    setStatus('');
+                    return true;
+                }
+
+                if (isSaving) {
+                    resaveAfterCurrent = true;
+                    return false;
+                }
+
+                isSaving = true;
+                resaveAfterCurrent = false;
+                let succeeded = false;
+                setStatus('保存中');
+
+                try {
+                    buildFields(payloadRows);
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        keepalive: Boolean(options.keepalive)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Karaoke save failed.');
+                    }
+
+                    const result = await response.json().catch(() => null);
+                    if (result && result.succeeded === false) {
+                        throw new Error(result.message || 'Karaoke save failed.');
+                    }
+
+                    markSaved(payloadRows);
+                    setStatus(getDirtyRows().length === 0 ? '保存済み' : '未保存');
+                    succeeded = true;
+                    return true;
+                } catch {
+                    saveDraft();
+                    setStatus('未保存');
+                    return false;
+                } finally {
+                    if (fields) {
+                        fields.innerHTML = '';
+                    }
+                    isSaving = false;
+                    if (succeeded && (resaveAfterCurrent || getDirtyRows().length > 0)) {
+                        resaveAfterCurrent = false;
+                        scheduleAutoSave();
+                    }
+                }
+            };
+
+            const scheduleAutoSave = () => {
+                window.clearTimeout(saveTimer);
+                if (getDirtyRows().length === 0) {
+                    setStatus('');
+                    return;
+                }
+
+                setStatus('未保存');
+                saveTimer = window.setTimeout(() => {
+                    void submitDraft();
+                }, autoSaveDelay);
+            };
+
+            const sendKeepAliveDraft = () => {
+                const payloadRows = collectDirtyPayload();
+                if (payloadRows.length === 0) {
+                    return;
+                }
+
+                buildFields(payloadRows);
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    keepalive: true
+                }).catch(() => {
+                    saveDraft();
+                });
+            };
+
+            const navigateAfterFlush = async (link) => {
+                const timeout = new Promise((resolve) => {
+                    window.setTimeout(() => resolve(false), 1200);
+                });
+                await Promise.race([submitDraft(), timeout]);
+                window.location.href = link.href;
+            };
+
+            form.addEventListener('click', (event) => {
+                const decrement = event.target.closest('[data-business-karaoke-decrement]');
+                const increment = event.target.closest('[data-business-karaoke-increment]');
+                if (decrement || increment) {
+                    const row = event.target.closest('[data-business-karaoke-row]');
+                    if (!row) {
+                        return;
+                    }
+
+                    setQuantity(row, getQuantity(row) + (increment ? 1 : -1));
+                    saveDraft();
+                    scheduleAutoSave();
+                    return;
+                }
+
+                const link = event.target.closest('a[href]');
+                const isPlainPrimaryClick = event.button === 0 &&
+                    !event.altKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.shiftKey;
+                if (link && form.contains(link) && isPlainPrimaryClick && getDirtyRows().length > 0) {
+                    event.preventDefault();
+                    void navigateAfterFlush(link);
+                }
+            });
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                window.AppLoading?.hide(form);
+                void submitDraft();
+            });
+
+            restoreDraft();
+            if (getDirtyRows().length > 0) {
+                scheduleAutoSave();
+            }
+
+            window.addEventListener('online', () => {
+                if (getDirtyRows().length > 0) {
+                    scheduleAutoSave();
+                }
+            });
+            window.addEventListener('focus', () => {
+                if (!isSaving && getDirtyRows().length > 0) {
+                    scheduleAutoSave();
+                }
+            });
+            window.addEventListener('pagehide', () => {
+                window.clearTimeout(saveTimer);
+                sendKeepAliveDraft();
+            });
+        })();
+
+        (() => {
             const createSlipModalElement = document.getElementById('createSlipModal');
             if (!createSlipModalElement) {
                 return;
@@ -286,12 +616,17 @@
             let castModalTargetRow = null;
             const nominationKindOptions = `
                 <option value="">指名区分</option>
-                <option value="companion_18">18:00同伴</option>
-                <option value="companion_19">19:00同伴</option>
-                <option value="companion_20">20:00同伴</option>
-                <option value="nomination">本指名</option>
+                <option value="nomination" selected>本指名</option>
                 <option value="in_store">場内指名</option>
+                <option value="companion_until_1929">同伴 19:29まで</option>
+                <option value="companion_until_1959">同伴 19:59まで</option>
+                <option value="companion_until_2059">同伴 20:59まで</option>
+                <option value="companion_after_2100">同伴 21:00以降</option>
             `;
+            const nominationPriceOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(nominationPriceOptions.Select(price => new { value = price, label = $"{price:N0} 円" })));
+            const nominationPriceOptionsHtml = nominationPriceOptions
+                .map((price) => `<option value="${price.value}">${price.label}</option>`)
+                .join('');
 
             document.querySelectorAll('[data-business-slip-table-id]').forEach((button) => {
                 button.addEventListener('click', () => {
@@ -413,6 +748,7 @@
                 rows.forEach((row, index) => {
                     const label = row.querySelector('.nomination-row__index');
                     const kind = row.querySelector('.nomination-row__kind');
+                    const price = row.querySelector('.nomination-row__price');
                     const castId = row.querySelector('[data-business-cast-id]');
                     const castName = row.querySelector('[data-business-cast-name-hidden]');
                     const remove = row.querySelector('[data-business-remove-nomination]');
@@ -421,6 +757,9 @@
                     }
                     if (kind) {
                         kind.name = `CreateSlipInput.CastNominations[${index}].NominationKind`;
+                    }
+                    if (price) {
+                        price.name = `CreateSlipInput.CastNominations[${index}].NominationPrice`;
                     }
                     if (castId) {
                         castId.name = `CreateSlipInput.CastNominations[${index}].CastId`;
@@ -451,6 +790,9 @@
                     <label class="customer-row__index nomination-row__index">${count + 1}</label>
                     <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[${count}].NominationKind">
                         ${nominationKindOptions}
+                    </select>
+                    <select class="form-select nomination-row__price" name="CreateSlipInput.CastNominations[${count}].NominationPrice">
+                        ${nominationPriceOptionsHtml}
                     </select>
                     <div class="nomination-row__cast">
                         <input type="hidden" name="CreateSlipInput.CastNominations[${count}].CastId" data-business-cast-id />

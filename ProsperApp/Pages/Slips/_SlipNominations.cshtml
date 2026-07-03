@@ -3,13 +3,15 @@
 @{
     var nominationOptions = new[]
     {
-        ("companion_18", "18:00同伴"),
-        ("companion_19", "19:00同伴"),
-        ("companion_20", "20:00同伴"),
         ("nomination", "本指名"),
-        ("in_store", "場内指名")
+        ("in_store", "場内指名"),
+        ("companion_until_1929", "同伴 19:29まで"),
+        ("companion_until_1959", "同伴 19:59まで"),
+        ("companion_until_2059", "同伴 20:59まで"),
+        ("companion_after_2100", "同伴 21:00以降")
     };
-    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel();
+    var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
+    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = "nomination" };
 }
 
 <div class="slip-create__panel" id="slipNominationsPanel">
@@ -27,19 +29,21 @@
                 <col class="slip-detail-table__col--time" />
                 <col class="slip-detail-table__col--type" />
                 <col class="slip-detail-table__col--primary" />
+                <col class="slip-detail-table__col--amount" />
             </colgroup>
             <thead>
                 <tr>
                     <th class="slip-detail-table__time">時刻</th>
                     <th class="slip-detail-table__type">区分</th>
                     <th class="slip-detail-table__primary">キャスト</th>
+                    <th class="slip-detail-table__amount text-end">価格</th>
                 </tr>
             </thead>
             <tbody>
                 @if (Model.Detail is null || Model.Detail.Nominations.Count == 0)
                 {
                     <tr>
-                        <td colspan="3" class="text-muted">指名はまだ登録されていません。</td>
+                        <td colspan="4" class="text-muted">指名はまだ登録されていません。</td>
                     </tr>
                 }
                 else
@@ -50,13 +54,14 @@
                             <td class="slip-detail-table__time">@Model.FormatStoreTime(nomination.StartedAt)</td>
                             <td class="slip-detail-table__type">@nomination.NominationDisplayName</td>
                             <td class="slip-detail-table__primary">@nomination.CastDisplayName</td>
+                            <td class="slip-detail-table__amount text-end">@nomination.NominationPrice.ToString("N0")</td>
                         </tr>
                     }
                 }
                 @if (Model.IsOpenSlip && Model.AttendanceCasts.Count == 0)
                 {
                     <tr class="slip-detail-add-row">
-                        <td colspan="3">
+                        <td colspan="4">
                             <div class="alert alert-secondary mb-0">出勤キャストが未登録です。指名を追加するには勤怠入力で出勤者を登録してください。</div>
                         </td>
                     </tr>
@@ -97,6 +102,22 @@
                                         else
                                         {
                                             <option value="@option.Item1">@option.Item2</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">指名価格</label>
+                                <select class="form-select form-select-lg nomination-row__price" name="AddNominationsInput.CastNominations[0].NominationPrice">
+                                    @foreach (var price in nominationPriceOptions)
+                                    {
+                                        if (addNomination.NominationPrice == price)
+                                        {
+                                            <option value="@price" selected>@price.ToString("N0") 円</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@price">@price.ToString("N0") 円</option>
                                         }
                                     }
                                 </select>

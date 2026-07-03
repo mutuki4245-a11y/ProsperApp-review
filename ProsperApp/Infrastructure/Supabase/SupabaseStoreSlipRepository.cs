@@ -93,6 +93,7 @@ public class SupabaseStoreSlipRepository(
                 CustomerNames = ReadString(row, "customer_names"),
                 CastNames = NormalizeCastDisplayNameList(ReadString(row, "cast_names")),
                 AccountingAmount = ReadDecimal(row, "accounting_amount") ?? 0,
+                KaraokeQuantity = ReadDecimal(row, "karaoke_quantity") ?? 0,
                 Memo = ReadString(row, "memo")
             })
             .Where(x => x.SlipId > 0)
@@ -163,6 +164,7 @@ public class SupabaseStoreSlipRepository(
                     DisplayName = ReadString(row, "cast_display_name") ?? string.Empty,
                     DepartmentName = ReadString(row, "cast_department_name"),
                     NominationType = ReadString(row, "nomination_type") ?? string.Empty,
+                    NominationPrice = ReadDecimal(row, "nomination_price") ?? 0,
                     StartedAt = ReadDateTimeOffset(row, "started_at") ?? DateTimeOffset.MinValue,
                     Status = ReadString(row, "nomination_status") ?? string.Empty
                 });
@@ -178,6 +180,21 @@ public class SupabaseStoreSlipRepository(
                     UnitPrice = ReadDecimal(row, "unit_price") ?? 0,
                     Amount = ReadDecimal(row, "amount") ?? 0,
                     OrderedAt = ReadDateTimeOffset(row, "ordered_at") ?? DateTimeOffset.MinValue,
+                    Status = ReadString(row, "order_status") ?? string.Empty
+                });
+            }
+            else if (rowType == "charge")
+            {
+                detail.ChargeLines.Add(new SlipDetailChargeLine
+                {
+                    ChargeLineId = ReadLong(row, "charge_line_id") ?? 0,
+                    LineNo = (int)(ReadLong(row, "line_no") ?? 0),
+                    ChargeType = ReadString(row, "charge_type") ?? string.Empty,
+                    LineName = ReadString(row, "item_name_snapshot") ?? string.Empty,
+                    Quantity = ReadDecimal(row, "quantity") ?? 0,
+                    UnitPrice = ReadDecimal(row, "unit_price") ?? 0,
+                    Amount = ReadDecimal(row, "amount") ?? 0,
+                    CreatedAt = ReadDateTimeOffset(row, "ordered_at") ?? DateTimeOffset.MinValue,
                     Status = ReadString(row, "order_status") ?? string.Empty
                 });
             }
@@ -218,7 +235,8 @@ public class SupabaseStoreSlipRepository(
             .Select(x => new CastNominationPayload(
                 x.CastId!.Value,
                 ToNominationType(x.NominationKind!),
-                ToCompanionTime(x.NominationKind!)))
+                ToCompanionTime(x.NominationKind!),
+                x.NominationPrice))
             .ToArray();
 
         var result = await RpcClient.PostArrayAsync(
@@ -293,7 +311,8 @@ public class SupabaseStoreSlipRepository(
             .Select(x => new CastNominationPayload(
                 x.CastId!.Value,
                 ToNominationType(x.NominationKind!),
-                ToCompanionTime(x.NominationKind!)))
+                ToCompanionTime(x.NominationKind!),
+                x.NominationPrice))
             .ToArray();
 
         if (slipId <= 0 || payload.Length == 0)
@@ -409,16 +428,105 @@ public class SupabaseStoreSlipRepository(
         return SlipMutationResult.Success(1);
     }
 
+    public async Task<SlipMutationResult> SaveSlipAdjustmentsAsync(long slipId, IReadOnlyList<SlipAdjustmentInputModel> adjustments, CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。調整明細を保存できません。");
+        }
+
+        if (slipId <= 0)
+        {
+            return SlipMutationResult.Failed("調整明細を保存する伝票を確認してください。");
+        }
+
+        var payload = adjustments
+            .Where(x => !string.IsNullOrWhiteSpace(x.LineName))
+            .Select(x => new AdjustmentLinePayload(x.LineName!.Trim(), x.Amount))
+            .ToArray();
+
+        var result = await RpcClient.PostArrayAsync(
+            "save_store_slip_adjustments",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_slip_id = slipId,
+                p_adjustment_lines = payload
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return SlipMutationResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var savedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "saved_count") ?? 0) : 0;
+        return SlipMutationResult.Success(savedCount);
+    }
+
+    public async Task<SlipMutationResult> SaveKaraokeLinesAsync(long businessDayId, IReadOnlyList<KaraokeQuantityInputModel> karaokeLines, CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。カラオケ回数を保存できません。");
+        }
+
+        if (businessDayId <= 0)
+        {
+            return SlipMutationResult.Failed("営業日を確認してください。");
+        }
+
+        var payload = karaokeLines
+            .Where(x => x.SlipId > 0 && x.Quantity >= 0)
+            .Select(x => new KaraokeLinePayload(x.SlipId, x.Quantity))
+            .ToArray();
+
+        if (payload.Length == 0)
+        {
+            return SlipMutationResult.Failed("保存するカラオケ回数がありません。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "save_store_karaoke_lines",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId,
+                p_karaoke_lines = payload
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return SlipMutationResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var savedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "saved_count") ?? 0) : 0;
+        return SlipMutationResult.Success(savedCount);
+    }
+
     private sealed record CastNominationPayload(
         [property: JsonPropertyName("cast_id")] long CastId,
         [property: JsonPropertyName("nomination_type")] string NominationType,
-        [property: JsonPropertyName("companion_time")] string? CompanionTime);
+        [property: JsonPropertyName("companion_time")] string? CompanionTime,
+        [property: JsonPropertyName("nomination_price")] decimal NominationPrice);
+
+    private sealed record AdjustmentLinePayload(
+        [property: JsonPropertyName("line_name")] string LineName,
+        [property: JsonPropertyName("amount")] decimal Amount);
+
+    private sealed record KaraokeLinePayload(
+        [property: JsonPropertyName("slip_id")] long SlipId,
+        [property: JsonPropertyName("quantity")] decimal Quantity);
 
     private static string ToNominationType(string nominationKind)
     {
         return nominationKind switch
         {
-            "companion_18" or "companion_19" or "companion_20" => "companion",
+            "companion_until_1929" or
+            "companion_until_1959" or
+            "companion_until_2059" or
+            "companion_after_2100" => "companion",
             "in_store" => "in_store",
             _ => "nomination"
         };
@@ -428,9 +536,10 @@ public class SupabaseStoreSlipRepository(
     {
         return nominationKind switch
         {
-            "companion_18" => "18:00",
-            "companion_19" => "19:00",
-            "companion_20" => "20:00",
+            "companion_until_1929" => "19:29",
+            "companion_until_1959" => "19:59",
+            "companion_until_2059" => "20:59",
+            "companion_after_2100" => "21:00",
             _ => null
         };
     }
@@ -486,6 +595,26 @@ public class SupabaseStoreSlipRepository(
             rawError.Contains("invalid_companion_time", StringComparison.OrdinalIgnoreCase))
         {
             return "指名区分を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_nomination_price", StringComparison.OrdinalIgnoreCase))
+        {
+            return "指名価格を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_adjustment_name", StringComparison.OrdinalIgnoreCase))
+        {
+            return "調整明細の名前を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_adjustment_amount", StringComparison.OrdinalIgnoreCase))
+        {
+            return "調整明細の価格を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_karaoke_quantity", StringComparison.OrdinalIgnoreCase))
+        {
+            return "カラオケ回数を確認してください。";
         }
 
         if (rawError.Contains("invalid_customer_count", StringComparison.OrdinalIgnoreCase))

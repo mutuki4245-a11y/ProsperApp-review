@@ -18,6 +18,7 @@ builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
 builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
 builder.Services.Configure<GoogleDriveOptions>(builder.Configuration.GetSection("GoogleDrive"));
 builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection("GoogleAuth"));
+builder.Services.Configure<ReceiptPrinterOptions>(builder.Configuration.GetSection("ReceiptPrinter"));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddMemoryCache();
@@ -38,6 +39,7 @@ builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();
 builder.Services.AddScoped<IStoreItemAdminRepository, SupabaseStoreItemAdminRepository>();
 builder.Services.AddScoped<IStoreCastAdminRepository, SupabaseStoreCastAdminRepository>();
 builder.Services.AddHttpClient<IDriveFileService, GoogleDriveFileService>();
+builder.Services.AddHttpClient<IReceiptPrinterClient, SiiReceiptPrinterClient>();
 
 var googleDriveOptions = builder.Configuration.GetSection("GoogleDrive").Get<GoogleDriveOptions>() ?? new();
 var googleAuthConfigured = !string.IsNullOrWhiteSpace(googleDriveOptions.ClientId) &&

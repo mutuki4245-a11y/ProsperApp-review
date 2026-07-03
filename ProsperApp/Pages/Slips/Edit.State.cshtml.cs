@@ -49,6 +49,8 @@ public partial class SlipEditModel
         EnsureAddNominationRows();
         SetDefaultLeaveInput();
         SetDefaultCheckoutInput();
+        SetDefaultAdjustmentInput();
+        SetDefaultKaraokeInput();
     }
 
     private void ClearCrossFormValidationState()
@@ -71,5 +73,51 @@ public partial class SlipEditModel
     public string FormatStoreTime(DateTimeOffset? value, string fallback = "-")
     {
         return _storeClock.FormatStoreTime(value, fallback);
+    }
+
+    private void SetDefaultAdjustmentInput()
+    {
+        if (AdjustmentsInput.Lines.Count > 0 || Detail is null)
+        {
+            return;
+        }
+
+        AdjustmentsInput.Lines = Detail.ChargeLines
+            .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal) &&
+                        string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .OrderBy(x => x.LineNo)
+            .Select(x => new SlipAdjustmentInputModel
+            {
+                LineName = x.LineName,
+                Amount = x.Amount
+            })
+            .ToList();
+
+        if (AdjustmentsInput.Lines.Count == 0)
+        {
+            AdjustmentsInput.Lines.Add(new SlipAdjustmentInputModel());
+        }
+    }
+
+    private void SetDefaultKaraokeInput()
+    {
+        if (KaraokeLines.Count > 0 || Detail is null)
+        {
+            return;
+        }
+
+        var quantity = Detail.ChargeLines
+            .Where(x => string.Equals(x.ChargeType, "karaoke", StringComparison.Ordinal) &&
+                        string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .Sum(x => x.Quantity);
+
+        KaraokeLines =
+        [
+            new KaraokeQuantityInputModel
+            {
+                SlipId = Detail.SlipId,
+                Quantity = quantity
+            }
+        ];
     }
 }

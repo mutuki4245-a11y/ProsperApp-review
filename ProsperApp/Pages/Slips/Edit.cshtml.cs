@@ -12,13 +12,16 @@ public partial class SlipEditModel(
     IStoreOrderRepository orderRepository,
     ICheckoutRepository checkoutRepository,
     IStoreClock storeClock,
-    IOrderQueueService orderQueueService) : PageModel
+    IOrderQueueService orderQueueService,
+    IReceiptPrinterClient receiptPrinterClient,
+    ILocalSettingsProvider localSettingsProvider) : PageModel
 {
     private static readonly HashSet<string> AllowedNominationKinds = new(StringComparer.Ordinal)
     {
-        "companion_18",
-        "companion_19",
-        "companion_20",
+        "companion_until_1929",
+        "companion_until_1959",
+        "companion_until_2059",
+        "companion_after_2100",
         "nomination",
         "in_store"
     };
@@ -30,6 +33,8 @@ public partial class SlipEditModel(
     private readonly ICheckoutRepository _checkoutRepository = checkoutRepository;
     private readonly IStoreClock _storeClock = storeClock;
     private readonly IOrderQueueService _orderQueueService = orderQueueService;
+    private readonly IReceiptPrinterClient _receiptPrinterClient = receiptPrinterClient;
+    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
 
     private static readonly IReadOnlyList<CheckoutPaymentInputModel> PaymentTemplates =
     [
@@ -58,6 +63,12 @@ public partial class SlipEditModel(
 
     [BindProperty]
     public CheckoutInputModel CheckoutInput { get; set; } = new();
+
+    [BindProperty]
+    public SaveSlipAdjustmentsInputModel AdjustmentsInput { get; set; } = new();
+
+    [BindProperty]
+    public List<KaraokeQuantityInputModel> KaraokeLines { get; set; } = [];
 
     public SlipDetail? Detail { get; private set; }
 

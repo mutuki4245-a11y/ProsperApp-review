@@ -8,6 +8,9 @@
     const showCheckoutModal = pageData.showCheckoutModal === true;
     const showAddCustomerModal = pageData.showAddCustomerModal === true;
     const showAddNominationModal = pageData.showAddNominationModal === true;
+    const slipId = pageData.slipId ? String(pageData.slipId) : '';
+    const businessDayId = pageData.businessDayId ? String(pageData.businessDayId) : '';
+    const draftPrefix = `prosper:slip:${businessDayId}:${slipId}`;
 
     const parseValidation = (root) => {
         if (window.jQuery?.validator?.unobtrusive) {
@@ -105,6 +108,13 @@
     const detailBackToPaymentsButton = document.getElementById('detailBackToPaymentsButton');
     const detailCashDisplay = document.getElementById('detailCashAmountDisplay');
     const detailChangeDisplay = document.getElementById('detailChangeAmountDisplay');
+    const detailKaraokeForm = document.querySelector('[data-detail-karaoke-form]');
+    const detailKaraokeInput = document.querySelector('[data-detail-karaoke-input]');
+    const detailKaraokeDisplay = document.querySelector('[data-detail-karaoke-display]');
+    const detailKaraokeSave = document.querySelector('[data-detail-karaoke-save]');
+    const adjustmentForm = document.querySelector('[data-adjustment-form]');
+    const adjustmentList = document.querySelector('[data-adjustment-list]');
+    const addAdjustmentButton = document.querySelector('[data-add-adjustment-row]');
     let detailCashAmount = Number(detailCashDisplay?.dataset.cashAmount ?? 0);
     const orderQueue = new Map();
     const submitOrderBaseDisabled = detailSubmitOrderButton?.disabled ?? false;
@@ -126,6 +136,98 @@
     }
 
     const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
+    const karaokeDraftKey = `${draftPrefix}:karaoke`;
+    const adjustmentDraftKey = `${draftPrefix}:adjustments`;
+
+    const setDetailKaraokeQuantity = (quantity, markDirty = true) => {
+        const normalized = Math.max(0, Math.trunc(Number(quantity) || 0));
+        if (detailKaraokeInput) {
+            detailKaraokeInput.value = String(normalized);
+        }
+        if (detailKaraokeDisplay) {
+            detailKaraokeDisplay.textContent = String(normalized);
+        }
+        if (detailKaraokeSave) {
+            detailKaraokeSave.disabled = !markDirty;
+        }
+        if (markDirty && slipId) {
+            localStorage.setItem(karaokeDraftKey, String(normalized));
+        }
+    };
+
+    const readAdjustmentRows = () => Array.from(adjustmentList?.querySelectorAll('[data-adjustment-row]') ?? [])
+        .map((row) => ({
+            lineName: row.querySelector('[data-adjustment-name]')?.value ?? '',
+            amount: row.querySelector('[data-adjustment-amount]')?.value ?? ''
+        }));
+
+    const saveAdjustmentDraft = () => {
+        if (!slipId || !adjustmentList) {
+            return;
+        }
+
+        localStorage.setItem(adjustmentDraftKey, JSON.stringify(readAdjustmentRows()));
+    };
+
+    const renumberAdjustmentRows = () => {
+        adjustmentList?.querySelectorAll('[data-adjustment-row]').forEach((row, index) => {
+            const name = row.querySelector('[data-adjustment-name]');
+            const amount = row.querySelector('[data-adjustment-amount]');
+            if (name) {
+                name.name = `AdjustmentsInput.Lines[${index}].LineName`;
+            }
+            if (amount) {
+                amount.name = `AdjustmentsInput.Lines[${index}].Amount`;
+            }
+        });
+    };
+
+    const appendAdjustmentRow = (lineName = '', amount = '') => {
+        if (!adjustmentList) {
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'adjustment-row';
+        row.dataset.adjustmentRow = '';
+        row.innerHTML = `
+            <input class="form-control" maxlength="160" placeholder="明細名" data-adjustment-name />
+            <input class="form-control" type="number" step="1" placeholder="価格" data-adjustment-amount />
+            <button class="btn btn-outline-danger" type="button" data-remove-adjustment-row>削除</button>
+        `;
+        row.querySelector('[data-adjustment-name]').value = lineName;
+        row.querySelector('[data-adjustment-amount]').value = amount;
+        adjustmentList.appendChild(row);
+        renumberAdjustmentRows();
+    };
+
+    const restoreDetailDrafts = () => {
+        if (detailKaraokeInput && slipId) {
+            const draft = localStorage.getItem(karaokeDraftKey);
+            if (draft !== null) {
+                setDetailKaraokeQuantity(draft, true);
+            }
+        }
+
+        if (adjustmentList && slipId) {
+            const draft = localStorage.getItem(adjustmentDraftKey);
+            if (draft) {
+                try {
+                    const rows = JSON.parse(draft);
+                    if (Array.isArray(rows)) {
+                        adjustmentList.innerHTML = '';
+                        rows.forEach((row) => appendAdjustmentRow(row.lineName ?? '', row.amount ?? ''));
+                        if (rows.length === 0) {
+                            appendAdjustmentRow();
+                        }
+                    }
+                } catch {
+                    localStorage.removeItem(adjustmentDraftKey);
+                }
+            }
+        }
+        renumberAdjustmentRows();
+    };
 
     const syncCheckoutClosedTimeFields = () => {
         document.querySelectorAll('[data-detail-checkout-closed-time-field]').forEach((field) => {
@@ -237,6 +339,7 @@
         nominationList.querySelectorAll('[data-nomination-row]').forEach((row, index) => {
             const label = row.querySelector('.nomination-row__index');
             const kind = row.querySelector('.nomination-row__kind');
+            const price = row.querySelector('.nomination-row__price');
             const castId = row.querySelector('[data-cast-id]');
             const castName = row.querySelector('[data-cast-name-hidden]');
             const removeButton = row.querySelector('[data-remove-nomination]');
@@ -245,6 +348,9 @@
             }
             if (kind) {
                 kind.name = 'AddNominationsInput.CastNominations[0].NominationKind';
+            }
+            if (price) {
+                price.name = 'AddNominationsInput.CastNominations[0].NominationPrice';
             }
             if (castId) {
                 castId.name = 'AddNominationsInput.CastNominations[0].CastId';
@@ -334,13 +440,22 @@
 
         orderAttendingCastModalList.innerHTML = '';
         const matches = castOptions.slice(0, 80);
-        if (matches.length === 0) {
-            const empty = document.createElement('p');
-            empty.className = 'text-muted mb-0';
-            empty.textContent = '出勤キャストが登録されていません。';
-            orderAttendingCastModalList.appendChild(empty);
-            return;
-        }
+
+        const noBack = document.createElement('button');
+        noBack.type = 'button';
+        noBack.className = 'cast-select-modal__item';
+        const noBackName = document.createElement('strong');
+        noBackName.textContent = 'なし';
+        const noBackHelp = document.createElement('span');
+        noBackHelp.textContent = 'バックの摘要を付けずに登録';
+        noBack.append(noBackName, noBackHelp);
+        noBack.addEventListener('click', () => {
+            if (pendingBackItemId) {
+                addToOrderQueue(pendingBackItemId, null);
+            }
+            closeOrderBackPicker();
+        });
+        orderAttendingCastModalList.appendChild(noBack);
 
         matches.forEach((cast) => {
             const button = document.createElement('button');
@@ -459,9 +574,6 @@
             const itemId = orderItemButton.dataset.detailItemId ?? '';
             const item = orderItems.find((candidate) => String(candidate.id) === String(itemId));
             if (item?.isCastBackTarget) {
-                if (castOptions.length === 0) {
-                    return;
-                }
                 openOrderBackPicker(itemId);
                 return;
             }
@@ -487,6 +599,53 @@
                 panel.classList.toggle('is-active', panel.dataset.detailCategoryPanel === index);
             });
         }
+
+        if (event.target.closest('[data-detail-karaoke-decrement]')) {
+            setDetailKaraokeQuantity(Number(detailKaraokeInput?.value ?? 0) - 1);
+            return;
+        }
+
+        if (event.target.closest('[data-detail-karaoke-increment]')) {
+            setDetailKaraokeQuantity(Number(detailKaraokeInput?.value ?? 0) + 1);
+            return;
+        }
+
+        if (event.target.closest('[data-add-adjustment-row]')) {
+            appendAdjustmentRow();
+            saveAdjustmentDraft();
+            return;
+        }
+
+        const removeAdjustmentButton = event.target.closest('[data-remove-adjustment-row]');
+        if (removeAdjustmentButton) {
+            const rows = adjustmentList?.querySelectorAll('[data-adjustment-row]') ?? [];
+            if (rows.length <= 1) {
+                const row = removeAdjustmentButton.closest('[data-adjustment-row]');
+                const name = row?.querySelector('[data-adjustment-name]');
+                const amount = row?.querySelector('[data-adjustment-amount]');
+                if (name) {
+                    name.value = '';
+                }
+                if (amount) {
+                    amount.value = '0';
+                }
+            } else {
+                removeAdjustmentButton.closest('[data-adjustment-row]')?.remove();
+            }
+            renumberAdjustmentRows();
+            saveAdjustmentDraft();
+        }
+    });
+
+    adjustmentList?.addEventListener('input', saveAdjustmentDraft);
+
+    detailKaraokeForm?.addEventListener('submit', () => {
+        localStorage.removeItem(karaokeDraftKey);
+    });
+
+    adjustmentForm?.addEventListener('submit', () => {
+        renumberAdjustmentRows();
+        localStorage.removeItem(adjustmentDraftKey);
     });
 
     detailClearQueueButton?.addEventListener('click', () => {
@@ -561,5 +720,6 @@
         addNominationModal?.show();
     }
 
+    restoreDetailDrafts();
     renderOrderQueue();
 })();

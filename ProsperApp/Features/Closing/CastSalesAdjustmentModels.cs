@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ProsperApp.Services;
 
 namespace ProsperApp.Models;
 
@@ -131,11 +132,28 @@ public class CastSalesAdjustmentCastRow
 
     public string NominationDisplayName => NominationType switch
     {
-        "companion" => "同伴",
+        "companion" => ToCompanionDisplayName(),
         "in_store" => "場内指名",
         "nomination" => "本指名",
         _ => NominationType
     };
+
+    private string ToCompanionDisplayName()
+    {
+        if (StartedAt is null)
+        {
+            return "同伴";
+        }
+
+        return StoreBusinessTime.FormatStoreTime(StartedAt.Value) switch
+        {
+            "19:29" => "同伴 19:29まで",
+            "19:59" => "同伴 19:59まで",
+            "20:59" => "同伴 20:59まで",
+            "21:00" => "同伴 21:00以降",
+            _ => "同伴"
+        };
+    }
 }
 
 public class CastSalesAdjustmentSaveInput

@@ -20,6 +20,10 @@ public interface IStoreSlipRepository
 
     Task<SlipMutationResult> AddSlipNominationsAsync(long slipId, IReadOnlyList<CastNominationInputModel> nominations, CancellationToken ct);
 
+    Task<SlipMutationResult> SaveSlipAdjustmentsAsync(long slipId, IReadOnlyList<SlipAdjustmentInputModel> adjustments, CancellationToken ct);
+
+    Task<SlipMutationResult> SaveKaraokeLinesAsync(long businessDayId, IReadOnlyList<KaraokeQuantityInputModel> karaokeLines, CancellationToken ct);
+
     Task<SlipMutationResult> LeaveSlipCustomerAsync(long slipCustomerId, DateTime leftAt, CancellationToken ct);
 
     Task<SlipMutationResult> UpdateSlipCustomerLabelAsync(long slipCustomerId, string? customerLabel, CancellationToken ct);

@@ -89,7 +89,7 @@ public partial class SlipEditModel
     {
         if (AddNominationsInput.CastNominations.Count == 0)
         {
-            AddNominationsInput.CastNominations.Add(new CastNominationInputModel());
+            AddNominationsInput.CastNominations.Add(new CastNominationInputModel { NominationKind = "nomination" });
         }
     }
 
@@ -99,12 +99,30 @@ public partial class SlipEditModel
         AddNominationsInput.CastNominations = AddNominationsInput.CastNominations
             .Select(x => new CastNominationInputModel
             {
-                NominationKind = string.IsNullOrWhiteSpace(x.NominationKind) ? null : x.NominationKind.Trim(),
+                NominationKind = ResolveNominationKind(x),
+                NominationPrice = x.NominationPrice,
                 CastId = x.CastId,
                 CastName = string.IsNullOrWhiteSpace(x.CastName) ? null : x.CastName.Trim()
             })
-            .Where(x => x.CastId is not null || !string.IsNullOrWhiteSpace(x.CastName) || !string.IsNullOrWhiteSpace(x.NominationKind))
+            .Where(HasNominationCast)
             .ToList();
+    }
+
+    private static bool HasNominationCast(CastNominationInputModel nomination)
+    {
+        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName);
+    }
+
+    private static string? ResolveNominationKind(CastNominationInputModel nomination)
+    {
+        if (!string.IsNullOrWhiteSpace(nomination.NominationKind))
+        {
+            return nomination.NominationKind.Trim();
+        }
+
+        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName)
+            ? "nomination"
+            : null;
     }
 
     private void ValidateNominations()
@@ -134,6 +152,11 @@ public partial class SlipEditModel
                 ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationKind", "指名区分を選択してください。");
             }
 
+            if (!IsValidNominationPrice(nomination.NominationPrice))
+            {
+                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationPrice", "指名価格を選択してください。");
+            }
+
             if (nomination.CastId is null)
             {
                 ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].CastName", "候補からキャストを選択してください。");
@@ -148,5 +171,10 @@ public partial class SlipEditModel
                 ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].CastName", "キャスト名は160文字以内で入力してください。");
             }
         }
+    }
+
+    private static bool IsValidNominationPrice(decimal price)
+    {
+        return price is >= 1000 and <= 20000 && price % 1000 == 0;
     }
 }

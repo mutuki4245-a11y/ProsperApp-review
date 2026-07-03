@@ -195,6 +195,7 @@ returns table (
     customer_names text,
     cast_names text,
     accounting_amount numeric,
+    karaoke_quantity numeric,
     memo text
 )
 language sql
@@ -241,9 +242,23 @@ as $$
     order_summary as (
         select
             l.slip_id,
-            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as accounting_amount
+            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount
         from public.store_order_lines l
         group by l.slip_id
+    ),
+    nomination_summary as (
+        select
+            sc.slip_id,
+            coalesce(sum(sc.nomination_price) filter (where sc.status = 'active'), 0) as nomination_amount
+        from public.store_slip_casts sc
+        group by sc.slip_id
+    ),
+    charge_summary as (
+        select
+            cl.slip_id,
+            coalesce(sum(cl.amount) filter (where cl.status = 'active'), 0) as charge_amount
+        from public.store_slip_charge_lines cl
+        group by cl.slip_id
     )
     select
         s.slip_id,
@@ -256,7 +271,20 @@ as $$
         coalesce(cs.customer_count, s.customer_count) as customer_count,
         coalesce(cs.customer_names, '') as customer_names,
         coalesce(casts.cast_names, '') as cast_names,
-        coalesce(os.accounting_amount, 0) as accounting_amount,
+        greatest(
+            coalesce(os.order_subtotal_amount, 0) +
+            round(coalesce(os.order_subtotal_amount, 0) * 0.20, 0) +
+            coalesce(ns.nomination_amount, 0) +
+            coalesce(charges.charge_amount, 0),
+            0
+        ) as accounting_amount,
+        coalesce((
+            select sum(cl.quantity)
+            from public.store_slip_charge_lines cl
+            where cl.slip_id = s.slip_id
+              and cl.charge_type = 'karaoke'
+              and cl.status = 'active'
+        ), 0) as karaoke_quantity,
         s.memo
     from public.store_slips s
     left join public.store_table_master t
@@ -267,6 +295,10 @@ as $$
       on casts.slip_id = s.slip_id
     left join order_summary os
       on os.slip_id = s.slip_id
+    left join nomination_summary ns
+      on ns.slip_id = s.slip_id
+    left join charge_summary charges
+      on charges.slip_id = s.slip_id
     where s.department_id = p_department_id
       and s.business_day_id = p_business_day_id
     order by s.opened_at asc;

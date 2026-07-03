@@ -329,6 +329,28 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "save_store_slip_adjustments",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+        { name: "p_adjustment_lines", type: "jsonb" },
+      ],
+    },
+  ],
+  [
+    "save_store_karaoke_lines",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_karaoke_lines", type: "jsonb" },
+      ],
+    },
+  ],
+  [
     "leave_store_slip_customer",
     {
       result: "rows",

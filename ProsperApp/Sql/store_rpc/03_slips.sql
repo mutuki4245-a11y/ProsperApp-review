@@ -1,3 +1,5 @@
+drop function if exists public.get_store_slip_detail(bigint, bigint);
+
 create or replace function public.get_store_slip_detail(
     p_department_id bigint,
     p_slip_id bigint
@@ -27,13 +29,16 @@ returns table (
     nomination_type text,
     started_at timestamp with time zone,
     nomination_status text,
+    nomination_price numeric,
     order_line_id bigint,
     item_name_snapshot text,
     quantity numeric,
     unit_price numeric,
     amount numeric,
     ordered_at timestamp with time zone,
-    order_status text
+    order_status text,
+    charge_line_id bigint,
+    charge_type text
 )
 language sql
 security definer
@@ -64,13 +69,16 @@ as $$
         null::text as nomination_type,
         null::timestamp with time zone as started_at,
         null::text as nomination_status,
+        null::numeric as nomination_price,
         null::bigint as order_line_id,
         null::text as item_name_snapshot,
         null::numeric as quantity,
         null::numeric as unit_price,
         null::numeric as amount,
         null::timestamp with time zone as ordered_at,
-        null::text as order_status
+        null::text as order_status,
+        null::bigint as charge_line_id,
+        null::text as charge_type
     from public.store_slips s
     left join public.store_table_master t
       on t.table_id = s.table_id
@@ -104,12 +112,15 @@ as $$
         null::text,
         null::timestamp with time zone,
         null::text,
+        null::numeric,
         null::bigint,
         null::text,
         null::numeric,
         null::numeric,
         null::numeric,
         null::timestamp with time zone,
+        null::text,
+        null::bigint,
         null::text
     from public.store_slips s
     join public.store_slip_customers c
@@ -146,12 +157,15 @@ as $$
         sc.nomination_type,
         sc.started_at,
         sc.status,
+        coalesce(sc.nomination_price, 0),
         null::bigint,
         null::text,
         null::numeric,
         null::numeric,
         null::numeric,
         null::timestamp with time zone,
+        null::text,
+        null::bigint,
         null::text
     from public.store_slips s
     join public.store_slip_casts sc
@@ -192,16 +206,64 @@ as $$
         null::text,
         null::timestamp with time zone,
         null::text,
+        null::numeric,
         ol.order_line_id,
         ol.item_name_snapshot,
         ol.quantity,
         ol.unit_price,
         ol.amount,
         ol.ordered_at,
-        ol.status
+        ol.status,
+        null::bigint,
+        null::text
     from public.store_slips s
     join public.store_order_lines ol
       on ol.slip_id = s.slip_id
+    left join public.store_table_master t
+      on t.table_id = s.table_id
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+
+    union all
+
+    select
+        'charge'::text,
+        s.slip_id,
+        s.slip_no,
+        s.business_date,
+        s.table_id,
+        t.table_code,
+        t.table_name,
+        s.opened_at,
+        s.status,
+        s.customer_count,
+        s.memo,
+        null::bigint,
+        cl.line_no,
+        null::text,
+        null::timestamp with time zone,
+        null::timestamp with time zone,
+        null::text,
+        null::bigint,
+        null::bigint,
+        null::text,
+        null::text,
+        null::text,
+        null::timestamp with time zone,
+        null::text,
+        null::numeric,
+        null::bigint,
+        cl.line_name,
+        cl.quantity,
+        cl.unit_price,
+        cl.amount,
+        cl.created_at,
+        cl.status,
+        cl.charge_line_id,
+        cl.charge_type
+    from public.store_slips s
+    join public.store_slip_charge_lines cl
+      on cl.slip_id = s.slip_id
     left join public.store_table_master t
       on t.table_id = s.table_id
     where s.slip_id = p_slip_id
@@ -307,6 +369,7 @@ declare
     v_nomination jsonb;
     v_cast_id bigint;
     v_nomination_type text;
+    v_nomination_price numeric(12, 0);
     v_companion_time time;
     v_started_at timestamp with time zone;
     v_inserted_count integer := 0;
@@ -339,9 +402,17 @@ begin
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
         v_nomination_type := nullif(trim(coalesce(v_nomination->>'nomination_type', '')), '');
+        v_nomination_price := nullif(v_nomination->>'nomination_price', '')::numeric;
 
         if v_cast_id is null then
             raise exception 'cast_not_selected';
+        end if;
+
+        if v_nomination_price is null or
+           v_nomination_price < 1000 or
+           v_nomination_price > 20000 or
+           mod(v_nomination_price, 1000) <> 0 then
+            raise exception 'invalid_nomination_price';
         end if;
 
         if v_nomination_type not in ('nomination', 'in_store', 'companion') then
@@ -349,9 +420,10 @@ begin
         end if;
 
         v_companion_time := case nullif(v_nomination->>'companion_time', '')
-            when '18:00' then time '18:00'
-            when '19:00' then time '19:00'
-            when '20:00' then time '20:00'
+            when '19:29' then time '19:29'
+            when '19:59' then time '19:59'
+            when '20:59' then time '20:59'
+            when '21:00' then time '21:00'
             else null
         end;
 
@@ -383,6 +455,7 @@ begin
             slip_id,
             cast_id,
             nomination_type,
+            nomination_price,
             started_at,
             status
         )
@@ -390,6 +463,7 @@ begin
             p_slip_id,
             v_cast_id,
             v_nomination_type,
+            v_nomination_price,
             v_started_at,
             'active'
         );
@@ -455,6 +529,207 @@ begin
      where s.slip_id = v_slip_id;
 
     return query select p_slip_customer_id;
+end;
+$$;
+
+create or replace function public.save_store_slip_adjustments(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_adjustment_lines jsonb default '[]'::jsonb
+)
+returns table (
+    saved_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_line jsonb;
+    v_line_name text;
+    v_amount numeric(12, 0);
+    v_line_no integer;
+    v_saved_count integer := 0;
+begin
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    update public.store_slip_charge_lines cl
+       set status = 'voided',
+           updated_at = now()
+     where cl.slip_id = p_slip_id
+       and cl.charge_type = 'adjustment'
+       and cl.status = 'active';
+
+    v_line_no := coalesce((
+        select max(cl.line_no)
+        from public.store_slip_charge_lines cl
+        where cl.slip_id = p_slip_id
+    ), 0);
+
+    for v_line in
+        select value from jsonb_array_elements(coalesce(p_adjustment_lines, '[]'::jsonb))
+    loop
+        v_line_name := nullif(trim(coalesce(v_line->>'line_name', '')), '');
+        v_amount := nullif(v_line->>'amount', '')::numeric;
+
+        if v_line_name is null or length(v_line_name) > 160 then
+            raise exception 'invalid_adjustment_name';
+        end if;
+
+        if v_amount is null or v_amount <> trunc(v_amount) or abs(v_amount) > 99999999 then
+            raise exception 'invalid_adjustment_amount';
+        end if;
+
+        v_line_no := v_line_no + 1;
+
+        insert into public.store_slip_charge_lines (
+            slip_id,
+            business_day_id,
+            business_date,
+            company_id,
+            department_id,
+            line_no,
+            charge_type,
+            line_name,
+            quantity,
+            unit_price,
+            amount,
+            status
+        )
+        values (
+            p_slip_id,
+            v_slip.business_day_id,
+            v_slip.business_date,
+            v_slip.company_id,
+            v_slip.department_id,
+            v_line_no,
+            'adjustment',
+            v_line_name,
+            1,
+            v_amount,
+            v_amount,
+            'active'
+        );
+
+        v_saved_count := v_saved_count + 1;
+    end loop;
+
+    return query select v_saved_count;
+end;
+$$;
+
+create or replace function public.save_store_karaoke_lines(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_karaoke_lines jsonb default '[]'::jsonb
+)
+returns table (
+    saved_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_line jsonb;
+    v_slip public.store_slips%rowtype;
+    v_slip_id bigint;
+    v_quantity numeric(10, 2);
+    v_line_no integer;
+    v_saved_count integer := 0;
+begin
+    if not exists (
+        select 1
+        from public.store_business_days b
+        where b.business_day_id = p_business_day_id
+          and b.department_id = p_department_id
+          and b.status = 'open'
+    ) then
+        raise exception 'business_day_not_open';
+    end if;
+
+    for v_line in
+        select value from jsonb_array_elements(coalesce(p_karaoke_lines, '[]'::jsonb))
+    loop
+        v_slip_id := nullif(v_line->>'slip_id', '')::bigint;
+        v_quantity := coalesce(nullif(v_line->>'quantity', '')::numeric, 0);
+
+        if v_slip_id is null or v_quantity < 0 or v_quantity <> trunc(v_quantity) or v_quantity > 999 then
+            raise exception 'invalid_karaoke_quantity';
+        end if;
+
+        select *
+          into v_slip
+        from public.store_slips s
+        where s.slip_id = v_slip_id
+          and s.department_id = p_department_id
+          and s.business_day_id = p_business_day_id
+          and s.status = 'open'
+        limit 1;
+
+        if v_slip.slip_id is null then
+            raise exception 'store_slip_not_found';
+        end if;
+
+        update public.store_slip_charge_lines cl
+           set status = 'voided',
+               updated_at = now()
+         where cl.slip_id = v_slip_id
+           and cl.charge_type = 'karaoke'
+           and cl.status = 'active';
+
+        if v_quantity > 0 then
+            v_line_no := coalesce((
+                select max(cl.line_no)
+                from public.store_slip_charge_lines cl
+                where cl.slip_id = v_slip_id
+            ), 0) + 1;
+
+            insert into public.store_slip_charge_lines (
+                slip_id,
+                business_day_id,
+                business_date,
+                company_id,
+                department_id,
+                line_no,
+                charge_type,
+                line_name,
+                quantity,
+                unit_price,
+                amount,
+                status
+            )
+            values (
+                v_slip_id,
+                v_slip.business_day_id,
+                v_slip.business_date,
+                v_slip.company_id,
+                v_slip.department_id,
+                v_line_no,
+                'karaoke',
+                'カラオケ',
+                v_quantity,
+                200,
+                v_quantity * 200,
+                'active'
+            );
+        end if;
+
+        v_saved_count := v_saved_count + 1;
+    end loop;
+
+    return query select v_saved_count;
 end;
 $$;
 
@@ -532,4 +807,3 @@ begin
     return query select p_order_line_id;
 end;
 $$;
-

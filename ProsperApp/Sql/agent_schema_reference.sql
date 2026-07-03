@@ -523,7 +523,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     creates an active cast for the current store. joined_on is set to the current Asia/Tokyo date.
 --   get_business_day_slips(p_department_id bigint, p_business_day_id bigint)
 --     returns slip_id, slip_no, table_id, table_code, table_name, opened_at, status,
---       customer_count, customer_names, cast_names, accounting_amount, memo
+--       customer_count, customer_names, cast_names, accounting_amount, karaoke_quantity, memo
 --   get_order_entry_slips(p_department_id bigint, p_business_day_id bigint)
 --     returns slip_id, table_id, table_code, table_name, opened_at, customer_count, memo
 --   get_store_order_items(p_department_id bigint)
@@ -542,22 +542,33 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   get_order_attending_casts(p_department_id bigint, p_business_day_id bigint)
 --     returns cast_id, display_name, department_name
 --     display_name is the cast name; UI composes display_name:department_name when needed.
+--     includes all casts who attended the business day even if they are already checked out.
 --   add_store_order_lines(p_department_id bigint, p_slip_id bigint, p_order_lines jsonb)
 --     returns inserted_count
---     p_order_lines supports { item_id, quantity, cast_back_cast_id }.
---     Back target items require cast_back_cast_id and create store_order_line_cast_backs rows.
+--     p_order_lines supports { slip_id, item_id, quantity, cast_back_cast_id }.
+--     p_slip_id is used as the fallback slip when order-line slip_id is omitted.
+--     Back target items create store_order_line_cast_backs rows only when cast_back_cast_id is present.
 --   get_store_slip_detail(p_department_id bigint, p_slip_id bigint)
---     returns flattened slip, customer, nomination, and order rows for Slips/Edit.
+--     returns flattened slip, customer, nomination, order, and charge rows for Slips/Edit.
+--     charge rows are separate from product order rows and use charge_type adjustment/karaoke.
 --   add_store_slip_customers(p_department_id bigint, p_slip_id bigint, p_customer_labels text[], p_entered_at timestamptz)
 --     adds active customer rows to an open slip with the selected entered_at and refreshes store_slips.customer_count.
 --   add_store_slip_nominations(p_department_id bigint, p_slip_id bigint, p_cast_nominations jsonb)
---     adds nomination rows to an open slip. p_cast_nominations uses { cast_id, nomination_type, companion_time }.
+--     adds nomination rows to an open slip. p_cast_nominations uses { cast_id, nomination_type, companion_time, nomination_price }.
+--     nomination_price is selected each time and is added to checkout total.
+--   save_store_slip_adjustments(p_department_id bigint, p_slip_id bigint, p_adjustment_lines jsonb)
+--     replaces active adjustment charge lines on an open slip.
+--     p_adjustment_lines uses { line_name, amount }; negative amount is allowed.
+--   save_store_karaoke_lines(p_department_id bigint, p_business_day_id bigint, p_karaoke_lines jsonb)
+--     replaces active karaoke charge lines for selected open slips in the business day.
+--     p_karaoke_lines uses { slip_id, quantity }; unit price is fixed at 200.
 --   leave_store_slip_customer(p_department_id bigint, p_slip_customer_id bigint, p_left_at timestamptz)
 --     marks an active customer row left and refreshes store_slips.customer_count.
 --   void_store_order_line(p_department_id bigint, p_order_line_id bigint)
 --     marks an active order line and related store_order_line_cast_backs rows voided.
 --   confirm_store_checkout(p_department_id bigint, p_slip_id bigint, p_closed_at timestamptz, p_payments jsonb, p_received_amount numeric)
 --     confirms checkout, stores subtotal/service tax/total snapshots, split payment rows, closes active customers, and marks the slip checked_out.
+--     total includes product subtotal, 20% service tax on product subtotal, nomination_price, and active charge lines.
 --     p_payments supports { method_code, amount } with method_code in cash/cat/paypay.
 --   create_store_slip(
 --       p_department_id bigint,

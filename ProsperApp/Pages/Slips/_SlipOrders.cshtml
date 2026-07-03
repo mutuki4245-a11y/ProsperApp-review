@@ -6,6 +6,17 @@
         .OrderBy(x => x.LineNo)
         .ToList();
     var activeOrderTotal = activeOrders.Sum(x => x.Amount);
+    var activeCharges = detail.ChargeLines
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+        .OrderBy(x => x.LineNo)
+        .ToList();
+    var activeKaraokeQuantity = activeCharges
+        .Where(x => string.Equals(x.ChargeType, "karaoke", StringComparison.Ordinal))
+        .Sum(x => x.Quantity);
+    var activeAdjustments = activeCharges
+        .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
+        .ToList();
+    var chargeTotal = activeCharges.Sum(x => x.Amount);
     var orderItemGroups = Model.OrderItems
         .GroupBy(x => x.CategoryName)
         .ToList();
@@ -85,6 +96,93 @@
                     </tfoot>
                 </table>
             </div>
+        </div>
+
+        <div class="slip-create__panel">
+            <div class="slip-create__panel-title">
+                <h2>別枠明細</h2>
+                <span class="badge text-bg-secondary">@chargeTotal.ToString("N0") 円</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0 slip-detail-table">
+                    <colgroup>
+                        <col class="slip-detail-table__col--type" />
+                        <col class="slip-detail-table__col--primary" />
+                        <col class="slip-detail-table__col--quantity" />
+                        <col class="slip-detail-table__col--amount" />
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>種別</th>
+                            <th>明細</th>
+                            <th class="text-end">数量</th>
+                            <th class="text-end">金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (activeCharges.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="text-muted">別枠明細はまだ登録されていません。</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var charge in activeCharges)
+                            {
+                                <tr>
+                                    <td>@charge.ChargeTypeDisplayName</td>
+                                    <td>@charge.LineName</td>
+                                    <td class="text-end">@charge.Quantity.ToString("0.##")</td>
+                                    <td class="text-end">@charge.Amount.ToString("N0")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (Model.IsOpenSlip)
+            {
+                <div class="slip-charge-editor">
+                    <form method="post" asp-page-handler="SaveKaraoke" class="slip-charge-editor__karaoke" data-detail-karaoke-form>
+                        <input type="hidden" asp-for="SlipId" />
+                        <input type="hidden" name="KaraokeLines[0].SlipId" value="@detail.SlipId" />
+                        <input type="hidden" name="KaraokeLines[0].Quantity" value="@activeKaraokeQuantity" data-detail-karaoke-input />
+                        <span>カラオケ</span>
+                        <div class="quantity-stepper">
+                            <button class="btn btn-outline-secondary" type="button" data-detail-karaoke-decrement>-</button>
+                            <strong data-detail-karaoke-display>@activeKaraokeQuantity.ToString("0")</strong>
+                            <button class="btn btn-outline-primary" type="button" data-detail-karaoke-increment>+</button>
+                        </div>
+                        <span>200 円/回</span>
+                        <button class="btn btn-primary" type="submit" data-detail-karaoke-save disabled>保存</button>
+                    </form>
+
+                    <form method="post" asp-page-handler="SaveAdjustments" data-adjustment-form>
+                        <input type="hidden" asp-for="SlipId" />
+                        <div class="slip-create__panel-title">
+                            <h3>自由入力明細</h3>
+                            <button class="btn btn-outline-primary" type="button" data-add-adjustment-row>明細を追加</button>
+                        </div>
+                        <span asp-validation-for="AdjustmentsInput.Lines" class="text-danger"></span>
+                        <div class="adjustment-list" data-adjustment-list>
+                            @for (var i = 0; i < Model.AdjustmentsInput.Lines.Count; i++)
+                            {
+                                <div class="adjustment-row" data-adjustment-row>
+                                    <input class="form-control" name="AdjustmentsInput.Lines[@i].LineName" value="@Model.AdjustmentsInput.Lines[i].LineName" maxlength="160" placeholder="明細名" data-adjustment-name />
+                                    <input class="form-control" name="AdjustmentsInput.Lines[@i].Amount" value="@Model.AdjustmentsInput.Lines[i].Amount" type="number" step="1" placeholder="価格" data-adjustment-amount />
+                                    <button class="btn btn-outline-danger" type="button" data-remove-adjustment-row>削除</button>
+                                </div>
+                            }
+                        </div>
+                        <div class="slip-detail-add-actions">
+                            <button class="btn btn-primary" type="submit">調整明細を保存</button>
+                        </div>
+                    </form>
+                </div>
+            }
         </div>
 
         @if (Model.CanAddOrders)

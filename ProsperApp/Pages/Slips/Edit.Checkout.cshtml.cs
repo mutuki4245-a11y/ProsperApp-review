@@ -42,6 +42,7 @@ public partial class SlipEditModel
             return Page();
         }
 
+        QueueReceiptPrint(result);
         TempData["SuccessMessage"] = "会計を確定しました。";
         ModelState.Clear();
         return RedirectToPage("/Index");
@@ -77,6 +78,7 @@ public partial class SlipEditModel
             return Page();
         }
 
+        QueueReceiptPrint(result);
         TempData["SuccessMessage"] = $"会計を確定しました。お釣り: {result.ChangeAmount:N0}円";
         ModelState.Clear();
         return RedirectToPage("/Index");
@@ -217,12 +219,107 @@ public partial class SlipEditModel
             .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
             .Sum(x => x.Amount) ?? 0;
         var serviceTax = Math.Round(subtotal * 0.20m, 0, MidpointRounding.AwayFromZero);
+        var nominationAmount = Detail?.Nominations
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .Sum(x => x.NominationPrice) ?? 0;
+        var karaokeAmount = Detail?.ChargeLines
+            .Where(x => string.Equals(x.ChargeType, "karaoke", StringComparison.Ordinal) &&
+                        string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .Sum(x => x.Amount) ?? 0;
+        var adjustmentAmount = Detail?.ChargeLines
+            .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal) &&
+                        string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .Sum(x => x.Amount) ?? 0;
+        var total = subtotal + serviceTax + nominationAmount + karaokeAmount + adjustmentAmount;
 
         return new CheckoutTotals
         {
             SubtotalAmount = subtotal,
             ServiceTaxAmount = serviceTax,
-            TotalAmount = subtotal + serviceTax
+            NominationAmount = nominationAmount,
+            KaraokeAmount = karaokeAmount,
+            AdjustmentAmount = adjustmentAmount,
+            TotalAmount = Math.Max(total, 0)
         };
+    }
+
+    private void QueueReceiptPrint(ConfirmCheckoutResult result)
+    {
+        if (Detail is null || result.CheckoutId is null || CheckoutInput.ClosedAt is null)
+        {
+            return;
+        }
+
+        var request = BuildReceiptPrintRequest(result);
+        _ = _receiptPrinterClient.TryPrintCheckoutReceiptAsync(request, CancellationToken.None);
+    }
+
+    private ReceiptPrintRequest BuildReceiptPrintRequest(ConfirmCheckoutResult result)
+    {
+        var settings = _localSettingsProvider.GetCurrent();
+        var request = new ReceiptPrintRequest
+        {
+            CheckoutId = result.CheckoutId!.Value,
+            SlipId = Detail!.SlipId,
+            SlipNo = Detail.SlipNo,
+            StoreName = settings.StoreName,
+            TableDisplayName = Detail.TableDisplayName,
+            ClosedAt = _storeClock.ToStoreDateTimeOffset(CheckoutInput.ClosedAt!.Value),
+            SubtotalAmount = CheckoutTotals.SubtotalAmount,
+            ServiceTaxAmount = CheckoutTotals.ServiceTaxAmount,
+            NominationAmount = CheckoutTotals.NominationAmount,
+            KaraokeAmount = CheckoutTotals.KaraokeAmount,
+            AdjustmentAmount = CheckoutTotals.AdjustmentAmount,
+            TotalAmount = CheckoutTotals.TotalAmount,
+            ReceivedAmount = CheckoutInput.ReceivedAmount,
+            ChangeAmount = result.ChangeAmount
+        };
+
+        request.Lines.AddRange(Detail.Orders
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .OrderBy(x => x.LineNo)
+            .Select(x => new ReceiptPrintLine
+            {
+                LineType = "order",
+                Name = x.ItemNameSnapshot,
+                Quantity = x.Quantity,
+                UnitPrice = x.UnitPrice,
+                Amount = x.Amount
+            }));
+
+        request.Lines.AddRange(Detail.Nominations
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .OrderBy(x => x.StartedAt)
+            .Select(x => new ReceiptPrintLine
+            {
+                LineType = "nomination",
+                Name = $"{x.NominationDisplayName} {x.CastDisplayName}",
+                Quantity = 1,
+                UnitPrice = x.NominationPrice,
+                Amount = x.NominationPrice
+            }));
+
+        request.Lines.AddRange(Detail.ChargeLines
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .OrderBy(x => x.LineNo)
+            .Select(x => new ReceiptPrintLine
+            {
+                LineType = x.ChargeType,
+                Name = x.LineName,
+                Quantity = x.Quantity,
+                UnitPrice = x.UnitPrice,
+                Amount = x.Amount
+            }));
+
+        request.Payments.AddRange(CheckoutInput.Payments
+            .Where(x => x.IsSelected && x.Amount > 0)
+            .Select(x => new ReceiptPrintPayment
+            {
+                MethodCode = x.MethodCode,
+                MethodName = x.MethodName,
+                Amount = x.Amount
+            }));
+
+        return request;
     }
 }

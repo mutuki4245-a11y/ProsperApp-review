@@ -22,6 +22,8 @@ declare
     v_amount numeric(12, 0);
     v_subtotal_amount numeric(12, 0);
     v_service_tax_amount numeric(12, 0);
+    v_nomination_amount numeric(12, 0);
+    v_charge_amount numeric(12, 0);
     v_total_amount numeric(12, 0);
     v_payment_total numeric(12, 0) := 0;
     v_cash_amount numeric(12, 0) := 0;
@@ -93,8 +95,24 @@ begin
     where ol.slip_id = p_slip_id
       and ol.status = 'active';
 
+    select coalesce(sum(sc.nomination_price), 0)
+      into v_nomination_amount
+    from public.store_slip_casts sc
+    where sc.slip_id = p_slip_id
+      and sc.status = 'active';
+
+    select coalesce(sum(cl.amount), 0)
+      into v_charge_amount
+    from public.store_slip_charge_lines cl
+    where cl.slip_id = p_slip_id
+      and cl.status = 'active';
+
     v_service_tax_amount := round(v_subtotal_amount * 0.20, 0);
-    v_total_amount := v_subtotal_amount + v_service_tax_amount;
+    v_total_amount := v_subtotal_amount + v_service_tax_amount + v_nomination_amount + v_charge_amount;
+
+    if v_total_amount < 0 then
+        raise exception 'invalid_checkout_total';
+    end if;
 
     for v_payment in
         select value from jsonb_array_elements(coalesce(p_payments, '[]'::jsonb))
@@ -261,6 +279,7 @@ declare
     v_cast_id bigint;
     v_nomination jsonb;
     v_nomination_type text;
+    v_nomination_price numeric(12, 0);
     v_companion_time time;
     v_started_at timestamp with time zone;
     v_customer_count integer;
@@ -353,9 +372,17 @@ begin
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
         v_nomination_type := nullif(trim(coalesce(v_nomination->>'nomination_type', '')), '');
+        v_nomination_price := nullif(v_nomination->>'nomination_price', '')::numeric;
 
         if v_cast_id is null then
             raise exception 'cast_not_selected';
+        end if;
+
+        if v_nomination_price is null or
+           v_nomination_price < 1000 or
+           v_nomination_price > 20000 or
+           mod(v_nomination_price, 1000) <> 0 then
+            raise exception 'invalid_nomination_price';
         end if;
 
         if v_nomination_type not in ('nomination', 'in_store', 'companion') then
@@ -363,9 +390,10 @@ begin
         end if;
 
         v_companion_time := case nullif(v_nomination->>'companion_time', '')
-            when '18:00' then time '18:00'
-            when '19:00' then time '19:00'
-            when '20:00' then time '20:00'
+            when '19:29' then time '19:29'
+            when '19:59' then time '19:59'
+            when '20:59' then time '20:59'
+            when '21:00' then time '21:00'
             else null
         end;
 
@@ -394,6 +422,7 @@ begin
                 slip_id,
                 cast_id,
                 nomination_type,
+                nomination_price,
                 started_at,
                 status
             )
@@ -401,6 +430,7 @@ begin
                 v_slip_id,
                 v_cast_id,
                 v_nomination_type,
+                v_nomination_price,
                 v_started_at,
                 'active'
             );
@@ -412,4 +442,3 @@ begin
     return query select v_slip_id;
 end;
 $$;
-

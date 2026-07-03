@@ -5,6 +5,10 @@
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
         .OrderBy(x => x.LineNo)
         .ToList();
+    var activeCharges = detail.ChargeLines
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+        .OrderBy(x => x.LineNo)
+        .ToList();
     var checkoutCashPayment = Model.CheckoutInput.Payments.FirstOrDefault(x => x.MethodCode == "cash");
     var checkoutCashAmount = checkoutCashPayment?.Amount ?? 0;
 }
@@ -100,7 +104,7 @@
                                                 {
                                                     <div class="checkout-review__row">
                                                         <strong>@nomination.CastDisplayName</strong>
-                                                        <span>@Model.FormatStoreTime(nomination.StartedAt) / @nomination.NominationDisplayName</span>
+                                                        <span>@Model.FormatStoreTime(nomination.StartedAt) / @nomination.NominationDisplayName / @nomination.NominationPrice.ToString("N0") 円</span>
                                                     </div>
                                                 }
                                             </div>
@@ -133,18 +137,55 @@
                                     }
                                     <div class="checkout-review__totals">
                                         <div>
-                                            <span>小計</span>
+                                            <span>商品小計</span>
                                             <strong>@Model.CheckoutTotals.SubtotalAmount.ToString("N0") 円</strong>
                                         </div>
                                         <div>
                                             <span>ServiceTax20%</span>
                                             <strong>@Model.CheckoutTotals.ServiceTaxAmount.ToString("N0") 円</strong>
                                         </div>
+                                        <div>
+                                            <span>指名</span>
+                                            <strong>@Model.CheckoutTotals.NominationAmount.ToString("N0") 円</strong>
+                                        </div>
+                                        <div>
+                                            <span>カラオケ</span>
+                                            <strong>@Model.CheckoutTotals.KaraokeAmount.ToString("N0") 円</strong>
+                                        </div>
+                                        <div>
+                                            <span>調整</span>
+                                            <strong>@Model.CheckoutTotals.AdjustmentAmount.ToString("N0") 円</strong>
+                                        </div>
                                         <div class="checkout-review__total">
                                             <span>合計</span>
                                             <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
                                         </div>
                                     </div>
+                                </section>
+
+                                <section class="checkout-review__panel">
+                                    <div class="checkout-review__panel-title">
+                                        <h3>別枠明細</h3>
+                                        <span>@activeCharges.Count 件</span>
+                                    </div>
+                                    @if (activeCharges.Count == 0)
+                                    {
+                                        <p class="text-muted mb-0">別枠明細はありません。</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="checkout-review__orders">
+                                            @foreach (var charge in activeCharges)
+                                            {
+                                                <div class="checkout-review__order">
+                                                    <span>@charge.ChargeTypeDisplayName</span>
+                                                    <strong>@charge.LineName</strong>
+                                                    <span class="text-end">@charge.UnitPrice.ToString("N0") x @charge.Quantity.ToString("0.##")</span>
+                                                    <strong class="text-end">@charge.Amount.ToString("N0") 円</strong>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 </section>
                             </section>
 

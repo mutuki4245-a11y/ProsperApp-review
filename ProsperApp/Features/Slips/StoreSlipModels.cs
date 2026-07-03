@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ProsperApp.Services;
 
 namespace ProsperApp.Models;
 
@@ -67,6 +68,9 @@ public class StoreCastSaveResult
 public class CastNominationInputModel
 {
     public string? NominationKind { get; set; }
+
+    [Range(1000, 20000, ErrorMessage = "指名価格は1000円から20000円で選択してください。")]
+    public decimal NominationPrice { get; set; } = 1000;
 
     public long? CastId { get; set; }
 
@@ -191,6 +195,7 @@ public class BusinessSlipListItem
     public string? CustomerNames { get; set; }
     public string? CastNames { get; set; }
     public decimal AccountingAmount { get; set; }
+    public decimal KaraokeQuantity { get; set; }
     public string? Memo { get; set; }
 
     public string TableDisplayName
@@ -222,6 +227,7 @@ public class SlipDetail
     public List<SlipDetailCustomer> Customers { get; } = [];
     public List<SlipDetailNomination> Nominations { get; } = [];
     public List<SlipDetailOrderLine> Orders { get; } = [];
+    public List<SlipDetailChargeLine> ChargeLines { get; } = [];
 
     public string TableDisplayName
     {
@@ -258,6 +264,7 @@ public class SlipDetailNomination
     public string DisplayName { get; set; } = string.Empty;
     public string? DepartmentName { get; set; }
     public string NominationType { get; set; } = string.Empty;
+    public decimal NominationPrice { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public string Status { get; set; } = string.Empty;
 
@@ -265,11 +272,23 @@ public class SlipDetailNomination
 
     public string NominationDisplayName => NominationType switch
     {
-        "companion" => "同伴",
+        "companion" => ToCompanionDisplayName(),
         "in_store" => "場内指名",
         "nomination" => "本指名",
         _ => NominationType
     };
+
+    private string ToCompanionDisplayName()
+    {
+        return StoreBusinessTime.FormatStoreTime(StartedAt) switch
+        {
+            "19:29" => "同伴 19:29まで",
+            "19:59" => "同伴 19:59まで",
+            "20:59" => "同伴 20:59まで",
+            "21:00" => "同伴 21:00以降",
+            _ => "同伴"
+        };
+    }
 }
 
 public class SlipDetailOrderLine
@@ -282,6 +301,48 @@ public class SlipDetailOrderLine
     public decimal Amount { get; set; }
     public DateTimeOffset OrderedAt { get; set; }
     public string Status { get; set; } = string.Empty;
+}
+
+public class SlipDetailChargeLine
+{
+    public long ChargeLineId { get; set; }
+    public int LineNo { get; set; }
+    public string ChargeType { get; set; } = string.Empty;
+    public string LineName { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal Amount { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public string Status { get; set; } = string.Empty;
+
+    public string ChargeTypeDisplayName => ChargeType switch
+    {
+        "karaoke" => "カラオケ",
+        "adjustment" => "調整",
+        _ => ChargeType
+    };
+}
+
+public class SlipAdjustmentInputModel
+{
+    [StringLength(160, ErrorMessage = "明細名は160文字以内で入力してください。")]
+    public string? LineName { get; set; }
+
+    [Range(-99999999, 99999999, ErrorMessage = "価格を確認してください。")]
+    public decimal Amount { get; set; }
+}
+
+public class SaveSlipAdjustmentsInputModel
+{
+    public List<SlipAdjustmentInputModel> Lines { get; set; } = [];
+}
+
+public class KaraokeQuantityInputModel
+{
+    public long SlipId { get; set; }
+
+    [Range(0, 999, ErrorMessage = "カラオケ回数を確認してください。")]
+    public decimal Quantity { get; set; }
 }
 
 public class StoreBusinessDay

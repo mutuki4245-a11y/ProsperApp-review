@@ -16,9 +16,10 @@ public class IndexModel(
 {
     private static readonly HashSet<string> AllowedNominationKinds = new(StringComparer.Ordinal)
     {
-        "companion_18",
-        "companion_19",
-        "companion_20",
+        "companion_until_1929",
+        "companion_until_1959",
+        "companion_until_2059",
+        "companion_after_2100",
         "nomination",
         "in_store"
     };
@@ -33,6 +34,9 @@ public class IndexModel(
 
     [BindProperty]
     public CreateSlipInputModel CreateSlipInput { get; set; } = new();
+
+    [BindProperty]
+    public List<KaraokeQuantityInputModel> KaraokeLines { get; set; } = [];
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
@@ -137,6 +141,67 @@ public class IndexModel(
         return Page();
     }
 
+    public async Task<IActionResult> OnPostSaveKaraokeAsync(CancellationToken cancellationToken)
+    {
+        var isAsyncRequest = IsAsyncKaraokeRequest();
+        if (!SlipsEnabled)
+        {
+            return isAsyncRequest ? KaraokeJsonError("カラオケ入力は利用できません。", 404) : NotFound();
+        }
+
+        await LoadAsync(cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
+            if (isAsyncRequest)
+            {
+                return KaraokeJsonError(GetFirstModelError("営業中の営業日がありません。"));
+            }
+
+            SetDefaultCreateSlipInput();
+            return Page();
+        }
+
+        NormalizeKaraokeLines();
+        ValidateKaraokeLines();
+        if (!ModelState.IsValid)
+        {
+            if (isAsyncRequest)
+            {
+                return KaraokeJsonError(GetFirstModelError("カラオケ回数を保存できませんでした。"));
+            }
+
+            SetDefaultCreateSlipInput();
+            return Page();
+        }
+
+        var result = await _slipRepository.SaveKaraokeLinesAsync(
+            CurrentBusinessDay.BusinessDayId,
+            KaraokeLines,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "カラオケ回数を保存できませんでした。");
+            if (isAsyncRequest)
+            {
+                return KaraokeJsonError(GetFirstModelError("カラオケ回数を保存できませんでした。"));
+            }
+
+            SetDefaultCreateSlipInput();
+            return Page();
+        }
+
+        if (isAsyncRequest)
+        {
+            ModelState.Clear();
+            return new JsonResult(new { succeeded = true, savedCount = KaraokeLines.Count });
+        }
+
+        TempData["SuccessMessage"] = "カラオケ回数を保存しました。";
+        ModelState.Clear();
+        return RedirectToPage();
+    }
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         StoreContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
@@ -191,7 +256,7 @@ public class IndexModel(
 
         if (CreateSlipInput.CastNominations.Count == 0)
         {
-            CreateSlipInput.CastNominations.Add(new CastNominationInputModel());
+            CreateSlipInput.CastNominations.Add(new CastNominationInputModel { NominationKind = "nomination" });
         }
 
         ComposeOpenedAt();
@@ -218,12 +283,30 @@ public class IndexModel(
         CreateSlipInput.CastNominations = CreateSlipInput.CastNominations
             .Select(x => new CastNominationInputModel
             {
-                NominationKind = string.IsNullOrWhiteSpace(x.NominationKind) ? null : x.NominationKind.Trim(),
+                NominationKind = ResolveNominationKind(x),
+                NominationPrice = x.NominationPrice,
                 CastId = x.CastId,
                 CastName = string.IsNullOrWhiteSpace(x.CastName) ? null : x.CastName.Trim()
             })
-            .Where(x => x.CastId is not null || !string.IsNullOrWhiteSpace(x.CastName) || !string.IsNullOrWhiteSpace(x.NominationKind))
+            .Where(HasNominationCast)
             .ToList();
+    }
+
+    private static bool HasNominationCast(CastNominationInputModel nomination)
+    {
+        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName);
+    }
+
+    private static string? ResolveNominationKind(CastNominationInputModel nomination)
+    {
+        if (!string.IsNullOrWhiteSpace(nomination.NominationKind))
+        {
+            return nomination.NominationKind.Trim();
+        }
+
+        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName)
+            ? "nomination"
+            : null;
     }
 
     private void ComposeOpenedAt()
@@ -275,6 +358,11 @@ public class IndexModel(
                 ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationKind", "指名区分を選択してください。");
             }
 
+            if (!IsValidNominationPrice(nomination.NominationPrice))
+            {
+                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationPrice", "指名価格を選択してください。");
+            }
+
             if (nomination.CastId is null)
             {
                 ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].CastName", "候補からキャストを選択してください。");
@@ -318,6 +406,69 @@ public class IndexModel(
                 ModelState.AddModelError("CreateSlipInput.OpenedAt", "入店時刻は過去2日以内で入力してください。");
             }
         }
+    }
+
+    private void NormalizeKaraokeLines()
+    {
+        KaraokeLines = KaraokeLines
+            .Where(x => x.SlipId > 0)
+            .GroupBy(x => x.SlipId)
+            .Select(x => new KaraokeQuantityInputModel
+            {
+                SlipId = x.Key,
+                Quantity = x.Last().Quantity
+            })
+            .ToList();
+    }
+
+    private void ValidateKaraokeLines()
+    {
+        if (KaraokeLines.Count == 0)
+        {
+            ModelState.AddModelError(nameof(KaraokeLines), "保存するカラオケ回数がありません。");
+            return;
+        }
+
+        var openSlipIds = Slips
+            .Where(x => string.Equals(x.Status, "open", StringComparison.Ordinal))
+            .Select(x => x.SlipId)
+            .ToHashSet();
+        for (var i = 0; i < KaraokeLines.Count; i++)
+        {
+            var line = KaraokeLines[i];
+            if (!openSlipIds.Contains(line.SlipId))
+            {
+                ModelState.AddModelError($"KaraokeLines[{i}].SlipId", "営業中の卓を確認してください。");
+            }
+
+            if (line.Quantity < 0 || line.Quantity > 999 || line.Quantity != decimal.Truncate(line.Quantity))
+            {
+                ModelState.AddModelError($"KaraokeLines[{i}].Quantity", "カラオケ回数を確認してください。");
+            }
+        }
+    }
+
+    private bool IsAsyncKaraokeRequest()
+    {
+        return string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private IActionResult KaraokeJsonError(string message, int statusCode = 400)
+    {
+        return new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
+    }
+
+    private string GetFirstModelError(string fallback)
+    {
+        return ModelState.Values
+            .SelectMany(x => x.Errors)
+            .Select(x => x.ErrorMessage)
+            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? fallback;
+    }
+
+    private static bool IsValidNominationPrice(decimal price)
+    {
+        return price is >= 1000 and <= 20000 && price % 1000 == 0;
     }
 
     public static string ToSlipStatusDisplay(string status)
