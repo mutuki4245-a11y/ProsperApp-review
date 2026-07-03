@@ -18,11 +18,21 @@ internal static class StoreMasterCacheKeys
 
     public static string CastAdminList(long departmentId) => $"store-master:{departmentId}:cast-admin-list";
 
+    public static string CurrentBusinessDay(long departmentId) => $"store-runtime:{departmentId}:current-business-day";
+
     public static MemoryCacheEntryOptions CreateOptions()
     {
         return new MemoryCacheEntryOptions
         {
             Priority = CacheItemPriority.NeverRemove
+        };
+    }
+
+    public static MemoryCacheEntryOptions CreateShortOptions()
+    {
+        return new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(10)
         };
     }
 
@@ -36,5 +46,10 @@ internal static class StoreMasterCacheKeys
     {
         memoryCache.Remove(StoreCasts(departmentId));
         memoryCache.Remove(CastAdminList(departmentId));
+    }
+
+    public static void ClearCurrentBusinessDay(IMemoryCache memoryCache, long departmentId)
+    {
+        memoryCache.Remove(CurrentBusinessDay(departmentId));
     }
 }

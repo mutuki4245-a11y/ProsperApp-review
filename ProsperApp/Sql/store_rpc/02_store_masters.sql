@@ -202,7 +202,24 @@ language sql
 security definer
 set search_path = public
 as $$
-    with customer_summary as (
+    with target_slips as (
+        select
+            s.slip_id,
+            s.slip_no,
+            s.table_id,
+            t.table_code,
+            t.table_name,
+            s.opened_at,
+            s.status,
+            s.customer_count,
+            s.memo
+        from public.store_slips s
+        left join public.store_table_master t
+          on t.table_id = s.table_id
+        where s.department_id = p_department_id
+          and s.business_day_id = p_business_day_id
+    ),
+    customer_summary as (
         select
             c.slip_id,
             count(*) filter (where c.status <> 'cancelled')::integer as customer_count,
@@ -211,7 +228,9 @@ as $$
                 '、'
                 order by c.line_no
             ) filter (where c.status <> 'cancelled') as customer_names
-        from public.store_slip_customers c
+        from target_slips s
+        join public.store_slip_customers c
+          on c.slip_id = s.slip_id
         group by c.slip_id
     ),
     cast_rows as (
@@ -221,7 +240,9 @@ as $$
             cm.display_name as cast_display_name,
             min(sc.started_at) as first_started_at,
             min(sc.slip_cast_id) as first_slip_cast_id
-        from public.store_slip_casts sc
+        from target_slips s
+        join public.store_slip_casts sc
+          on sc.slip_id = s.slip_id
         join public.cast_master cm
           on cm.cast_id = sc.cast_id
         where sc.status <> 'cancelled'
@@ -243,32 +264,39 @@ as $$
         select
             l.slip_id,
             coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount
-        from public.store_order_lines l
+        from target_slips s
+        join public.store_order_lines l
+          on l.slip_id = s.slip_id
         group by l.slip_id
     ),
     nomination_summary as (
         select
             sc.slip_id,
             coalesce(sum(sc.nomination_price) filter (where sc.status = 'active'), 0) as nomination_amount
-        from public.store_slip_casts sc
+        from target_slips s
+        join public.store_slip_casts sc
+          on sc.slip_id = s.slip_id
         group by sc.slip_id
     ),
     charge_summary as (
         select
             cl.slip_id,
-            coalesce(sum(cl.amount) filter (where cl.status = 'active'), 0) as charge_amount
-        from public.store_slip_charge_lines cl
+            coalesce(sum(cl.amount) filter (where cl.status = 'active'), 0) as charge_amount,
+            coalesce(sum(cl.quantity) filter (where cl.charge_type = 'karaoke' and cl.status = 'active'), 0) as karaoke_quantity
+        from target_slips s
+        join public.store_slip_charge_lines cl
+          on cl.slip_id = s.slip_id
         group by cl.slip_id
     )
     select
-        s.slip_id,
-        s.slip_no,
-        s.table_id,
-        t.table_code,
-        t.table_name,
-        s.opened_at,
-        s.status,
-        coalesce(cs.customer_count, s.customer_count) as customer_count,
+        ts.slip_id,
+        ts.slip_no,
+        ts.table_id,
+        ts.table_code,
+        ts.table_name,
+        ts.opened_at,
+        ts.status,
+        coalesce(cs.customer_count, ts.customer_count) as customer_count,
         coalesce(cs.customer_names, '') as customer_names,
         coalesce(casts.cast_names, '') as cast_names,
         greatest(
@@ -278,30 +306,20 @@ as $$
             coalesce(charges.charge_amount, 0),
             0
         ) as accounting_amount,
-        coalesce((
-            select sum(cl.quantity)
-            from public.store_slip_charge_lines cl
-            where cl.slip_id = s.slip_id
-              and cl.charge_type = 'karaoke'
-              and cl.status = 'active'
-        ), 0) as karaoke_quantity,
-        s.memo
-    from public.store_slips s
-    left join public.store_table_master t
-      on t.table_id = s.table_id
+        coalesce(charges.karaoke_quantity, 0) as karaoke_quantity,
+        ts.memo
+    from target_slips ts
     left join customer_summary cs
-      on cs.slip_id = s.slip_id
+      on cs.slip_id = ts.slip_id
     left join cast_summary casts
-      on casts.slip_id = s.slip_id
+      on casts.slip_id = ts.slip_id
     left join order_summary os
-      on os.slip_id = s.slip_id
+      on os.slip_id = ts.slip_id
     left join nomination_summary ns
-      on ns.slip_id = s.slip_id
+      on ns.slip_id = ts.slip_id
     left join charge_summary charges
-      on charges.slip_id = s.slip_id
-    where s.department_id = p_department_id
-      and s.business_day_id = p_business_day_id
-    order by s.opened_at asc;
+      on charges.slip_id = ts.slip_id
+    order by ts.opened_at asc;
 $$;
 
 create or replace function public.get_order_entry_slips(

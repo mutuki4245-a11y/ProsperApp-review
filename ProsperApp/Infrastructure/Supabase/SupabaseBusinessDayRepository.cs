@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using ProsperApp.Models;
 using ProsperApp.Options;
@@ -12,9 +13,11 @@ public class SupabaseBusinessDayRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
     IStoreClock storeClock,
+    IMemoryCache memoryCache,
     IOptions<SupabaseOptions> options) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
 {
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IMemoryCache _memoryCache = memoryCache;
     private readonly SupabaseOptions _options = options.Value;
 
     public async Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct)
@@ -24,12 +27,26 @@ public class SupabaseBusinessDayRepository(
             return null;
         }
 
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.CurrentBusinessDay(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
+        {
+            return cachedBusinessDay;
+        }
+
         var rows = await PostRpcArrayAsync(
             "get_current_business_day",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
-        return rows.Count == 0 ? null : ParseBusinessDay(rows[0]);
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var businessDay = ParseBusinessDay(rows[0]);
+        _memoryCache.Set(cacheKey, businessDay, StoreMasterCacheKeys.CreateShortOptions());
+        return businessDay;
     }
 
     public async Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct)
@@ -128,7 +145,9 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("営業日を開始できませんでした。");
         }
 
-        return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
+        var businessDay = ParseBusinessDay(result.Rows[0]);
+        _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(CurrentStoreDepartmentId), businessDay, StoreMasterCacheKeys.CreateShortOptions());
+        return BusinessDayOperationResult.Success(businessDay);
     }
 
     public async Task<BusinessDayOperationResult> CloseAsync(long businessDayId, string? memo, CancellationToken ct)
@@ -159,6 +178,7 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("現在営業中の営業日が見つかりません。");
         }
 
+        StoreMasterCacheKeys.ClearCurrentBusinessDay(_memoryCache, CurrentStoreDepartmentId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
 

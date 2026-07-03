@@ -448,8 +448,15 @@ create unique index if not exists ux_store_business_days_one_open
 create index if not exists idx_store_business_days_lookup
     on public.store_business_days(company_id, department_id, business_date, status);
 
+create index if not exists idx_store_business_days_open_department
+    on public.store_business_days(department_id, opened_at desc)
+    where status = 'open';
+
 create index if not exists idx_store_cast_attendance_day_status
     on public.store_cast_attendance(company_id, department_id, business_day_id, attendance_status);
+
+create index if not exists idx_store_cast_attendance_department_day_status
+    on public.store_cast_attendance(department_id, business_day_id, attendance_status, cast_id);
 
 create index if not exists idx_store_cast_attendance_cast
     on public.store_cast_attendance(cast_id, business_date);
@@ -459,6 +466,9 @@ create index if not exists idx_store_slips_open
 
 create index if not exists idx_store_slips_business_day
     on public.store_slips(business_day_id, status);
+
+create index if not exists idx_store_slips_department_business_day
+    on public.store_slips(department_id, business_day_id, opened_at);
 
 create index if not exists idx_store_slip_customers_slip_status
     on public.store_slip_customers(slip_id, status);
@@ -483,6 +493,9 @@ create index if not exists idx_store_slip_charge_lines_day
 
 create index if not exists idx_store_checkouts_date
     on public.store_checkouts(company_id, department_id, checkout_at);
+
+create index if not exists idx_store_checkouts_slip_status
+    on public.store_checkouts(slip_id, status);
 
 create index if not exists idx_store_checkout_payments_checkout
     on public.store_checkout_payments(checkout_id, status);

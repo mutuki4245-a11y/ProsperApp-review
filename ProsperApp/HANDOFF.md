@@ -12,8 +12,9 @@
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
 - Supabase RPCのHTTP送信、Edge Functionキー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。アプリからのRPCは必ず `prosper-rpc` Edge Function経由で呼び出し、REST RPC fallbackは持ちません。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
-- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。RPC失敗や設定未完了の結果はキャッシュしません。
-- 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` で取得します。
+- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。現在営業日は店舗別に10秒だけ短期キャッシュし、営業日開始時は更新、締め成功時は破棄します。RPC失敗や設定未完了の結果はキャッシュしません。
+- 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` で取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。
+- 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `get_business_day_slips` と `get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。

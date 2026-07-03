@@ -214,58 +214,55 @@
                             <section class="slip-create__panel">
                                 <div class="slip-create__panel-title">
                                     <h3>指名情報</h3>
-                                    <button class="btn btn-outline-primary" type="button" id="businessAddNominationButton" @(Model.AttendanceCasts.Count == 0 ? "disabled" : null)>指名行追加</button>
+                                    <button class="btn btn-outline-primary" type="button" id="businessAddNominationButton">指名行追加</button>
                                 </div>
-                                @if (Model.AttendanceCasts.Count == 0)
-                                {
-                                    <div class="alert alert-secondary mb-0">出勤キャストが未登録です。指名なしで伝票を作成できます。</div>
-                                }
-                                else
-                                {
-                                    <div class="nomination-list" id="businessNominationList">
-                                        @for (var i = 0; i < Model.CreateSlipInput.CastNominations.Count; i++)
-                                        {
-                                            var nomination = Model.CreateSlipInput.CastNominations[i];
-                                            <div class="nomination-row" data-business-nomination-row>
-                                                <label class="customer-row__index nomination-row__index">@(i + 1)</label>
-                                                <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[@i].NominationKind">
-                                                    <option value="">指名区分</option>
-                                                    @foreach (var option in nominationOptions)
+                                <div class="nomination-list" id="businessNominationList">
+                                    @for (var i = 0; i < Model.CreateSlipInput.CastNominations.Count; i++)
+                                    {
+                                        var nomination = Model.CreateSlipInput.CastNominations[i];
+                                        <div class="nomination-row" data-business-nomination-row>
+                                            <label class="customer-row__index nomination-row__index">@(i + 1)</label>
+                                            <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[@i].NominationKind">
+                                                <option value="">指名区分</option>
+                                                @foreach (var option in nominationOptions)
+                                                {
+                                                    if (nomination.NominationKind == option.Item1)
                                                     {
-                                                        if (nomination.NominationKind == option.Item1)
-                                                        {
-                                                            <option value="@option.Item1" selected>@option.Item2</option>
-                                                        }
-                                                        else
-                                                        {
-                                                            <option value="@option.Item1">@option.Item2</option>
-                                                        }
+                                                        <option value="@option.Item1" selected>@option.Item2</option>
                                                     }
-                                                </select>
-                                                <select class="form-select nomination-row__price" name="CreateSlipInput.CastNominations[@i].NominationPrice">
-                                                    @foreach (var price in nominationPriceOptions)
+                                                    else
                                                     {
-                                                        if (nomination.NominationPrice == price)
-                                                        {
-                                                            <option value="@price" selected>@price.ToString("N0") 円</option>
-                                                        }
-                                                        else
-                                                        {
-                                                            <option value="@price">@price.ToString("N0") 円</option>
-                                                        }
+                                                        <option value="@option.Item1">@option.Item2</option>
                                                     }
-                                                </select>
-                                                <div class="nomination-row__cast">
-                                                    <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastId" value="@nomination.CastId" data-business-cast-id />
-                                                    <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastName" value="@nomination.CastName" data-business-cast-name-hidden />
-                                                    <button class="selected-cast selected-cast--button" type="button" data-business-open-cast-modal>
-                                                        <span data-business-selected-cast>@(nomination.CastName ?? "キャストを選択")</span>
-                                                    </button>
-                                                </div>
-                                                <button class="btn btn-outline-danger nomination-row__remove" type="button" data-business-remove-nomination @(i == 0 ? "hidden" : null)>削除</button>
+                                                }
+                                            </select>
+                                            <select class="form-select nomination-row__price" name="CreateSlipInput.CastNominations[@i].NominationPrice">
+                                                @foreach (var price in nominationPriceOptions)
+                                                {
+                                                    if (nomination.NominationPrice == price)
+                                                    {
+                                                        <option value="@price" selected>@price.ToString("N0") 円</option>
+                                                    }
+                                                    else
+                                                    {
+                                                        <option value="@price">@price.ToString("N0") 円</option>
+                                                    }
+                                                }
+                                            </select>
+                                            <div class="nomination-row__cast">
+                                                <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastId" value="@nomination.CastId" data-business-cast-id />
+                                                <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastName" value="@nomination.CastName" data-business-cast-name-hidden />
+                                                <button class="selected-cast selected-cast--button" type="button" data-business-open-cast-modal>
+                                                    <span data-business-selected-cast>@(nomination.CastName ?? "キャストを選択")</span>
+                                                </button>
                                             </div>
-                                        }
-                                    </div>
+                                            <button class="btn btn-outline-danger nomination-row__remove" type="button" data-business-remove-nomination @(i == 0 ? "hidden" : null)>削除</button>
+                                        </div>
+                                    }
+                                </div>
+                                @if (Model.CreateSlipInput.CastNominations.Count == 0)
+                                {
+                                    <p class="text-muted mb-0" data-business-nomination-empty>指名なし</p>
                                 }
                             </section>
 
@@ -602,12 +599,16 @@
                 return;
             }
 
-            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.SearchDisplayName, department = c.DepartmentName })));
+            let castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(c => new { id = c.CastId, name = c.DisplayName, display = c.SearchDisplayName, department = c.DepartmentName })));
+            let castOptionsLoaded = castOptions.length > 0;
+            let castOptionsLoading = null;
+            const attendanceCastsUrl = '@Url.Page("/Index", "AttendanceCasts")';
             const showCreateSlipModal = @Json.Serialize(Model.ShowCreateSlipModal);
             const tableIdInput = document.getElementById('businessCreateSlipTableId');
             const customerList = document.getElementById('businessCustomerList');
             const addCustomerButton = document.getElementById('businessAddCustomerButton');
             const nominationList = document.getElementById('businessNominationList');
+            const nominationEmpty = document.querySelector('[data-business-nomination-empty]');
             const addNominationButton = document.getElementById('businessAddNominationButton');
             const castModalElement = document.getElementById('businessAttendingCastSelectModal');
             const castModalList = document.getElementById('businessAttendingCastModalList');
@@ -627,6 +628,41 @@
             const nominationPriceOptionsHtml = nominationPriceOptions
                 .map((price) => `<option value="${price.value}">${price.label}</option>`)
                 .join('');
+
+            const loadCastOptions = async () => {
+                if (castOptionsLoaded) {
+                    return castOptions;
+                }
+
+                if (!castOptionsLoading) {
+                    castOptionsLoading = fetch(attendanceCastsUrl, {
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error('Attendance casts load failed.');
+                            }
+
+                            return response.json();
+                        })
+                        .then((items) => {
+                            castOptions = Array.isArray(items) ? items : [];
+                            castOptionsLoaded = true;
+                            castOptionsLoading = null;
+                            return castOptions;
+                        })
+                        .catch(() => {
+                            castOptions = [];
+                            castOptionsLoaded = false;
+                            castOptionsLoading = null;
+                            return castOptions;
+                        });
+                }
+
+                return castOptionsLoading;
+            };
 
             document.querySelectorAll('[data-business-slip-table-id]').forEach((button) => {
                 button.addEventListener('click', () => {
@@ -729,14 +765,17 @@
                 });
             };
 
-            const openCastModal = (row) => {
+            const openCastModal = async (row) => {
                 castModalTargetRow = row;
+                await loadCastOptions();
                 renderCastModal();
                 castModal?.show();
             };
 
             const wireNominationRow = (row) => {
-                row.querySelector('[data-business-open-cast-modal]')?.addEventListener('click', () => openCastModal(row));
+                row.querySelector('[data-business-open-cast-modal]')?.addEventListener('click', () => {
+                    void openCastModal(row);
+                });
             };
 
             const renumberNominationRows = () => {
@@ -745,6 +784,9 @@
                 }
 
                 const rows = nominationList.querySelectorAll('[data-business-nomination-row]');
+                if (nominationEmpty) {
+                    nominationEmpty.hidden = rows.length > 0;
+                }
                 rows.forEach((row, index) => {
                     const label = row.querySelector('.nomination-row__index');
                     const kind = row.querySelector('.nomination-row__kind');
@@ -773,8 +815,15 @@
                 });
             };
 
-            const addNominationRow = () => {
+            const addNominationRow = async () => {
                 if (!nominationList) {
+                    return;
+                }
+
+                await loadCastOptions();
+                if (castOptions.length === 0) {
+                    renderCastModal();
+                    castModal?.show();
                     return;
                 }
 
@@ -806,7 +855,7 @@
                 nominationList.appendChild(row);
                 wireNominationRow(row);
                 renumberNominationRows();
-                openCastModal(row);
+                await openCastModal(row);
             };
 
             customerList?.addEventListener('click', (event) => {
@@ -830,12 +879,17 @@
             });
 
             addCustomerButton?.addEventListener('click', addCustomerRow);
-            addNominationButton?.addEventListener('click', addNominationRow);
+            addNominationButton?.addEventListener('click', () => {
+                void addNominationRow();
+            });
             renumberCustomerRows();
             renumberNominationRows();
             nominationList?.querySelectorAll('[data-business-nomination-row]').forEach(wireNominationRow);
             castModalElement?.addEventListener('hidden.bs.modal', () => {
                 castModalTargetRow = null;
+            });
+            createSlipModalElement.addEventListener('shown.bs.modal', () => {
+                void loadCastOptions();
             });
 
             if (showCreateSlipModal) {

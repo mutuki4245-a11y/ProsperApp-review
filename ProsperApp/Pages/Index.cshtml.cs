@@ -80,10 +80,33 @@ public class IndexModel(
             return RedirectToPage("/Orders/Index");
         }
 
-        await LoadAsync(cancellationToken);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: false);
         SetDefaultCreateSlipInput();
         SuccessMessage = TempData["SuccessMessage"] as string;
         return Page();
+    }
+
+    public async Task<IActionResult> OnGetAttendanceCastsAsync(CancellationToken cancellationToken)
+    {
+        if (!SlipsEnabled)
+        {
+            return NotFound();
+        }
+
+        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (currentBusinessDay is null)
+        {
+            return new JsonResult(Array.Empty<object>());
+        }
+
+        var casts = await _orderRepository.GetAttendanceCastsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(casts.Select(cast => new
+        {
+            id = cast.CastId,
+            name = cast.DisplayName,
+            display = cast.SearchDisplayName,
+            department = cast.DepartmentName
+        }));
     }
 
     public async Task<IActionResult> OnPostCreateSlipAsync(CancellationToken cancellationToken)
@@ -94,7 +117,7 @@ public class IndexModel(
         }
 
         NormalizeCreateSlipInput();
-        await LoadAsync(cancellationToken);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: CreateSlipInput.CastNominations.Count > 0);
         SetBusinessDayInput();
         ComposeOpenedAt();
         ValidateCreateSlip();
@@ -116,7 +139,7 @@ public class IndexModel(
         SuccessMessage = "伝票を作成しました。";
         ModelState.Clear();
         CreateSlipInput = new CreateSlipInputModel();
-        await LoadAsync(cancellationToken);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: false);
         SetDefaultCreateSlipInput();
         return Page();
     }
@@ -129,7 +152,7 @@ public class IndexModel(
             return isAsyncRequest ? KaraokeJsonError("カラオケ入力は利用できません。", 404) : NotFound();
         }
 
-        await LoadAsync(cancellationToken);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: false);
         if (CurrentBusinessDay is null)
         {
             ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
@@ -182,7 +205,7 @@ public class IndexModel(
         return RedirectToPage();
     }
 
-    private async Task LoadAsync(CancellationToken cancellationToken)
+    private async Task LoadAsync(CancellationToken cancellationToken, bool includeAttendanceCasts)
     {
         var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
         var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
@@ -204,11 +227,20 @@ public class IndexModel(
             return;
         }
 
-        var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
         var slipsTask = _slipRepository.GetBusinessDaySlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        await Task.WhenAll(attendanceCastsTask, slipsTask);
 
-        AttendanceCasts = await attendanceCastsTask;
+        if (includeAttendanceCasts)
+        {
+            var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+            await Task.WhenAll(slipsTask, attendanceCastsTask);
+            AttendanceCasts = await attendanceCastsTask;
+        }
+        else
+        {
+            AttendanceCasts = [];
+            await slipsTask;
+        }
+
         Slips = await slipsTask;
     }
 
@@ -220,11 +252,6 @@ public class IndexModel(
         if (CreateSlipInput.CustomerLabels.Count == 0)
         {
             CreateSlipInput.CustomerLabels.Add(null);
-        }
-
-        if (CreateSlipInput.CastNominations.Count == 0)
-        {
-            CreateSlipInput.CastNominations.Add(new CastNominationInputModel { NominationKind = "nomination" });
         }
 
         ComposeOpenedAt();

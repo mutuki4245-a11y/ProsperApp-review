@@ -74,7 +74,30 @@ language sql
 security definer
 set search_path = public
 as $$
-    with customer_summary as (
+    with target_slips as (
+        select
+            s.slip_id,
+            s.slip_no,
+            s.table_id,
+            s.status,
+            t.table_code,
+            t.table_name,
+            c.checkout_id,
+            c.checkout_at,
+            c.subtotal_amount,
+            c.service_tax_amount,
+            c.total_amount
+        from public.store_slips s
+        join public.store_checkouts c
+          on c.slip_id = s.slip_id
+         and c.status = 'confirmed'
+        left join public.store_table_master t
+          on t.table_id = s.table_id
+        where s.department_id = p_department_id
+          and s.business_day_id = p_business_day_id
+          and s.status = 'checked_out'
+    ),
+    customer_summary as (
         select
             c.slip_id,
             string_agg(
@@ -82,7 +105,9 @@ as $$
                 '、'
                 order by c.line_no
             ) filter (where c.status <> 'cancelled') as customer_names
-        from public.store_slip_customers c
+        from target_slips s
+        join public.store_slip_customers c
+          on c.slip_id = s.slip_id
         group by c.slip_id
     ),
     required_casts as (
@@ -92,19 +117,13 @@ as $$
             sc.cast_id,
             cm.display_name as cast_display_name,
             sc.started_at
-        from public.store_slips s
-        join public.store_checkouts c
-          on c.slip_id = s.slip_id
-         and c.status = 'confirmed'
+        from target_slips s
         join public.store_slip_casts sc
           on sc.slip_id = s.slip_id
          and sc.status = 'active'
          and sc.nomination_type in ('nomination', 'in_store', 'companion')
         join public.cast_master cm
           on cm.cast_id = sc.cast_id
-        where s.department_id = p_department_id
-          and s.business_day_id = p_business_day_id
-          and s.status = 'checked_out'
     ),
     required_cast_names as (
         select
@@ -140,37 +159,29 @@ as $$
         group by rc.slip_id
     )
     select
-        s.slip_id,
-        s.slip_no,
-        s.table_id,
-        t.table_code,
-        t.table_name,
-        c.checkout_id,
-        c.checkout_at,
-        c.subtotal_amount,
-        c.service_tax_amount,
-        c.total_amount,
+        ts.slip_id,
+        ts.slip_no,
+        ts.table_id,
+        ts.table_code,
+        ts.table_name,
+        ts.checkout_id,
+        ts.checkout_at,
+        ts.subtotal_amount,
+        ts.service_tax_amount,
+        ts.total_amount,
         coalesce(cs.customer_names, '') as customer_names,
         coalesce(cns.cast_names, '') as cast_names,
         ss.required_cast_count,
         ss.saved_cast_count,
         ss.adjusted_sales_amount_total
-    from public.store_slips s
-    join public.store_checkouts c
-      on c.slip_id = s.slip_id
-     and c.status = 'confirmed'
+    from target_slips ts
     join slip_status ss
-      on ss.slip_id = s.slip_id
+      on ss.slip_id = ts.slip_id
     left join customer_summary cs
-      on cs.slip_id = s.slip_id
+      on cs.slip_id = ts.slip_id
     left join cast_name_summary cns
-      on cns.slip_id = s.slip_id
-    left join public.store_table_master t
-      on t.table_id = s.table_id
-    where s.department_id = p_department_id
-      and s.business_day_id = p_business_day_id
-      and s.status = 'checked_out'
-    order by c.checkout_at asc, s.slip_id asc;
+      on cns.slip_id = ts.slip_id
+    order by ts.checkout_at asc, ts.slip_id asc;
 $$;
 
 drop function if exists public.get_cast_sales_adjustment_detail(bigint, bigint);
