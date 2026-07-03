@@ -246,7 +246,7 @@ Azure App Serviceでは最低限以下が必要です。
 
 - `Supabase__Url`
 - `SUPABASE_RPC_EDGE_FUNCTION_URL` または `Supabase__RpcEdgeFunctionUrl`
-- `SUPABASE_RPC_EDGE_FUNCTION_KEY` または `Supabase__RpcEdgeFunctionKey`
+- `Supabase_Edge_Key` または `SUPABASE_RPC_EDGE_FUNCTION_KEY`
 
 `SUPABASE_RPC_EDGE_FUNCTION_URL` 未設定時は `Supabase__Url` と `Supabase__RpcProxyFunctionName` から `/functions/v1/prosper-rpc` を組み立てます。
 アプリ側のSupabase RPC呼び出しでは、Edge Functionキーを `x-prosper-rpc-api-key`、`apikey`、`Authorization: Bearer` に設定します。
@@ -254,7 +254,7 @@ Azure App Serviceでは最低限以下が必要です。
 `prosper-rpc` Edge Function側では以下が必要です。
 
 - `SUPABASE_DB_URL`
-- `PROSPER_RPC_API_KEY` または `PROSPER_RPC_API_KEYS`
+- `ProsperApp_API_KEY` または `PROSPER_RPC_API_KEY`
 
 Google Drive OAuth/プレビューを使う場合は以下も必要です。
 

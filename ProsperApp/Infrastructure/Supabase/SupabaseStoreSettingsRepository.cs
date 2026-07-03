@@ -11,7 +11,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient)
     {
         if (!HasRequiredSettings())
         {
-            return StoreSettingsLoadResult.Failed("Supabase Edge Function設定が未設定です。Azure App Serviceの環境変数 SUPABASE_RPC_EDGE_FUNCTION_URL と SUPABASE_RPC_EDGE_FUNCTION_KEY を設定してください。");
+            return StoreSettingsLoadResult.Failed("Supabase Edge Function設定が未設定です。Azure App Serviceの環境変数 SUPABASE_RPC_EDGE_FUNCTION_URL と Supabase_Edge_Key を設定してください。");
         }
 
         var rpcResult = await GetDepartmentsFromRpcAsync(ct);
@@ -53,7 +53,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient)
         if (rpcStatus.Contains("401", StringComparison.OrdinalIgnoreCase) ||
             rpcStatus.Contains("403", StringComparison.OrdinalIgnoreCase))
         {
-            return "店舗一覧取得RPCの実行権限がありません。prosper-rpc Edge Functionのキー設定を確認してください。";
+            return "店舗一覧取得RPCの認証に失敗しました。AzureのSupabase_Edge_KeyとSupabaseのProsperApp_API_KEYが一致しているか確認してください。";
         }
 
         if (rpcStatus.Contains("0件", StringComparison.OrdinalIgnoreCase))
@@ -61,7 +61,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient)
             return "有効な店舗が0件です。department_masterのis_active=trueの店舗を確認してください。";
         }
 
-        return "店舗一覧を取得できません。AzureのSUPABASE_RPC_EDGE_FUNCTION_URL / SUPABASE_RPC_EDGE_FUNCTION_KEY、最新デプロイ、Supabaseのprosper-rpc Edge Functionを確認してください。";
+        return "店舗一覧を取得できません。AzureのSUPABASE_RPC_EDGE_FUNCTION_URL / Supabase_Edge_Key、最新デプロイ、Supabaseのprosper-rpc Edge Functionを確認してください。";
     }
 
     private static IReadOnlyList<DepartmentOption> ParseDepartments(IReadOnlyList<JsonElement> rows)

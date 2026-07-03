@@ -509,6 +509,10 @@ function validateClientKey(req: Request): string | null {
 
 function getAllowedClientKeys(): string[] {
   const keys = new Set<string>();
+  addClientKey(keys, Deno.env.get("ProsperApp_API_KEY"));
+  addClientKeys(keys, Deno.env.get("ProsperApp_API_KEYS"));
+  addClientKey(keys, Deno.env.get("PROSPERAPP_API_KEY"));
+  addClientKeys(keys, Deno.env.get("PROSPERAPP_API_KEYS"));
   addClientKey(keys, Deno.env.get("PROSPER_RPC_API_KEY"));
   addClientKeys(keys, Deno.env.get("PROSPER_RPC_API_KEYS"));
   return [...keys];

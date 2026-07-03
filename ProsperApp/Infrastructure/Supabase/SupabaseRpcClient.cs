@@ -152,6 +152,8 @@ public sealed class SupabaseRpcClient(
     private string? GetRpcEdgeFunctionKey()
     {
         return FirstNonEmpty(
+            _configuration["Supabase_Edge_Key"],
+            _configuration["SUPABASE_EDGE_KEY"],
             _configuration["SUPABASE_RPC_EDGE_FUNCTION_KEY"],
             _configuration["Supabase:RpcEdgeFunctionKey"],
             _options.RpcEdgeFunctionKey);
