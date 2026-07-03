@@ -55,7 +55,7 @@ public class SupabaseStoreItemAdminRepository(
     {
         if (!HasMutationSettings())
         {
-            return StoreItemAdminSaveResult.Failed("Supabase SecretKeyが未設定です。商品カテゴリを保存できません。");
+            return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品カテゴリを保存できません。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -69,7 +69,6 @@ public class SupabaseStoreItemAdminRepository(
                 p_sort_order = input.SortOrder,
                 p_is_active = input.IsActive
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -87,7 +86,7 @@ public class SupabaseStoreItemAdminRepository(
     {
         if (!HasMutationSettings())
         {
-            return StoreItemAdminSaveResult.Failed("Supabase SecretKeyが未設定です。商品を保存できません。");
+            return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品を保存できません。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -105,7 +104,6 @@ public class SupabaseStoreItemAdminRepository(
                 p_cast_back_nomination_unit_amount = input.IsCastBackTarget ? input.CastBackNominationUnitAmount : 0,
                 p_cast_back_type = "drink"
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -123,7 +121,7 @@ public class SupabaseStoreItemAdminRepository(
     {
         if (!HasMutationSettings())
         {
-            return StoreItemAdminSaveResult.Failed("Supabase SecretKeyが未設定です。商品を削除できません。");
+            return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品を削除できません。");
         }
 
         if (itemId <= 0)
@@ -138,7 +136,6 @@ public class SupabaseStoreItemAdminRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_item_id = itemId
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -156,7 +153,7 @@ public class SupabaseStoreItemAdminRepository(
     {
         if (!HasMutationSettings())
         {
-            return StoreItemAdminSaveResult.Failed("Supabase SecretKeyが未設定です。商品の並び順を保存できません。");
+            return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品の並び順を保存できません。");
         }
 
         var payload = items
@@ -176,7 +173,6 @@ public class SupabaseStoreItemAdminRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_items = payload
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

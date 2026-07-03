@@ -1,83 +1,68 @@
-grant execute on function public.get_store_context(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_current_business_day(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_open_slip_count(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_business_day_drink_delivery_amount(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_business_day_drink_delivery_status(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_business_day_closing_attendance(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_store_tables(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_store_casts(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_store_cast_admin_list(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_business_day_slips(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_order_entry_slips(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_store_order_items(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_store_item_admin_catalog(bigint) to anon, authenticated, service_role;
-grant execute on function public.get_order_attending_casts(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_store_slip_detail(bigint, bigint) to anon, authenticated, service_role;
-grant execute on function public.get_pending_receipts(bigint, text) to anon, authenticated, service_role;
-
-revoke execute on function public.open_business_day(bigint, date, text) from public, anon;
-revoke execute on function public.open_business_day_with_attendance(bigint, date, bigint[], text) from public, anon;
-revoke execute on function public.open_business_day_with_attendance(bigint, date, jsonb, text) from public, anon;
-revoke execute on function public.add_business_day_attendance(bigint, bigint, jsonb) from public, anon;
-revoke execute on function public.save_business_day_attendance(bigint, bigint, jsonb) from public, anon;
-revoke execute on function public.save_business_day_drink_delivery_amount(bigint, bigint, numeric) from public, anon;
-revoke execute on function public.save_business_day_closing_attendance(bigint, bigint, jsonb) from public, anon;
-revoke execute on function public.get_business_day_cast_sales_adjustment_status(bigint, bigint) from public, anon;
-revoke execute on function public.get_cast_sales_adjustment_slips(bigint, bigint) from public, anon;
-revoke execute on function public.get_cast_sales_adjustment_detail(bigint, bigint) from public, anon;
-revoke execute on function public.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text) from public, anon;
-do $revoke_close_business_day_v3$
+-- ProsperApp RPCs are executed only through the prosper-rpc Edge Function.
+-- Direct PostgREST RPC execution is not an application route.
+do $$
+declare
+    target_functions text[] := array[
+        'get_store_departments',
+        'get_store_context',
+        'get_current_business_day',
+        'get_open_slip_count',
+        'get_business_day_drink_delivery_status',
+        'get_business_day_closing_attendance',
+        'get_store_tables',
+        'get_store_casts',
+        'get_store_cast_admin_list',
+        'get_business_day_slips',
+        'get_order_entry_slips',
+        'get_store_order_items',
+        'get_store_item_admin_catalog',
+        'get_order_attending_casts',
+        'get_store_slip_detail',
+        'get_pending_receipts',
+        'open_business_day',
+        'open_business_day_with_attendance',
+        'save_business_day_attendance',
+        'save_business_day_drink_delivery_amount',
+        'save_business_day_closing_attendance',
+        'get_business_day_cast_sales_adjustment_status',
+        'get_cast_sales_adjustment_slips',
+        'get_cast_sales_adjustment_detail',
+        'save_cast_sales_adjustment',
+        'close_business_day',
+        'create_store_cast',
+        'delete_store_cast',
+        'upsert_store_item_category',
+        'upsert_store_item',
+        'delete_store_item',
+        'reorder_store_items',
+        'add_store_order_lines',
+        'add_store_slip_customers',
+        'add_store_slip_nominations',
+        'leave_store_slip_customer',
+        'update_store_slip_customer_label',
+        'void_store_order_line',
+        'confirm_store_checkout',
+        'create_store_slip',
+        'quick_enter_receipt',
+        'mark_receipt_scan_mistake'
+    ];
+    r record;
 begin
-    if to_regprocedure('public.close_business_day(bigint,bigint,text)') is not null then
-        revoke execute on function public.close_business_day(bigint, bigint, text) from public, anon;
-    end if;
-end;
-$revoke_close_business_day_v3$;
-revoke execute on function public.close_business_day(bigint, bigint, text, text) from public, anon;
-revoke execute on function public.create_store_cast(bigint, text) from public, anon;
-revoke execute on function public.delete_store_cast(bigint, bigint) from public, anon;
-revoke execute on function public.upsert_store_item_category(bigint, bigint, text, text, integer, boolean) from public, anon;
-revoke execute on function public.upsert_store_item(bigint, bigint, bigint, text, numeric, boolean, boolean, numeric, numeric, text) from public, anon;
-revoke execute on function public.delete_store_item(bigint, bigint) from public, anon;
-revoke execute on function public.reorder_store_items(bigint, jsonb) from public, anon;
-revoke execute on function public.add_store_order_lines(bigint, bigint, jsonb) from public, anon;
-revoke execute on function public.add_store_slip_customers(bigint, bigint, text[], timestamp with time zone) from public, anon;
-revoke execute on function public.add_store_slip_nominations(bigint, bigint, jsonb) from public, anon;
-revoke execute on function public.leave_store_slip_customer(bigint, bigint, timestamp with time zone) from public, anon;
-revoke execute on function public.update_store_slip_customer_label(bigint, bigint, text) from public, anon;
-revoke execute on function public.void_store_order_line(bigint, bigint) from public, anon;
-revoke execute on function public.confirm_store_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric) from public, anon;
-revoke execute on function public.create_store_slip(bigint, bigint, timestamp with time zone, text[], jsonb, text) from public, anon;
-revoke execute on function public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text) from public, anon;
-revoke execute on function public.mark_receipt_scan_mistake(bigint, text, text) from public, anon;
-
-grant execute on function public.open_business_day(bigint, date, text) to authenticated, service_role;
-grant execute on function public.open_business_day_with_attendance(bigint, date, bigint[], text) to authenticated, service_role;
-grant execute on function public.open_business_day_with_attendance(bigint, date, jsonb, text) to authenticated, service_role;
-grant execute on function public.add_business_day_attendance(bigint, bigint, jsonb) to authenticated, service_role;
-grant execute on function public.save_business_day_attendance(bigint, bigint, jsonb) to authenticated, service_role;
-grant execute on function public.save_business_day_drink_delivery_amount(bigint, bigint, numeric) to authenticated, service_role;
-grant execute on function public.save_business_day_closing_attendance(bigint, bigint, jsonb) to authenticated, service_role;
-grant execute on function public.get_business_day_cast_sales_adjustment_status(bigint, bigint) to authenticated, service_role;
-grant execute on function public.get_cast_sales_adjustment_slips(bigint, bigint) to authenticated, service_role;
-grant execute on function public.get_cast_sales_adjustment_detail(bigint, bigint) to authenticated, service_role;
-grant execute on function public.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text) to authenticated, service_role;
-grant execute on function public.close_business_day(bigint, bigint, text, text) to authenticated, service_role;
-grant execute on function public.create_store_cast(bigint, text) to authenticated, service_role;
-grant execute on function public.delete_store_cast(bigint, bigint) to authenticated, service_role;
-grant execute on function public.upsert_store_item_category(bigint, bigint, text, text, integer, boolean) to authenticated, service_role;
-grant execute on function public.upsert_store_item(bigint, bigint, bigint, text, numeric, boolean, boolean, numeric, numeric, text) to authenticated, service_role;
-grant execute on function public.delete_store_item(bigint, bigint) to authenticated, service_role;
-grant execute on function public.reorder_store_items(bigint, jsonb) to authenticated, service_role;
-grant execute on function public.add_store_order_lines(bigint, bigint, jsonb) to authenticated, service_role;
-grant execute on function public.add_store_slip_customers(bigint, bigint, text[], timestamp with time zone) to authenticated, service_role;
-grant execute on function public.add_store_slip_nominations(bigint, bigint, jsonb) to authenticated, service_role;
-grant execute on function public.leave_store_slip_customer(bigint, bigint, timestamp with time zone) to authenticated, service_role;
-grant execute on function public.update_store_slip_customer_label(bigint, bigint, text) to authenticated, service_role;
-grant execute on function public.void_store_order_line(bigint, bigint) to authenticated, service_role;
-grant execute on function public.confirm_store_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric) to authenticated, service_role;
-grant execute on function public.create_store_slip(bigint, bigint, timestamp with time zone, text[], jsonb, text) to authenticated, service_role;
-grant execute on function public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text) to authenticated, service_role;
-grant execute on function public.mark_receipt_scan_mistake(bigint, text, text) to authenticated, service_role;
-
-commit;
+    for r in
+        select
+            n.nspname as schema_name,
+            p.proname as function_name,
+            pg_get_function_identity_arguments(p.oid) as identity_arguments
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname = any(target_functions)
+    loop
+        execute format(
+            'revoke execute on function %I.%I(%s) from public, anon, authenticated, service_role',
+            r.schema_name,
+            r.function_name,
+            r.identity_arguments
+        );
+    end loop;
+end $$;

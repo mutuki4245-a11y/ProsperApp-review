@@ -13,7 +13,7 @@ public class SupabaseCheckoutRepository(
     {
         if (!HasMutationSettings())
         {
-            return ConfirmCheckoutResult.Failed("Supabase SecretKeyが未設定です。会計処理を実行できません。");
+            return ConfirmCheckoutResult.Failed("Supabase Edge Function設定が未設定です。会計処理を実行できません。");
         }
 
         if (slipId <= 0 || input.ClosedAt is null)
@@ -41,7 +41,6 @@ public class SupabaseCheckoutRepository(
                 p_payments = payments,
                 p_received_amount = input.ReceivedAmount
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

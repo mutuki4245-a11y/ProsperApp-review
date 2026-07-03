@@ -313,18 +313,6 @@ public class BusinessDayOperationResult
     }
 }
 
-public class OpeningAttendanceCastInputModel
-{
-    public long CastId { get; set; }
-    public string DisplayName { get; set; } = string.Empty;
-    public string? DepartmentName { get; set; }
-    public bool IsSelected { get; set; }
-    public bool IsRegistered { get; set; }
-
-    [StringLength(5, ErrorMessage = "出勤時刻を確認してください。")]
-    public string? ClockInTime { get; set; }
-}
-
 public class BusinessDayAttendanceInput
 {
     public long CastId { get; set; }

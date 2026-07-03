@@ -10,7 +10,7 @@
 
 - DB操作は原則 Supabase RPC 経由で行います。
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
-- Supabase RPCのHTTP送信、API keyヘッダー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。`SUPABASE_RPC_EDGE_FUNCTION_URL` または `Supabase:Mode=edge-function` が設定されている場合はEdge Function経由で呼び出します。
+- Supabase RPCのHTTP送信、Edge Functionキー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。アプリからのRPCは必ず `prosper-rpc` Edge Function経由で呼び出し、REST RPC fallbackは持ちません。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
@@ -18,7 +18,7 @@
 - アプリログインはGoogle認証に統一します。
 - Googleログインの許可対象は `GoogleAuth:AllowedEmails` または `GoogleAuth:AllowedDomains` で明示します。
 - Google Driveプレビューはアプリサーバー経由で取得します。
-- 秘密情報、Supabase SecretKey、Google認証情報はローカル設定に保存しません。
+- 秘密情報、Supabase RPCキー、Google認証情報はローカル設定に保存しません。
 - 動作確認は毎回Azureへデプロイした環境で行います。ローカル起動やローカル用 `appsettings` 整備は前提にしません。
 
 ## 参照すべきSQLファイル
@@ -61,7 +61,7 @@
   - 締め作業のキャスト売上額調整系RPCです。
 
 - `Sql/store_rpc/99_grants.sql`
-  - 分割RPCの `grant execute` をまとめた実行順最後のSQLです。
+  - アプリRPCの直接PostgREST実行権限を剥奪する現在定義です。
 
 - `Sql/quick_entry_account_master_updates.sql`
   - 領収書簡易入力UIで使う科目・補助科目の追加更新SQLです。
@@ -103,9 +103,8 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `get_store_context(p_department_id)`
 - `get_current_business_day(p_department_id)`
 - `open_business_day(p_department_id, p_business_date, p_memo)`
-- `add_business_day_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
+- `open_business_day_with_attendance(p_department_id, p_business_date, p_attendance_entries, p_memo)`
 - `get_open_slip_count(p_department_id, p_business_day_id)`
-- `get_business_day_drink_delivery_amount(p_department_id, p_business_day_id)`
 - `get_business_day_drink_delivery_status(p_department_id, p_business_day_id)`
 - `save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
 - `get_business_day_closing_attendance(p_department_id, p_business_day_id)`
@@ -246,15 +245,17 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 Azure App Serviceでは最低限以下が必要です。
 
 - `Supabase__Url`
-- `Supabase__SecretKey`
+- `SUPABASE_RPC_EDGE_FUNCTION_URL` または `Supabase__RpcEdgeFunctionUrl`
+- `SUPABASE_RPC_EDGE_FUNCTION_KEY` または `Supabase__RpcEdgeFunctionKey`
 
-Supabaseのレガシー `anon` / `service_role` キーは使いません。
-新しいAPI key方式の `sb_secret_...` を `Supabase__SecretKey` に設定してください。
-アプリ側のSupabase RPC呼び出しでは、新キーを `apikey` ヘッダーで送信し、`Authorization: Bearer` には入れません。
+`SUPABASE_RPC_EDGE_FUNCTION_URL` 未設定時は `Supabase__Url` と `Supabase__RpcProxyFunctionName` から `/functions/v1/prosper-rpc` を組み立てます。
+`SUPABASE_RPC_EDGE_FUNCTION_KEY` 未設定時は、既存環境変数 `DOCUMENT_API_KEY` / `DOCUMENT_API_KEYS` も互換キーとして利用できます。
+アプリ側のSupabase RPC呼び出しでは、Edge Functionキーを `x-prosper-rpc-api-key`、`apikey`、`Authorization: Bearer` に設定します。
 
-読み取りだけを低権限キーで動かしたい場合のみ、任意で以下を設定できます。
+`prosper-rpc` Edge Function側では以下が必要です。
 
-- `Supabase__PublishableKey`
+- `SUPABASE_DB_URL`
+- `PROSPER_RPC_API_KEY` または `PROSPER_RPC_API_KEYS`
 
 Google Drive OAuth/プレビューを使う場合は以下も必要です。
 

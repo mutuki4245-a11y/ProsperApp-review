@@ -6,5 +6,4 @@ public interface IDriveFileService
     Task<DriveFileResult> GetFileWithDiagnosticsAsync(string driveFileId, CancellationToken ct);
     Task<DriveFileResult> PrefetchFileAsync(string driveFileId, CancellationToken ct);
     void RemoveCachedFile(string driveFileId);
-    Task<DriveFileOperationResult> TrashFileAsync(string driveFileId, CancellationToken ct);
 }

@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -94,45 +93,6 @@ public class GoogleDriveFileService(
         {
             _memoryCache.Remove(BuildCacheKey(driveFileId));
         }
-    }
-
-    public async Task<DriveFileOperationResult> TrashFileAsync(string driveFileId, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(driveFileId) ||
-            !await _receiptRepository.IsPendingDriveFileAllowedAsync(driveFileId, ct))
-        {
-            return DriveFileOperationResult.Failed(
-                "not_allowed",
-                "The drive_file_id is empty or is not included in the current store pending list.");
-        }
-
-        var accessToken = await _googleDriveAuthService.GetAccessTokenAsync();
-        if (string.IsNullOrWhiteSpace(accessToken))
-        {
-            return DriveFileOperationResult.Failed(
-                "missing_access_token",
-                "Google access token was not found. Sign in with Google again.");
-        }
-
-        var payload = JsonSerializer.Serialize(new { trashed = true });
-        using var request = new HttpRequestMessage(
-            HttpMethod.Patch,
-            $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(driveFileId)}")
-        {
-            Content = new StringContent(payload, Encoding.UTF8, "application/json")
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var response = await _httpClient.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync(ct);
-            return DriveFileOperationResult.Failed(
-                $"trash_failed_{(int)response.StatusCode}",
-                $"Drive trash request failed: {errorBody}");
-        }
-
-        return DriveFileOperationResult.Success();
     }
 
     private static string BuildCacheKey(string driveFileId) => $"drive-preview:{driveFileId}";

@@ -23,7 +23,6 @@ public class SupabaseCastSalesAdjustmentRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_business_day_id = businessDayId
             },
-            requireSecretKey: true,
             ct);
         var rows = result.Succeeded ? result.Rows : [];
 
@@ -54,7 +53,6 @@ public class SupabaseCastSalesAdjustmentRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_business_day_id = businessDayId
             },
-            requireSecretKey: true,
             ct);
         var rows = result.Succeeded ? result.Rows : [];
 
@@ -94,7 +92,6 @@ public class SupabaseCastSalesAdjustmentRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_slip_id = slipId
             },
-            requireSecretKey: true,
             ct);
         var rows = result.Succeeded ? result.Rows : [];
 
@@ -143,7 +140,7 @@ public class SupabaseCastSalesAdjustmentRepository(
     {
         if (!HasMutationSettings())
         {
-            return CastSalesAdjustmentSaveResult.Failed("Supabase SecretKeyが未設定です。キャスト売上額調整を保存できません。");
+            return CastSalesAdjustmentSaveResult.Failed("Supabase Edge Function設定が未設定です。キャスト売上額調整を保存できません。");
         }
 
         if (input.SlipId is null or <= 0)
@@ -180,7 +177,6 @@ public class SupabaseCastSalesAdjustmentRepository(
                 p_source_amount_type = sourceAmountType,
                 p_split_mode = splitMode
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

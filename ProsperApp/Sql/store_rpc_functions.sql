@@ -13,5 +13,5 @@
 --   7. Sql/store_rpc/07_cast_sales_adjustments.sql
 --   8. Sql/store_rpc/99_grants.sql
 --
--- Keep function names, argument lists, return columns, and grants in the split
--- files compatible with existing C# RPC callers.
+-- Keep function names, argument lists, return columns, and direct execute revokes
+-- in the split files aligned with the current C# RPC callers and prosper-rpc allowlist.

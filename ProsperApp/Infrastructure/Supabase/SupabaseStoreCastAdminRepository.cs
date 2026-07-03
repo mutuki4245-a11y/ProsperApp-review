@@ -28,7 +28,7 @@ public class SupabaseStoreCastAdminRepository(
     {
         if (!HasMutationSettings())
         {
-            return StoreCastSaveResult.Failed("Supabase SecretKeyが未設定です。キャストを登録できません。");
+            return StoreCastSaveResult.Failed("Supabase Edge Function設定が未設定です。キャストを登録できません。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -38,7 +38,6 @@ public class SupabaseStoreCastAdminRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_display_name = input.DisplayName.Trim()
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -56,7 +55,7 @@ public class SupabaseStoreCastAdminRepository(
     {
         if (!HasMutationSettings())
         {
-            return StoreCastSaveResult.Failed("Supabase SecretKeyが未設定です。キャストを削除できません。");
+            return StoreCastSaveResult.Failed("Supabase Edge Function設定が未設定です。キャストを削除できません。");
         }
 
         if (castId <= 0)
@@ -71,7 +70,6 @@ public class SupabaseStoreCastAdminRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_cast_id = castId
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

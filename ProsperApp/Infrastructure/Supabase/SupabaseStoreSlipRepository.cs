@@ -195,7 +195,7 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasMutationSettings())
         {
-            return CreateSlipResult.Failed("Supabase SecretKeyが未設定です。伝票を作成できません。");
+            return CreateSlipResult.Failed("Supabase Edge Function設定が未設定です。伝票を作成できません。");
         }
 
         if (input.OpenedAt is null || input.TableId is null)
@@ -232,7 +232,6 @@ public class SupabaseStoreSlipRepository(
                 p_cast_nominations = castNominations,
                 p_memo = string.IsNullOrWhiteSpace(input.Memo) ? null : input.Memo.Trim()
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -250,7 +249,7 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasMutationSettings())
         {
-            return SlipMutationResult.Failed("Supabase SecretKeyが未設定です。伝票を更新できません。");
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
 
         var labels = customerLabels
@@ -271,7 +270,6 @@ public class SupabaseStoreSlipRepository(
                 p_customer_labels = labels,
                 p_entered_at = storeClock.ToStoreDateTimeOffset(enteredAt)
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -287,7 +285,7 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasMutationSettings())
         {
-            return SlipMutationResult.Failed("Supabase SecretKeyが未設定です。伝票を更新できません。");
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
 
         var payload = nominations
@@ -311,7 +309,6 @@ public class SupabaseStoreSlipRepository(
                 p_slip_id = slipId,
                 p_cast_nominations = payload
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -327,7 +324,7 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasMutationSettings())
         {
-            return SlipMutationResult.Failed("Supabase SecretKeyが未設定です。伝票を更新できません。");
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
 
         if (slipCustomerId <= 0)
@@ -343,7 +340,6 @@ public class SupabaseStoreSlipRepository(
                 p_slip_customer_id = slipCustomerId,
                 p_left_at = storeClock.ToStoreDateTimeOffset(leftAt)
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -358,7 +354,7 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasMutationSettings())
         {
-            return SlipMutationResult.Failed("Supabase SecretKeyが未設定です。伝票を更新できません。");
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
 
         if (slipCustomerId <= 0)
@@ -374,7 +370,6 @@ public class SupabaseStoreSlipRepository(
                 p_slip_customer_id = slipCustomerId,
                 p_customer_label = string.IsNullOrWhiteSpace(customerLabel) ? null : customerLabel.Trim()
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -389,7 +384,7 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasMutationSettings())
         {
-            return SlipMutationResult.Failed("Supabase SecretKeyが未設定です。伝票を更新できません。");
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
 
         if (orderLineId <= 0)
@@ -404,7 +399,6 @@ public class SupabaseStoreSlipRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_order_line_id = orderLineId
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

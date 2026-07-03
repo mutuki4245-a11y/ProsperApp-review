@@ -86,7 +86,7 @@ public class SupabaseBusinessDayRepository(
     {
         if (!HasMutationSettings())
         {
-            return BusinessDayOperationResult.Failed("Supabase SecretKeyが未設定です。営業日を更新できません。");
+            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
         }
 
         var attendancePayload = attendanceEntries?
@@ -106,7 +106,6 @@ public class SupabaseBusinessDayRepository(
                     p_business_date = businessDate,
                     p_memo = trimmedMemo
                 },
-                requireSecretKey: true,
                 ct)
             : await RpcClient.PostArrayAsync(
                 "open_business_day_with_attendance",
@@ -117,7 +116,6 @@ public class SupabaseBusinessDayRepository(
                     p_attendance_entries = attendancePayload,
                     p_memo = trimmedMemo
                 },
-                requireSecretKey: true,
                 ct);
 
         if (!result.Succeeded)
@@ -137,7 +135,7 @@ public class SupabaseBusinessDayRepository(
     {
         if (!HasMutationSettings())
         {
-            return BusinessDayOperationResult.Failed("Supabase SecretKeyが未設定です。営業日を更新できません。");
+            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -149,7 +147,6 @@ public class SupabaseBusinessDayRepository(
                 p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
                 p_pending_receipt_status = _options.PendingStatus
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -172,7 +169,7 @@ public class SupabaseBusinessDayRepository(
     {
         if (!HasMutationSettings())
         {
-            return BusinessDayOperationResult.Failed("Supabase SecretKeyが未設定です。勤怠入力を更新できません。");
+            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を更新できません。");
         }
 
         var payload = attendanceEntries
@@ -195,7 +192,6 @@ public class SupabaseBusinessDayRepository(
                 p_business_day_id = businessDayId,
                 p_attendance_entries = payload
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -225,16 +221,10 @@ public class SupabaseBusinessDayRepository(
                 p_department_id = CurrentStoreDepartmentId,
                 p_business_day_id = businessDayId
             },
-            requireSecretKey: false,
             ct);
         var value = result.Succeeded ? result.Body?.Trim() : null;
 
         return int.TryParse(value, out var count) ? count : 0;
-    }
-
-    public async Task<decimal> GetDrinkDeliveryAmountAsync(long businessDayId, CancellationToken ct)
-    {
-        return (await GetDrinkDeliveryStatusAsync(businessDayId, ct)).Amount;
     }
 
     public async Task<BusinessDayDrinkDeliveryStatus> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct)
@@ -272,7 +262,7 @@ public class SupabaseBusinessDayRepository(
     {
         if (!HasMutationSettings())
         {
-            return BusinessDayAmountSaveResult.Failed("Supabase SecretKeyが未設定です。納品額を保存できません。");
+            return BusinessDayAmountSaveResult.Failed("Supabase Edge Function設定が未設定です。納品額を保存できません。");
         }
 
         if (amount < 0 || decimal.Truncate(amount) != amount)
@@ -288,7 +278,6 @@ public class SupabaseBusinessDayRepository(
                 p_business_day_id = businessDayId,
                 p_drink_delivery_amount = amount
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -333,7 +322,7 @@ public class SupabaseBusinessDayRepository(
     {
         if (!HasMutationSettings())
         {
-            return BusinessDayAttendanceSaveResult.Failed("Supabase SecretKeyが未設定です。勤怠入力を保存できません。");
+            return BusinessDayAttendanceSaveResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を保存できません。");
         }
 
         var payload = attendanceEntries
@@ -360,7 +349,6 @@ public class SupabaseBusinessDayRepository(
                 p_business_day_id = businessDayId,
                 p_attendance_entries = payload
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

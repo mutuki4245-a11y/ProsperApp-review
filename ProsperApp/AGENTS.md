@@ -106,7 +106,7 @@ Codexは原則としてローカル開発サーバーを起動しない。
 - JSON payloadのキーとSQL引数名の一致。
 - SQLの戻り列名とC#パーサの一致。
 - `security definer` 関数の `set search_path = public`。
-- `grant execute` の有無。
+- 直接PostgREST RPC実行権限が剥奪されていること。
 - 店舗スコープ処理の `department_id` フィルタ。
 - 更新系RPCの対象IDと `department_id` 絞り込み。
 - Postgresの型、構文、戻り値リスク。

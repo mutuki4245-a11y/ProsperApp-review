@@ -482,19 +482,11 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
 --   open_business_day(p_department_id bigint, p_business_date date, p_memo text)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
---   open_business_day_with_attendance(p_department_id bigint, p_business_date date, p_attending_cast_ids bigint[], p_memo text)
---     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
---     legacy overload; saves selected active same-company casts to store_cast_attendance as scheduled.
 --   open_business_day_with_attendance(p_department_id bigint, p_business_date date, p_attendance_entries jsonb, p_memo text)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
 --     p_attendance_entries supports { cast_id, clock_in_time } and saves checked_in rows with clock_in_at.
---   add_business_day_attendance(p_department_id bigint, p_business_day_id bigint, p_attendance_entries jsonb)
---     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
---     adds checked_in attendance rows after the business day has already opened.
 --   get_open_slip_count(p_department_id bigint, p_business_day_id bigint)
 --     returns integer
---   get_business_day_drink_delivery_amount(p_department_id bigint, p_business_day_id bigint)
---     returns numeric. Closing drink-cost entry uses this as the current business-day delivery amount.
 --   get_business_day_drink_delivery_status(p_department_id bigint, p_business_day_id bigint)
 --     returns drink_delivery_amount and is_entered so 0 yen can be distinguished from not entered.
 --   save_business_day_drink_delivery_amount(p_department_id bigint, p_business_day_id bigint, p_drink_delivery_amount numeric)
@@ -598,8 +590,8 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   language sql/plpgsql
 --   security definer
 --   set search_path = public
---   grant execute to anon/authenticated/service_role for non-sensitive read functions,
---   and to authenticated/service_role only for sensitive or mutating functions.
+--   direct PostgREST RPC execution revoked from public/anon/authenticated/service_role.
+--   Application calls are routed through the prosper-rpc Edge Function.
 
 -- -----------------------------------------------------------------------------
 -- Quick-entry account master updates

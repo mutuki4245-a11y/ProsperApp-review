@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using ProsperApp.Options;
@@ -8,20 +9,16 @@ namespace ProsperApp.Services;
 
 public interface ISupabaseRpcClient
 {
-    bool HasReadAccess { get; }
-
-    bool HasSecretAccess { get; }
+    bool HasAccess { get; }
 
     Task<SupabaseRpcResult> PostArrayAsync<TPayload>(
         string functionName,
         TPayload payload,
-        bool requireSecretKey,
         CancellationToken ct);
 
     Task<SupabaseRpcResult> PostScalarAsync<TPayload>(
         string functionName,
         TPayload payload,
-        bool requireSecretKey,
         CancellationToken ct);
 }
 
@@ -36,17 +33,15 @@ public sealed class SupabaseRpcClient(
     private readonly IConfiguration _configuration = configuration;
     private readonly SupabaseOptions _options = options.Value;
 
-    public bool HasReadAccess => SupabaseApiKeyHeaders.HasReadAccess(_options);
-
-    public bool HasSecretAccess => SupabaseApiKeyHeaders.HasMutationAccess(_options);
+    public bool HasAccess => !string.IsNullOrWhiteSpace(GetRpcEdgeFunctionUrl()) &&
+                             !string.IsNullOrWhiteSpace(GetRpcEdgeFunctionKey());
 
     public async Task<SupabaseRpcResult> PostArrayAsync<TPayload>(
         string functionName,
         TPayload payload,
-        bool requireSecretKey,
         CancellationToken ct)
     {
-        var result = await SendAsync(functionName, payload, requireSecretKey, ct);
+        var result = await SendAsync(functionName, payload, ct);
         if (!result.Succeeded || string.IsNullOrWhiteSpace(result.Body))
         {
             return result with { Rows = [] };
@@ -71,37 +66,29 @@ public sealed class SupabaseRpcClient(
     public Task<SupabaseRpcResult> PostScalarAsync<TPayload>(
         string functionName,
         TPayload payload,
-        bool requireSecretKey,
         CancellationToken ct)
     {
-        return SendAsync(functionName, payload, requireSecretKey, ct);
+        return SendAsync(functionName, payload, ct);
     }
 
     private async Task<SupabaseRpcResult> SendAsync<TPayload>(
         string functionName,
         TPayload payload,
-        bool requireSecretKey,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(_options.Url))
+        var edgeFunctionUrl = GetRpcEdgeFunctionUrl();
+        if (string.IsNullOrWhiteSpace(edgeFunctionUrl))
         {
-            return SupabaseRpcResult.Failed("Supabase URLが未設定です。");
+            return SupabaseRpcResult.Failed("Supabase Edge Function URLが未設定です。");
         }
 
-        var accessKey = requireSecretKey
-            ? SupabaseApiKeyHeaders.MutationAccessKey(_options)
-            : SupabaseApiKeyHeaders.ReadAccessKey(_options);
+        var accessKey = GetRpcEdgeFunctionKey();
         if (string.IsNullOrWhiteSpace(accessKey))
         {
-            return SupabaseRpcResult.Failed(requireSecretKey
-                ? "Supabase SecretKeyが未設定です。更新系RPCを実行できません。"
-                : "Supabaseキーが未設定です。");
+            return SupabaseRpcResult.Failed("Supabase Edge Functionキーが未設定です。RPCを実行できません。");
         }
 
-        var edgeFunctionUrl = GetRpcEdgeFunctionUrl();
-        using var request = string.IsNullOrWhiteSpace(edgeFunctionUrl)
-            ? BuildRestRpcRequest(functionName, payload, accessKey)
-            : BuildEdgeFunctionRequest(edgeFunctionUrl, functionName, payload, requireSecretKey, accessKey);
+        using var request = BuildEdgeFunctionRequest(edgeFunctionUrl, functionName, payload, accessKey);
 
         try
         {
@@ -112,7 +99,7 @@ public sealed class SupabaseRpcClient(
                 return SupabaseRpcResult.Failed(body, $"HTTP {(int)response.StatusCode} {Shorten(body)}");
             }
 
-            return SupabaseRpcResult.Success(string.IsNullOrWhiteSpace(edgeFunctionUrl) ? body : NormalizeEdgeFunctionBody(body));
+            return SupabaseRpcResult.Success(NormalizeEdgeFunctionBody(body));
         }
         catch (Exception ex)
         {
@@ -120,26 +107,10 @@ public sealed class SupabaseRpcClient(
         }
     }
 
-    private HttpRequestMessage BuildRestRpcRequest<TPayload>(
-        string functionName,
-        TPayload payload,
-        string accessKey)
-    {
-        var request = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{_options.Url.TrimEnd('/')}/rest/v1/rpc/{functionName}")
-        {
-            Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json")
-        };
-        SupabaseApiKeyHeaders.Apply(request, accessKey);
-        return request;
-    }
-
     private static HttpRequestMessage BuildEdgeFunctionRequest<TPayload>(
         string edgeFunctionUrl,
         string functionName,
         TPayload payload,
-        bool requireSecretKey,
         string accessKey)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, edgeFunctionUrl)
@@ -149,15 +120,15 @@ public sealed class SupabaseRpcClient(
                     new
                     {
                         function_name = functionName,
-                        payload,
-                        require_secret_key = requireSecretKey
+                        payload
                     },
                     JsonOptions),
                 Encoding.UTF8,
                 "application/json")
         };
-        SupabaseApiKeyHeaders.Apply(request, accessKey);
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessKey);
+        request.Headers.Add("apikey", accessKey);
+        request.Headers.Add("x-prosper-rpc-api-key", accessKey);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessKey);
         return request;
     }
 
@@ -172,15 +143,22 @@ public sealed class SupabaseRpcClient(
             return configuredUrl.Trim();
         }
 
-        if (!string.Equals(_options.Mode, "edge-function", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
         var functionName = FirstNonEmpty(_options.RpcProxyFunctionName, "prosper-rpc");
         return string.IsNullOrWhiteSpace(_options.Url) || string.IsNullOrWhiteSpace(functionName)
             ? null
             : $"{_options.Url.TrimEnd('/')}/functions/v1/{functionName}";
+    }
+
+    private string? GetRpcEdgeFunctionKey()
+    {
+        var documentApiKeys = SplitConfiguredKeys(_configuration["DOCUMENT_API_KEYS"]);
+        return FirstNonEmpty(
+            _configuration["SUPABASE_RPC_EDGE_FUNCTION_KEY"],
+            _configuration["Supabase:RpcEdgeFunctionKey"],
+            _options.RpcEdgeFunctionKey,
+            _configuration["DOCUMENT_API_KEY"],
+            _configuration["DocManagement:DocumentApiKey"],
+            documentApiKeys.FirstOrDefault());
     }
 
     private static string NormalizeEdgeFunctionBody(string body)
@@ -219,6 +197,47 @@ public sealed class SupabaseRpcClient(
     private static string? FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+    }
+
+    private static IReadOnlyList<string> SplitConfiguredKeys(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            if (document.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                return document.RootElement
+                    .EnumerateArray()
+                    .Where(x => x.ValueKind == JsonValueKind.String)
+                    .Select(x => x.GetString())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x!.Trim())
+                    .ToArray();
+            }
+
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                return document.RootElement
+                    .EnumerateObject()
+                    .Select(x => x.Value.ValueKind == JsonValueKind.String ? x.Value.GetString() : null)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x!.Trim())
+                    .ToArray();
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return raw
+            .Split([',', ';', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToArray();
     }
 
     private static string Shorten(string value)

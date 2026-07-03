@@ -23,6 +23,6 @@ as $$
     order by d.company_id asc, d.department_code asc, d.department_id asc;
 $$;
 
-grant execute on function public.get_store_departments() to anon, authenticated, service_role;
+revoke execute on function public.get_store_departments() from public, anon, authenticated, service_role;
 
 commit;

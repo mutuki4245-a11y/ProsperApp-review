@@ -12,13 +12,13 @@ public abstract class SupabaseRepositoryBase(
 
     protected bool HasRequiredSettings()
     {
-        return RpcClient.HasReadAccess &&
+        return RpcClient.HasAccess &&
                (localSettingsProvider is null || CurrentStoreDepartmentId > 0);
     }
 
     protected bool HasMutationSettings()
     {
-        return RpcClient.HasSecretAccess &&
+        return RpcClient.HasAccess &&
                (localSettingsProvider is null || CurrentStoreDepartmentId > 0);
     }
 
@@ -32,7 +32,7 @@ public abstract class SupabaseRepositoryBase(
             return [];
         }
 
-        var result = await RpcClient.PostArrayAsync(functionName, payload, requireSecretKey: false, ct);
+        var result = await RpcClient.PostArrayAsync(functionName, payload, ct);
         return result.Succeeded ? result.Rows : [];
     }
 
@@ -67,6 +67,6 @@ public abstract class SupabaseRepositoryBase(
 
     protected static string PermissionErrorMessage()
     {
-        return "DBへの実行権限がありません。RPCのgrant設定を確認してください。";
+        return "Edge Function経由のRPC実行権限がありません。prosper-rpcのキー設定を確認してください。";
     }
 }

@@ -82,7 +82,7 @@ public class SupabaseStoreOrderRepository(
     {
         if (!HasMutationSettings())
         {
-            return AddStoreOrderLinesResult.Failed("Supabase SecretKeyが未設定です。注文を登録できません。");
+            return AddStoreOrderLinesResult.Failed("Supabase Edge Function設定が未設定です。注文を登録できません。");
         }
 
         if (slipId <= 0 || lines.Count == 0)
@@ -108,7 +108,6 @@ public class SupabaseStoreOrderRepository(
                 p_slip_id = slipId,
                 p_order_lines = payload
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

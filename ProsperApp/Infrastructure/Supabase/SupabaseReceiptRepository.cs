@@ -44,7 +44,7 @@ public class SupabaseReceiptRepository(
     {
         if (!HasMutationSettings())
         {
-            return SaveReceiptResult.Failed("Supabase SecretKeyが未設定です。領収書を更新できません。");
+            return SaveReceiptResult.Failed("Supabase Edge Function設定が未設定です。領収書を更新できません。");
         }
 
         if (string.IsNullOrWhiteSpace(input.DocumentId) ||
@@ -82,7 +82,6 @@ public class SupabaseReceiptRepository(
                 p_group_code = input.GroupCode,
                 p_status = _options.CompletedStatus
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)
@@ -99,7 +98,7 @@ public class SupabaseReceiptRepository(
     {
         if (!HasMutationSettings())
         {
-            return SaveReceiptResult.Failed("Supabase SecretKeyが未設定です。領収書を更新できません。");
+            return SaveReceiptResult.Failed("Supabase Edge Function設定が未設定です。領収書を更新できません。");
         }
 
         if (string.IsNullOrWhiteSpace(documentId))
@@ -115,7 +114,6 @@ public class SupabaseReceiptRepository(
                 p_document_id = documentId,
                 p_status = _options.ScanMistakeStatus
             },
-            requireSecretKey: true,
             ct);
 
         if (!result.Succeeded)

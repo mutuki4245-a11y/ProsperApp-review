@@ -23,8 +23,6 @@ public interface IBusinessDayRepository
 
     Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);
 
-    Task<decimal> GetDrinkDeliveryAmountAsync(long businessDayId, CancellationToken ct);
-
     Task<BusinessDayDrinkDeliveryStatus> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(long businessDayId, decimal amount, CancellationToken ct);
