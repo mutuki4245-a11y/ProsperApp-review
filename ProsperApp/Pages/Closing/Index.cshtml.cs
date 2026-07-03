@@ -102,26 +102,48 @@ public class ClosingModel(
     private async Task LoadBusinessDayAsync(CancellationToken cancellationToken)
     {
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        OpenSlipCount = CurrentBusinessDay is null
-            ? 0
-            : await _businessDayRepository.GetOpenSlipCountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        var drinkDeliveryStatus = CurrentBusinessDay is null
-            ? new BusinessDayDrinkDeliveryStatus()
-            : await _businessDayRepository.GetDrinkDeliveryStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            OpenSlipCount = 0;
+            DrinkDeliveryAmount = 0;
+            IsDrinkDeliveryAmountEntered = false;
+            ClosingAttendanceCount = 0;
+            ClosingAttendanceMissingClockOutCount = 0;
+            PendingReceiptCount = 0;
+            CastSalesAdjustmentStatus = new CastSalesAdjustmentStatus();
+            Readiness = new BusinessDayClosingReadiness
+            {
+                ReceiptsEnabled = ReceiptsEnabled
+            };
+            BusinessDayId = null;
+            return;
+        }
+
+        var openSlipCountTask = _businessDayRepository.GetOpenSlipCountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        var drinkDeliveryStatusTask = _businessDayRepository.GetDrinkDeliveryStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        var closingAttendanceTask = _businessDayRepository.GetClosingAttendanceAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        var pendingReceiptsTask = ReceiptsEnabled
+            ? _receiptRepository.GetPendingAsync(cancellationToken)
+            : Task.FromResult<IReadOnlyList<PendingReceiptItem>>([]);
+        var castSalesAdjustmentStatusTask = _castSalesAdjustmentRepository.GetStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+
+        await Task.WhenAll(
+            openSlipCountTask,
+            drinkDeliveryStatusTask,
+            closingAttendanceTask,
+            pendingReceiptsTask,
+            castSalesAdjustmentStatusTask);
+
+        OpenSlipCount = await openSlipCountTask;
+        var drinkDeliveryStatus = await drinkDeliveryStatusTask;
         DrinkDeliveryAmount = drinkDeliveryStatus.Amount;
         IsDrinkDeliveryAmountEntered = drinkDeliveryStatus.IsEntered;
 
-        IReadOnlyList<BusinessDayClosingAttendanceItem> closingAttendance = CurrentBusinessDay is null
-            ? []
-            : await _businessDayRepository.GetClosingAttendanceAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        var closingAttendance = await closingAttendanceTask;
         ClosingAttendanceCount = closingAttendance.Count;
         ClosingAttendanceMissingClockOutCount = closingAttendance.Count(x => x.ClockOutAt is null);
-        PendingReceiptCount = ReceiptsEnabled
-            ? (await _receiptRepository.GetPendingAsync(cancellationToken)).Count
-            : 0;
-        CastSalesAdjustmentStatus = CurrentBusinessDay is null
-            ? new CastSalesAdjustmentStatus()
-            : await _castSalesAdjustmentRepository.GetStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        PendingReceiptCount = (await pendingReceiptsTask).Count;
+        CastSalesAdjustmentStatus = await castSalesAdjustmentStatusTask;
         Readiness = new BusinessDayClosingReadiness
         {
             BusinessDay = CurrentBusinessDay,

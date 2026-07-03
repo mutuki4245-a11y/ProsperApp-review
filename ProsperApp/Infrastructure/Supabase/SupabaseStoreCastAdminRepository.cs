@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
 
@@ -5,16 +6,36 @@ namespace ProsperApp.Services;
 
 public class SupabaseStoreCastAdminRepository(
     ISupabaseRpcClient rpcClient,
-    ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreCastAdminRepository
+    ILocalSettingsProvider localSettingsProvider,
+    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreCastAdminRepository
 {
+    private readonly IMemoryCache _memoryCache = memoryCache;
+
     public async Task<IReadOnlyList<StoreCastAdminItem>> GetCastsAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (!HasRequiredSettings())
+        {
+            return [];
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.CastAdminList(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreCastAdminItem>? cachedCasts))
+        {
+            return cachedCasts ?? [];
+        }
+
+        var result = await RpcClient.PostArrayAsync(
             "get_store_cast_admin_list",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
-        return rows.Select(row => new StoreCastAdminItem
+        if (!result.Succeeded)
+        {
+            return [];
+        }
+
+        var casts = result.Rows.Select(row => new StoreCastAdminItem
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
@@ -22,6 +43,8 @@ public class SupabaseStoreCastAdminRepository(
             })
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
+        _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateOptions());
+        return casts;
     }
 
     public async Task<StoreCastSaveResult> CreateCastAsync(StoreCastCreateInputModel input, CancellationToken ct)
@@ -46,6 +69,11 @@ public class SupabaseStoreCastAdminRepository(
         }
 
         var castId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "cast_id") ?? 0 : 0;
+        if (castId > 0)
+        {
+            StoreMasterCacheKeys.ClearCasts(_memoryCache, CurrentStoreDepartmentId);
+        }
+
         return castId > 0
             ? StoreCastSaveResult.Success(castId)
             : StoreCastSaveResult.Failed("キャストを登録できませんでした。");
@@ -78,6 +106,11 @@ public class SupabaseStoreCastAdminRepository(
         }
 
         var deletedCastId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "cast_id") ?? 0 : 0;
+        if (deletedCastId > 0)
+        {
+            StoreMasterCacheKeys.ClearCasts(_memoryCache, CurrentStoreDepartmentId);
+        }
+
         return deletedCastId > 0
             ? StoreCastSaveResult.Success(deletedCastId)
             : StoreCastSaveResult.Failed("キャストを削除できませんでした。");

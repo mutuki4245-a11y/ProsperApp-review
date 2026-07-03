@@ -1,12 +1,15 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
 
 namespace ProsperApp.Services;
 
-public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient)
+public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemoryCache memoryCache)
     : SupabaseRepositoryBase(rpcClient), IStoreSettingsRepository
 {
+    private readonly IMemoryCache _memoryCache = memoryCache;
+
     public async Task<StoreSettingsLoadResult> GetDepartmentsAsync(CancellationToken ct)
     {
         if (!HasRequiredSettings())
@@ -14,9 +17,16 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient)
             return StoreSettingsLoadResult.Failed("Supabase Edge Function設定が未設定です。Azure App Serviceの環境変数 SUPABASE_RPC_EDGE_FUNCTION_URL と Supabase_Edge_Key を設定してください。");
         }
 
+        if (_memoryCache.TryGetValue(StoreMasterCacheKeys.Departments, out IReadOnlyList<DepartmentOption>? cachedDepartments) &&
+            cachedDepartments is { Count: > 0 })
+        {
+            return StoreSettingsLoadResult.Success(cachedDepartments, $"cache: {cachedDepartments.Count}件");
+        }
+
         var rpcResult = await GetDepartmentsFromRpcAsync(ct);
         if (rpcResult.Departments.Count > 0)
         {
+            _memoryCache.Set(StoreMasterCacheKeys.Departments, rpcResult.Departments, StoreMasterCacheKeys.CreateOptions());
             return StoreSettingsLoadResult.Success(rpcResult.Departments, rpcResult.Status);
         }
 

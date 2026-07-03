@@ -8,14 +8,24 @@ public partial class SlipEditModel
 {
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        Detail = SlipId is null ? null : await _slipRepository.GetSlipDetailAsync(SlipId.Value, cancellationToken);
+        var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
+        var detailTask = SlipId is null
+            ? Task.FromResult<SlipDetail?>(null)
+            : _slipRepository.GetSlipDetailAsync(SlipId.Value, cancellationToken);
+        var orderItemsTask = _featureGate.IsEnabled(FeatureNames.Orders)
+            ? _orderRepository.GetItemsAsync(cancellationToken)
+            : Task.FromResult<IReadOnlyList<StoreOrderItemOption>>([]);
+
+        await Task.WhenAll(currentBusinessDayTask, detailTask, orderItemsTask);
+
+        CurrentBusinessDay = await currentBusinessDayTask;
+        Detail = await detailTask;
+        OrderItems = CurrentBusinessDay is null
+            ? []
+            : await orderItemsTask;
         AttendanceCasts = CurrentBusinessDay is null
             ? []
             : await _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        OrderItems = CurrentBusinessDay is null || !_featureGate.IsEnabled(FeatureNames.Orders)
-            ? []
-            : await _orderRepository.GetItemsAsync(cancellationToken);
         TimeOptions = _storeClock.BuildTimeOptions(5);
         CheckoutTotals = CalculateCheckoutTotals();
     }

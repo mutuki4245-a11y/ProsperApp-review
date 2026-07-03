@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
@@ -6,8 +7,11 @@ namespace ProsperApp.Services;
 
 public class SupabaseStoreOrderRepository(
     ISupabaseRpcClient rpcClient,
-    ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreOrderRepository
+    ILocalSettingsProvider localSettingsProvider,
+    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreOrderRepository
 {
+    private readonly IMemoryCache _memoryCache = memoryCache;
+
     public async Task<IReadOnlyList<StoreOrderSlipOption>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct)
     {
         var rows = await PostRpcArrayAsync(
@@ -35,12 +39,29 @@ public class SupabaseStoreOrderRepository(
 
     public async Task<IReadOnlyList<StoreOrderItemOption>> GetItemsAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (!HasRequiredSettings())
+        {
+            return [];
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.OrderItems(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderItemOption>? cachedItems))
+        {
+            return cachedItems ?? [];
+        }
+
+        var result = await RpcClient.PostArrayAsync(
             "get_store_order_items",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
-        return rows.Select(row => new StoreOrderItemOption
+        if (!result.Succeeded)
+        {
+            return [];
+        }
+
+        var items = result.Rows.Select(row => new StoreOrderItemOption
             {
                 ItemId = ReadLong(row, "item_id") ?? 0,
                 ItemName = ReadString(row, "item_name") ?? string.Empty,
@@ -54,6 +75,8 @@ public class SupabaseStoreOrderRepository(
             })
             .Where(x => x.ItemId > 0 && !string.IsNullOrWhiteSpace(x.ItemName))
             .ToList();
+        _memoryCache.Set(cacheKey, items, StoreMasterCacheKeys.CreateOptions());
+        return items;
     }
 
     public async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsAsync(long businessDayId, CancellationToken ct)

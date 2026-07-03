@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
@@ -6,16 +7,36 @@ namespace ProsperApp.Services;
 
 public class SupabaseStoreItemAdminRepository(
     ISupabaseRpcClient rpcClient,
-    ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreItemAdminRepository
+    ILocalSettingsProvider localSettingsProvider,
+    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreItemAdminRepository
 {
+    private readonly IMemoryCache _memoryCache = memoryCache;
+
     public async Task<StoreItemAdminCatalog> GetCatalogAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (!HasRequiredSettings())
+        {
+            return new StoreItemAdminCatalog();
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.ItemAdminCatalog(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out StoreItemAdminCatalog? cachedCatalog))
+        {
+            return cachedCatalog ?? new StoreItemAdminCatalog();
+        }
+
+        var result = await RpcClient.PostArrayAsync(
             "get_store_item_admin_catalog",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
-        var categories = rows
+        if (!result.Succeeded)
+        {
+            return new StoreItemAdminCatalog();
+        }
+
+        var categories = result.Rows
             .Where(row => string.Equals(ReadString(row, "row_type"), "category", StringComparison.OrdinalIgnoreCase))
             .Select(row => new StoreItemCategoryAdminItem
             {
@@ -28,7 +49,7 @@ public class SupabaseStoreItemAdminRepository(
             .Where(x => x.ItemCategoryId > 0)
             .ToList();
 
-        var items = rows
+        var items = result.Rows
             .Where(row => string.Equals(ReadString(row, "row_type"), "item", StringComparison.OrdinalIgnoreCase))
             .Select(row => new StoreItemAdminItem
             {
@@ -48,7 +69,9 @@ public class SupabaseStoreItemAdminRepository(
             .Where(x => x.ItemId > 0)
             .ToList();
 
-        return new StoreItemAdminCatalog { Categories = categories, Items = items };
+        var catalog = new StoreItemAdminCatalog { Categories = categories, Items = items };
+        _memoryCache.Set(cacheKey, catalog, StoreMasterCacheKeys.CreateOptions());
+        return catalog;
     }
 
     public async Task<StoreItemAdminSaveResult> SaveCategoryAsync(StoreItemCategoryInputModel input, CancellationToken ct)
@@ -77,6 +100,11 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var id = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_category_id") ?? 0 : 0;
+        if (id > 0)
+        {
+            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+        }
+
         return id > 0
             ? StoreItemAdminSaveResult.Success(id)
             : StoreItemAdminSaveResult.Failed("カテゴリを保存できませんでした。");
@@ -112,6 +140,11 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var id = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_id") ?? 0 : 0;
+        if (id > 0)
+        {
+            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+        }
+
         return id > 0
             ? StoreItemAdminSaveResult.Success(id)
             : StoreItemAdminSaveResult.Failed("商品を保存できませんでした。");
@@ -144,6 +177,11 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var deletedItemId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_id") ?? 0 : 0;
+        if (deletedItemId > 0)
+        {
+            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+        }
+
         return deletedItemId > 0
             ? StoreItemAdminSaveResult.Success(deletedItemId)
             : StoreItemAdminSaveResult.Failed("商品を削除できませんでした。");
@@ -181,6 +219,11 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var updatedCount = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "updated_count") ?? 0 : 0;
+        if (updatedCount > 0)
+        {
+            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+        }
+
         return updatedCount > 0
             ? StoreItemAdminSaveResult.Success(updatedCount)
             : StoreItemAdminSaveResult.Failed("商品の並び順を保存できませんでした。");

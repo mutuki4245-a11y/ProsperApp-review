@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
@@ -8,40 +9,73 @@ public class SupabaseStoreSlipRepository(
     ISupabaseRpcClient rpcClient,
     IBusinessDayRepository businessDayRepository,
     ILocalSettingsProvider localSettingsProvider,
+    IMemoryCache memoryCache,
     IStoreClock storeClock)
     : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreSlipRepository
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
+    private readonly IMemoryCache _memoryCache = memoryCache;
 
     public async Task<StoreContext?> GetStoreContextAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
-            "get_store_context",
-            new { p_department_id = CurrentStoreDepartmentId },
-            ct);
-
-        if (rows.Count == 0)
+        if (!HasRequiredSettings())
         {
             return null;
         }
 
-        var row = rows[0];
-        return new StoreContext
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.StoreContext(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out StoreContext? cachedContext))
+        {
+            return cachedContext;
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "get_store_context",
+            new { p_department_id = departmentId },
+            ct);
+
+        if (!result.Succeeded || result.Rows.Count == 0)
+        {
+            return null;
+        }
+
+        var row = result.Rows[0];
+        var context = new StoreContext
         {
             CompanyId = ReadLong(row, "company_id") ?? 0,
-            DepartmentId = ReadLong(row, "department_id") ?? CurrentStoreDepartmentId,
+            DepartmentId = ReadLong(row, "department_id") ?? departmentId,
             DepartmentName = ReadString(row, "department_name")
         };
+        _memoryCache.Set(cacheKey, context, StoreMasterCacheKeys.CreateOptions());
+        return context;
     }
 
     public async Task<IReadOnlyList<StoreTableOption>> GetTablesAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (!HasRequiredSettings())
+        {
+            return [];
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.Tables(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreTableOption>? cachedTables))
+        {
+            return cachedTables ?? [];
+        }
+
+        var result = await RpcClient.PostArrayAsync(
             "get_store_tables",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
-        return rows.Select(row => new StoreTableOption
+        if (!result.Succeeded)
+        {
+            return [];
+        }
+
+        var tables = result.Rows.Select(row => new StoreTableOption
             {
                 TableId = ReadLong(row, "table_id") ?? 0,
                 TableCode = ReadString(row, "table_code") ?? string.Empty,
@@ -49,16 +83,35 @@ public class SupabaseStoreSlipRepository(
             })
             .Where(x => x.TableId > 0 && !string.IsNullOrWhiteSpace(x.TableCode))
             .ToList();
+        _memoryCache.Set(cacheKey, tables, StoreMasterCacheKeys.CreateOptions());
+        return tables;
     }
 
     public async Task<IReadOnlyList<CastOption>> GetCastsAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (!HasRequiredSettings())
+        {
+            return [];
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.StoreCasts(departmentId);
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<CastOption>? cachedCasts))
+        {
+            return cachedCasts ?? [];
+        }
+
+        var result = await RpcClient.PostArrayAsync(
             "get_store_casts",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
-        return rows.Select(row => new CastOption
+        if (!result.Succeeded)
+        {
+            return [];
+        }
+
+        var casts = result.Rows.Select(row => new CastOption
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 CastCode = ReadString(row, "cast_code"),
@@ -67,6 +120,8 @@ public class SupabaseStoreSlipRepository(
             })
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
+        _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateOptions());
+        return casts;
     }
 
     public async Task<IReadOnlyList<BusinessSlipListItem>> GetBusinessDaySlipsAsync(long businessDayId, CancellationToken ct)

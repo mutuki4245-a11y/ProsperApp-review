@@ -90,17 +90,30 @@ public class IndexModel(
 
     private async Task LoadOptionsAsync(CancellationToken cancellationToken)
     {
-        StoreContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        Slips = CurrentBusinessDay is null
-            ? []
-            : await _orderRepository.GetOpenSlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        Items = CurrentBusinessDay is null
-            ? []
-            : await _orderRepository.GetItemsAsync(cancellationToken);
-        AttendanceCasts = CurrentBusinessDay is null
-            ? []
-            : await _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
+        var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
+        var itemsTask = _orderRepository.GetItemsAsync(cancellationToken);
+
+        await Task.WhenAll(storeContextTask, currentBusinessDayTask, itemsTask);
+
+        StoreContext = await storeContextTask;
+        CurrentBusinessDay = await currentBusinessDayTask;
+
+        if (CurrentBusinessDay is null)
+        {
+            Slips = [];
+            Items = [];
+            AttendanceCasts = [];
+            return;
+        }
+
+        var slipsTask = _orderRepository.GetOpenSlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        await Task.WhenAll(slipsTask, attendanceCastsTask);
+
+        Slips = await slipsTask;
+        Items = await itemsTask;
+        AttendanceCasts = await attendanceCastsTask;
     }
 
     private void ValidateBusinessRules()
