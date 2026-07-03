@@ -49,8 +49,12 @@ public class StoreOrderAttendanceCastOption
 
 public class OrderQueueInputModel
 {
+    public long? SlipId { get; set; }
+
     public long ItemId { get; set; }
+
     public int Quantity { get; set; }
+
     public long? CastBackCastId { get; set; }
 }
 

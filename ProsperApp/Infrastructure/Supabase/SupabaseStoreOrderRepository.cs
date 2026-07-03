@@ -85,14 +85,14 @@ public class SupabaseStoreOrderRepository(
             return AddStoreOrderLinesResult.Failed("Supabase Edge Function設定が未設定です。注文を登録できません。");
         }
 
-        if (slipId <= 0 || lines.Count == 0)
+        if ((slipId <= 0 && lines.All(x => x.SlipId is null or <= 0)) || lines.Count == 0)
         {
             return AddStoreOrderLinesResult.Failed("注文登録に必要な入力が不足しています。");
         }
 
         var payload = lines
             .Where(x => x.ItemId > 0 && x.Quantity > 0)
-            .Select(x => new OrderLinePayload(x.ItemId, x.Quantity, x.CastBackCastId))
+            .Select(x => new OrderLinePayload(x.SlipId, x.ItemId, x.Quantity, x.CastBackCastId))
             .ToArray();
 
         if (payload.Length == 0)
@@ -105,7 +105,7 @@ public class SupabaseStoreOrderRepository(
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
-                p_slip_id = slipId,
+                p_slip_id = slipId > 0 ? slipId : (long?)null,
                 p_order_lines = payload
             },
             ct);
@@ -120,6 +120,7 @@ public class SupabaseStoreOrderRepository(
     }
 
     private sealed record OrderLinePayload(
+        [property: JsonPropertyName("slip_id")] long? SlipId,
         [property: JsonPropertyName("item_id")] long ItemId,
         [property: JsonPropertyName("quantity")] int Quantity,
         [property: JsonPropertyName("cast_back_cast_id")] long? CastBackCastId);
@@ -144,11 +145,6 @@ public class SupabaseStoreOrderRepository(
         if (rawError.Contains("invalid_order_quantity", StringComparison.OrdinalIgnoreCase))
         {
             return "注文数量を確認してください。";
-        }
-
-        if (rawError.Contains("cast_back_cast_required", StringComparison.OrdinalIgnoreCase))
-        {
-            return "バック対象商品のキャストを選択してください。";
         }
 
         if (rawError.Contains("store_order_attendance_cast_not_found", StringComparison.OrdinalIgnoreCase))

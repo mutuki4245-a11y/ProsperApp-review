@@ -167,7 +167,7 @@
             const slips = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName })));
             const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(x => new { id = x.ItemId, name = x.ItemName, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType })));
             const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true })));
-            const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
+            const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
             const initialSlipId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SelectedSlipId));
 
             const selectedSlipInput = document.getElementById('selectedSlipId');
@@ -187,9 +187,10 @@
             const attendingCastModal = attendingCastModalElement ? new bootstrap.Modal(attendingCastModalElement) : null;
 
             initialQueue.forEach((line) => {
-                if (line.itemId > 0 && line.quantity > 0) {
-                    const key = makeQueueKey(line.itemId, line.castBackCastId);
+                if (line.slipId > 0 && line.itemId > 0 && line.quantity > 0) {
+                    const key = makeQueueKey(line.slipId, line.itemId, line.castBackCastId);
                     queue.set(key, {
+                        slipId: String(line.slipId),
                         itemId: String(line.itemId),
                         castBackCastId: line.castBackCastId ? String(line.castBackCastId) : null,
                         quantity: line.quantity
@@ -197,8 +198,8 @@
                 }
             });
 
-            function makeQueueKey(itemId, castBackCastId) {
-                return `${itemId}:${castBackCastId ?? ''}`;
+            function makeQueueKey(slipId, itemId, castBackCastId) {
+                return `${slipId}:${itemId}:${castBackCastId ?? ''}`;
             }
 
             const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
@@ -215,8 +216,14 @@
             };
 
             const addToQueue = (itemId, castBackCastId = null) => {
-                const key = makeQueueKey(itemId, castBackCastId);
+                const slipId = selectedSlipInput?.value ?? '';
+                if (!slipId) {
+                    return;
+                }
+
+                const key = makeQueueKey(slipId, itemId, castBackCastId);
                 const current = queue.get(key) ?? {
+                    slipId: String(slipId),
                     itemId: String(itemId),
                     castBackCastId: castBackCastId ? String(castBackCastId) : null,
                     quantity: 0
@@ -250,7 +257,8 @@
                 let total = 0;
                 queue.forEach((line, key) => {
                     const item = items.find((candidate) => String(candidate.id) === String(line.itemId));
-                    if (!item) {
+                    const lineSlip = slips.find((candidate) => String(candidate.id) === String(line.slipId));
+                    if (!item || !lineSlip) {
                         return;
                     }
 
@@ -264,6 +272,7 @@
                     if (queueFields) {
                         queueFields.insertAdjacentHTML('beforeend', `
                             <input type="hidden" name="QueueLines[${index}].ItemId" value="${item.id}" />
+                            <input type="hidden" name="QueueLines[${index}].SlipId" value="${lineSlip.id}" />
                             <input type="hidden" name="QueueLines[${index}].Quantity" value="${quantity}" />
                             ${line.castBackCastId ? `<input type="hidden" name="QueueLines[${index}].CastBackCastId" value="${line.castBackCastId}" />` : ''}
                         `);
@@ -273,6 +282,9 @@
                     row.className = 'order-queue__row';
                     const name = document.createElement('strong');
                     name.textContent = item.name;
+                    const slip = document.createElement('small');
+                    slip.className = 'order-queue__back';
+                    slip.textContent = lineSlip.display;
                     const price = document.createElement('span');
                     price.textContent = formatYen(Number(item.price));
                     const quantityText = document.createElement('span');
@@ -284,7 +296,7 @@
                     remove.type = 'button';
                     remove.dataset.removeItem = key;
                     remove.textContent = '削除';
-                    row.append(name, price, quantityText, subtotalText, remove);
+                    row.append(name, price, quantityText, subtotalText, remove, slip);
                     if (cast) {
                         const back = document.createElement('small');
                         back.className = 'order-queue__back';
@@ -303,7 +315,7 @@
                     queueTotal.textContent = formatYen(total);
                 }
                 if (submitOrderButton) {
-                    submitOrderButton.disabled = submitBaseDisabled || !selectedSlipInput?.value || !hasQueue;
+                    submitOrderButton.disabled = submitBaseDisabled || !hasQueue;
                 }
             };
 
@@ -312,7 +324,6 @@
                     if (selectedSlipInput) {
                         selectedSlipInput.value = button.dataset.slipId ?? '';
                     }
-                    queue.clear();
                     render();
                 });
             });
@@ -375,6 +386,22 @@
                     attendingCastModalList.appendChild(empty);
                     return;
                 }
+
+                const noBack = document.createElement('button');
+                noBack.type = 'button';
+                noBack.className = 'cast-select-modal__item';
+                const noBackName = document.createElement('strong');
+                noBackName.textContent = 'なし';
+                const noBackHelp = document.createElement('span');
+                noBackHelp.textContent = 'バックの摘要を付けずに登録';
+                noBack.append(noBackName, noBackHelp);
+                noBack.addEventListener('click', () => {
+                    if (pendingBackItemId) {
+                        addToQueue(pendingBackItemId, null);
+                    }
+                    closeBackPicker();
+                });
+                attendingCastModalList.appendChild(noBack);
 
                 matches.forEach((cast) => {
                     const button = document.createElement('button');

@@ -29,7 +29,7 @@ as $$
       on d.department_id = c.department_id
     where a.department_id = p_department_id
       and a.business_day_id = p_business_day_id
-      and a.attendance_status in ('scheduled', 'checked_in')
+      and a.attendance_status in ('scheduled', 'checked_in', 'checked_out')
       and c.is_active = true
       and c.status = 'active'
       and d.is_active = true
@@ -53,6 +53,7 @@ declare
     v_slip public.store_slips%rowtype;
     v_order_line jsonb;
     v_item public.store_item_master%rowtype;
+    v_line_slip_id bigint;
     v_item_id bigint;
     v_quantity numeric(10, 2);
     v_cast_back_cast_id bigint;
@@ -72,33 +73,28 @@ begin
         raise exception 'store_department_not_found';
     end if;
 
-    select *
-      into v_slip
-    from public.store_slips s
-    where s.slip_id = p_slip_id
-      and s.department_id = p_department_id
-      and s.status = 'open'
-    limit 1;
-
-    if v_slip.slip_id is null then
-        raise exception 'store_order_slip_not_found';
-    end if;
-
-    v_line_no := coalesce((
-        select max(l.line_no)
-        from public.store_order_lines l
-        where l.slip_id = p_slip_id
-    ), 0);
-
     for v_order_line in
         select value from jsonb_array_elements(coalesce(p_order_lines, '[]'::jsonb))
     loop
+        v_line_slip_id := coalesce(nullif(v_order_line->>'slip_id', '')::bigint, p_slip_id);
         v_item_id := nullif(v_order_line->>'item_id', '')::bigint;
         v_quantity := nullif(v_order_line->>'quantity', '')::numeric;
         v_cast_back_cast_id := nullif(v_order_line->>'cast_back_cast_id', '')::bigint;
 
-        if v_item_id is null or coalesce(v_quantity, 0) <= 0 then
+        if v_line_slip_id is null or v_item_id is null or coalesce(v_quantity, 0) <= 0 then
             raise exception 'invalid_order_quantity';
+        end if;
+
+        select *
+          into v_slip
+        from public.store_slips s
+        where s.slip_id = v_line_slip_id
+          and s.department_id = p_department_id
+          and s.status = 'open'
+        limit 1;
+
+        if v_slip.slip_id is null then
+            raise exception 'store_order_slip_not_found';
         end if;
 
         select *
@@ -114,10 +110,6 @@ begin
             raise exception 'store_order_item_not_found';
         end if;
 
-        if v_item.is_cast_back_target and v_cast_back_cast_id is null then
-            raise exception 'cast_back_cast_required';
-        end if;
-
         if v_cast_back_cast_id is not null and not exists (
             select 1
             from public.store_cast_attendance a
@@ -126,7 +118,7 @@ begin
             where a.business_day_id = v_slip.business_day_id
               and a.department_id = p_department_id
               and a.cast_id = v_cast_back_cast_id
-              and a.attendance_status in ('scheduled', 'checked_in')
+              and a.attendance_status in ('scheduled', 'checked_in', 'checked_out')
               and c.company_id = v_company_id
               and c.is_active = true
               and c.status = 'active'
@@ -134,7 +126,11 @@ begin
             raise exception 'store_order_attendance_cast_not_found';
         end if;
 
-        v_line_no := v_line_no + 1;
+        v_line_no := coalesce((
+            select max(l.line_no)
+            from public.store_order_lines l
+            where l.slip_id = v_line_slip_id
+        ), 0) + 1;
 
         insert into public.store_order_lines (
             slip_id,
@@ -148,7 +144,7 @@ begin
             status
         )
         values (
-            p_slip_id,
+            v_line_slip_id,
             v_line_no,
             v_item.item_id,
             v_item.item_name,
@@ -160,12 +156,12 @@ begin
         )
         returning store_order_lines.order_line_id into v_order_line_id;
 
-        if v_item.is_cast_back_target then
+        if v_item.is_cast_back_target and v_cast_back_cast_id is not null then
             v_back_unit_amount := case
                 when exists (
                     select 1
                     from public.store_slip_casts sc
-                    where sc.slip_id = p_slip_id
+                    where sc.slip_id = v_line_slip_id
                       and sc.cast_id = v_cast_back_cast_id
                       and sc.status = 'active'
                 )
@@ -189,7 +185,7 @@ begin
             )
             values (
                 v_order_line_id,
-                p_slip_id,
+                v_line_slip_id,
                 v_slip.business_day_id,
                 v_slip.business_date,
                 v_company_id,
@@ -209,4 +205,3 @@ begin
     return query select v_inserted_count;
 end;
 $$;
-

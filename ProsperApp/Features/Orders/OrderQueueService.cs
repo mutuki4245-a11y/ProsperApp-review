@@ -8,9 +8,10 @@ public sealed class OrderQueueService : IOrderQueueService
     {
         return queueLines
             .Where(x => x.ItemId > 0 && x.Quantity > 0)
-            .GroupBy(x => new { x.ItemId, x.CastBackCastId })
+            .GroupBy(x => new { x.SlipId, x.ItemId, x.CastBackCastId })
             .Select(group => new OrderQueueInputModel
             {
+                SlipId = group.Key.SlipId,
                 ItemId = group.Key.ItemId,
                 Quantity = group.Sum(x => x.Quantity),
                 CastBackCastId = group.Key.CastBackCastId
@@ -58,13 +59,9 @@ public sealed class OrderQueueService : IOrderQueueService
                 continue;
             }
 
-            if (line.CastBackCastId is null)
-            {
-                errors.Add("バック対象商品のキャストを選択してください。");
-                break;
-            }
-
-            if (requireAttendingCastForBackTarget && !attendingCastIds.Contains(line.CastBackCastId.Value))
+            if (line.CastBackCastId is not null &&
+                requireAttendingCastForBackTarget &&
+                !attendingCastIds.Contains(line.CastBackCastId.Value))
             {
                 errors.Add("バック対象商品のキャストは出勤キャストから選択してください。");
                 break;

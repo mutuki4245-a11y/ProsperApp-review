@@ -69,7 +69,7 @@ public class IndexModel(
             return Page();
         }
 
-        var result = await _orderRepository.AddOrderLinesAsync(SelectedSlipId!.Value, QueueLines, cancellationToken);
+        var result = await _orderRepository.AddOrderLinesAsync(0, QueueLines, cancellationToken);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文を登録できませんでした。");
@@ -116,11 +116,6 @@ public class IndexModel(
             ModelState.AddModelError(string.Empty, "注文登録できるopen伝票がありません。");
         }
 
-        if (SelectedSlipId is null || Slips.All(x => x.SlipId != SelectedSlipId.Value))
-        {
-            ModelState.AddModelError(nameof(SelectedSlipId), "卓番を選択してください。");
-        }
-
         foreach (var error in _orderQueueService.Validate(
                      QueueLines,
                      Items,
@@ -129,6 +124,12 @@ public class IndexModel(
                      missingItemsMessage: "商品マスタが未登録です。store_item_masterを確認してください。"))
         {
             ModelState.AddModelError(nameof(QueueLines), error);
+        }
+
+        var openSlipIds = Slips.Select(x => x.SlipId).ToHashSet();
+        if (QueueLines.Any(x => x.SlipId is null || !openSlipIds.Contains(x.SlipId.Value)))
+        {
+            ModelState.AddModelError(nameof(QueueLines), "注文キューに利用できない卓番があります。");
         }
     }
 }
