@@ -65,7 +65,7 @@
                 </div>
                 @for (var i = 0; i < Model.Input.Entries.Count; i++)
                 {
-                    <div class="closing-attendance-table__row" data-attendance-row data-attendance-index="@i" data-default-clock-in="@Model.DefaultClockInTime" @(Model.Input.Entries[i].IsSelected ? null : "hidden")>
+                    <div class="closing-attendance-table__row" data-attendance-row data-attendance-index="@i" data-default-clock-in="@Model.DefaultClockInTime" data-default-clock-out="@Model.DefaultClockOutTime" @(Model.Input.Entries[i].IsSelected ? null : "hidden")>
                         <input asp-for="Input.Entries[i].CastId" type="hidden" />
                         <input asp-for="Input.Entries[i].AttendanceId" type="hidden" />
                         <input asp-for="Input.Entries[i].DisplayName" type="hidden" />
@@ -83,20 +83,20 @@
                             <span>出勤時刻</span>
                             <select class="form-select" asp-for="Input.Entries[i].ClockInTime" data-clock-in-select>
                                 <option value="">選択</option>
-                                @foreach (var time in Model.TimeOptions)
+                                @foreach (var time in Model.ClockInTimeOptions)
                                 {
-                                    <option value="@time">@time</option>
+                                    <option value="@time.Value">@time.Label</option>
                                 }
                             </select>
                             <span asp-validation-for="Input.Entries[i].ClockInTime" class="text-danger"></span>
                         </label>
                         <label class="closing-attendance-table__field">
                             <span>退勤時刻</span>
-                            <select class="form-select" asp-for="Input.Entries[i].ClockOutTime">
+                            <select class="form-select" asp-for="Input.Entries[i].ClockOutTime" data-clock-out-select>
                                 <option value="">未入力</option>
-                                @foreach (var time in Model.TimeOptions)
+                                @foreach (var time in Model.ClockOutTimeOptions)
                                 {
-                                    <option value="@time">@time</option>
+                                    <option value="@time.Value">@time.Label</option>
                                 }
                             </select>
                             <span asp-validation-for="Input.Entries[i].ClockOutTime" class="text-danger"></span>
@@ -126,6 +126,10 @@
                             <input class="form-control form-control-lg closing-attendance-modal__search" id="castSearchInput" type="search" placeholder="キャスト名を入力" autocomplete="off" />
                             <div class="closing-attendance-modal__list" id="castModalList"></div>
                         </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                            <button class="btn btn-primary" type="button" id="addSelectedAttendanceButton" disabled>選択したキャストを追加</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -142,6 +146,7 @@
             const modalElement = document.getElementById('castSelectModal');
             const modalList = document.getElementById('castModalList');
             const searchInput = document.getElementById('castSearchInput');
+            const addSelectedButton = document.getElementById('addSelectedAttendanceButton');
             const emptyMessage = document.getElementById('attendanceEmptyMessage');
             const selectedCount = document.getElementById('selectedAttendanceCount');
             const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
@@ -149,6 +154,7 @@
             const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
             const getSelectedInput = (row) => row?.querySelector('[data-attendance-selected]');
             const getClockInSelect = (row) => row?.querySelector('[data-clock-in-select]');
+            const getClockOutSelect = (row) => row?.querySelector('[data-clock-out-select]');
             const isSelected = (row) => (getSelectedInput(row)?.value ?? '').toLocaleLowerCase('en-US') === 'true';
             const normalize = (value) => (value ?? '').toString().trim().toLocaleLowerCase('ja-JP');
 
@@ -163,6 +169,14 @@
                 }
             };
 
+            const updateAddSelectedButton = () => {
+                if (!addSelectedButton || !modalList) {
+                    return;
+                }
+
+                addSelectedButton.disabled = modalList.querySelectorAll('[data-attendance-cast-check]:checked').length === 0;
+            };
+
             const renderModal = () => {
                 if (!modalList) {
                     return;
@@ -175,6 +189,10 @@
                     .slice(0, 80);
 
                 modalList.innerHTML = '';
+                if (addSelectedButton) {
+                    addSelectedButton.disabled = true;
+                }
+
                 if (matches.length === 0) {
                     const empty = document.createElement('p');
                     empty.className = 'text-muted mb-0';
@@ -184,32 +202,53 @@
                 }
 
                 matches.forEach((cast) => {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'closing-attendance-modal__item';
+                    const item = document.createElement('label');
+                    item.className = 'closing-attendance-modal__item';
+                    const checkbox = document.createElement('input');
+                    checkbox.className = 'form-check-input';
+                    checkbox.type = 'checkbox';
+                    checkbox.value = String(cast.index);
+                    checkbox.dataset.attendanceCastCheck = '';
+                    const text = document.createElement('span');
+                    text.className = 'closing-attendance-modal__item-text';
                     const name = document.createElement('strong');
                     name.textContent = cast.name;
                     const department = document.createElement('span');
                     department.textContent = cast.department ?? '';
-                    button.append(name, department);
-                    button.addEventListener('click', () => {
-                        const row = getRow(cast.index);
-                        const selected = getSelectedInput(row);
-                        const clockIn = getClockInSelect(row);
-                        if (!row || !selected) {
-                            return;
-                        }
-
-                        selected.value = 'true';
-                        if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
-                            clockIn.value = row.dataset.defaultClockIn;
-                        }
-                        row.hidden = false;
-                        updateSelectedState();
-                        modal?.hide();
-                    });
-                    modalList.appendChild(button);
+                    text.append(name, department);
+                    item.append(checkbox, text);
+                    checkbox.addEventListener('change', updateAddSelectedButton);
+                    modalList.appendChild(item);
                 });
+            };
+
+            const addSelectedCasts = () => {
+                if (!modalList) {
+                    return;
+                }
+
+                const checked = Array.from(modalList.querySelectorAll('[data-attendance-cast-check]:checked'));
+                checked.forEach((checkbox) => {
+                    const row = getRow(checkbox.value);
+                    const selected = getSelectedInput(row);
+                    const clockIn = getClockInSelect(row);
+                    const clockOut = getClockOutSelect(row);
+                    if (!row || !selected) {
+                        return;
+                    }
+
+                    selected.value = 'true';
+                    if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
+                        clockIn.value = row.dataset.defaultClockIn;
+                    }
+                    if (clockOut && !clockOut.value && row.dataset.defaultClockOut) {
+                        clockOut.value = row.dataset.defaultClockOut;
+                    }
+                    row.hidden = false;
+                });
+
+                updateSelectedState();
+                modal?.hide();
             };
 
             addButton?.addEventListener('click', () => {
@@ -235,6 +274,7 @@
             });
 
             searchInput?.addEventListener('input', renderModal);
+            addSelectedButton?.addEventListener('click', addSelectedCasts);
             modalElement?.addEventListener('shown.bs.modal', () => searchInput?.focus());
             updateSelectedState();
         })();

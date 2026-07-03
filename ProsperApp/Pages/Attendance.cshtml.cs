@@ -27,9 +27,13 @@ public class AttendanceModel(
 
     public DateOnly CurrentBusinessDate { get; private set; }
 
-    public IReadOnlyList<string> TimeOptions { get; private set; } = [];
+    public IReadOnlyList<AttendanceTimeOption> ClockInTimeOptions { get; private set; } = [];
 
-    public string DefaultClockInTime { get; private set; } = "18:00";
+    public IReadOnlyList<AttendanceTimeOption> ClockOutTimeOptions { get; private set; } = [];
+
+    public string DefaultClockInTime { get; private set; } = "19:00";
+
+    public string DefaultClockOutTime { get; private set; } = "00:00";
 
     public string? SuccessMessage { get; private set; }
 
@@ -161,8 +165,10 @@ public class AttendanceModel(
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
     {
         var minuteStep = _localSettingsProvider.GetCurrent().AttendanceMinuteStep is 30 ? 30 : 15;
-        TimeOptions = _storeClock.BuildTimeOptions(minuteStep);
-        DefaultClockInTime = ResolveDefaultClockInTime(TimeOptions);
+        ClockInTimeOptions = BuildAttendanceTimeOptions(19, 0, minuteStep);
+        ClockOutTimeOptions = BuildAttendanceTimeOptions(24, 0, minuteStep);
+        DefaultClockInTime = ResolveDefaultTime(ClockInTimeOptions, "19:00");
+        DefaultClockOutTime = ResolveDefaultTime(ClockOutTimeOptions, "00:00");
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         var postedByCastId = preserveInput
@@ -192,6 +198,12 @@ public class AttendanceModel(
                     clockInTime = DefaultClockInTime;
                 }
 
+                var clockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty);
+                if (string.IsNullOrWhiteSpace(clockOutTime))
+                {
+                    clockOutTime = DefaultClockOutTime;
+                }
+
                 return new BusinessDayAttendanceEntryInput
                 {
                     CastId = cast.CastId,
@@ -201,7 +213,7 @@ public class AttendanceModel(
                     IsSelected = posted?.IsSelected ?? (attendance is not null && !string.IsNullOrWhiteSpace(clockInTime)),
                     IsRegistered = attendance is not null,
                     ClockInTime = clockInTime,
-                    ClockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty),
+                    ClockOutTime = clockOutTime,
                     UsesSendService = posted?.UsesSendService ?? attendance?.UsesSendService ?? false
                 };
             })
@@ -213,6 +225,12 @@ public class AttendanceModel(
             {
                 postedByCastId.TryGetValue(item.CastId, out var posted);
                 var clockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(item.ClockInAt, string.Empty);
+                var clockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(item.ClockOutAt, string.Empty);
+                if (string.IsNullOrWhiteSpace(clockOutTime))
+                {
+                    clockOutTime = DefaultClockOutTime;
+                }
+
                 return new BusinessDayAttendanceEntryInput
                 {
                     CastId = item.CastId,
@@ -222,7 +240,7 @@ public class AttendanceModel(
                     IsSelected = posted?.IsSelected ?? !string.IsNullOrWhiteSpace(clockInTime),
                     IsRegistered = true,
                     ClockInTime = clockInTime,
-                    ClockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(item.ClockOutAt, string.Empty),
+                    ClockOutTime = clockOutTime,
                     UsesSendService = posted?.UsesSendService ?? item.UsesSendService
                 };
             }));
@@ -234,11 +252,44 @@ public class AttendanceModel(
         };
     }
 
-    private static string ResolveDefaultClockInTime(IReadOnlyList<string> timeOptions)
+    private static IReadOnlyList<AttendanceTimeOption> BuildAttendanceTimeOptions(
+        int centerHour,
+        int centerMinute,
+        int minuteStep)
     {
-        return timeOptions.Contains("18:00", StringComparer.Ordinal)
-            ? "18:00"
-            : timeOptions.FirstOrDefault() ?? string.Empty;
+        if (minuteStep <= 0 || 60 % minuteStep != 0)
+        {
+            minuteStep = 15;
+        }
+
+        var centerTotalMinutes = centerHour * 60 + centerMinute;
+        var startMinutes = centerTotalMinutes - 12 * 60;
+        var endMinutes = centerTotalMinutes + 12 * 60;
+        var options = new List<AttendanceTimeOption>();
+        var seenValues = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var totalMinutes = startMinutes; totalMinutes < endMinutes; totalMinutes += minuteStep)
+        {
+            var normalizedMinutes = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+            var value = $"{normalizedMinutes / 60:00}:{normalizedMinutes % 60:00}";
+            if (!seenValues.Add(value))
+            {
+                continue;
+            }
+
+            options.Add(new AttendanceTimeOption(
+                value,
+                $"{totalMinutes / 60:00}:{totalMinutes % 60:00}"));
+        }
+
+        return options;
+    }
+
+    private static string ResolveDefaultTime(IReadOnlyList<AttendanceTimeOption> timeOptions, string preferredValue)
+    {
+        return timeOptions.Any(x => string.Equals(x.Value, preferredValue, StringComparison.Ordinal))
+            ? preferredValue
+            : timeOptions.FirstOrDefault()?.Value ?? string.Empty;
     }
 
     private void ValidateAttendanceInput()
@@ -256,7 +307,8 @@ public class AttendanceModel(
             return;
         }
 
-        var validTimes = TimeOptions.ToHashSet(StringComparer.Ordinal);
+        var validClockInTimes = ClockInTimeOptions.Select(x => x.Value).ToHashSet(StringComparer.Ordinal);
+        var validClockOutTimes = ClockOutTimeOptions.Select(x => x.Value).ToHashSet(StringComparer.Ordinal);
         for (var i = 0; i < Input.Entries.Count; i++)
         {
             var entry = Input.Entries[i];
@@ -276,7 +328,7 @@ public class AttendanceModel(
 
             if (string.IsNullOrWhiteSpace(entry.ClockInTime) ||
                 !TimeOnly.TryParse(entry.ClockInTime, CultureInfo.InvariantCulture, out var parsedClockInTime) ||
-                !validTimes.Contains(entry.ClockInTime))
+                !validClockInTimes.Contains(entry.ClockInTime))
             {
                 ModelState.AddModelError(
                     $"Input.Entries[{i}].ClockInTime",
@@ -290,7 +342,7 @@ public class AttendanceModel(
             if (!string.IsNullOrWhiteSpace(entry.ClockOutTime))
             {
                 if (!TimeOnly.TryParse(entry.ClockOutTime, CultureInfo.InvariantCulture, out var parsedClockOutTime) ||
-                    !validTimes.Contains(entry.ClockOutTime))
+                    !validClockOutTimes.Contains(entry.ClockOutTime))
                 {
                     ModelState.AddModelError(
                         $"Input.Entries[{i}].ClockOutTime",
@@ -345,3 +397,5 @@ public class BusinessDayAttendanceEntryInput
 
     public bool UsesSendService { get; set; }
 }
+
+public sealed record AttendanceTimeOption(string Value, string Label);
