@@ -76,6 +76,7 @@ body.order-terminal .order-entry__grid {
 .order-slip-picker,
 .order-item-groups,
 .order-queue {
+  align-content: start;
   display: grid;
   gap: 0.5rem;
 }
@@ -106,6 +107,7 @@ body.order-terminal .order-entry__queue {
 }
 
 .order-entry__panel-body {
+  align-content: start;
   display: grid;
   flex: 1 1 auto;
   gap: 0.5rem;
@@ -153,6 +155,7 @@ body.order-terminal .order-entry__queue {
 }
 
 .order-category-tabs {
+  align-items: center;
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
@@ -166,6 +169,7 @@ body.order-terminal .order-entry__queue {
   border-radius: 999px;
   color: #102a43;
   font-weight: 800;
+  min-height: 2.65rem;
   padding: 0.45rem 0.85rem;
 }
 
