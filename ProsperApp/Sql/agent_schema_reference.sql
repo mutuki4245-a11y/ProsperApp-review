@@ -53,6 +53,9 @@
 --   department_code text
 --   department_name text
 --   is_active boolean
+--   attendance_minute_step integer
+--   cast_sales_amount_basis text
+--   cast_sales_split_mode text
 
 -- document_file_no_sequences
 --   company_id bigint
@@ -562,7 +565,8 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 
 -- Store context and business day:
 --   get_store_context(p_department_id bigint)
---     returns company_id, department_id, department_name
+--     returns company_id, department_id, department_name,
+--       attendance_minute_step, cast_sales_amount_basis, cast_sales_split_mode
 --   get_current_business_day(p_department_id bigint)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
 --   open_business_day(p_department_id bigint, p_business_date date, p_memo text)
@@ -590,11 +594,11 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     returns checkout snapshot and nominated cast rows for one checked-out slip.
 --   save_cast_sales_adjustment(p_department_id bigint, p_slip_id bigint, p_adjustments jsonb, p_source_amount_type text, p_split_mode text)
 --     replaces the per-slip adjustment rows for all active nominated casts.
---   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text, p_pending_receipt_status text default 'unprocessed')
+--   close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text, p_pending_receipt_status text default 'unprocessed', p_ignore_closing_requirements boolean default false)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo.
 --     rejects closing when open slips, missing drink delivery input, no attendance,
---     missing clock-out, or missing cast sales adjustment remain.
---     Pending receipt documents are UI warnings, not close blockers.
+--     missing clock-out, missing cast sales adjustment, or pending receipt documents remain.
+--     p_ignore_closing_requirements skips those close blockers for administrator mode.
 
 -- Slip creation and listing:
 --   get_store_tables(p_department_id bigint)

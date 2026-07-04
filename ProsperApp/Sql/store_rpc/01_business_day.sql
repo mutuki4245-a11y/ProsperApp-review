@@ -3,11 +3,16 @@ begin;
 alter table public.cast_master
     add column if not exists joined_on date not null default ((now() at time zone 'Asia/Tokyo')::date);
 
+drop function if exists public.get_store_context(bigint);
+
 create or replace function public.get_store_context(p_department_id bigint)
 returns table (
     company_id bigint,
     department_id bigint,
-    department_name text
+    department_name text,
+    attendance_minute_step integer,
+    cast_sales_amount_basis text,
+    cast_sales_split_mode text
 )
 language sql
 security definer
@@ -16,7 +21,19 @@ as $$
     select
         d.company_id,
         d.department_id,
-        d.department_name
+        d.department_name,
+        case
+            when d.attendance_minute_step in (5, 10, 15, 20, 30, 60) then d.attendance_minute_step
+            else 15
+        end as attendance_minute_step,
+        case
+            when d.cast_sales_amount_basis in ('subtotal', 'total') then d.cast_sales_amount_basis
+            else 'total'
+        end as cast_sales_amount_basis,
+        case
+            when d.cast_sales_split_mode in ('split', 'full') then d.cast_sales_split_mode
+            else 'split'
+        end as cast_sales_split_mode
     from public.department_master d
     where d.department_id = p_department_id
       and d.is_active = true
@@ -609,12 +626,14 @@ $$;
 
 drop function if exists public.close_business_day(bigint, bigint, text);
 drop function if exists public.close_business_day(bigint, bigint, text, text);
+drop function if exists public.close_business_day(bigint, bigint, text, text, boolean);
 
 create or replace function public.close_business_day(
     p_department_id bigint,
     p_business_day_id bigint,
     p_memo text default null,
-    p_pending_receipt_status text default 'unprocessed'
+    p_pending_receipt_status text default 'unprocessed',
+    p_ignore_closing_requirements boolean default false
 )
 returns table (
     business_day_id bigint,
@@ -650,53 +669,55 @@ begin
         raise exception 'business_day_not_open';
     end if;
 
-    select public.get_open_slip_count(p_department_id, p_business_day_id)
-      into v_open_slip_count;
+    if coalesce(p_ignore_closing_requirements, false) = false then
+        select public.get_open_slip_count(p_department_id, p_business_day_id)
+          into v_open_slip_count;
 
-    if coalesce(v_open_slip_count, 0) > 0 then
-        raise exception 'open_slips_exist:%', v_open_slip_count;
-    end if;
+        if coalesce(v_open_slip_count, 0) > 0 then
+            raise exception 'open_slips_exist:%', v_open_slip_count;
+        end if;
 
-    if coalesce(v_business_day.drink_delivery_amount_entered, false) = false then
-        raise exception 'drink_delivery_required';
-    end if;
+        if coalesce(v_business_day.drink_delivery_amount_entered, false) = false then
+            raise exception 'drink_delivery_required';
+        end if;
 
-    select
-        count(*)::integer,
-        count(*) filter (where a.clock_out_at is null)::integer
-      into v_attendance_count,
-           v_missing_clock_out_count
-    from public.store_cast_attendance a
-    where a.business_day_id = p_business_day_id
-      and a.department_id = p_department_id
-      and a.attendance_status in ('scheduled', 'checked_in', 'checked_out');
+        select
+            count(*)::integer,
+            count(*) filter (where a.clock_out_at is null)::integer
+          into v_attendance_count,
+               v_missing_clock_out_count
+        from public.store_cast_attendance a
+        where a.business_day_id = p_business_day_id
+          and a.department_id = p_department_id
+          and a.attendance_status in ('scheduled', 'checked_in', 'checked_out');
 
-    if coalesce(v_attendance_count, 0) = 0 then
-        raise exception 'attendance_required';
-    end if;
+        if coalesce(v_attendance_count, 0) = 0 then
+            raise exception 'attendance_required';
+        end if;
 
-    if coalesce(v_missing_clock_out_count, 0) > 0 then
-        raise exception 'attendance_clock_out_required:%', v_missing_clock_out_count;
-    end if;
+        if coalesce(v_missing_clock_out_count, 0) > 0 then
+            raise exception 'attendance_clock_out_required:%', v_missing_clock_out_count;
+        end if;
 
-    select s.missing_slip_count
-      into v_cast_sales_adjustment_missing_count
-    from public.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id) s
-    limit 1;
+        select s.missing_slip_count
+          into v_cast_sales_adjustment_missing_count
+        from public.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id) s
+        limit 1;
 
-    if coalesce(v_cast_sales_adjustment_missing_count, 0) > 0 then
-        raise exception 'cast_sales_adjustment_required:%', v_cast_sales_adjustment_missing_count;
-    end if;
+        if coalesce(v_cast_sales_adjustment_missing_count, 0) > 0 then
+            raise exception 'cast_sales_adjustment_required:%', v_cast_sales_adjustment_missing_count;
+        end if;
 
-    if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
-        select count(*)::integer
-          into v_pending_receipt_count
-        from public.documents d
-        where d.department_id = p_department_id
-          and d.status = p_pending_receipt_status;
+        if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
+            select count(*)::integer
+              into v_pending_receipt_count
+            from public.documents d
+            where d.department_id = p_department_id
+              and d.status = p_pending_receipt_status;
 
-        if coalesce(v_pending_receipt_count, 0) > 0 then
-            raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
+            if coalesce(v_pending_receipt_count, 0) > 0 then
+                raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
+            end if;
         end if;
     end if;
 

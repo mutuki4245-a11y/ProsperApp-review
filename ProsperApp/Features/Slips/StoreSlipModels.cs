@@ -8,6 +8,9 @@ public class StoreContext
     public long CompanyId { get; set; }
     public long DepartmentId { get; set; }
     public string? DepartmentName { get; set; }
+    public int AttendanceMinuteStep { get; set; } = 15;
+    public string CastSalesAmountBasis { get; set; } = LocalSettings.CastSalesAmountBasisTotal;
+    public string CastSalesSplitMode { get; set; } = LocalSettings.CastSalesSplitModeSplit;
 }
 
 public class StoreTableOption

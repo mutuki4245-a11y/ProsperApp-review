@@ -9,12 +9,14 @@ public class ClosingModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
-    IReceiptRepository receiptRepository) : PageModel
+    IReceiptRepository receiptRepository,
+    ILocalSettingsProvider localSettingsProvider) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
+    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
 
     [BindProperty]
     public long? BusinessDayId { get; set; }
@@ -41,6 +43,8 @@ public class ClosingModel(
     public int PendingReceiptCount { get; set; }
 
     public CastSalesAdjustmentStatus CastSalesAdjustmentStatus { get; private set; } = new();
+
+    public bool IsAdminMode { get; private set; }
 
     [TempData]
     public string? SuccessMessage { get; set; }
@@ -77,7 +81,7 @@ public class ClosingModel(
             return Page();
         }
 
-        if (!Readiness.CanClose)
+        if (!IsAdminMode && !Readiness.CanClose)
         {
             foreach (var reason in Readiness.BlockReasons)
             {
@@ -87,7 +91,7 @@ public class ClosingModel(
             return Page();
         }
 
-        var result = await _businessDayRepository.CloseAsync(CurrentBusinessDay.BusinessDayId, ClosingMemo, cancellationToken);
+        var result = await _businessDayRepository.CloseAsync(CurrentBusinessDay.BusinessDayId, ClosingMemo, IsAdminMode, cancellationToken);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "営業日を締められませんでした。");
@@ -101,6 +105,7 @@ public class ClosingModel(
 
     private async Task LoadBusinessDayAsync(CancellationToken cancellationToken)
     {
+        IsAdminMode = _localSettingsProvider.GetCurrent().IsAdminMode;
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         if (CurrentBusinessDay is null)
         {

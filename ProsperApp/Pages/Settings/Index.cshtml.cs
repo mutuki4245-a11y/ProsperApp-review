@@ -112,10 +112,7 @@ public class SettingsModel(
             StoreName = selectedDepartment.DisplayName,
             StoreDepartmentId = selectedDepartment.DepartmentId,
             ScreenMode = Input.ScreenMode,
-            IsAdminMode = Input.IsAdminMode,
-            AttendanceMinuteStep = Input.AttendanceMinuteStep,
-            CastSalesAmountBasis = Input.CastSalesAmountBasis,
-            CastSalesSplitMode = Input.CastSalesSplitMode
+            IsAdminMode = Input.IsAdminMode
         };
 
         WriteSettingsCookie(settings);
@@ -160,10 +157,7 @@ public class SettingsModel(
             StoreName = settings.StoreName,
             StoreDepartmentId = settings.StoreDepartmentId,
             ScreenMode = settings.ScreenMode,
-            IsAdminMode = settings.IsAdminMode,
-            AttendanceMinuteStep = settings.AttendanceMinuteStep,
-            CastSalesAmountBasis = settings.CastSalesAmountBasis,
-            CastSalesSplitMode = settings.CastSalesSplitMode
+            IsAdminMode = settings.IsAdminMode
         };
     }
 
@@ -220,21 +214,6 @@ public class SettingsModel(
             ModelState.AddModelError("Input.ScreenMode", "機能設定を選択してください。");
         }
 
-        if (Input.AttendanceMinuteStep is not 15 and not 30)
-        {
-            ModelState.AddModelError("Input.AttendanceMinuteStep", "勤怠入力の時刻刻みは15分または30分を選択してください。");
-        }
-
-        if (Input.CastSalesAmountBasis is not LocalSettings.CastSalesAmountBasisSubtotal and not LocalSettings.CastSalesAmountBasisTotal)
-        {
-            ModelState.AddModelError("Input.CastSalesAmountBasis", "キャスト売上額の基準を選択してください。");
-        }
-
-        if (Input.CastSalesSplitMode is not LocalSettings.CastSalesSplitModeSplit and not LocalSettings.CastSalesSplitModeFull)
-        {
-            ModelState.AddModelError("Input.CastSalesSplitMode", "売上額の人数割りを選択してください。");
-        }
-
         return selectedDepartment;
     }
 }
@@ -251,13 +230,4 @@ public class SettingsInputModel
 
     [Display(Name = "管理者モード")]
     public bool IsAdminMode { get; set; }
-
-    [Display(Name = "勤怠入力の時刻刻み")]
-    public int AttendanceMinuteStep { get; set; } = 15;
-
-    [Display(Name = "キャスト売上額の基準")]
-    public string CastSalesAmountBasis { get; set; } = LocalSettings.CastSalesAmountBasisTotal;
-
-    [Display(Name = "売上額の人数割り")]
-    public string CastSalesSplitMode { get; set; } = LocalSettings.CastSalesSplitModeSplit;
 }

@@ -5,7 +5,7 @@
     ViewData["Title"] = "締め作業";
     var hasBusinessDay = Model.CurrentBusinessDay is not null;
     ViewData["HasCurrentBusinessDay"] = hasBusinessDay;
-    var canCloseBusinessDay = Model.Readiness.CanClose;
+    var canCloseBusinessDay = Model.Readiness.CanClose || (hasBusinessDay && Model.IsAdminMode);
     var drinkDeliveryPanelClass = hasBusinessDay && Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning";
     var attendancePanelClass = hasBusinessDay && Model.ClosingAttendanceMissingClockOutCount == 0 && Model.ClosingAttendanceCount > 0
         ? "is-ready"

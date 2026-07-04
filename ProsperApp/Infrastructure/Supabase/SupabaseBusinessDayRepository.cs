@@ -152,7 +152,11 @@ public class SupabaseBusinessDayRepository(
         return BusinessDayOperationResult.Success(businessDay);
     }
 
-    public async Task<BusinessDayOperationResult> CloseAsync(long businessDayId, string? memo, CancellationToken ct)
+    public async Task<BusinessDayOperationResult> CloseAsync(
+        long businessDayId,
+        string? memo,
+        bool ignoreClosingRequirements,
+        CancellationToken ct)
     {
         if (!HasMutationSettings())
         {
@@ -167,7 +171,8 @@ public class SupabaseBusinessDayRepository(
                 p_department_id = departmentId,
                 p_business_day_id = businessDayId,
                 p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
-                p_pending_receipt_status = _options.PendingStatus
+                p_pending_receipt_status = _options.PendingStatus,
+                p_ignore_closing_requirements = ignoreClosingRequirements
             },
             ct);
 

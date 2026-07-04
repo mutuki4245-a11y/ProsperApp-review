@@ -9,12 +9,12 @@ public class CastSalesAdjustmentModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
-    ILocalSettingsProvider localSettingsProvider) : PageModel
+    IStoreSlipRepository slipRepository) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly IStoreSlipRepository _slipRepository = slipRepository;
 
     [BindProperty]
     public CastSalesAdjustmentSaveInput CastSalesAdjustmentInput { get; set; } = new();
@@ -156,10 +156,14 @@ public class CastSalesAdjustmentModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
-        var settings = _localSettingsProvider.GetCurrent();
-        CastSalesAmountBasis = settings.CastSalesAmountBasis;
-        CastSalesSplitMode = settings.CastSalesSplitMode;
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
+        var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
+        await Task.WhenAll(storeContextTask, currentBusinessDayTask);
+
+        var storeContext = await storeContextTask;
+        CastSalesAmountBasis = storeContext?.CastSalesAmountBasis ?? LocalSettings.CastSalesAmountBasisTotal;
+        CastSalesSplitMode = storeContext?.CastSalesSplitMode ?? LocalSettings.CastSalesSplitModeSplit;
+        CurrentBusinessDay = await currentBusinessDayTask;
         CastSalesAdjustmentStatus = CurrentBusinessDay is null
             ? new CastSalesAdjustmentStatus()
             : await _castSalesAdjustmentRepository.GetStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);

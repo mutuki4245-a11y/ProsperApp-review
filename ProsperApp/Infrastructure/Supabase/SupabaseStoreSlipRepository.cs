@@ -45,7 +45,10 @@ public class SupabaseStoreSlipRepository(
         {
             CompanyId = ReadLong(row, "company_id") ?? 0,
             DepartmentId = ReadLong(row, "department_id") ?? departmentId,
-            DepartmentName = ReadString(row, "department_name")
+            DepartmentName = ReadString(row, "department_name"),
+            AttendanceMinuteStep = NormalizeAttendanceMinuteStep(ReadLong(row, "attendance_minute_step")),
+            CastSalesAmountBasis = NormalizeCastSalesAmountBasis(ReadString(row, "cast_sales_amount_basis")),
+            CastSalesSplitMode = NormalizeCastSalesSplitMode(ReadString(row, "cast_sales_split_mode"))
         };
         _memoryCache.Set(cacheKey, context, StoreMasterCacheKeys.CreateOptions());
         return context;
@@ -574,6 +577,27 @@ public class SupabaseStoreSlipRepository(
     private sealed record KaraokeLinePayload(
         [property: JsonPropertyName("slip_id")] long SlipId,
         [property: JsonPropertyName("quantity")] decimal Quantity);
+
+    private static int NormalizeAttendanceMinuteStep(long? value)
+    {
+        return value is 5L or 10L or 15L or 20L or 30L or 60L
+            ? (int)value.Value
+            : 15;
+    }
+
+    private static string NormalizeCastSalesAmountBasis(string? value)
+    {
+        return value is LocalSettings.CastSalesAmountBasisSubtotal
+            ? LocalSettings.CastSalesAmountBasisSubtotal
+            : LocalSettings.CastSalesAmountBasisTotal;
+    }
+
+    private static string NormalizeCastSalesSplitMode(string? value)
+    {
+        return value is LocalSettings.CastSalesSplitModeFull
+            ? LocalSettings.CastSalesSplitModeFull
+            : LocalSettings.CastSalesSplitModeSplit;
+    }
 
     private static string ToNominationType(string nominationKind)
     {

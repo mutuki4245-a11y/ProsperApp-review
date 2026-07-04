@@ -227,6 +227,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_business_day_id", type: "bigint" },
         { name: "p_memo", type: "text" },
         { name: "p_pending_receipt_status", type: "text" },
+        { name: "p_ignore_closing_requirements", type: "boolean" },
       ],
     },
   ],

@@ -16,7 +16,7 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 
 | ファイル | 役割 |
 | --- | --- |
-| `Sql/store_order_accounting_tables.sql` | 店舗営業、伝票、客行、指名、注文、自由入力調整、会計、締め調整のテーブル定義。RLS有効化、`updated_at` トリガー、主要インデックスを含む。 |
+| `Sql/store_order_accounting_tables.sql` | 店舗営業、伝票、客行、指名、注文、自由入力調整、会計、締め調整のテーブル定義。`department_master` の店舗別運用設定列、RLS有効化、`updated_at` トリガー、主要インデックスを含む。 |
 | `Sql/store_settings_functions.sql` | 店舗設定画面用RPC。`get_store_departments()` で有効店舗一覧を返す。 |
 | `Sql/store_rpc_functions.sql` | 分割済みRPCファイルの実行順を示す非実行インデックス。実行対象ではない。 |
 | `Sql/store_rpc/01_business_day.sql` | 店舗コンテキスト、営業日開始/取得/締め、勤怠、酒代、未会計伝票数を扱う。 |
@@ -50,6 +50,7 @@ DB反映時の基本順序は以下。
 
 | 分類 | テーブル | 概要 |
 | --- | --- | --- |
+| 既存マスタ | `department_master` | 店舗マスタ。店舗別運用設定として勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割を持つ。 |
 | マスタ | `store_table_master` | 店舗ごとの卓番。 |
 | マスタ | `cast_master` | キャスト。店舗所属と表示順を持つ。 |
 | マスタ | `store_item_category_master` | 商品カテゴリ。 |
@@ -98,7 +99,7 @@ DB反映時の基本順序は以下。
 
 | RPC | 主な用途 |
 | --- | --- |
-| `get_store_context` | 店舗IDから店舗コンテキストを返す。 |
+| `get_store_context` | 店舗IDから店舗コンテキストを返す。勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割も返す。 |
 | `get_current_business_day` | 未締めの現在営業日を返す。締めるまでキャッシュ対象。 |
 | `open_business_day` | 営業日を開始する。 |
 | `open_business_day_with_attendance` | 営業日開始と勤怠一括登録を行う。 |
@@ -108,7 +109,7 @@ DB反映時の基本順序は以下。
 | `get_open_slip_count` | 未会計伝票数を返す。 |
 | `get_business_day_drink_delivery_status` | 酒代入力状態を返す。 |
 | `save_business_day_drink_delivery_amount` | 酒代を保存する。 |
-| `close_business_day` | 営業日を締める。 |
+| `close_business_day` | 営業日を締める。通常モードでは締め条件を検証し、管理者モードからは `p_ignore_closing_requirements` で条件検証を無視できる。 |
 
 ### マスタ・一覧
 
@@ -207,6 +208,8 @@ RPCを追加/変更するときは、以下を同じタスク内で揃える。
 | 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。会計額へ直接加減し、商品マスタには登録しない。 |
 | 指名価格 | 実装済み | `store_slip_casts.nomination_price` を会計額へ加算する。 |
 | 指名種別別キャストバック | 実装済み | `store_nomination_back_master` で店舗別単価を管理し、`create_store_slip` / `add_store_slip_nominations` が指名登録時に `store_slip_cast_backs` へ営業実績を作成する。 |
+| 店舗別運用設定 | 実装済み | `department_master.attendance_minute_step`, `cast_sales_amount_basis`, `cast_sales_split_mode` を `get_store_context` で返し、勤怠時刻選択とキャスト売上額調整の初期配分に使う。 |
+| 管理者モード締め | 実装済み | `close_business_day` は `p_ignore_closing_requirements = true` の場合、未会計伝票、酒代、勤怠、退勤、キャスト売上額調整、未入力領収書の条件検証を無視して営業日を締める。営業日IDと店舗IDの一致確認は維持する。 |
 | 当日出勤キャスト候補キャッシュ | 実装済み | RPC定義変更は不要。アプリ側に店舗別・営業日別キャッシュキーを持ち、勤怠保存/退勤情報保存/営業日開始/営業日締め時に破棄する。 |
 | 営業中一覧と注文対象伝票の再取得削減 | 実装済み | RPC定義変更は不要。`get_business_day_slips` と `get_order_entry_slips` はページ用JSON handlerから非同期取得し、初期表示や保存成功POSTをブロックしない。 |
 | レシートプリンター正式仕様 | 後続仕様 | SQL/RPC変更は現時点で不要。再印刷履歴や印刷状態をDB保存する場合は、会計テーブルまたは印刷ログテーブルの追加を検討する。 |

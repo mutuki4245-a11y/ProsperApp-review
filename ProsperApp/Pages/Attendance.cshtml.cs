@@ -11,13 +11,11 @@ public class AttendanceModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
-    ILocalSettingsProvider localSettingsProvider,
     IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
@@ -164,7 +162,8 @@ public class AttendanceModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
     {
-        var minuteStep = _localSettingsProvider.GetCurrent().AttendanceMinuteStep is 30 ? 30 : 15;
+        var storeContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
+        var minuteStep = storeContext?.AttendanceMinuteStep ?? 15;
         ClockInTimeOptions = BuildAttendanceTimeOptions(19, 0, minuteStep);
         ClockOutTimeOptions = BuildAttendanceTimeOptions(24, 0, minuteStep);
         DefaultClockInTime = ResolveDefaultTime(ClockInTimeOptions, "19:00");

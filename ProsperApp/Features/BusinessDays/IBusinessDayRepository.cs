@@ -19,7 +19,11 @@ public interface IBusinessDayRepository
         IReadOnlyCollection<BusinessDayAttendanceInput> attendanceEntries,
         CancellationToken ct);
 
-    Task<BusinessDayOperationResult> CloseAsync(long businessDayId, string? memo, CancellationToken ct);
+    Task<BusinessDayOperationResult> CloseAsync(
+        long businessDayId,
+        string? memo,
+        bool ignoreClosingRequirements,
+        CancellationToken ct);
 
     Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);
 
