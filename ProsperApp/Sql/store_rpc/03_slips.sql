@@ -408,7 +408,13 @@ begin
     end if;
 
     for v_nomination in
-        select value from jsonb_array_elements(coalesce(p_cast_nominations, '[]'::jsonb))
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_cast_nominations) = 'array' then p_cast_nominations
+                else '[]'::jsonb
+            end
+        )
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
         v_nomination_type := nullif(trim(coalesce(v_nomination->>'nomination_type', '')), '');
@@ -626,7 +632,13 @@ begin
     ), 0);
 
     for v_line in
-        select value from jsonb_array_elements(coalesce(p_adjustment_lines, '[]'::jsonb))
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_adjustment_lines) = 'array' then p_adjustment_lines
+                else '[]'::jsonb
+            end
+        )
     loop
         v_line_name := nullif(trim(coalesce(v_line->>'line_name', '')), '');
         v_amount := nullif(v_line->>'amount', '')::numeric;
@@ -737,7 +749,13 @@ begin
     end if;
 
     for v_line in
-        select value from jsonb_array_elements(coalesce(p_karaoke_lines, '[]'::jsonb))
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_karaoke_lines) = 'array' then p_karaoke_lines
+                else '[]'::jsonb
+            end
+        )
     loop
         v_slip_id := nullif(v_line->>'slip_id', '')::bigint;
         v_quantity := coalesce(nullif(v_line->>'quantity', '')::numeric, 0);

@@ -3,7 +3,7 @@
 @model IndexModel
 @{
     ViewData["Title"] = "営業中";
-    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
+    ViewData["HasCurrentBusinessDay"] = Model.HasCurrentBusinessDay;
     var nominationOptions = new[]
     {
         ("nomination", "本指名"),
@@ -25,25 +25,18 @@
     @if (Model.IsPreviousBusinessDayOpen)
     {
         <div class="alert alert-danger sales-block-alert" role="alert">
-            前回営業日 @Model.CurrentBusinessDay?.BusinessDate.ToString("yyyy-MM-dd") の締め作業が未完了です。
+            前回営業日 @Model.DisplayBusinessDate.ToString("yyyy-MM-dd") の締め作業が未完了です。
         </div>
     }
 
-    @if (Model.CurrentBusinessDay is not null || Model.CanCreateSalesInput)
+    @if (Model.HasCurrentBusinessDay || Model.CanCreateSalesInput)
     {
         <section class="home-workspace" aria-label="営業中の操作">
             <div class="sales-summary" aria-label="営業中サマリー">
                 <div class="sales-summary__items">
                     <span class="sales-summary__item">
                         <strong>営業日</strong>
-                        @if (Model.CurrentBusinessDay is null)
-                        {
-                            <span data-business-date-display>@Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 自動作成待ち</span>
-                        }
-                        else
-                        {
-                            <span data-business-date-display>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</span>
-                        }
+                        <span data-business-date-display>@Model.DisplayBusinessDateText</span>
                     </span>
                     <span class="sales-summary__item">
                         <strong>未会計</strong>
@@ -64,7 +57,7 @@
                     </div>
                 }
 
-                <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDay?.BusinessDayId">
+                <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
                     <div id="businessKaraokeFields"></div>
                     <output class="visually-hidden" data-business-karaoke-status aria-live="polite"></output>
                     <div class="slip-list" data-business-slip-list>
@@ -315,6 +308,7 @@
                 }
                 return element;
             };
+            const isValidBusinessDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && value !== '0001-01-01';
 
             function loadDraft() {
                 const raw = localStorage.getItem(draftKey);
@@ -413,13 +407,13 @@
                 const businessDateText = result?.businessDateDisplay || '';
                 const businessDateValue = result?.businessDate || '';
                 const businessDayId = result?.businessDayId ? String(result.businessDayId) : '';
-                if (businessDateDisplay && businessDateText) {
+                if (businessDateDisplay && businessDateText && !businessDateText.startsWith('0001-01-01')) {
                     businessDateDisplay.textContent = businessDateText;
                 }
-                if (createDateDisplay && businessDateValue) {
+                if (createDateDisplay && isValidBusinessDate(businessDateValue)) {
                     createDateDisplay.textContent = businessDateValue;
                 }
-                if (createDateInput && businessDateValue) {
+                if (createDateInput && isValidBusinessDate(businessDateValue)) {
                     createDateInput.value = businessDateValue;
                 }
                 if (createDayIdInput) {

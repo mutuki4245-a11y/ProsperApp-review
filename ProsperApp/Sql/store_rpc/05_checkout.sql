@@ -116,7 +116,13 @@ begin
     end if;
 
     for v_payment in
-        select value from jsonb_array_elements(coalesce(p_payments, '[]'::jsonb))
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_payments) = 'array' then p_payments
+                else '[]'::jsonb
+            end
+        )
     loop
         v_method_code := lower(nullif(trim(coalesce(v_payment->>'method_code', '')), ''));
         v_amount := nullif(v_payment->>'amount', '')::numeric;
@@ -199,7 +205,13 @@ begin
     returning store_checkouts.checkout_id into v_checkout_id;
 
     for v_payment in
-        select value from jsonb_array_elements(coalesce(p_payments, '[]'::jsonb))
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_payments) = 'array' then p_payments
+                else '[]'::jsonb
+            end
+        )
     loop
         v_method_code := lower(nullif(trim(coalesce(v_payment->>'method_code', '')), ''));
         v_amount := nullif(v_payment->>'amount', '')::numeric;
@@ -370,7 +382,13 @@ begin
     end loop;
 
     for v_nomination in
-        select value from jsonb_array_elements(coalesce(p_cast_nominations, '[]'::jsonb))
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_cast_nominations) = 'array' then p_cast_nominations
+                else '[]'::jsonb
+            end
+        )
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
         v_nomination_type := nullif(trim(coalesce(v_nomination->>'nomination_type', '')), '');

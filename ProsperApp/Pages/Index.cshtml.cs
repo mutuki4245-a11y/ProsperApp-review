@@ -66,12 +66,25 @@ public class IndexModel(
 
     public bool HasAnySlip => Slips.Count > 0;
 
+    public bool HasCurrentBusinessDay => HasValidBusinessDate(CurrentBusinessDay);
+
+    public DateOnly DisplayBusinessDate => GetSafeBusinessDate(CurrentBusinessDay);
+
+    public string DisplayBusinessDateText => HasCurrentBusinessDay
+        ? DisplayBusinessDate.ToString("yyyy-MM-dd")
+        : $"{DisplayBusinessDate:yyyy-MM-dd} / 自動作成待ち";
+
+    public long? CurrentBusinessDayId => HasCurrentBusinessDay
+        ? CurrentBusinessDay?.BusinessDayId
+        : null;
+
     public bool IsPreviousBusinessDayOpen => CurrentBusinessDay is not null &&
+        HasValidBusinessDate(CurrentBusinessDay) &&
         CurrentBusinessDay.BusinessDate < CurrentBusinessDate;
 
     public bool CanCreateSalesInput => SlipsEnabled && !IsPreviousBusinessDayOpen;
 
-    public bool CanMoveToClosing => CurrentBusinessDay is not null;
+    public bool CanMoveToClosing => HasCurrentBusinessDay;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -134,13 +147,17 @@ public class IndexModel(
         }
 
         var slips = await _slipRepository.GetBusinessDaySlipsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
+        var businessDate = GetSafeBusinessDate(currentBusinessDay);
+        var hasValidBusinessDate = HasValidBusinessDate(currentBusinessDay);
         return new JsonResult(new
         {
             succeeded = true,
-            businessDayId = (long?)currentBusinessDay.BusinessDayId,
-            businessDate = currentBusinessDay.BusinessDate.ToString("yyyy-MM-dd"),
-            businessDateDisplay = currentBusinessDay.BusinessDate.ToString("yyyy-MM-dd"),
-            hasBusinessDay = true,
+            businessDayId = hasValidBusinessDate ? (long?)currentBusinessDay.BusinessDayId : null,
+            businessDate = businessDate.ToString("yyyy-MM-dd"),
+            businessDateDisplay = hasValidBusinessDate
+                ? businessDate.ToString("yyyy-MM-dd")
+                : $"{businessDate:yyyy-MM-dd} / 自動作成待ち",
+            hasBusinessDay = hasValidBusinessDate,
             openSlipCount = slips.Count(x => x.Status == "open"),
             checkedOutSlipCount = slips.Count(x => x.Status == "checked_out"),
             slips = slips.Select(slip => new
@@ -306,8 +323,24 @@ public class IndexModel(
 
     private void SetBusinessDayInput()
     {
-        CreateSlipInput.BusinessDate = CurrentBusinessDay?.BusinessDate ?? CurrentBusinessDate;
-        CreateSlipInput.BusinessDayId = CurrentBusinessDay?.BusinessDayId;
+        CreateSlipInput.BusinessDate = GetSafeBusinessDate(CurrentBusinessDay);
+        CreateSlipInput.BusinessDayId = HasValidBusinessDate(CurrentBusinessDay)
+            ? CurrentBusinessDay?.BusinessDayId
+            : null;
+    }
+
+    private DateOnly GetSafeBusinessDate(StoreBusinessDay? businessDay)
+    {
+        return HasValidBusinessDate(businessDay)
+            ? businessDay!.BusinessDate
+            : CurrentBusinessDate == default
+                ? _storeClock.GetCurrentBusinessDate()
+                : CurrentBusinessDate;
+    }
+
+    private static bool HasValidBusinessDate(StoreBusinessDay? businessDay)
+    {
+        return businessDay is { BusinessDayId: > 0, BusinessDate: var businessDate } && businessDate != default;
     }
 
     private void NormalizeCreateSlipInput()

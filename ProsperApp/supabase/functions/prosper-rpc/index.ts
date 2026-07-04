@@ -593,6 +593,10 @@ function addClientKey(keys: Set<string>, value: unknown) {
 
 function toSqlValue(value: unknown, type: PgType): unknown {
   if (type === "jsonb") {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
     return JSON.stringify(value ?? null);
   }
 

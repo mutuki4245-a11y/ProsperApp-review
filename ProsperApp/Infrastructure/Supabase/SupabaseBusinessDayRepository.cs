@@ -31,7 +31,12 @@ public class SupabaseBusinessDayRepository(
         var cacheKey = StoreMasterCacheKeys.CurrentBusinessDay(departmentId);
         if (_memoryCache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
         {
-            return cachedBusinessDay;
+            if (IsValidBusinessDay(cachedBusinessDay))
+            {
+                return cachedBusinessDay;
+            }
+
+            _memoryCache.Remove(cacheKey);
         }
 
         var rows = await PostRpcArrayAsync(
@@ -45,6 +50,11 @@ public class SupabaseBusinessDayRepository(
         }
 
         var businessDay = ParseBusinessDay(rows[0]);
+        if (!IsValidBusinessDay(businessDay))
+        {
+            return null;
+        }
+
         _memoryCache.Set(cacheKey, businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
         return businessDay;
     }
@@ -422,6 +432,11 @@ public class SupabaseBusinessDayRepository(
             Status = ReadString(row, "status") ?? string.Empty,
             Memo = ReadString(row, "memo")
         };
+    }
+
+    private static bool IsValidBusinessDay(StoreBusinessDay? businessDay)
+    {
+        return businessDay is { BusinessDayId: > 0 } && businessDay.BusinessDate != DateOnly.MinValue;
     }
 
     private static BusinessDayClosingAttendanceItem ParseClosingAttendanceItem(JsonElement row)

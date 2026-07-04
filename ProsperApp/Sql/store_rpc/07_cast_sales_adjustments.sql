@@ -345,7 +345,12 @@ begin
         select
             nullif(value->>'slip_cast_id', '')::bigint as slip_cast_id,
             nullif(value->>'sales_amount', '')::numeric as sales_amount
-        from jsonb_array_elements(coalesce(p_adjustments, '[]'::jsonb))
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_adjustments) = 'array' then p_adjustments
+                else '[]'::jsonb
+            end
+        )
     )
     select
         count(*)::integer,
@@ -376,7 +381,12 @@ begin
     ),
     payload as (
         select nullif(value->>'slip_cast_id', '')::bigint as slip_cast_id
-        from jsonb_array_elements(coalesce(p_adjustments, '[]'::jsonb))
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_adjustments) = 'array' then p_adjustments
+                else '[]'::jsonb
+            end
+        )
     )
     select
         count(*) filter (where p.slip_cast_id is null)::integer
@@ -394,7 +404,12 @@ begin
     ),
     payload as (
         select nullif(value->>'slip_cast_id', '')::bigint as slip_cast_id
-        from jsonb_array_elements(coalesce(p_adjustments, '[]'::jsonb))
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_adjustments) = 'array' then p_adjustments
+                else '[]'::jsonb
+            end
+        )
     )
     select
         count(*) filter (where r.slip_cast_id is null)::integer
@@ -424,7 +439,12 @@ begin
         select
             nullif(value->>'slip_cast_id', '')::bigint as slip_cast_id,
             nullif(value->>'sales_amount', '')::numeric as sales_amount
-        from jsonb_array_elements(coalesce(p_adjustments, '[]'::jsonb))
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_adjustments) = 'array' then p_adjustments
+                else '[]'::jsonb
+            end
+        )
     )
     insert into public.store_slip_cast_sales_adjustments (
         slip_id,
