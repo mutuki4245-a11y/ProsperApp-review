@@ -1,12 +1,71 @@
+body.order-terminal {
+  background: #f8fafc;
+  height: 100dvh;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+body.order-terminal .app-shell {
+  height: 100dvh;
+  max-width: none;
+  padding: 0.75rem;
+}
+
+body.order-terminal main {
+  height: 100%;
+  padding-bottom: 0 !important;
+}
+
+.order-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+  margin: 0 auto;
+  max-width: 1800px;
+  min-height: 0;
+}
+
+.order-entry__header {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  min-height: 2.25rem;
+}
+
+.order-entry__header h1 {
+  color: #102a43;
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0;
+}
+
 .order-entry__form {
   display: grid;
   gap: 1rem;
+}
+
+body.order-terminal .order-entry__form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
 }
 
 .order-entry__grid {
   display: grid;
   gap: 1rem;
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+}
+
+body.order-terminal .order-entry__grid {
+  align-items: stretch;
+  flex: 1 1 auto;
+  gap: 0.75rem;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(360px, 1.35fr) minmax(320px, 0.9fr);
+  min-height: 0;
 }
 
 .order-entry__grid--modal {
@@ -24,6 +83,38 @@
   align-self: start;
   position: sticky;
   top: 0.75rem;
+}
+
+body.order-terminal .order-entry__queue {
+  align-self: stretch;
+  position: static;
+  top: auto;
+}
+
+.order-entry__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.85rem;
+}
+
+.order-entry__panel .slip-create__panel-title {
+  flex: 0 0 auto;
+  margin-bottom: 0.65rem;
+}
+
+.order-entry__panel-body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.5rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.order-entry__panel-body--queue {
+  align-content: start;
 }
 
 .order-slip-picker__button {
@@ -160,6 +251,7 @@
   align-items: center;
   border-top: 1px solid #d9e2ec;
   display: flex;
+  flex: 0 0 auto;
   justify-content: space-between;
   margin-top: 1rem;
   padding-top: 1rem;
@@ -167,4 +259,22 @@
 
 .order-queue__total strong {
   font-size: 1.4rem;
+}
+
+body.order-terminal .slip-create__actions {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1099.98px) {
+  body.order-terminal {
+    overflow: auto;
+  }
+
+  body.order-terminal .app-shell {
+    min-width: 1080px;
+  }
+
+  body.order-terminal .order-entry__grid {
+    grid-template-columns: minmax(240px, 0.75fr) minmax(360px, 1.35fr) minmax(320px, 0.9fr);
+  }
 }

@@ -8,11 +8,9 @@
         .ToList();
 }
 
-<section class="store-home order-entry">
-    <div class="store-home__hero">
-        <p class="store-home__eyebrow">営業中</p>
+<section class="order-entry">
+    <div class="order-entry__header">
         <h1>オーダー入力</h1>
-        <p>卓番を選択し、商品をキューに入れて一括登録します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -29,26 +27,26 @@
         {
             <div class="alert alert-warning">
                 オーダー入力の前に営業中画面で伝票を作成してください。最初の伝票作成時に営業日を自動作成します。
-                <a class="alert-link" asp-page="/Index">営業中へ戻る</a>
             </div>
         }
         else
         {
             <div class="order-entry__grid">
-                <section class="slip-create__panel">
+                <section class="slip-create__panel order-entry__panel order-entry__slips">
                     <div class="slip-create__panel-title">
                         <h2>1. 卓番選択</h2>
-                        <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
                     </div>
-                    <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
-                    <div class="alert alert-warning" role="alert" id="slipOptionsWarning" hidden></div>
+                    <div class="order-entry__panel-body">
+                        <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
+                        <div class="alert alert-warning" role="alert" id="slipOptionsWarning" hidden></div>
 
-                    <div class="order-slip-picker" role="group" aria-label="卓番選択" data-order-slip-picker>
-                        <div class="alert alert-secondary mb-0">注文対象の卓番を読み込み中です。</div>
+                        <div class="order-slip-picker" role="group" aria-label="卓番選択" data-order-slip-picker>
+                            <div class="alert alert-secondary mb-0">注文対象の卓番を読み込み中です。</div>
+                        </div>
                     </div>
                 </section>
 
-                <section class="slip-create__panel order-entry__items" id="itemPanel">
+                <section class="slip-create__panel order-entry__panel order-entry__items" id="itemPanel">
                     <div class="slip-create__panel-title">
                         <h2>2. 商品一覧</h2>
                         <span class="badge text-bg-secondary" id="selectedSlipBadge">
@@ -56,49 +54,51 @@
                         </span>
                     </div>
 
-                    @if (Model.Items.Count == 0)
-                    {
-                        <div class="alert alert-secondary mb-0">商品マスタが未登録です。</div>
-                    }
-                    else
-                    {
-                        <div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ">
-                            @for (var i = 0; i < itemGroups.Count; i++)
-                            {
-                                <button class="order-category-tab @(i == 0 ? "is-active" : "")" type="button" data-category-tab="@i">
-                                    @itemGroups[i].Key
-                                </button>
-                            }
-                        </div>
-                        <div class="order-item-groups">
-                            @for (var groupIndex = 0; groupIndex < itemGroups.Count; groupIndex++)
-                            {
-                                var group = itemGroups[groupIndex];
-                                <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-category-panel="@groupIndex">
-                                    <h3>@group.Key</h3>
-                                    <div class="order-item-grid">
-                                        @foreach (var item in group)
-                                        {
-                                            <button
-                                                class="order-item-button"
-                                                type="button"
-                                                data-item-id="@item.ItemId">
-                                                <strong>@item.ItemName</strong>
-                                                <span>@item.DefaultPrice.ToString("N0") 円</span>
-                                                @if (item.IsCastBackTarget)
-                                                {
-                                                    <small>通常 @item.CastBackRegularUnitAmount.ToString("N0") 円 / 指名 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
-                                                }
-                                            </button>
-                                        }
-                                    </div>
-                                </section>
-                            }
-                        </div>
-                    }
+                    <div class="order-entry__panel-body">
+                        @if (Model.Items.Count == 0)
+                        {
+                            <div class="alert alert-secondary mb-0">商品マスタが未登録です。</div>
+                        }
+                        else
+                        {
+                            <div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ">
+                                @for (var i = 0; i < itemGroups.Count; i++)
+                                {
+                                    <button class="order-category-tab @(i == 0 ? "is-active" : "")" type="button" data-category-tab="@i">
+                                        @itemGroups[i].Key
+                                    </button>
+                                }
+                            </div>
+                            <div class="order-item-groups">
+                                @for (var groupIndex = 0; groupIndex < itemGroups.Count; groupIndex++)
+                                {
+                                    var group = itemGroups[groupIndex];
+                                    <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-category-panel="@groupIndex">
+                                        <h3>@group.Key</h3>
+                                        <div class="order-item-grid">
+                                            @foreach (var item in group)
+                                            {
+                                                <button
+                                                    class="order-item-button"
+                                                    type="button"
+                                                    data-item-id="@item.ItemId">
+                                                    <strong>@item.ItemName</strong>
+                                                    <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                                    @if (item.IsCastBackTarget)
+                                                    {
+                                                        <small>通常 @item.CastBackRegularUnitAmount.ToString("N0") 円 / 指名 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
+                                                    }
+                                                </button>
+                                            }
+                                        </div>
+                                    </section>
+                                }
+                            </div>
+                        }
+                    </div>
                 </section>
 
-                <section class="slip-create__panel order-entry__queue">
+                <section class="slip-create__panel order-entry__panel order-entry__queue">
                     <div class="slip-create__panel-title">
                         <div>
                             <h2>3. 注文キュー</h2>
@@ -106,10 +106,12 @@
                         </div>
                         <button class="btn btn-outline-secondary" type="button" id="clearQueueButton">クリア</button>
                     </div>
-                    <span asp-validation-for="QueueLines" class="text-danger"></span>
+                    <div class="order-entry__panel-body order-entry__panel-body--queue">
+                        <span asp-validation-for="QueueLines" class="text-danger"></span>
 
-                    <div class="order-queue" id="queueList"></div>
-                    <div class="order-queue__empty" id="queueEmpty">商品を選択してください。</div>
+                        <div class="order-queue" id="queueList"></div>
+                        <div class="order-queue__empty" id="queueEmpty">商品を選択してください。</div>
+                    </div>
 
                     <div class="order-queue__total">
                         <span>合計</span>

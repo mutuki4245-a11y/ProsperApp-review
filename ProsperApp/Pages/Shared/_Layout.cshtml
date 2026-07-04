@@ -2,10 +2,10 @@
 @inject ILocalSettingsProvider LocalSettingsProvider
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
+    var isOrdersPage = currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase);
     var isSalesAttendance = currentPath.StartsWith("/Attendance", StringComparison.OrdinalIgnoreCase);
     var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase);
     var isSalesActive = currentPath == "/" ||
-        currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase) ||
         currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase) ||
         isSalesAttendance;
     var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
@@ -29,70 +29,73 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/ProsperApp.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Index">店舗用アプリ</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="ナビゲーション切り替え">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark @(isSalesActive ? "fw-bold" : null)" asp-area="" asp-page="/Index">営業中</a>
-                        </li>
-                        @if (FeatureGate.IsEnabled(FeatureNames.Opening))
-                        {
+<body class="@(isOrdersPage ? "order-terminal" : string.Empty)">
+    @if (!isOrdersPage)
+    {
+        <header>
+            <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+                <div class="container">
+                    <a class="navbar-brand" asp-area="" asp-page="/Index">店舗用アプリ</a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                            aria-expanded="false" aria-label="ナビゲーション切り替え">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                        <ul class="navbar-nav flex-grow-1">
                             <li class="nav-item">
-                                <a class="nav-link text-dark @(isManagementActive ? "fw-bold" : null)" asp-area="" asp-page="/Management/Index">マスタ設定</a>
+                                <a class="nav-link text-dark @(isSalesActive ? "fw-bold" : null)" asp-area="" asp-page="/Index">営業中</a>
                             </li>
-                        }
-                        @if (FeatureGate.IsEnabled(FeatureNames.Settings))
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Settings/Index">管理者設定</a>
-                            </li>
-                        }
-                    </ul>
-                    <ul class="navbar-nav">
-                        @if (User.Identity?.IsAuthenticated == true)
-                        {
-                            var storeName = LocalSettingsProvider.GetCurrent().StoreName;
-                            <li class="nav-item">
-                                <span class="navbar-text text-dark">@storeName</span>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" href="/logout">ログアウト</a>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-page="/Login">ログイン</a>
-                            </li>
-                        }
-                    </ul>
-                </div>
-            </div>
-        </nav>
-        @if (User.Identity?.IsAuthenticated == true)
-        {
-            <nav class="app-workflow-nav" aria-label="店舗業務フロー">
-                <div class="container app-workflow-nav__inner">
-                    <a class="app-workflow-nav__step @(isSalesActive ? "is-active" : null)" asp-page="/Index">
-                        <span>1</span>
-                        <strong>営業中</strong>
-                    </a>
-                    <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null)" asp-page="/Closing/Index">
-                        <span>2</span>
-                        <strong>締め作業</strong>
-                    </a>
+                            @if (FeatureGate.IsEnabled(FeatureNames.Opening))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link text-dark @(isManagementActive ? "fw-bold" : null)" asp-area="" asp-page="/Management/Index">マスタ設定</a>
+                                </li>
+                            }
+                            @if (FeatureGate.IsEnabled(FeatureNames.Settings))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link text-dark" asp-area="" asp-page="/Settings/Index">管理者設定</a>
+                                </li>
+                            }
+                        </ul>
+                        <ul class="navbar-nav">
+                            @if (User.Identity?.IsAuthenticated == true)
+                            {
+                                var storeName = LocalSettingsProvider.GetCurrent().StoreName;
+                                <li class="nav-item">
+                                    <span class="navbar-text text-dark">@storeName</span>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link text-dark" href="/logout">ログアウト</a>
+                                </li>
+                            }
+                            else
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link text-dark" asp-page="/Login">ログイン</a>
+                                </li>
+                            }
+                        </ul>
+                    </div>
                 </div>
             </nav>
-        }
-    </header>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <nav class="app-workflow-nav" aria-label="店舗業務フロー">
+                    <div class="container app-workflow-nav__inner">
+                        <a class="app-workflow-nav__step @(isSalesActive ? "is-active" : null)" asp-page="/Index">
+                            <span>1</span>
+                            <strong>営業中</strong>
+                        </a>
+                        <a class="app-workflow-nav__step @(isClosingActive ? "is-active" : null)" asp-page="/Closing/Index">
+                            <span>2</span>
+                            <strong>締め作業</strong>
+                        </a>
+                    </div>
+                </nav>
+            }
+        </header>
+    }
     <div class="container-fluid app-shell">
         <main role="main" class="pb-3">
             @RenderBody()
@@ -106,11 +109,14 @@
         </div>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - 店舗用アプリ
-        </div>
-    </footer>
+    @if (!isOrdersPage)
+    {
+        <footer class="border-top footer text-muted">
+            <div class="container">
+                &copy; 2026 - 店舗用アプリ
+            </div>
+        </footer>
+    }
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
