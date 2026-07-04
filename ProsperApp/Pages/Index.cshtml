@@ -47,11 +47,11 @@
                     </span>
                     <span class="sales-summary__item">
                         <strong>未会計</strong>
-                        <span>@Model.OpenSlipCount 件</span>
+                        <span data-business-open-slip-count>取得中</span>
                     </span>
                     <span class="sales-summary__item">
                         <strong>会計済</strong>
-                        <span>@Model.CheckedOutSlipCount 件</span>
+                        <span data-business-checked-out-slip-count>取得中</span>
                     </span>
                 </div>
                 <a class="btn btn-outline-primary btn-sm sales-summary__attendance" asp-page="/Attendance">勤怠管理</a>
@@ -64,62 +64,22 @@
                     </div>
                 }
 
-                @if (Model.Slips.Count == 0)
-                {
-                    <div class="slip-list">
-                        <article class="slip-list__row slip-list__row--add">
+                <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDay?.BusinessDayId">
+                    <div id="businessKaraokeFields"></div>
+                    <output class="visually-hidden" data-business-karaoke-status aria-live="polite"></output>
+                    <div class="slip-list" data-business-slip-list>
+                        <article class="slip-list__row slip-list__row--add" data-business-slip-loading>
                             <div class="slip-list__main">
-                                <strong>当日の伝票はまだありません</strong>
-                                <span>最初の伝票作成時に営業日を自動作成します。</span>
-                            </div>
-                            <div class="slip-list__actions">
-                                @if (Model.CanCreateSalesInput)
-                                {
-                                    <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-                                }
+                                <strong>伝票を読み込み中</strong>
+                                <span>営業中の一覧を取得しています。</span>
                             </div>
                         </article>
                     </div>
-                }
-                else
-                {
-                    <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDay?.BusinessDayId">
-                        <div id="businessKaraokeFields"></div>
-                        <output class="visually-hidden" data-business-karaoke-status aria-live="polite"></output>
-                        <div class="slip-list">
-                            @foreach (var slip in Model.Slips)
-                            {
-                                <article class="slip-list__row slip-list__row--action">
-                                    <a class="slip-list__row-main" asp-page="/Slips/Edit" asp-route-slipId="@slip.SlipId">
-                                        <strong class="slip-list__table">@slip.TableDisplayName</strong>
-                                        <span class="badge @IndexModel.ToSlipStatusBadgeClass(slip.Status)">@IndexModel.ToSlipStatusDisplay(slip.Status)</span>
-                                        <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt)</span>
-                                        <span class="slip-list__customers">@(string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames)</span>
-                                        <span class="slip-list__casts">@(string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames)</span>
-                                        <span class="slip-list__memo">@(string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo)</span>
-                                        <span class="slip-list__amount slip-list__amount--concealed" aria-label="会計額">
-                                            <span class="slip-list__amount-mask">**** 円</span>
-                                            <strong class="slip-list__amount-value">@slip.AccountingAmount.ToString("N0") 円</strong>
-                                        </span>
-                                    </a>
-                                    @if (string.Equals(slip.Status, "open", StringComparison.Ordinal))
-                                    {
-                                        <div class="slip-list__karaoke" data-business-karaoke-row data-slip-id="@slip.SlipId" data-initial-quantity="@slip.KaraokeQuantity" data-accounting-base-amount="@(slip.AccountingAmount - (slip.KaraokeQuantity * 240))" data-karaoke-accounting-unit="240">
-                                            <span>カラオケ</span>
-                                            <button class="btn btn-outline-secondary" type="button" data-business-karaoke-decrement>-</button>
-                                            <strong data-business-karaoke-display>@slip.KaraokeQuantity.ToString("0")</strong>
-                                            <button class="btn btn-outline-primary" type="button" data-business-karaoke-increment>+</button>
-                                        </div>
-                                    }
-                                </article>
-                            }
-                        </div>
-                    </form>
-                    <button class="slip-amount-reveal" type="button" data-slip-amount-reveal aria-label="会計額を表示" aria-pressed="false">
-                        <span class="slip-amount-reveal__mark">¥</span>
-                        <span class="visually-hidden">会計額</span>
-                    </button>
-                }
+                </form>
+                <button class="slip-amount-reveal" type="button" data-slip-amount-reveal aria-label="会計額を表示" aria-pressed="false" hidden>
+                    <span class="slip-amount-reveal__mark">¥</span>
+                    <span class="visually-hidden">会計額</span>
+                </button>
             </section>
         </section>
     }
@@ -301,51 +261,34 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const revealButton = document.querySelector('[data-slip-amount-reveal]');
-            if (!revealButton) {
-                return;
-            }
-
-            const setAmountVisible = (visible) => {
-                document.body.classList.toggle('slip-amounts-visible', visible);
-                revealButton.setAttribute('aria-pressed', visible ? 'true' : 'false');
-            };
-
-            revealButton.addEventListener('pointerdown', () => setAmountVisible(true));
-            document.addEventListener('pointerup', () => setAmountVisible(false));
-            document.addEventListener('pointercancel', () => setAmountVisible(false));
-            revealButton.addEventListener('blur', () => setAmountVisible(false));
-            revealButton.addEventListener('keydown', (event) => {
-                if (event.key === ' ' || event.key === 'Enter') {
-                    event.preventDefault();
-                    setAmountVisible(true);
-                }
-            });
-            revealButton.addEventListener('keyup', (event) => {
-                if (event.key === ' ' || event.key === 'Enter') {
-                    event.preventDefault();
-                    setAmountVisible(false);
-                }
-            });
-        })();
-
-        (() => {
             const form = document.querySelector('[data-business-karaoke-form]');
-            if (!form) {
+            const list = document.querySelector('[data-business-slip-list]');
+            if (!form || !list) {
                 return;
             }
 
             const fields = document.getElementById('businessKaraokeFields');
             const status = form.querySelector('[data-business-karaoke-status]');
-            const rows = Array.from(form.querySelectorAll('[data-business-karaoke-row]'));
+            const revealButton = document.querySelector('[data-slip-amount-reveal]');
+            const openSlipCount = document.querySelector('[data-business-open-slip-count]');
+            const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
+            const businessSlipsUrl = '@Url.Page("/Index", "BusinessSlips")';
+            const slipEditUrl = '@Url.Page("/Slips/Edit")';
+            const canCreateSalesInput = @Json.Serialize(Model.CanCreateSalesInput);
             const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
+            const refreshIntervalMs = 30000;
             const autoSaveDelay = 700;
+            const accountingUnit = 240;
+            let slips = [];
+            let hasLoaded = false;
+            let refreshInFlight = false;
             let saveTimer = 0;
             let isSaving = false;
             let resaveAfterCurrent = false;
+            let draft = loadDraft();
 
-            const getQuantity = (row) => Number(row.dataset.quantity ?? row.dataset.initialQuantity ?? 0) || 0;
-            const getInitialQuantity = (row) => Number(row.dataset.initialQuantity ?? 0) || 0;
+            const formatYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
+            const toQuantity = (value) => Math.max(0, Math.trunc(Number(value) || 0));
 
             const setStatus = (message) => {
                 if (status) {
@@ -353,30 +296,38 @@
                 }
             };
 
-            const setQuantity = (row, quantity) => {
-                const normalized = Math.max(0, Math.trunc(Number(quantity) || 0));
-                row.dataset.quantity = String(normalized);
-                const display = row.querySelector('[data-business-karaoke-display]');
-                if (display) {
-                    display.textContent = String(normalized);
-                }
-                const amountValue = row.closest('.slip-list__row')?.querySelector('.slip-list__amount-value');
-                if (amountValue) {
-                    const baseAmount = Number(row.dataset.accountingBaseAmount ?? 0);
-                    const accountingUnit = Number(row.dataset.karaokeAccountingUnit ?? 240);
-                    amountValue.textContent = `${Math.round(baseAmount + normalized * accountingUnit).toLocaleString('ja-JP')} 円`;
-                }
-                row.classList.toggle('is-dirty', normalized !== getInitialQuantity(row));
+            const setAmountVisible = (visible) => {
+                document.body.classList.toggle('slip-amounts-visible', visible);
+                revealButton?.setAttribute('aria-pressed', visible ? 'true' : 'false');
             };
 
-            const getDirtyRows = () => rows.filter((row) => getQuantity(row) !== getInitialQuantity(row));
+            const buildElement = (tagName, className, text) => {
+                const element = document.createElement(tagName);
+                if (className) {
+                    element.className = className;
+                }
+                if (text !== undefined && text !== null) {
+                    element.textContent = String(text);
+                }
+                return element;
+            };
 
-            const saveDraft = () => {
-                const draft = {};
-                getDirtyRows().forEach((row) => {
-                    draft[row.dataset.slipId] = getQuantity(row);
-                });
+            function loadDraft() {
+                const raw = localStorage.getItem(draftKey);
+                if (!raw) {
+                    return {};
+                }
 
+                try {
+                    const parsed = JSON.parse(raw);
+                    return parsed && typeof parsed === 'object' ? parsed : {};
+                } catch {
+                    localStorage.removeItem(draftKey);
+                    return {};
+                }
+            }
+
+            const writeDraft = () => {
                 if (Object.keys(draft).length === 0) {
                     localStorage.removeItem(draftKey);
                 } else {
@@ -384,35 +335,54 @@
                 }
             };
 
-            const restoreDraft = () => {
-                const raw = localStorage.getItem(draftKey);
-                if (!raw) {
-                    rows.forEach((row) => setQuantity(row, getInitialQuantity(row)));
-                    saveDraft();
-                    return;
-                }
+            const getSlip = (slipId) => slips.find((slip) => String(slip.id) === String(slipId));
+            const getInitialQuantity = (slip) => toQuantity(slip?.karaokeQuantity);
+            const getDisplayQuantity = (slip) => {
+                const key = String(slip.id);
+                return Object.prototype.hasOwnProperty.call(draft, key)
+                    ? toQuantity(draft[key])
+                    : getInitialQuantity(slip);
+            };
 
-                try {
-                    const draft = JSON.parse(raw);
-                    rows.forEach((row) => {
-                        const slipId = row.dataset.slipId;
-                        setQuantity(row, Object.prototype.hasOwnProperty.call(draft, slipId)
-                            ? draft[slipId]
-                            : getInitialQuantity(row));
-                    });
-                    saveDraft();
-                } catch {
-                    localStorage.removeItem(draftKey);
-                    rows.forEach((row) => setQuantity(row, getInitialQuantity(row)));
-                    saveDraft();
+            const cleanupDraft = () => {
+                let changed = false;
+                Object.keys(draft).forEach((slipId) => {
+                    const slip = getSlip(slipId);
+                    if (!slip || slip.status !== 'open') {
+                        delete draft[slipId];
+                        changed = true;
+                        return;
+                    }
+
+                    if (toQuantity(draft[slipId]) === getInitialQuantity(slip)) {
+                        delete draft[slipId];
+                        changed = true;
+                    }
+                });
+
+                if (changed) {
+                    writeDraft();
                 }
             };
 
-            const collectDirtyPayload = () => getDirtyRows().map((row) => ({
-                row,
-                slipId: row.dataset.slipId,
-                quantity: getQuantity(row)
-            }));
+            const collectDirtyPayload = () => {
+                cleanupDraft();
+                return Object.keys(draft)
+                    .map((slipId) => {
+                        const slip = getSlip(slipId);
+                        if (!slip || slip.status !== 'open') {
+                            return null;
+                        }
+
+                        return {
+                            slip,
+                            slipId,
+                            quantity: toQuantity(draft[slipId]),
+                            baseAmount: Number(slip.accountingAmount || 0) - getInitialQuantity(slip) * accountingUnit
+                        };
+                    })
+                    .filter(Boolean);
+            };
 
             const buildFields = (payloadRows) => {
                 if (!fields) {
@@ -435,14 +405,147 @@
                 });
             };
 
+            const updateSummary = (openCount, checkedOutCount) => {
+                if (openSlipCount) {
+                    openSlipCount.textContent = `${Number(openCount) || 0} 件`;
+                }
+                if (checkedOutSlipCount) {
+                    checkedOutSlipCount.textContent = `${Number(checkedOutCount) || 0} 件`;
+                }
+            };
+
+            const renderEmpty = (title, message) => {
+                list.innerHTML = '';
+                const row = buildElement('article', 'slip-list__row slip-list__row--add');
+                const main = buildElement('div', 'slip-list__main');
+                main.append(buildElement('strong', null, title), buildElement('span', null, message));
+                row.appendChild(main);
+
+                if (canCreateSalesInput) {
+                    const actions = buildElement('div', 'slip-list__actions');
+                    const button = buildElement('button', 'btn btn-primary btn-lg', '伝票を追加');
+                    button.type = 'button';
+                    button.dataset.bsToggle = 'modal';
+                    button.dataset.bsTarget = '#createSlipModal';
+                    actions.appendChild(button);
+                    row.appendChild(actions);
+                }
+
+                list.appendChild(row);
+                if (revealButton) {
+                    revealButton.hidden = true;
+                }
+            };
+
+            const buildSlipRow = (slip) => {
+                const row = buildElement('article', 'slip-list__row slip-list__row--action');
+                const link = buildElement('a', 'slip-list__row-main');
+                link.href = `${slipEditUrl}?slipId=${encodeURIComponent(slip.id)}`;
+                link.append(
+                    buildElement('strong', 'slip-list__table', slip.tableDisplay),
+                    buildElement('span', `badge ${slip.statusBadgeClass}`, slip.statusDisplay),
+                    buildElement('span', null, slip.openedTime),
+                    buildElement('span', 'slip-list__customers', slip.customerNames || '客名なし'),
+                    buildElement('span', 'slip-list__casts', slip.castNames || '指名なし'),
+                    buildElement('span', 'slip-list__memo', slip.memo || '-')
+                );
+
+                const amount = buildElement('span', 'slip-list__amount slip-list__amount--concealed');
+                amount.setAttribute('aria-label', '会計額');
+                amount.append(
+                    buildElement('span', 'slip-list__amount-mask', '**** 円'),
+                    buildElement('strong', 'slip-list__amount-value', formatYen(slip.accountingAmount))
+                );
+                link.appendChild(amount);
+                row.appendChild(link);
+
+                if (slip.status === 'open') {
+                    const initialQuantity = getInitialQuantity(slip);
+                    const displayQuantity = getDisplayQuantity(slip);
+                    const baseAmount = Number(slip.accountingAmount || 0) - initialQuantity * accountingUnit;
+                    const karaoke = buildElement('div', 'slip-list__karaoke');
+                    karaoke.dataset.businessKaraokeRow = '';
+                    karaoke.dataset.slipId = String(slip.id);
+                    karaoke.dataset.initialQuantity = String(initialQuantity);
+                    karaoke.dataset.quantity = String(displayQuantity);
+                    karaoke.dataset.accountingBaseAmount = String(baseAmount);
+                    karaoke.dataset.karaokeAccountingUnit = String(accountingUnit);
+                    karaoke.classList.toggle('is-dirty', displayQuantity !== initialQuantity);
+
+                    const decrement = buildElement('button', 'btn btn-outline-secondary', '-');
+                    decrement.type = 'button';
+                    decrement.dataset.businessKaraokeDecrement = '';
+                    const increment = buildElement('button', 'btn btn-outline-primary', '+');
+                    increment.type = 'button';
+                    increment.dataset.businessKaraokeIncrement = '';
+                    const quantity = buildElement('strong', null, displayQuantity);
+                    quantity.dataset.businessKaraokeDisplay = '';
+                    karaoke.append(buildElement('span', null, 'カラオケ'), decrement, quantity, increment);
+                    row.appendChild(karaoke);
+
+                    amount.querySelector('.slip-list__amount-value').textContent = formatYen(baseAmount + displayQuantity * accountingUnit);
+                }
+
+                return row;
+            };
+
+            const renderSlips = () => {
+                cleanupDraft();
+                if (slips.length === 0) {
+                    renderEmpty('当日の伝票はまだありません', '最初の伝票作成時に営業日を自動作成します。');
+                    return;
+                }
+
+                list.innerHTML = '';
+                slips.forEach((slip) => {
+                    list.appendChild(buildSlipRow(slip));
+                });
+                if (revealButton) {
+                    revealButton.hidden = false;
+                }
+            };
+
+            const loadSlips = async () => {
+                if (refreshInFlight) {
+                    return;
+                }
+
+                refreshInFlight = true;
+                try {
+                    const response = await fetch(businessSlipsUrl, {
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+                    if (!response.ok) {
+                        throw new Error('Business slips load failed.');
+                    }
+
+                    const result = await response.json();
+                    slips = Array.isArray(result.slips) ? result.slips : [];
+                    hasLoaded = true;
+                    updateSummary(result.openSlipCount, result.checkedOutSlipCount);
+                    renderSlips();
+                } catch {
+                    if (!hasLoaded) {
+                        renderEmpty('伝票を取得できませんでした', '次の自動更新で再取得します。');
+                    }
+                } finally {
+                    refreshInFlight = false;
+                }
+            };
+
             const markSaved = (payloadRows) => {
                 payloadRows.forEach((line) => {
-                    if (getQuantity(line.row) === line.quantity) {
-                        line.row.dataset.initialQuantity = String(line.quantity);
-                        setQuantity(line.row, line.quantity);
+                    const slip = getSlip(line.slipId);
+                    if (slip && toQuantity(draft[line.slipId]) === line.quantity) {
+                        slip.karaokeQuantity = line.quantity;
+                        slip.accountingAmount = line.baseAmount + line.quantity * accountingUnit;
+                        delete draft[line.slipId];
                     }
                 });
-                saveDraft();
+                writeDraft();
+                renderSlips();
             };
 
             const submitDraft = async (options = {}) => {
@@ -450,7 +553,7 @@
 
                 const payloadRows = collectDirtyPayload();
                 if (payloadRows.length === 0) {
-                    saveDraft();
+                    writeDraft();
                     setStatus('');
                     return true;
                 }
@@ -486,11 +589,11 @@
                     }
 
                     markSaved(payloadRows);
-                    setStatus(getDirtyRows().length === 0 ? '保存済み' : '未保存');
+                    setStatus(collectDirtyPayload().length === 0 ? '保存済み' : '未保存');
                     succeeded = true;
                     return true;
                 } catch {
-                    saveDraft();
+                    writeDraft();
                     setStatus('未保存');
                     return false;
                 } finally {
@@ -498,7 +601,7 @@
                         fields.innerHTML = '';
                     }
                     isSaving = false;
-                    if (succeeded && (resaveAfterCurrent || getDirtyRows().length > 0)) {
+                    if (succeeded && (resaveAfterCurrent || collectDirtyPayload().length > 0)) {
                         resaveAfterCurrent = false;
                         scheduleAutoSave();
                     }
@@ -507,7 +610,7 @@
 
             const scheduleAutoSave = () => {
                 window.clearTimeout(saveTimer);
-                if (getDirtyRows().length === 0) {
+                if (collectDirtyPayload().length === 0) {
                     setStatus('');
                     return;
                 }
@@ -533,7 +636,7 @@
                     },
                     keepalive: true
                 }).catch(() => {
-                    saveDraft();
+                    writeDraft();
                 });
             };
 
@@ -554,8 +657,21 @@
                         return;
                     }
 
-                    setQuantity(row, getQuantity(row) + (increment ? 1 : -1));
-                    saveDraft();
+                    const slip = getSlip(row.dataset.slipId);
+                    if (!slip) {
+                        return;
+                    }
+
+                    const nextQuantity = toQuantity(row.dataset.quantity) + (increment ? 1 : -1);
+                    const normalized = toQuantity(nextQuantity);
+                    const initialQuantity = getInitialQuantity(slip);
+                    if (normalized === initialQuantity) {
+                        delete draft[String(slip.id)];
+                    } else {
+                        draft[String(slip.id)] = normalized;
+                    }
+                    writeDraft();
+                    renderSlips();
                     scheduleAutoSave();
                     return;
                 }
@@ -566,7 +682,7 @@
                     !event.ctrlKey &&
                     !event.metaKey &&
                     !event.shiftKey;
-                if (link && form.contains(link) && isPlainPrimaryClick && getDirtyRows().length > 0) {
+                if (link && form.contains(link) && isPlainPrimaryClick && collectDirtyPayload().length > 0) {
                     event.preventDefault();
                     void navigateAfterFlush(link);
                 }
@@ -578,25 +694,53 @@
                 void submitDraft();
             });
 
-            restoreDraft();
-            if (getDirtyRows().length > 0) {
-                scheduleAutoSave();
-            }
-
-            window.addEventListener('online', () => {
-                if (getDirtyRows().length > 0) {
-                    scheduleAutoSave();
+            revealButton?.addEventListener('pointerdown', () => setAmountVisible(true));
+            document.addEventListener('pointerup', () => setAmountVisible(false));
+            document.addEventListener('pointercancel', () => setAmountVisible(false));
+            revealButton?.addEventListener('blur', () => setAmountVisible(false));
+            revealButton?.addEventListener('keydown', (event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    setAmountVisible(true);
                 }
             });
-            window.addEventListener('focus', () => {
-                if (!isSaving && getDirtyRows().length > 0) {
+            revealButton?.addEventListener('keyup', (event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                    event.preventDefault();
+                    setAmountVisible(false);
+                }
+            });
+
+            window.addEventListener('online', () => {
+                if (collectDirtyPayload().length > 0) {
                     scheduleAutoSave();
+                }
+                void loadSlips();
+            });
+            window.addEventListener('focus', () => {
+                if (!isSaving && collectDirtyPayload().length > 0) {
+                    scheduleAutoSave();
+                }
+                if (document.visibilityState === 'visible') {
+                    void loadSlips();
+                }
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    void loadSlips();
                 }
             });
             window.addEventListener('pagehide', () => {
                 window.clearTimeout(saveTimer);
                 sendKeepAliveDraft();
             });
+            window.setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    void loadSlips();
+                }
+            }, refreshIntervalMs);
+
+            void loadSlips();
         })();
 
         (() => {

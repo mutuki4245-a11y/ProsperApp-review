@@ -196,6 +196,8 @@ RPCを追加/変更するときは、以下を同じタスク内で揃える。
 
 `get_order_attending_casts` は店舗別・営業日別にアプリ側でキャッシュする。RPC定義変更は不要で、勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄する。
 
+`get_business_day_slips` と `get_order_entry_slips` はキャッシュ対象にしない。アプリ側ではRazor初期表示をブロックせず、ページ用JSON handlerから初回Ajax、フォーカス復帰、30秒ごとの表示中自動更新で取得する。保存成功POST直後の同期再取得は行わない。
+
 ## 8. 実装済み変更と残件
 
 | 項目 | 状態 | SQL/RPC上の整理 |
@@ -206,4 +208,5 @@ RPCを追加/変更するときは、以下を同じタスク内で揃える。
 | 指名価格 | 実装済み | `store_slip_casts.nomination_price` を会計額へ加算する。 |
 | 指名種別別キャストバック | 実装済み | `store_nomination_back_master` で店舗別単価を管理し、`create_store_slip` / `add_store_slip_nominations` が指名登録時に `store_slip_cast_backs` へ営業実績を作成する。 |
 | 当日出勤キャスト候補キャッシュ | 実装済み | RPC定義変更は不要。アプリ側に店舗別・営業日別キャッシュキーを持ち、勤怠保存/退勤情報保存/営業日開始/営業日締め時に破棄する。 |
+| 営業中一覧と注文対象伝票の再取得削減 | 実装済み | RPC定義変更は不要。`get_business_day_slips` と `get_order_entry_slips` はページ用JSON handlerから非同期取得し、初期表示や保存成功POSTをブロックしない。 |
 | レシートプリンター正式仕様 | 後続仕様 | SQL/RPC変更は現時点で不要。再印刷履歴や印刷状態をDB保存する場合は、会計テーブルまたは印刷ログテーブルの追加を検討する。 |

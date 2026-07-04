@@ -16,6 +16,7 @@
 - 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。localStorageや画面内ドラフトは端末内の復旧用状態として扱い、端末間では直接同期しません。端末間の共有状態はDB/RPC保存後のデータを基準にします。
 - 出勤キャスト候補の `get_order_attending_casts` は、店舗別・営業日別に `IMemoryCache` へ初回成功時だけ保持します。変更契機は勤怠入力に限られるため、勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄します。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
 - 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` で取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ自動保存は `businessDayId`、`slipId`、`quantity` を `save_store_karaoke_lines` へ送るだけにし、店舗コンテキスト、卓、伝票一覧は再取得しません。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、保存RPCは同一伝票内のカラオケ注文行を1行に集約します。
+- 営業中一覧の `get_business_day_slips` と `/Orders` の `get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、30秒ごとの表示中自動更新で再取得し、保存成功POST直後のサーバー側再ロードは行いません。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
 - 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `get_business_day_slips` と `get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
@@ -92,11 +93,11 @@
 - 指名種別別キャストバックは、店舗別マスタ `store_nomination_back_master` と営業実績 `store_slip_cast_backs` で扱います。`/Management/NominationBacks` で本指名、場内指名、同伴のバック単価と有効/無効を管理し、指名登録時に現在の単価を実績行としてスナップショット保存します。
 - 営業中画面では会計額を固定オーバーレイ操作中だけ表示し、カラオケ数量は画面内で即時反映してデバウンス保存します。
 - マスタ系候補、現在営業日、当日出勤キャスト候補は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、指名バック設定、現在営業日、`get_order_attending_casts` の店舗別・営業日別結果です。
+- 営業中一覧と注文対象伝票は初期表示後のAjax取得と30秒自動更新で扱います。`get_business_day_slips` と `get_order_entry_slips` はキャッシュせず、保存成功POST直後の再取得を削ります。
 
 ### 後続仕様・検討候補
 
 - レシートプリンターは会計時の印刷要求データ作成と `ReceiptPrinter:BridgeUrl` への非同期POSTまで実装済みです。SII Receipt Web Server相当アプリの正式API、領収書レイアウト、再印刷画面は後続仕様です。
-- `get_business_day_slips` と `get_order_entry_slips` の再取得削減は検討候補です。保存成功時の画面差分反映方針を先に決めてから実装してください。
 
 ## SQL参照とDB反映
 

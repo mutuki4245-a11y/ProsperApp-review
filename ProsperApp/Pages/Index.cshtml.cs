@@ -109,6 +109,48 @@ public class IndexModel(
         }));
     }
 
+    public async Task<IActionResult> OnGetBusinessSlipsAsync(CancellationToken cancellationToken)
+    {
+        if (!SlipsEnabled)
+        {
+            return NotFound();
+        }
+
+        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (currentBusinessDay is null)
+        {
+            return new JsonResult(new
+            {
+                succeeded = true,
+                openSlipCount = 0,
+                checkedOutSlipCount = 0,
+                slips = Array.Empty<object>()
+            });
+        }
+
+        var slips = await _slipRepository.GetBusinessDaySlipsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            openSlipCount = slips.Count(x => x.Status == "open"),
+            checkedOutSlipCount = slips.Count(x => x.Status == "checked_out"),
+            slips = slips.Select(slip => new
+            {
+                id = slip.SlipId,
+                tableDisplay = slip.TableDisplayName,
+                openedTime = StoreBusinessTime.FormatStoreTime(slip.OpenedAt),
+                status = slip.Status,
+                statusDisplay = ToSlipStatusDisplay(slip.Status),
+                statusBadgeClass = ToSlipStatusBadgeClass(slip.Status),
+                customerNames = string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames,
+                castNames = string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames,
+                memo = string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo,
+                accountingAmount = slip.AccountingAmount,
+                karaokeQuantity = slip.KaraokeQuantity
+            })
+        });
+    }
+
     public async Task<IActionResult> OnPostCreateSlipAsync(CancellationToken cancellationToken)
     {
         if (!SlipsEnabled)
@@ -227,21 +269,17 @@ public class IndexModel(
             return;
         }
 
-        var slipsTask = _slipRepository.GetBusinessDaySlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-
         if (includeAttendanceCasts)
         {
             var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-            await Task.WhenAll(slipsTask, attendanceCastsTask);
             AttendanceCasts = await attendanceCastsTask;
         }
         else
         {
             AttendanceCasts = [];
-            await slipsTask;
         }
 
-        Slips = await slipsTask;
+        Slips = [];
     }
 
     private void SetDefaultCreateSlipInput()
@@ -424,14 +462,10 @@ public class IndexModel(
             return;
         }
 
-        var openSlipIds = Slips
-            .Where(x => string.Equals(x.Status, "open", StringComparison.Ordinal))
-            .Select(x => x.SlipId)
-            .ToHashSet();
         for (var i = 0; i < KaraokeLines.Count; i++)
         {
             var line = KaraokeLines[i];
-            if (!openSlipIds.Contains(line.SlipId))
+            if (line.SlipId <= 0)
             {
                 ModelState.AddModelError($"KaraokeLines[{i}].SlipId", "営業中の卓を確認してください。");
             }

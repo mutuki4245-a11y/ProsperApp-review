@@ -45,12 +45,35 @@ public class IndexModel(
 
         SelectedSlipId = slipId;
         await LoadOptionsAsync(cancellationToken);
-        if (SelectedSlipId is not null && Slips.All(x => x.SlipId != SelectedSlipId.Value))
+        return Page();
+    }
+
+    public async Task<IActionResult> OnGetSlipOptionsAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Orders))
         {
-            SelectedSlipId = null;
+            return NotFound();
         }
 
-        return Page();
+        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (currentBusinessDay is null)
+        {
+            return new JsonResult(new { succeeded = true, slips = Array.Empty<object>() });
+        }
+
+        var slips = await _orderRepository.GetOpenSlipsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            slips = slips.Select(slip => new
+            {
+                id = slip.SlipId,
+                display = slip.TableDisplayName,
+                openedTime = StoreBusinessTime.FormatStoreTime(slip.OpenedAt),
+                customerCount = slip.CustomerCount,
+                memo = slip.Memo
+            })
+        });
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
@@ -79,7 +102,6 @@ public class IndexModel(
         ModelState.Clear();
         SelectedSlipId = null;
         QueueLines = [];
-        await LoadOptionsAsync(cancellationToken);
         SuccessMessage = $"注文を登録しました。登録行数: {result.InsertedCount}";
         return Page();
     }
@@ -107,11 +129,9 @@ public class IndexModel(
             return;
         }
 
-        var slipsTask = _orderRepository.GetOpenSlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
         var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        await Task.WhenAll(slipsTask, attendanceCastsTask);
 
-        Slips = await slipsTask;
+        Slips = [];
         Items = await itemsTask;
         AttendanceCasts = await attendanceCastsTask;
     }
@@ -124,11 +144,6 @@ public class IndexModel(
             return;
         }
 
-        if (Slips.Count == 0)
-        {
-            ModelState.AddModelError(string.Empty, "注文登録できるopen伝票がありません。");
-        }
-
         foreach (var error in _orderQueueService.Validate(
                      QueueLines,
                      Items,
@@ -139,8 +154,7 @@ public class IndexModel(
             ModelState.AddModelError(nameof(QueueLines), error);
         }
 
-        var openSlipIds = Slips.Select(x => x.SlipId).ToHashSet();
-        if (QueueLines.Any(x => x.SlipId is null || !openSlipIds.Contains(x.SlipId.Value)))
+        if (QueueLines.Any(x => x.SlipId is null or <= 0))
         {
             ModelState.AddModelError(nameof(QueueLines), "注文キューに利用できない卓番があります。");
         }

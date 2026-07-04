@@ -41,26 +41,11 @@
                         <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
                     </div>
                     <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
+                    <div class="alert alert-warning" role="alert" id="slipOptionsWarning" hidden></div>
 
-                    @if (Model.Slips.Count == 0)
-                    {
-                        <div class="alert alert-secondary mb-0">注文登録できるopen伝票がありません。</div>
-                    }
-                    else
-                    {
-                        <div class="order-slip-picker" role="group" aria-label="卓番選択">
-                            @foreach (var slip in Model.Slips)
-                            {
-                                <button
-                                    class="order-slip-picker__button @(Model.SelectedSlipId == slip.SlipId ? "is-selected" : "")"
-                                    type="button"
-                                    data-slip-id="@slip.SlipId">
-                                    <strong>@slip.TableDisplayName</strong>
-                                    <span>@StoreBusinessTime.FormatStoreTime(slip.OpenedAt) 入店 / @slip.CustomerCount 人</span>
-                                </button>
-                            }
-                        </div>
-                    }
+                    <div class="order-slip-picker" role="group" aria-label="卓番選択" data-order-slip-picker>
+                        <div class="alert alert-secondary mb-0">注文対象の卓番を読み込み中です。</div>
+                    </div>
                 </section>
 
                 <section class="slip-create__panel order-entry__items" id="itemPanel">
@@ -136,7 +121,7 @@
                             class="btn btn-primary btn-lg"
                             type="submit"
                             id="submitOrderButton"
-                            @(Model.Slips.Count == 0 || Model.Items.Count == 0 ? "disabled" : null)>
+                            @(Model.Items.Count == 0 ? "disabled" : null)>
                             一括登録
                         </button>
                     </div>
@@ -164,15 +149,19 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const slips = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName })));
+            let slips = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName })));
             const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType })));
             const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true })));
             const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
             const initialSlipId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SelectedSlipId));
+            const slipOptionsUrl = '@Url.Page("/Orders/Index", "SlipOptions")';
+            const refreshIntervalMs = 30000;
 
             const selectedSlipInput = document.getElementById('selectedSlipId');
             const selectedSlipBadge = document.getElementById('selectedSlipBadge');
             const selectedSlipQueueLabel = document.getElementById('selectedSlipQueueLabel');
+            const slipPicker = document.querySelector('[data-order-slip-picker]');
+            const slipOptionsWarning = document.getElementById('slipOptionsWarning');
             const queueFields = document.getElementById('queueFields');
             const queueList = document.getElementById('queueList');
             const queueEmpty = document.getElementById('queueEmpty');
@@ -182,6 +171,8 @@
             const queue = new Map();
             const submitBaseDisabled = submitOrderButton?.disabled ?? false;
             let pendingBackItemId = null;
+            let slipOptionsLoaded = slips.length > 0;
+            let slipOptionsLoading = false;
             const attendingCastModalElement = document.getElementById('attendingCastSelectModal');
             const attendingCastModalList = document.getElementById('attendingCastModalList');
             const attendingCastModal = attendingCastModalElement ? new bootstrap.Modal(attendingCastModalElement) : null;
@@ -203,6 +194,114 @@
             }
 
             const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
+            const hasSlip = (slipId) => slips.some((slip) => String(slip.id) === String(slipId));
+
+            const setSlipWarning = (message) => {
+                if (!slipOptionsWarning) {
+                    return;
+                }
+
+                slipOptionsWarning.textContent = message ?? '';
+                slipOptionsWarning.hidden = !message;
+            };
+
+            const renderSlipPicker = () => {
+                if (!slipPicker) {
+                    return;
+                }
+
+                slipPicker.innerHTML = '';
+                if (!slipOptionsLoaded) {
+                    const loading = document.createElement('div');
+                    loading.className = 'alert alert-secondary mb-0';
+                    loading.textContent = '注文対象の卓番を読み込み中です。';
+                    slipPicker.appendChild(loading);
+                    return;
+                }
+
+                if (slips.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'alert alert-secondary mb-0';
+                    empty.textContent = '注文登録できるopen伝票がありません。';
+                    slipPicker.appendChild(empty);
+                    return;
+                }
+
+                slips.forEach((slip) => {
+                    const button = document.createElement('button');
+                    button.className = 'order-slip-picker__button';
+                    button.type = 'button';
+                    button.dataset.slipId = String(slip.id);
+                    button.classList.toggle('is-selected', String(selectedSlipInput?.value ?? '') === String(slip.id));
+                    const name = document.createElement('strong');
+                    name.textContent = slip.display;
+                    const meta = document.createElement('span');
+                    meta.textContent = `${slip.openedTime} 入店 / ${slip.customerCount} 人`;
+                    button.append(name, meta);
+                    slipPicker.appendChild(button);
+                });
+            };
+
+            const removeUnavailableSlipLines = () => {
+                if (!slipOptionsLoaded) {
+                    return;
+                }
+
+                let changed = false;
+                let removed = false;
+                if (selectedSlipInput?.value && !hasSlip(selectedSlipInput.value)) {
+                    selectedSlipInput.value = '';
+                    changed = true;
+                    removed = true;
+                }
+
+                queue.forEach((line, key) => {
+                    if (!hasSlip(line.slipId)) {
+                        queue.delete(key);
+                        changed = true;
+                        removed = true;
+                    }
+                });
+
+                if (removed) {
+                    setSlipWarning('会計済みまたは利用できなくなった卓番をキューから外しました。');
+                }
+
+                if (changed) {
+                    render();
+                }
+            };
+
+            const loadSlipOptions = async () => {
+                if (slipOptionsLoading) {
+                    return;
+                }
+
+                slipOptionsLoading = true;
+                try {
+                    const response = await fetch(slipOptionsUrl, {
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+                    if (!response.ok) {
+                        throw new Error('Slip options load failed.');
+                    }
+
+                    const result = await response.json();
+                    slips = Array.isArray(result.slips) ? result.slips : [];
+                    slipOptionsLoaded = true;
+                    renderSlipPicker();
+                    removeUnavailableSlipLines();
+                    render();
+                } catch {
+                    if (!slipOptionsLoaded && slipPicker) {
+                        slipPicker.innerHTML = '<div class="alert alert-secondary mb-0">注文対象の卓番を取得できませんでした。</div>';
+                    }
+                } finally {
+                    slipOptionsLoading = false;
+                }
+            };
 
             const openBackPicker = (itemId) => {
                 pendingBackItemId = String(itemId);
@@ -217,7 +316,7 @@
 
             const addToQueue = (itemId, castBackCastId = null) => {
                 const slipId = selectedSlipInput?.value ?? '';
-                if (!slipId) {
+                if (!slipId || !hasSlip(slipId)) {
                     return;
                 }
 
@@ -242,9 +341,7 @@
                     selectedSlipQueueLabel.textContent = selectedSlip ? selectedSlip.display : '卓番未選択';
                 }
 
-                document.querySelectorAll('[data-slip-id]').forEach((button) => {
-                    button.classList.toggle('is-selected', String(button.dataset.slipId) === String(selectedSlipInput?.value ?? ''));
-                });
+                renderSlipPicker();
 
                 if (queueFields) {
                     queueFields.innerHTML = '';
@@ -307,7 +404,7 @@
                     index += 1;
                 });
 
-                const hasQueue = queue.size > 0;
+                const hasQueue = index > 0;
                 if (queueEmpty) {
                     queueEmpty.hidden = hasQueue;
                 }
@@ -319,13 +416,17 @@
                 }
             };
 
-            document.querySelectorAll('[data-slip-id]').forEach((button) => {
-                button.addEventListener('click', () => {
-                    if (selectedSlipInput) {
-                        selectedSlipInput.value = button.dataset.slipId ?? '';
-                    }
-                    render();
-                });
+            slipPicker?.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-slip-id]');
+                if (!button || !slipPicker.contains(button)) {
+                    return;
+                }
+
+                if (selectedSlipInput) {
+                    selectedSlipInput.value = button.dataset.slipId ?? '';
+                }
+                setSlipWarning(null);
+                render();
             });
 
             document.querySelectorAll('[data-item-id]').forEach((button) => {
@@ -428,7 +529,24 @@
                 selectedSlipInput.value = initialSlipId;
             }
 
+            renderSlipPicker();
             render();
+            void loadSlipOptions();
+            window.setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    void loadSlipOptions();
+                }
+            }, refreshIntervalMs);
+            window.addEventListener('focus', () => {
+                if (document.visibilityState === 'visible') {
+                    void loadSlipOptions();
+                }
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    void loadSlipOptions();
+                }
+            });
         })();
     </script>
 }
