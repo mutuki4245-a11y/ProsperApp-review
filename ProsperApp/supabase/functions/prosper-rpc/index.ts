@@ -61,6 +61,17 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ],
   ["get_store_order_items", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["get_store_item_admin_catalog", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["get_store_nomination_back_master", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  [
+    "save_store_nomination_back_master",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_settings", type: "jsonb" },
+      ],
+    },
+  ],
   [
     "get_store_slip_detail",
     {

@@ -283,6 +283,7 @@ declare
     v_nomination_price numeric(12, 0);
     v_companion_time time;
     v_started_at timestamp with time zone;
+    v_slip_cast_id bigint;
     v_customer_count integer;
     v_slip_no text;
 begin
@@ -434,7 +435,45 @@ begin
                 v_nomination_price,
                 v_started_at,
                 'active'
-            );
+            )
+            returning store_slip_casts.slip_cast_id into v_slip_cast_id;
+
+            insert into public.store_slip_cast_backs (
+                slip_cast_id,
+                slip_id,
+                business_day_id,
+                business_date,
+                company_id,
+                department_id,
+                cast_id,
+                nomination_type,
+                back_type,
+                quantity,
+                back_unit_amount,
+                back_amount,
+                status
+            )
+            select
+                v_slip_cast_id,
+                v_slip_id,
+                v_business_day.business_day_id,
+                v_business_day.business_date,
+                v_company_id,
+                p_department_id,
+                v_cast_id,
+                v_nomination_type,
+                'nomination',
+                1,
+                m.back_unit_amount,
+                m.back_unit_amount,
+                'active'
+            from public.store_nomination_back_master m
+            where m.company_id = v_company_id
+              and m.department_id = p_department_id
+              and m.nomination_type = v_nomination_type
+              and m.back_type = 'nomination'
+              and m.is_active = true
+              and m.back_unit_amount > 0;
         else
             raise exception 'store_cast_not_found';
         end if;

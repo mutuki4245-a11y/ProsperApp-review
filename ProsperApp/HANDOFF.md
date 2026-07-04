@@ -12,7 +12,7 @@
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
 - Supabase RPCのHTTP送信、Edge Functionキー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。アプリからのRPCは必ず `prosper-rpc` Edge Function経由で呼び出し、REST RPC fallbackは持ちません。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
-- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
+- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧、指名バック設定などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャスト/指名バックのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
 - 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。localStorageや画面内ドラフトは端末内の復旧用状態として扱い、端末間では直接同期しません。端末間の共有状態はDB/RPC保存後のデータを基準にします。
 - 出勤キャスト候補の `get_order_attending_casts` は、現行実装では都度取得します。変更契機は勤怠入力に限られるため営業日単位キャッシュの検討候補ですが、導入する場合は勤怠保存、営業日開始、営業日締めで破棄する実装を同時に入れてください。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
 - 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` で取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ自動保存は `businessDayId`、`slipId`、`quantity` を `save_store_karaoke_lines` へ送るだけにし、店舗コンテキスト、卓、伝票一覧は再取得しません。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、保存RPCは同一伝票内のカラオケ注文行を1行に集約します。
@@ -52,7 +52,7 @@
   - 営業日、出勤、営業締め系RPCです。
 
 - `Sql/store_rpc/02_store_masters.sql`
-  - 卓番、キャスト、商品、注文入力向け一覧系RPCです。
+  - 卓番、キャスト、商品、指名バック設定、注文入力向け一覧系RPCです。
 
 - `Sql/store_rpc/03_slips.sql`
   - 伝票詳細、客、指名、注文取消系RPCです。
@@ -89,12 +89,12 @@
 - `/Orders` は複数卓の注文を同じキューに入れて一括登録できます。バック対象商品のキャスト候補には先頭に「なし」を出します。
 - 自由入力明細は商品マスタとは別枠の調整明細として扱い、負値も許容して会計合計額へ直接加減します。
 - カラオケは `store_item_master.item_type = 'karaoke'` のシステム商品です。1回200円、サービス料対象、同一伝票1注文行に集約し、時刻列は入店時刻にします。
+- 指名種別別キャストバックは、店舗別マスタ `store_nomination_back_master` と営業実績 `store_slip_cast_backs` で扱います。`/Management/NominationBacks` で本指名、場内指名、同伴のバック単価と有効/無効を管理し、指名登録時に現在の単価を実績行としてスナップショット保存します。
 - 営業中画面では会計額を固定オーバーレイ操作中だけ表示し、カラオケ数量は画面内で即時反映してデバウンス保存します。
-- マスタ系候補と現在営業日は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、現在営業日です。
+- マスタ系候補と現在営業日は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、指名バック設定、現在営業日です。
 
 ### 後続仕様・検討候補
 
-- 指名種別に応じたキャストバック計算は未実装です。指名価格の会計加算までは実装済みです。
 - レシートプリンターは会計時の印刷要求データ作成と `ReceiptPrinter:BridgeUrl` への非同期POSTまで実装済みです。SII Receipt Web Server相当アプリの正式API、領収書レイアウト、再印刷画面は後続仕様です。
 - `get_order_attending_casts` の営業日単位キャッシュは未実装の検討候補です。導入時は勤怠保存、営業日開始、営業日締めで破棄してください。
 - `get_business_day_slips` と `get_order_entry_slips` の再取得削減は検討候補です。保存成功時の画面差分反映方針を先に決めてから実装してください。
@@ -153,6 +153,8 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `get_order_entry_slips(p_department_id, p_business_day_id)`
 - `get_store_order_items(p_department_id)`
 - `get_store_item_admin_catalog(p_department_id)`
+- `get_store_nomination_back_master(p_department_id)`
+- `save_store_nomination_back_master(p_department_id, p_settings)`
 - `upsert_store_item_category(p_department_id, p_item_category_id, p_category_code, p_category_name, p_sort_order, p_is_active)`
 - `upsert_store_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price, p_is_active, p_is_cast_back_target, p_cast_back_regular_unit_amount, p_cast_back_nomination_unit_amount, p_cast_back_type)`
 - `delete_store_item(p_department_id, p_item_id)`
@@ -160,6 +162,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `create_store_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_nominations, p_memo)`
   - `p_cast_nominations` は `cast_id`, `nomination_type`, `companion_time`, `nomination_price` を持つJSON配列です。
   - `nomination_price` は1000円から20000円まで1000円刻みで、会計額へ加算します。
+  - 有効な指名バック設定がありバック単価が0円より大きい場合、`store_slip_cast_backs` に現在単価の実績を作成します。
 - `save_store_slip_adjustments(p_department_id, p_slip_id, p_adjustment_lines)`
   - 通常商品とは別枠の自由入力明細を保存します。商品マスタへは登録しません。
   - `amount` は負値を許容し、会計合計額へ直接加減します。
@@ -210,7 +213,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 
 - `/Management`
   - 上部タブの `マスタ設定` 入口です。
-  - キャスト情報と商品情報は、営業日前の必須作業ではなく、ここから任意のタイミングで開く導線にします。
+  - キャスト情報、商品情報、指名バック設定は、営業日前の必須作業ではなく、ここから任意のタイミングで開く導線にします。
   - 管理メニューも操作パネルの縦並びを維持します。
 
 - `/Management/Casts`
@@ -227,6 +230,11 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - カラオケは `item_type = 'karaoke'` のシステム商品として商品マスタに置きます。1回200円固定で、通常の商品小計に含めてサービス料対象にします。通常の商品削除RPCでは削除できません。
   - 注文履歴は `item_name_snapshot` / `unit_price` / `amount` を保持するため、商品マスタを再参照しません。
   - 商品削除は `delete_store_item` で商品マスタ行を削除し、既存注文行の `item_id` は切り離します。
+
+- `/Management/NominationBacks`
+  - 指名種別別キャストバックの店舗別マスタです。
+  - 本指名、場内指名、同伴の3種別についてバック単価と有効/無効を保存します。
+  - 保存成功時は指名バック設定キャッシュだけを破棄します。商品候補やキャスト候補のキャッシュは破棄しません。
 
 - `/Slips/Edit`
   - 伝票詳細、客追加、指名追加、オーダー追加、会計処理。

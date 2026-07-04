@@ -463,6 +463,10 @@
   grid-template-columns: minmax(170px, 1.25fr) minmax(96px, 0.55fr) minmax(78px, 0.32fr) minmax(96px, 0.55fr) minmax(96px, 0.55fr) auto;
 }
 
+.item-admin__row--nomination-back {
+  grid-template-columns: minmax(160px, 1fr) minmax(140px, 0.8fr) minmax(82px, 0.35fr);
+}
+
 .item-admin__row--add .btn {
   min-height: 2.35rem;
   padding-left: 0.85rem;

@@ -18,6 +18,8 @@ internal static class StoreMasterCacheKeys
 
     public static string CastAdminList(long departmentId) => $"store-master:{departmentId}:cast-admin-list";
 
+    public static string NominationBackMaster(long departmentId) => $"store-master:{departmentId}:nomination-back-master";
+
     public static string CurrentBusinessDay(long departmentId) => $"store-runtime:{departmentId}:current-business-day";
 
     public static MemoryCacheEntryOptions CreateOptions()
@@ -46,6 +48,11 @@ internal static class StoreMasterCacheKeys
     {
         memoryCache.Remove(StoreCasts(departmentId));
         memoryCache.Remove(CastAdminList(departmentId));
+    }
+
+    public static void ClearNominationBacks(IMemoryCache memoryCache, long departmentId)
+    {
+        memoryCache.Remove(NominationBackMaster(departmentId));
     }
 
     public static void ClearCurrentBusinessDay(IMemoryCache memoryCache, long departmentId)

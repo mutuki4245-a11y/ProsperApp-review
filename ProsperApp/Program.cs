@@ -38,6 +38,7 @@ builder.Services.AddScoped<IStoreOrderRepository, SupabaseStoreOrderRepository>(
 builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();
 builder.Services.AddScoped<IStoreItemAdminRepository, SupabaseStoreItemAdminRepository>();
 builder.Services.AddScoped<IStoreCastAdminRepository, SupabaseStoreCastAdminRepository>();
+builder.Services.AddScoped<INominationBackAdminRepository, SupabaseNominationBackAdminRepository>();
 builder.Services.AddHttpClient<IDriveFileService, GoogleDriveFileService>();
 builder.Services.AddHttpClient<IReceiptPrinterClient, SiiReceiptPrinterClient>();
 

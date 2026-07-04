@@ -471,6 +471,168 @@ as $$
         rows.item_name asc nulls last;
 $$;
 
+drop function if exists public.get_store_nomination_back_master(bigint);
+
+create or replace function public.get_store_nomination_back_master(p_department_id bigint)
+returns table (
+    nomination_type text,
+    display_name text,
+    back_type text,
+    back_unit_amount numeric,
+    sort_order integer,
+    is_active boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+    with nomination_types as (
+        select *
+        from (values
+            ('nomination'::text, '本指名'::text, 10),
+            ('in_store'::text, '場内指名'::text, 20),
+            ('companion'::text, '同伴'::text, 30)
+        ) as t(nomination_type, display_name, sort_order)
+    ),
+    target_department as (
+        select
+            d.company_id,
+            d.department_id
+        from public.department_master d
+        where d.department_id = p_department_id
+          and d.is_active = true
+        limit 1
+    )
+    select
+        nt.nomination_type,
+        nt.display_name,
+        coalesce(m.back_type, 'nomination') as back_type,
+        coalesce(m.back_unit_amount, 0) as back_unit_amount,
+        coalesce(m.sort_order, nt.sort_order) as sort_order,
+        coalesce(m.is_active, true) as is_active
+    from target_department d
+    cross join nomination_types nt
+    left join public.store_nomination_back_master m
+      on m.company_id = d.company_id
+     and m.department_id = d.department_id
+     and m.nomination_type = nt.nomination_type
+    order by coalesce(m.sort_order, nt.sort_order), nt.display_name;
+$$;
+
+drop function if exists public.save_store_nomination_back_master(bigint, jsonb);
+
+create or replace function public.save_store_nomination_back_master(
+    p_department_id bigint,
+    p_settings jsonb default '[]'::jsonb
+)
+returns table (
+    updated_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_payload_count integer;
+    v_distinct_count integer;
+    v_invalid_count integer;
+    v_updated_count integer;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    if p_settings is null or jsonb_typeof(p_settings) <> 'array' then
+        raise exception 'invalid_nomination_back_master';
+    end if;
+
+    with payload as (
+        select
+            nullif(trim(coalesce(x.nomination_type, '')), '') as nomination_type,
+            coalesce(x.back_unit_amount, 0) as back_unit_amount,
+            coalesce(x.is_active, true) as is_active,
+            coalesce(x.sort_order, 0) as sort_order
+        from jsonb_to_recordset(p_settings) as x(
+            nomination_type text,
+            back_unit_amount numeric,
+            is_active boolean,
+            sort_order integer
+        )
+    )
+    select
+        count(*)::integer,
+        count(distinct nomination_type)::integer,
+        count(*) filter (
+            where nomination_type not in ('nomination', 'in_store', 'companion')
+               or back_unit_amount < 0
+               or sort_order < 0
+        )::integer
+      into v_payload_count, v_distinct_count, v_invalid_count
+    from payload;
+
+    if coalesce(v_payload_count, 0) = 0 or
+       v_payload_count <> v_distinct_count or
+       coalesce(v_invalid_count, 0) > 0 then
+        raise exception 'invalid_nomination_back_master';
+    end if;
+
+    with payload as (
+        select
+            nullif(trim(coalesce(x.nomination_type, '')), '') as nomination_type,
+            coalesce(x.back_unit_amount, 0) as back_unit_amount,
+            coalesce(x.is_active, true) as is_active,
+            coalesce(x.sort_order, 0) as sort_order
+        from jsonb_to_recordset(p_settings) as x(
+            nomination_type text,
+            back_unit_amount numeric,
+            is_active boolean,
+            sort_order integer
+        )
+    ),
+    upserted as (
+        insert into public.store_nomination_back_master (
+            company_id,
+            department_id,
+            nomination_type,
+            back_type,
+            back_unit_amount,
+            sort_order,
+            is_active
+        )
+        select
+            v_company_id,
+            p_department_id,
+            p.nomination_type,
+            'nomination',
+            p.back_unit_amount,
+            p.sort_order,
+            p.is_active
+        from payload p
+        on conflict (company_id, department_id, nomination_type)
+        do update
+           set back_type = 'nomination',
+               back_unit_amount = excluded.back_unit_amount,
+               sort_order = excluded.sort_order,
+               is_active = excluded.is_active,
+               updated_at = now()
+        returning nomination_back_id
+    )
+    select count(*)::integer
+      into v_updated_count
+    from upserted;
+
+    return query select coalesce(v_updated_count, 0);
+end;
+$$;
+
 drop function if exists public.upsert_store_item_category(bigint, bigint, text, text, integer, boolean);
 
 create or replace function public.upsert_store_item_category(

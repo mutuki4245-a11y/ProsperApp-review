@@ -16,6 +16,8 @@ declare
         'get_order_entry_slips',
         'get_store_order_items',
         'get_store_item_admin_catalog',
+        'get_store_nomination_back_master',
+        'save_store_nomination_back_master',
         'get_order_attending_casts',
         'get_store_slip_detail',
         'get_pending_receipts',
