@@ -30,6 +30,7 @@ body.order-terminal main {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
+  gap: 0.75rem;
   justify-content: space-between;
   min-height: 2.25rem;
 }
@@ -64,7 +65,7 @@ body.order-terminal .order-entry__grid {
   align-items: stretch;
   flex: 1 1 auto;
   gap: 0.75rem;
-  grid-template-columns: minmax(240px, 0.75fr) minmax(360px, 1.35fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(260px, 0.75fr) minmax(420px, 1.35fr) minmax(340px, 0.9fr);
   min-height: 0;
 }
 
@@ -111,6 +112,7 @@ body.order-terminal .order-entry__queue {
   min-height: 0;
   overflow-y: auto;
   padding-right: 0.15rem;
+  scrollbar-gutter: stable;
 }
 
 .order-entry__panel-body--queue {
@@ -124,6 +126,7 @@ body.order-terminal .order-entry__queue {
   border-radius: 10px;
   color: #102a43;
   display: flex;
+  gap: 0.5rem;
   justify-content: space-between;
   min-height: 3.1rem;
   padding: 0.65rem 0.75rem;
@@ -138,15 +141,20 @@ body.order-terminal .order-entry__queue {
 
 .order-slip-picker__button strong {
   font-size: 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .order-slip-picker__button span {
   color: #64748b;
+  flex: 0 0 auto;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .order-category-tabs {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 0.45rem;
   margin-bottom: 0.75rem;
@@ -196,6 +204,8 @@ body.order-terminal .order-entry__queue {
   display: grid;
   gap: 0.2rem;
   min-height: 5.8rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 0.75rem;
   text-align: left;
 }
@@ -223,12 +233,39 @@ body.order-terminal .order-entry__queue {
   border-radius: 10px;
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(5.75rem, auto) auto;
   min-height: 3.1rem;
   padding: 0.6rem;
 }
 
-.order-queue__row > span,
+.order-queue__row-main {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.order-queue__row-main strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.order-queue__row-amount {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: end;
+  white-space: nowrap;
+}
+
+.order-queue__row-amount span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.order-queue__row-amount strong {
+  color: #102a43;
+  font-size: 0.95rem;
+}
+
 .order-queue__row > button {
   white-space: nowrap;
 }
@@ -236,7 +273,7 @@ body.order-terminal .order-entry__queue {
 .order-queue__back {
   color: #64748b;
   font-size: 0.85rem;
-  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
 }
 
 .order-queue__empty {
@@ -265,16 +302,25 @@ body.order-terminal .slip-create__actions {
   flex: 0 0 auto;
 }
 
-@media (max-width: 1099.98px) {
+body.order-terminal .order-entry__queue .slip-create__actions {
+  grid-template-columns: 1fr;
+  margin-top: 0.75rem;
+}
+
+body.order-terminal .order-entry__queue .slip-create__actions .btn {
+  width: 100%;
+}
+
+@media (max-width: 1119.98px) {
   body.order-terminal {
     overflow: auto;
   }
 
   body.order-terminal .app-shell {
-    min-width: 1080px;
+    min-width: 1100px;
   }
 
   body.order-terminal .order-entry__grid {
-    grid-template-columns: minmax(240px, 0.75fr) minmax(360px, 1.35fr) minmax(320px, 0.9fr);
+    grid-template-columns: minmax(260px, 0.75fr) minmax(420px, 1.35fr) minmax(340px, 0.9fr);
   }
 }
