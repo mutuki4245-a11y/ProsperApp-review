@@ -119,9 +119,14 @@ public class IndexModel(
         var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         if (currentBusinessDay is null)
         {
+            var currentBusinessDate = _storeClock.GetCurrentBusinessDate();
             return new JsonResult(new
             {
                 succeeded = true,
+                businessDayId = (long?)null,
+                businessDate = currentBusinessDate.ToString("yyyy-MM-dd"),
+                businessDateDisplay = $"{currentBusinessDate:yyyy-MM-dd} / 自動作成待ち",
+                hasBusinessDay = false,
                 openSlipCount = 0,
                 checkedOutSlipCount = 0,
                 slips = Array.Empty<object>()
@@ -132,6 +137,10 @@ public class IndexModel(
         return new JsonResult(new
         {
             succeeded = true,
+            businessDayId = (long?)currentBusinessDay.BusinessDayId,
+            businessDate = currentBusinessDay.BusinessDate.ToString("yyyy-MM-dd"),
+            businessDateDisplay = currentBusinessDay.BusinessDate.ToString("yyyy-MM-dd"),
+            hasBusinessDay = true,
             openSlipCount = slips.Count(x => x.Status == "open"),
             checkedOutSlipCount = slips.Count(x => x.Status == "checked_out"),
             slips = slips.Select(slip => new

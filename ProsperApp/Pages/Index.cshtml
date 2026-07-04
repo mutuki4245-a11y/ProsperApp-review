@@ -38,11 +38,11 @@
                         <strong>営業日</strong>
                         @if (Model.CurrentBusinessDay is null)
                         {
-                            <span>@Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 自動作成待ち</span>
+                            <span data-business-date-display>@Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 自動作成待ち</span>
                         }
                         else
                         {
-                            <span>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</span>
+                            <span data-business-date-display>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</span>
                         }
                     </span>
                     <span class="sales-summary__item">
@@ -100,15 +100,15 @@
                         <div class="modal-body slip-modal-form">
                             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
                             <input asp-for="CreateSlipInput.OpenedAt" type="hidden" />
-                            <input asp-for="CreateSlipInput.BusinessDate" type="hidden" />
-                            <input asp-for="CreateSlipInput.BusinessDayId" type="hidden" />
+                            <input asp-for="CreateSlipInput.BusinessDate" type="hidden" data-business-create-date-input />
+                            <input asp-for="CreateSlipInput.BusinessDayId" type="hidden" data-business-create-day-id-input />
 
                             <section class="slip-create__panel">
                                 <h3>入店情報</h3>
                                 <div class="row g-3">
                                     <div class="col-md-5">
                                         <label class="form-label">営業日</label>
-                                        <div class="business-date-display">@Model.CreateSlipInput.BusinessDate?.ToString("yyyy-MM-dd")</div>
+                                        <div class="business-date-display" data-business-create-date-display>@Model.CreateSlipInput.BusinessDate?.ToString("yyyy-MM-dd")</div>
                                     </div>
                                     <div class="col-md-7">
                                         <label asp-for="CreateSlipInput.OpenedTime" class="form-label"></label>
@@ -270,6 +270,10 @@
             const fields = document.getElementById('businessKaraokeFields');
             const status = form.querySelector('[data-business-karaoke-status]');
             const revealButton = document.querySelector('[data-slip-amount-reveal]');
+            const businessDateDisplay = document.querySelector('[data-business-date-display]');
+            const createDateInput = document.querySelector('[data-business-create-date-input]');
+            const createDayIdInput = document.querySelector('[data-business-create-day-id-input]');
+            const createDateDisplay = document.querySelector('[data-business-create-date-display]');
             const openSlipCount = document.querySelector('[data-business-open-slip-count]');
             const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
             const businessSlipsUrl = '@Url.Page("/Index", "BusinessSlips")';
@@ -405,12 +409,28 @@
                 });
             };
 
-            const updateSummary = (openCount, checkedOutCount) => {
+            const updateSummary = (result) => {
+                const businessDateText = result?.businessDateDisplay || '';
+                const businessDateValue = result?.businessDate || '';
+                const businessDayId = result?.businessDayId ? String(result.businessDayId) : '';
+                if (businessDateDisplay && businessDateText) {
+                    businessDateDisplay.textContent = businessDateText;
+                }
+                if (createDateDisplay && businessDateValue) {
+                    createDateDisplay.textContent = businessDateValue;
+                }
+                if (createDateInput && businessDateValue) {
+                    createDateInput.value = businessDateValue;
+                }
+                if (createDayIdInput) {
+                    createDayIdInput.value = businessDayId;
+                }
+
                 if (openSlipCount) {
-                    openSlipCount.textContent = `${Number(openCount) || 0} 件`;
+                    openSlipCount.textContent = `${Number(result?.openSlipCount) || 0} 件`;
                 }
                 if (checkedOutSlipCount) {
-                    checkedOutSlipCount.textContent = `${Number(checkedOutCount) || 0} 件`;
+                    checkedOutSlipCount.textContent = `${Number(result?.checkedOutSlipCount) || 0} 件`;
                 }
             };
 
@@ -524,7 +544,7 @@
                     const result = await response.json();
                     slips = Array.isArray(result.slips) ? result.slips : [];
                     hasLoaded = true;
-                    updateSummary(result.openSlipCount, result.checkedOutSlipCount);
+                    updateSummary(result);
                     renderSlips();
                 } catch {
                     if (!hasLoaded) {
