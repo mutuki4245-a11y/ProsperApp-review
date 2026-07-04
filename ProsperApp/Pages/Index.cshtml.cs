@@ -10,23 +10,15 @@ public class IndexModel(
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
     IStoreOrderRepository orderRepository,
+    INominationBackAdminRepository nominationBackRepository,
     ILocalSettingsProvider localSettingsProvider,
     IStoreClock storeClock) : PageModel
 {
-    private static readonly HashSet<string> AllowedNominationKinds = new(StringComparer.Ordinal)
-    {
-        "companion_until_1929",
-        "companion_until_1959",
-        "companion_until_2059",
-        "companion_after_2100",
-        "nomination",
-        "in_store"
-    };
-
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
+    private readonly INominationBackAdminRepository _nominationBackRepository = nominationBackRepository;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreClock _storeClock = storeClock;
 
@@ -47,6 +39,8 @@ public class IndexModel(
     public IReadOnlyList<StoreTableOption> Tables { get; set; } = [];
 
     public IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts { get; set; } = [];
+
+    public IReadOnlyList<NominationBackMasterItem> NominationOptions { get; set; } = [];
 
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
 
@@ -278,15 +272,21 @@ public class IndexModel(
         var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
         var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
         var tablesTask = _slipRepository.GetTablesAsync(cancellationToken);
+        var nominationOptionsTask = _nominationBackRepository.GetSettingsAsync(cancellationToken);
 
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         TimeOptions = _storeClock.BuildTimeOptions(5);
 
-        await Task.WhenAll(storeContextTask, currentBusinessDayTask, tablesTask);
+        await Task.WhenAll(storeContextTask, currentBusinessDayTask, tablesTask, nominationOptionsTask);
 
         StoreContext = await storeContextTask;
         CurrentBusinessDay = await currentBusinessDayTask;
         Tables = await tablesTask;
+        NominationOptions = (await nominationOptionsTask)
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.DisplayName)
+            .ToList();
 
         if (CurrentBusinessDay is null)
         {
@@ -379,9 +379,7 @@ public class IndexModel(
             return nomination.NominationKind.Trim();
         }
 
-        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName)
-            ? "nomination"
-            : null;
+        return null;
     }
 
     private void ComposeOpenedAt()
@@ -420,6 +418,9 @@ public class IndexModel(
         }
 
         var allowedCastIds = AttendanceCasts.Select(x => x.CastId).ToHashSet();
+        var allowedNominationKinds = NominationOptions
+            .Select(x => x.NominationKind)
+            .ToHashSet(StringComparer.Ordinal);
         for (var i = 0; i < CreateSlipInput.CastNominations.Count; i++)
         {
             var nomination = CreateSlipInput.CastNominations[i];
@@ -428,7 +429,11 @@ public class IndexModel(
                 nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.SearchDisplayName;
             }
 
-            if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !AllowedNominationKinds.Contains(nomination.NominationKind))
+            if (allowedNominationKinds.Count == 0)
+            {
+                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationKind", "指名種別マスタを登録してください。");
+            }
+            else if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !allowedNominationKinds.Contains(nomination.NominationKind))
             {
                 ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationKind", "指名区分を選択してください。");
             }

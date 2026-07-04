@@ -10,26 +10,18 @@ public partial class SlipEditModel(
     IStoreSlipRepository slipRepository,
     IBusinessDayRepository businessDayRepository,
     IStoreOrderRepository orderRepository,
+    INominationBackAdminRepository nominationBackRepository,
     ICheckoutRepository checkoutRepository,
     IStoreClock storeClock,
     IOrderQueueService orderQueueService,
     IReceiptPrinterClient receiptPrinterClient,
     ILocalSettingsProvider localSettingsProvider) : PageModel
 {
-    private static readonly HashSet<string> AllowedNominationKinds = new(StringComparer.Ordinal)
-    {
-        "companion_until_1929",
-        "companion_until_1959",
-        "companion_until_2059",
-        "companion_after_2100",
-        "nomination",
-        "in_store"
-    };
-
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
+    private readonly INominationBackAdminRepository _nominationBackRepository = nominationBackRepository;
     private readonly ICheckoutRepository _checkoutRepository = checkoutRepository;
     private readonly IStoreClock _storeClock = storeClock;
     private readonly IOrderQueueService _orderQueueService = orderQueueService;
@@ -77,6 +69,8 @@ public partial class SlipEditModel(
     public IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts { get; private set; } = [];
 
     public IReadOnlyList<StoreOrderItemOption> OrderItems { get; private set; } = [];
+
+    public IReadOnlyList<NominationBackMasterItem> NominationOptions { get; private set; } = [];
 
     public IReadOnlyList<string> TimeOptions { get; private set; } = [];
 

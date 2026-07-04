@@ -40,7 +40,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var rows = await PostRpcArrayAsync(
-            "get_current_business_day",
+            "store.get_current_business_day",
             new { p_department_id = departmentId },
             ct);
 
@@ -127,7 +127,7 @@ public class SupabaseBusinessDayRepository(
 
         var result = attendancePayload.Length == 0
             ? await RpcClient.PostArrayAsync(
-                "open_business_day",
+                "store.open_business_day",
                 new
                 {
                     p_department_id = departmentId,
@@ -136,7 +136,7 @@ public class SupabaseBusinessDayRepository(
                 },
                 ct)
             : await RpcClient.PostArrayAsync(
-                "open_business_day_with_attendance",
+                "store.open_business_day_with_attendance",
                 new
                 {
                     p_department_id = departmentId,
@@ -158,6 +158,7 @@ public class SupabaseBusinessDayRepository(
 
         var businessDay = ParseBusinessDay(result.Rows[0]);
         _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(departmentId), businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
+        StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, departmentId);
         StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDay.BusinessDayId);
         return BusinessDayOperationResult.Success(businessDay);
     }
@@ -175,7 +176,7 @@ public class SupabaseBusinessDayRepository(
 
         var departmentId = CurrentStoreDepartmentId;
         var result = await RpcClient.PostArrayAsync(
-            "close_business_day",
+            "store.close_business_day",
             new
             {
                 p_department_id = departmentId,
@@ -197,6 +198,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         StoreMasterCacheKeys.ClearCurrentBusinessDay(_memoryCache, departmentId);
+        StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, departmentId);
         StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
@@ -225,7 +227,7 @@ public class SupabaseBusinessDayRepository(
 
         var departmentId = CurrentStoreDepartmentId;
         var result = await RpcClient.PostArrayAsync(
-            "save_business_day_attendance",
+            "store.save_business_day_attendance",
             new
             {
                 p_department_id = departmentId,
@@ -256,7 +258,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var result = await RpcClient.PostScalarAsync(
-            "get_open_slip_count",
+            "store.get_open_slip_count",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -276,7 +278,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var rows = await PostRpcArrayAsync(
-            "get_business_day_drink_delivery_status",
+            "store.get_business_day_drink_delivery_status",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -312,7 +314,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var result = await RpcClient.PostScalarAsync(
-            "save_business_day_drink_delivery_amount",
+            "store.save_business_day_drink_delivery_amount",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -342,7 +344,7 @@ public class SupabaseBusinessDayRepository(
         }
 
         var rows = await PostRpcArrayAsync(
-            "get_business_day_closing_attendance",
+            "store.get_business_day_closing_attendance",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -384,7 +386,7 @@ public class SupabaseBusinessDayRepository(
 
         var departmentId = CurrentStoreDepartmentId;
         var result = await RpcClient.PostScalarAsync(
-            "save_business_day_closing_attendance",
+            "store.save_business_day_closing_attendance",
             new
             {
                 p_department_id = departmentId,

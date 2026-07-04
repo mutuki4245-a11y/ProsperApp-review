@@ -114,7 +114,11 @@ public class CastSalesAdjustmentCastRow
 
     public string? DepartmentName { get; init; }
 
+    public string NominationKind { get; init; } = string.Empty;
+
     public string NominationType { get; init; } = string.Empty;
+
+    public string? NominationDisplayNameFromMaster { get; init; }
 
     public DateTimeOffset? StartedAt { get; init; }
 
@@ -130,30 +134,11 @@ public class CastSalesAdjustmentCastRow
 
     public string CastDisplayName => DisplayName;
 
-    public string NominationDisplayName => NominationType switch
-    {
-        "companion" => ToCompanionDisplayName(),
-        "in_store" => "場内指名",
-        "nomination" => "本指名",
-        _ => NominationType
-    };
-
-    private string ToCompanionDisplayName()
-    {
-        if (StartedAt is null)
-        {
-            return "同伴";
-        }
-
-        return StoreBusinessTime.FormatStoreTime(StartedAt.Value) switch
-        {
-            "19:29" => "同伴 19:29まで",
-            "19:59" => "同伴 19:59まで",
-            "20:59" => "同伴 20:59まで",
-            "21:00" => "同伴 21:00以降",
-            _ => "同伴"
-        };
-    }
+    public string NominationDisplayName => !string.IsNullOrWhiteSpace(NominationDisplayNameFromMaster)
+        ? NominationDisplayNameFromMaster
+        : !string.IsNullOrWhiteSpace(NominationKind)
+            ? NominationKind
+            : NominationType;
 }
 
 public class CastSalesAdjustmentSaveInput

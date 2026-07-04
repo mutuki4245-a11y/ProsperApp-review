@@ -9,13 +9,6 @@ public class ManagementNominationBacksModel(
     IFeatureGate featureGate,
     INominationBackAdminRepository nominationBackAdminRepository) : PageModel
 {
-    private static readonly NominationBackDefinition[] Definitions =
-    [
-        new("nomination", "本指名", 10),
-        new("in_store", "場内指名", 20),
-        new("companion", "同伴", 30)
-    ];
-
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly INominationBackAdminRepository _nominationBackAdminRepository = nominationBackAdminRepository;
 
@@ -67,54 +60,70 @@ public class ManagementNominationBacksModel(
         return Page();
     }
 
-    public string GetDisplayName(string nominationType)
-    {
-        return Definitions.FirstOrDefault(x => x.NominationType == nominationType)?.DisplayName ?? nominationType;
-    }
-
     private async Task LoadSettingsAsync(CancellationToken cancellationToken)
     {
         var settings = await _nominationBackAdminRepository.GetSettingsAsync(cancellationToken);
-        Settings = Definitions
-            .Select(definition =>
+        Settings = settings
+            .Select(setting => new NominationBackMasterInputModel
             {
-                var current = settings.FirstOrDefault(x => x.NominationType == definition.NominationType);
-                return new NominationBackMasterInputModel
-                {
-                    NominationType = definition.NominationType,
-                    BackUnitAmount = current?.BackUnitAmount ?? 0,
-                    SortOrder = current?.SortOrder ?? definition.SortOrder,
-                    IsActive = current?.IsActive ?? true
-                };
+                NominationKind = setting.NominationKind,
+                NominationType = setting.NominationType,
+                DisplayName = setting.DisplayName,
+                CompanionTime = setting.CompanionTime,
+                BackUnitAmount = setting.BackUnitAmount,
+                SortOrder = setting.SortOrder,
+                IsActive = setting.IsActive
             })
             .ToList();
     }
 
     private void NormalizePostedSettings()
     {
-        Settings = Definitions
-            .Select(definition =>
+        Settings = Settings
+            .Select(setting => new NominationBackMasterInputModel
             {
-                var posted = Settings.FirstOrDefault(x => x.NominationType == definition.NominationType);
-                return new NominationBackMasterInputModel
-                {
-                    NominationType = definition.NominationType,
-                    BackUnitAmount = posted?.BackUnitAmount ?? 0,
-                    SortOrder = posted?.SortOrder ?? definition.SortOrder,
-                    IsActive = posted?.IsActive ?? true
-                };
+                NominationKind = string.IsNullOrWhiteSpace(setting.NominationKind) ? string.Empty : setting.NominationKind.Trim(),
+                NominationType = string.IsNullOrWhiteSpace(setting.NominationType) ? string.Empty : setting.NominationType.Trim(),
+                DisplayName = string.IsNullOrWhiteSpace(setting.DisplayName) ? string.Empty : setting.DisplayName.Trim(),
+                CompanionTime = string.IsNullOrWhiteSpace(setting.CompanionTime) ? null : setting.CompanionTime.Trim(),
+                BackUnitAmount = setting.BackUnitAmount,
+                SortOrder = setting.SortOrder,
+                IsActive = setting.IsActive
             })
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.DisplayName)
             .ToList();
     }
 
     private bool ValidateSettings()
     {
+        if (Settings.Select(x => x.NominationKind).Distinct(StringComparer.Ordinal).Count() != Settings.Count)
+        {
+            ModelState.AddModelError(string.Empty, "指名種別が重複しています。");
+        }
+
         for (var index = 0; index < Settings.Count; index++)
         {
             var setting = Settings[index];
-            if (!Definitions.Any(x => x.NominationType == setting.NominationType))
+            if (string.IsNullOrWhiteSpace(setting.NominationKind))
             {
                 ModelState.AddModelError($"Settings[{index}].NominationType", "指名種別を確認してください。");
+            }
+
+            if (string.IsNullOrWhiteSpace(setting.DisplayName))
+            {
+                ModelState.AddModelError($"Settings[{index}].DisplayName", "指名種別名を確認してください。");
+            }
+
+            if (setting.NominationType is not ("nomination" or "in_store" or "companion"))
+            {
+                ModelState.AddModelError($"Settings[{index}].NominationType", "指名種別を確認してください。");
+            }
+
+            if (setting.NominationType == "companion" &&
+                (string.IsNullOrWhiteSpace(setting.CompanionTime) || !TimeOnly.TryParse(setting.CompanionTime, out _)))
+            {
+                ModelState.AddModelError($"Settings[{index}].CompanionTime", "同伴時刻を確認してください。");
             }
 
             if (setting.BackUnitAmount < 0)
@@ -130,6 +139,4 @@ public class ManagementNominationBacksModel(
 
         return ModelState.IsValid;
     }
-
-    private sealed record NominationBackDefinition(string NominationType, string DisplayName, int SortOrder);
 }

@@ -32,7 +32,7 @@ public class SupabaseCheckoutRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "confirm_store_checkout",
+            "store.confirm_checkout",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,

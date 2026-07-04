@@ -1,6 +1,11 @@
 begin;
 
-create or replace function public.get_store_departments()
+create schema if not exists store;
+
+drop function if exists public.get_store_departments();
+drop function if exists store.get_departments();
+
+create or replace function store.get_departments()
 returns table (
     department_id bigint,
     company_id bigint,
@@ -23,6 +28,6 @@ as $$
     order by d.company_id asc, d.department_code asc, d.department_id asc;
 $$;
 
-revoke execute on function public.get_store_departments() from public, anon, authenticated, service_role;
+revoke execute on function store.get_departments() from public, anon, authenticated, service_role;
 
 commit;

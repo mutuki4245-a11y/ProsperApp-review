@@ -4,9 +4,13 @@ namespace ProsperApp.Models;
 
 public class NominationBackMasterItem
 {
+    public string NominationKind { get; set; } = string.Empty;
+
     public string NominationType { get; set; } = string.Empty;
 
     public string DisplayName { get; set; } = string.Empty;
+
+    public string? CompanionTime { get; set; }
 
     public string BackType { get; set; } = "nomination";
 
@@ -20,7 +24,13 @@ public class NominationBackMasterItem
 public class NominationBackMasterInputModel
 {
     [Required(ErrorMessage = "指名種別を確認してください。")]
+    public string NominationKind { get; set; } = string.Empty;
+
     public string NominationType { get; set; } = string.Empty;
+
+    public string DisplayName { get; set; } = string.Empty;
+
+    public string? CompanionTime { get; set; }
 
     [Display(Name = "バック単価")]
     [Range(0, 9999999, ErrorMessage = "バック単価は0以上で入力してください。")]

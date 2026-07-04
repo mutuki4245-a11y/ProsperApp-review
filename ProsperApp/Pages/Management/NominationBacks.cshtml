@@ -32,11 +32,14 @@
                 @for (var i = 0; i < Model.Settings.Count; i++)
                 {
                     <div class="item-admin__row item-admin__row--nomination-back">
+                        <input type="hidden" asp-for="Settings[i].NominationKind" />
                         <input type="hidden" asp-for="Settings[i].NominationType" />
+                        <input type="hidden" asp-for="Settings[i].DisplayName" />
+                        <input type="hidden" asp-for="Settings[i].CompanionTime" />
                         <input type="hidden" asp-for="Settings[i].SortOrder" />
                         <div class="item-admin__field item-admin__field--name">
                             <label>指名種別</label>
-                            <strong>@Model.GetDisplayName(Model.Settings[i].NominationType)</strong>
+                            <strong>@Model.Settings[i].DisplayName</strong>
                         </div>
                         <div class="item-admin__field">
                             <label asp-for="Settings[i].BackUnitAmount"></label>

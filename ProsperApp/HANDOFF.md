@@ -1,4 +1,4 @@
-﻿# ProsperApp Handoff
+# ProsperApp Handoff
 
 ## 現在の位置づけ
 
@@ -11,15 +11,16 @@
 - DB操作は原則 Supabase RPC 経由で行います。
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
 - Supabase RPCのHTTP送信、Edge Functionキー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。アプリからのRPCは必ず `prosper-rpc` Edge Function経由で呼び出し、REST RPC fallbackは持ちません。
+- アプリ用RPCは `store` schemaに集約し、Repositoryと `prosper-rpc` allowlistでは `store.get_casts` のようなschema-qualified名を使います。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
-- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧、指名バック設定などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャスト/指名バックのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
+- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。指名バック設定は店舗別マスタDBですが当日の指名入力に使うため現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
 - 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。localStorageや画面内ドラフトは端末内の復旧用状態として扱い、端末間では直接同期しません。端末間の共有状態はDB/RPC保存後のデータを基準にします。
-- 出勤キャスト候補の `get_order_attending_casts` は、店舗別・営業日別に `IMemoryCache` へ初回成功時だけ保持します。変更契機は勤怠入力に限られるため、勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄します。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
-- 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は端末設定ではなく、`department_master` の店舗別運用設定として管理します。アプリ側では `get_store_context` から取得し、店舗コンテキストキャッシュに載せます。
-- 管理者モードでは営業日締め条件を無視できます。画面POSTの `Readiness` ブロックと `close_business_day` RPCの条件検証は、同じ管理者モードフラグで迂回します。営業日が存在することと、画面の営業日IDが現在営業日と一致することは引き続き確認します。
-- 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` で取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ自動保存は `businessDayId`、`slipId`、`quantity` を `save_store_karaoke_lines` へ送るだけにし、店舗コンテキスト、卓、伝票一覧は再取得しません。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、保存RPCは同一伝票内のカラオケ注文行を1行に集約します。
-- 営業中一覧の `get_business_day_slips` と `/Orders` の `get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、30秒ごとの表示中自動更新で再取得し、保存成功POST直後のサーバー側再ロードは行いません。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
-- 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `get_business_day_slips` と `get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
+- 出勤キャスト候補の `store.get_order_attending_casts` は、店舗別・営業日別に `IMemoryCache` へ初回成功時だけ保持します。変更契機は勤怠入力に限られるため、勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄します。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
+- 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は端末設定ではなく、`department_master` の店舗別運用設定として管理します。アプリ側では `store.get_context` から取得し、店舗コンテキストキャッシュに載せます。
+- 管理者モードでは営業日締め条件を無視できます。画面POSTの `Readiness` ブロックと `store.close_business_day` RPCの条件検証は、同じ管理者モードフラグで迂回します。営業日が存在することと、画面の営業日IDが現在営業日と一致することは引き続き確認します。
+- 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` の各パネル用GET handlerで初期表示後に取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ自動保存は `businessDayId`、`slipId`、`quantity` を `store.save_karaoke_lines` へ送るだけにし、店舗コンテキスト、卓、伝票一覧は再取得しません。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、保存RPCは同一伝票内のカラオケ注文行を1行に集約します。
+- 営業中一覧の `store.get_business_day_slips` と `/Orders` の `store.get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、30秒ごとの表示中自動更新で再取得し、保存成功POST直後のサーバー側再ロードは行いません。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
+- 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `store.get_business_day_slips` と `store.get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。
@@ -33,6 +34,7 @@
 
 - `Docs/SQL_RPC概要.md`
   - SQL定義とRPCの全体像を確認するための入口資料です。
+  - RPC結果ごとのキャッシュ/再取得/破棄タイミングは「RPC結果ライフサイクル」にまとめています。
   - 実際の定義は各SQLファイルで確認してください。
 
 - `Sql/agent_schema_reference.sql`
@@ -44,12 +46,15 @@
   - RLS有効化、updated_atトリガー、主要インデックスを含みます。
 
 - `Sql/store_settings_functions.sql`
-  - 店舗設定画面用の `get_store_departments()` RPCです。
+  - 店舗設定画面用の `store.get_departments()` RPCです。
   - `department_master` から有効店舗一覧を取得します。
 
 - `Sql/store_rpc_functions.sql`
   - 分割済みRPCファイルの実行順を示す非実行インデックスです。
   - 実行対象は `Sql/store_rpc/*.sql` です。
+
+- `Sql/store_rpc/00_schema.sql`
+  - `store` schema作成と旧 `public.*` RPC削除のSQLです。
 
 - `Sql/store_rpc/01_business_day.sql`
   - 営業日、出勤、営業締め系RPCです。
@@ -88,15 +93,15 @@
 ### 実装済み
 
 - 勤怠入力のキャスト追加はチェックボックスで複数名を一括登録できます。勤怠時刻は出勤19:00、退勤24:00を初期値にし、24:00以降は25:00、26:00のように表示します。
-- 指名追加は本指名をデフォルトにし、同伴の4区分と1000円から20000円までの指名価格を選択できます。指名価格は会計額へ加算します。
+- 指名追加の指名種別は店舗別マスタ `store_nomination_back_master` の有効行から選択します。初期定義は本指名、場内指名、同伴4区分で、指名価格は1000円から20000円まで選択できます。指名価格は会計額へ加算します。
 - `/Orders` は営業中端末の業務フロー外にある注文端末専用画面です。上部タブ、業務フローナビ、フッター、営業中への戻り導線を表示せず、管理者設定だけは画面右上の最小導線として残します。卓番選択、商品一覧、注文キューを3パネル横並びで表示します。画面全体は縦横ともスクロールさせず、各パネル本文だけを縦スクロールします。複数卓の注文を同じキューに入れて一括登録でき、バック対象商品のキャスト候補には先頭に「なし」を出します。
 - 自由入力明細は商品マスタとは別枠の調整明細として扱い、負値も許容して会計合計額へ直接加減します。
 - カラオケは `store_item_master.item_type = 'karaoke'` のシステム商品です。1回200円、サービス料対象、同一伝票1注文行に集約し、時刻列は入店時刻にします。
-- 指名種別別キャストバックは、店舗別マスタ `store_nomination_back_master` と営業実績 `store_slip_cast_backs` で扱います。`/Management/NominationBacks` で本指名、場内指名、同伴のバック単価と有効/無効を管理し、指名登録時に現在の単価を実績行としてスナップショット保存します。
+- 指名種別別キャストバックは、店舗別マスタ `store_nomination_back_master` と営業実績 `store_slip_cast_backs` で扱います。マスタは `nomination_kind`、基本種別、表示名、同伴時刻、バック単価、有効/無効を店舗別に持ちます。`/Management/NominationBacks` でバック単価と有効/無効を管理し、指名登録時に現在の単価を実績行としてスナップショット保存します。
 - 営業中画面では会計額を固定オーバーレイ操作中だけ表示し、カラオケ数量は画面内で即時反映してデバウンス保存します。
-- マスタ系候補、現在営業日、当日出勤キャスト候補は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、指名バック設定、現在営業日、`get_order_attending_casts` の店舗別・営業日別結果です。
-- 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は店舗別マスター値です。`/Settings` には表示せず、`get_store_context` の店舗コンテキストとして利用します。
-- 営業中一覧と注文対象伝票は初期表示後のAjax取得と30秒自動更新で扱います。`get_business_day_slips` と `get_order_entry_slips` はキャッシュせず、保存成功POST直後の再取得を削ります。
+- マスタ系候補、現在営業日、当日出勤キャスト候補は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、現在営業日、指名バック設定、`store.get_order_attending_casts` の店舗別・営業日別結果です。指名バック設定は現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。
+- 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は店舗別マスター値です。`/Settings` には表示せず、`store.get_context` の店舗コンテキストとして利用します。
+- 営業中一覧と注文対象伝票は初期表示後のAjax取得と30秒自動更新で扱います。`store.get_business_day_slips` と `store.get_order_entry_slips` はキャッシュせず、保存成功POST直後の再取得を削ります。
 
 ### 後続仕様・検討候補
 
@@ -110,16 +115,17 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 
 1. `Sql/store_order_accounting_tables.sql`
 2. `Sql/store_settings_functions.sql`
-3. `Sql/store_rpc/01_business_day.sql`
-4. `Sql/store_rpc/02_store_masters.sql`
-5. `Sql/store_rpc/03_slips.sql`
-6. `Sql/store_rpc/04_orders.sql`
-7. `Sql/store_rpc/05_checkout.sql`
-8. `Sql/store_rpc/06_receipts.sql`
-9. `Sql/store_rpc/07_cast_sales_adjustments.sql`
-10. `Sql/store_rpc/99_grants.sql`
-11. 必要に応じて `Sql/store_table_master_seed.sql`
-12. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+3. `Sql/store_rpc/00_schema.sql`
+4. `Sql/store_rpc/01_business_day.sql`
+5. `Sql/store_rpc/02_store_masters.sql`
+6. `Sql/store_rpc/03_slips.sql`
+7. `Sql/store_rpc/04_orders.sql`
+8. `Sql/store_rpc/05_checkout.sql`
+9. `Sql/store_rpc/06_receipts.sql`
+10. `Sql/store_rpc/07_cast_sales_adjustments.sql`
+11. `Sql/store_rpc/99_grants.sql`
+12. 必要に応じて `Sql/store_table_master_seed.sql`
+13. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 `agent_schema_reference.sql` と `store_rpc_functions.sql` は実行対象ではありません。
 
@@ -127,59 +133,61 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 
 ### 店舗設定
 
-- `get_store_departments()`
+- `store.get_departments()`
 
 ### 店舗コンテキスト・営業日
 
-- `get_store_context(p_department_id)`
-- `get_current_business_day(p_department_id)`
-- `open_business_day(p_department_id, p_business_date, p_memo)`
-- `open_business_day_with_attendance(p_department_id, p_business_date, p_attendance_entries, p_memo)`
-- `get_open_slip_count(p_department_id, p_business_day_id)`
-- `get_business_day_drink_delivery_status(p_department_id, p_business_day_id)`
-- `save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
-- `get_business_day_closing_attendance(p_department_id, p_business_day_id)`
-- `save_business_day_closing_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
-- `get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id)`
-- `get_cast_sales_adjustment_slips(p_department_id, p_business_day_id)`
-- `get_cast_sales_adjustment_detail(p_department_id, p_slip_id)`
-- `save_cast_sales_adjustment(p_department_id, p_slip_id, p_adjustments, p_source_amount_type, p_split_mode)`
-- `close_business_day(p_department_id, p_business_day_id, p_memo, p_pending_receipt_status, p_ignore_closing_requirements)`
+- `store.get_context(p_department_id)`
+- `store.get_current_business_day(p_department_id)`
+- `store.open_business_day(p_department_id, p_business_date, p_memo)`
+- `store.open_business_day_with_attendance(p_department_id, p_business_date, p_attendance_entries, p_memo)`
+- `store.get_open_slip_count(p_department_id, p_business_day_id)`
+- `store.get_business_day_drink_delivery_status(p_department_id, p_business_day_id)`
+- `store.save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
+- `store.get_business_day_closing_attendance(p_department_id, p_business_day_id)`
+- `store.save_business_day_closing_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
+- `store.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id)`
+- `store.get_cast_sales_adjustment_slips(p_department_id, p_business_day_id)`
+- `store.get_cast_sales_adjustment_detail(p_department_id, p_slip_id)`
+- `store.save_cast_sales_adjustment(p_department_id, p_slip_id, p_adjustments, p_source_amount_type, p_split_mode)`
+- `store.close_business_day(p_department_id, p_business_day_id, p_memo, p_pending_receipt_status, p_ignore_closing_requirements)`
 
 ### 伝票
 
-- `get_store_tables(p_department_id)`
-- `get_store_casts(p_department_id)`
-  - 指定店舗と同じ会社内の有効店舗に所属する有効キャストを返します。
+- `store.get_tables(p_department_id)`
+- `store.get_casts(p_department_id)`
+  - 有効店舗に所属する全会社の有効キャストを返します。
   - ヘルプ対応のため、現在店舗所属キャストだけに限定しません。
-- `get_business_day_slips(p_department_id, p_business_day_id)`
-- `get_order_entry_slips(p_department_id, p_business_day_id)`
-- `get_store_order_items(p_department_id)`
-- `get_store_item_admin_catalog(p_department_id)`
-- `get_store_nomination_back_master(p_department_id)`
-- `save_store_nomination_back_master(p_department_id, p_settings)`
-- `upsert_store_item_category(p_department_id, p_item_category_id, p_category_code, p_category_name, p_sort_order, p_is_active)`
-- `upsert_store_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price, p_is_active, p_is_cast_back_target, p_cast_back_regular_unit_amount, p_cast_back_nomination_unit_amount, p_cast_back_type)`
-- `delete_store_item(p_department_id, p_item_id)`
-- `add_store_order_lines(p_department_id, p_slip_id, p_order_lines)`
-- `create_store_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_nominations, p_memo)`
-  - `p_cast_nominations` は `cast_id`, `nomination_type`, `companion_time`, `nomination_price` を持つJSON配列です。
+- `store.get_casts_admin(p_department_id)`
+  - キャスト管理画面用に、現在店舗所属キャストだけを返します。
+- `store.get_business_day_slips(p_department_id, p_business_day_id)`
+- `store.get_order_entry_slips(p_department_id, p_business_day_id)`
+- `store.get_order_items(p_department_id)`
+- `store.get_item_admin_catalog(p_department_id)`
+- `store.get_nomination_back_master(p_department_id)`
+- `store.save_nomination_back_master(p_department_id, p_settings)`
+- `store.upsert_item_category(p_department_id, p_item_category_id, p_category_code, p_category_name, p_sort_order, p_is_active)`
+- `store.upsert_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price, p_is_active, p_is_cast_back_target, p_cast_back_regular_unit_amount, p_cast_back_nomination_unit_amount, p_cast_back_type)`
+- `store.delete_item(p_department_id, p_item_id)`
+- `store.add_order_lines(p_department_id, p_slip_id, p_order_lines)`
+- `store.create_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_nominations, p_memo)`
+  - `p_cast_nominations` は `cast_id`, `nomination_kind`, `nomination_price` を持つJSON配列です。`nomination_kind` から店舗別マスタの基本種別と同伴時刻を解決します。
   - `nomination_price` は1000円から20000円まで1000円刻みで、会計額へ加算します。
   - 有効な指名バック設定がありバック単価が0円より大きい場合、`store_slip_cast_backs` に現在単価の実績を作成します。
-- `save_store_slip_adjustments(p_department_id, p_slip_id, p_adjustment_lines)`
+- `store.save_slip_adjustments(p_department_id, p_slip_id, p_adjustment_lines)`
   - 通常商品とは別枠の自由入力明細を保存します。商品マスタへは登録しません。
   - `amount` は負値を許容し、会計合計額へ直接加減します。
-- `save_store_karaoke_lines(p_department_id, p_business_day_id, p_karaoke_lines)`
+- `store.save_karaoke_lines(p_department_id, p_business_day_id, p_karaoke_lines)`
   - カラオケ商品の注文行を伝票単位で一括保存します。
   - カラオケは `store_item_master.item_type = 'karaoke'`、1回200円固定、サービス料対象です。
   - 同一伝票内ではカラオケ注文行を1行に集約し、`ordered_at` は入店時刻に合わせます。数量0はアクティブ行を残しません。
 
 ### 領収書
 
-- `get_pending_receipts(p_department_id, p_status)`
-- `quick_enter_receipt(p_department_id, p_document_id, p_payment_date, p_amount, p_account_subject, p_description, p_group_code, p_journal_payload, p_status)`
-- `mark_receipt_scan_mistake(p_department_id, p_document_id, p_status)`
-  - 領収書の管理入力は、DocManagementの `save_journal_payload` 契約に従ったpayloadを作成し、ProsperAppの `quick_enter_receipt` RPCへ渡します。DocManagementアプリや `document-api` へ直接送信しません。
+- `store.get_pending_receipts(p_department_id, p_status)`
+- `store.quick_enter_receipt(p_department_id, p_document_id, p_payment_date, p_amount, p_account_subject, p_description, p_group_code, p_journal_payload, p_status)`
+- `store.mark_receipt_scan_mistake(p_department_id, p_document_id, p_status)`
+  - 領収書の管理入力は、DocManagementの `save_journal_payload` 契約に従ったpayloadを作成し、ProsperAppの `store.quick_enter_receipt` RPCへ渡します。DocManagementアプリや `document-api` へ直接送信しません。
   - スキャンミス除外はDriveファイルを削除せず、DB上のステータス更新で入力対象から外します。
 
 ## 画面構成
@@ -232,17 +240,17 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - 商品は既存行を直接編集せず、追加と削除で運用します。
   - カラオケは `item_type = 'karaoke'` のシステム商品として商品マスタに置きます。1回200円固定で、通常の商品小計に含めてサービス料対象にします。通常の商品削除RPCでは削除できません。
   - 注文履歴は `item_name_snapshot` / `unit_price` / `amount` を保持するため、商品マスタを再参照しません。
-  - 商品削除は `delete_store_item` で商品マスタ行を削除し、既存注文行の `item_id` は切り離します。
+  - 商品削除は `store.delete_item` で商品マスタ行を削除し、既存注文行の `item_id` は切り離します。
 
 - `/Management/NominationBacks`
   - 指名種別別キャストバックの店舗別マスタです。
-  - 本指名、場内指名、同伴の3種別についてバック単価と有効/無効を保存します。
-  - 保存成功時は指名バック設定キャッシュだけを破棄します。商品候補やキャスト候補のキャッシュは破棄しません。
+  - 店舗別DBマスタに定義された指名種別についてバック単価と有効/無効を保存します。初期値は本指名、場内指名、同伴4区分で、バック単価はいずれも1000円です。
+  - 保存成功時は指名バック設定キャッシュだけを破棄します。商品候補やキャスト候補のキャッシュは破棄しません。指名バック設定キャッシュは営業日開始、営業日締めの成功時にも破棄します。
 
 - `/Slips/Edit`
   - 伝票詳細、客追加、指名追加、オーダー追加、会計処理。
   - 営業中画面の当日伝票一覧から遷移します。
-  - 指名追加は本指名をデフォルトにし、指名種別の次に1000円から20000円までの指名価格を選択します。
+  - 指名追加は店舗別DBマスタの有効な指名種別から選択し、指名種別の次に1000円から20000円までの指名価格を選択します。初期定義では本指名が先頭です。
   - 自由入力明細は通常商品とは別枠で伝票/会計に表示します。
   - カラオケは商品としてオーダー一覧に表示し、時刻列は入店時刻に固定します。異なるタイミングで追加したカラオケも同一伝票内では1行に集約し、数量のみを増減します。
   - 会計確定後は `ReceiptPrinter` 設定が有効な場合だけ、SII向け端末側ブリッジへ領収書印刷要求を非同期送信します。印刷失敗で会計確定は取り消しません。
@@ -257,11 +265,12 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `/Closing`
   - 締め作業画面。
   - 酒代入力、勤怠確認、キャスト売上額調整、領収書入力を縦並びの独立パネルで表示します。
+  - 初期表示では現在営業日と締めメモだけを取得し、各パネルの状態は表示後、フォーカス復帰時、30秒ごとの表示中自動更新でJSON handlerから取得します。
   - 営業日締めは通常の作業パネルから分離し、締め条件と最終実行ボタンを下部にまとめます。
   - 酒代入力、勤怠確認、キャスト売上額調整、領収書入力は締め前の必須作業です。未完了の必須作業は赤、確認対象は橙、完了は緑で表示します。
   - キャスト売上額調整は `/Closing/CastSalesAdjustment` の専用ページで、会計済みかつ指名キャストがいる伝票を一覧表示し、客名とキャストごとの売上分配額を一覧上で確認できるようにします。売上額調整は行末のボタンから開くモーダルで保存します。
   - 領収書入力は未入力がある場合に要入力として表示し、営業日締めのブロック条件にします。
-  - 営業日締めは、通常モードでは未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済み、領収書入力完了を満たした場合だけ実行できます。画面POSTと `close_business_day` RPCの両方で同じ条件を検証します。管理者モードでは締め条件を無視して実行できます。
+  - 営業日締めは、通常モードでは未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済み、領収書入力完了を満たした場合だけ実行できます。画面POSTと `store.close_business_day` RPCの両方で同じ条件を検証します。管理者モードでは締め条件を無視して実行できます。
 
 - `/Closing/Attendance`
   - 出勤登録を統合した勤怠入力画面。
@@ -272,7 +281,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `/Closing/Receipts`
   - 領収書簡易入力。
   - Google Driveプレビュー、DocManagement契約payload作成、Supabase RPC更新、スキャンミス除外、PDF先読みキャッシュを含みます。
-  - 入力保存時はDocManagement契約の `journal_entries`、`journal_entry_lines`、`document_journal_links` を `quick_enter_receipt` RPC payloadに含め、領収書ステータスを完了へ更新します。
+  - 入力保存時はDocManagement契約の `journal_entries`、`journal_entry_lines`、`document_journal_links` を `store.quick_enter_receipt` RPC payloadに含め、領収書ステータスを完了へ更新します。
   - スキャンミス除外はDB上の論理削除として扱い、Driveファイルは削除しません。
   - Driveファイルの取得は画面ではなく `/DrivePreview/{driveFileId}` endpoint で行います。
 

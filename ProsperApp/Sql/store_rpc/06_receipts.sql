@@ -1,7 +1,7 @@
-drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
-drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
+drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
+drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
 
-create or replace function public.get_pending_receipts(
+create or replace function store.get_pending_receipts(
     p_department_id bigint,
     p_status text default 'unprocessed'
 )
@@ -38,7 +38,7 @@ as $$
     order by d.created_at asc;
 $$;
 
-create or replace function public.quick_enter_receipt(
+create or replace function store.quick_enter_receipt(
     p_department_id bigint,
     p_document_id text,
     p_payment_date date,
@@ -74,7 +74,7 @@ begin
 end;
 $$;
 
-create or replace function public.mark_receipt_scan_mistake(
+create or replace function store.mark_receipt_scan_mistake(
     p_department_id bigint,
     p_document_id text,
     p_status text default 'excluded'

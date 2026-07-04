@@ -15,8 +15,9 @@ public partial class SlipEditModel
         var orderItemsTask = _featureGate.IsEnabled(FeatureNames.Orders)
             ? _orderRepository.GetItemsAsync(cancellationToken)
             : Task.FromResult<IReadOnlyList<StoreOrderItemOption>>([]);
+        var nominationOptionsTask = _nominationBackRepository.GetSettingsAsync(cancellationToken);
 
-        await Task.WhenAll(currentBusinessDayTask, detailTask, orderItemsTask);
+        await Task.WhenAll(currentBusinessDayTask, detailTask, orderItemsTask, nominationOptionsTask);
 
         CurrentBusinessDay = await currentBusinessDayTask;
         Detail = await detailTask;
@@ -26,6 +27,11 @@ public partial class SlipEditModel
         AttendanceCasts = CurrentBusinessDay is null
             ? []
             : await _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        NominationOptions = (await nominationOptionsTask)
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.DisplayName)
+            .ToList();
         TimeOptions = _storeClock.BuildTimeOptions(5);
         CheckoutTotals = CalculateCheckoutTotals();
     }

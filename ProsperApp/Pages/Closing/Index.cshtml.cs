@@ -56,9 +56,168 @@ public class ClosingModel(
             return NotFound();
         }
 
-        await LoadBusinessDayAsync(cancellationToken);
+        await LoadBusinessDayShellAsync(cancellationToken);
         ClosingMemo = CurrentBusinessDay?.Memo;
         return Page();
+    }
+
+    public async Task<IActionResult> OnGetOpenSlipPanelAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadBusinessDayShellAsync(cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            return new JsonResult(new
+            {
+                succeeded = true,
+                hasBusinessDay = false,
+                businessDayId = (long?)null,
+                openSlipCount = 0,
+                isAdminMode = IsAdminMode
+            });
+        }
+
+        var openSlipCount = await _businessDayRepository.GetOpenSlipCountAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            hasBusinessDay = true,
+            businessDayId = CurrentBusinessDay.BusinessDayId,
+            openSlipCount,
+            isAdminMode = IsAdminMode
+        });
+    }
+
+    public async Task<IActionResult> OnGetDrinkDeliveryPanelAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadBusinessDayShellAsync(cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            return new JsonResult(new
+            {
+                succeeded = true,
+                hasBusinessDay = false,
+                businessDayId = (long?)null,
+                amount = 0,
+                isEntered = false
+            });
+        }
+
+        var status = await _businessDayRepository.GetDrinkDeliveryStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            hasBusinessDay = true,
+            businessDayId = CurrentBusinessDay.BusinessDayId,
+            amount = status.Amount,
+            isEntered = status.IsEntered
+        });
+    }
+
+    public async Task<IActionResult> OnGetAttendancePanelAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadBusinessDayShellAsync(cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            return new JsonResult(new
+            {
+                succeeded = true,
+                hasBusinessDay = false,
+                businessDayId = (long?)null,
+                attendanceCount = 0,
+                missingClockOutCount = 0
+            });
+        }
+
+        var attendance = await _businessDayRepository.GetClosingAttendanceAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            hasBusinessDay = true,
+            businessDayId = CurrentBusinessDay.BusinessDayId,
+            attendanceCount = attendance.Count,
+            missingClockOutCount = attendance.Count(x => x.ClockOutAt is null)
+        });
+    }
+
+    public async Task<IActionResult> OnGetCastSalesAdjustmentPanelAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadBusinessDayShellAsync(cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            return new JsonResult(new
+            {
+                succeeded = true,
+                hasBusinessDay = false,
+                businessDayId = (long?)null,
+                requiredSlipCount = 0,
+                completedSlipCount = 0,
+                missingSlipCount = 0,
+                isCompleted = false
+            });
+        }
+
+        var status = await _castSalesAdjustmentRepository.GetStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            hasBusinessDay = true,
+            businessDayId = CurrentBusinessDay.BusinessDayId,
+            requiredSlipCount = status.RequiredSlipCount,
+            completedSlipCount = status.CompletedSlipCount,
+            missingSlipCount = status.MissingSlipCount,
+            isCompleted = status.IsCompleted
+        });
+    }
+
+    public async Task<IActionResult> OnGetReceiptsPanelAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadBusinessDayShellAsync(cancellationToken);
+        if (!ReceiptsEnabled || CurrentBusinessDay is null)
+        {
+            return new JsonResult(new
+            {
+                succeeded = true,
+                enabled = ReceiptsEnabled,
+                hasBusinessDay = CurrentBusinessDay is not null,
+                businessDayId = CurrentBusinessDay?.BusinessDayId,
+                pendingReceiptCount = 0
+            });
+        }
+
+        var pendingReceipts = await _receiptRepository.GetPendingAsync(cancellationToken);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            enabled = true,
+            hasBusinessDay = true,
+            businessDayId = CurrentBusinessDay.BusinessDayId,
+            pendingReceiptCount = pendingReceipts.Count
+        });
     }
 
     public async Task<IActionResult> OnPostCloseBusinessDayAsync(CancellationToken cancellationToken)
@@ -105,8 +264,7 @@ public class ClosingModel(
 
     private async Task LoadBusinessDayAsync(CancellationToken cancellationToken)
     {
-        IsAdminMode = _localSettingsProvider.GetCurrent().IsAdminMode;
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        await LoadBusinessDayShellAsync(cancellationToken);
         if (CurrentBusinessDay is null)
         {
             OpenSlipCount = 0;
@@ -161,6 +319,13 @@ public class ClosingModel(
             PendingReceiptCount = PendingReceiptCount,
             ReceiptsEnabled = ReceiptsEnabled
         };
+        BusinessDayId = CurrentBusinessDay?.BusinessDayId;
+    }
+
+    private async Task LoadBusinessDayShellAsync(CancellationToken cancellationToken)
+    {
+        IsAdminMode = _localSettingsProvider.GetCurrent().IsAdminMode;
+        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 }

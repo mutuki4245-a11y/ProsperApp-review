@@ -37,7 +37,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
     private async Task<(IReadOnlyList<DepartmentOption> Departments, string Status)> GetDepartmentsFromRpcAsync(CancellationToken ct)
     {
         var result = await RpcClient.PostArrayAsync(
-            "get_store_departments",
+            "store.get_departments",
             new { },
             ct);
         if (!result.Succeeded)
@@ -58,6 +58,12 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
             rpcStatus.Contains("Could not find", StringComparison.OrdinalIgnoreCase))
         {
             return "店舗一覧取得RPCが見つかりません。Supabase SQL Editorで Sql/store_settings_functions.sql を実行してください。";
+        }
+
+        if (rpcStatus.Contains("400", StringComparison.OrdinalIgnoreCase) ||
+            rpcStatus.Contains("invalid_function_name", StringComparison.OrdinalIgnoreCase))
+        {
+            return "店舗一覧取得RPC名がprosper-rpc Edge Functionの許可リストと一致していません。アプリとprosper-rpcを同じstore.*版へデプロイしてください。";
         }
 
         if (rpcStatus.Contains("401", StringComparison.OrdinalIgnoreCase) ||

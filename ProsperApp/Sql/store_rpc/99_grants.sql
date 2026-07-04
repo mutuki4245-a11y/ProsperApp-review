@@ -3,55 +3,57 @@
 do $$
 declare
     target_functions text[] := array[
-        'get_store_departments',
-        'get_store_context',
-        'get_current_business_day',
-        'get_open_slip_count',
-        'get_business_day_drink_delivery_status',
-        'get_business_day_closing_attendance',
-        'get_store_tables',
-        'get_store_casts',
-        'get_store_cast_admin_list',
-        'get_business_day_slips',
-        'get_order_entry_slips',
-        'get_store_order_items',
-        'get_store_item_admin_catalog',
-        'get_store_nomination_back_master',
-        'save_store_nomination_back_master',
-        'get_order_attending_casts',
-        'get_store_slip_detail',
-        'get_pending_receipts',
-        'open_business_day',
-        'open_business_day_with_attendance',
-        'save_business_day_attendance',
-        'save_business_day_drink_delivery_amount',
-        'save_business_day_closing_attendance',
-        'get_business_day_cast_sales_adjustment_status',
-        'get_cast_sales_adjustment_slips',
-        'get_cast_sales_adjustment_detail',
-        'save_cast_sales_adjustment',
-        'close_business_day',
-        'create_store_cast',
-        'delete_store_cast',
-        'upsert_store_item_category',
-        'upsert_store_item',
-        'delete_store_item',
-        'reorder_store_items',
-        'add_store_order_lines',
-        'add_store_slip_customers',
-        'add_store_slip_nominations',
-        'save_store_slip_adjustments',
-        'save_store_karaoke_lines',
-        'leave_store_slip_customer',
-        'update_store_slip_customer_label',
-        'void_store_order_line',
-        'confirm_store_checkout',
-        'create_store_slip',
-        'quick_enter_receipt',
-        'mark_receipt_scan_mistake'
+        'store.get_departments',
+        'store.get_context',
+        'store.get_current_business_day',
+        'store.get_open_slip_count',
+        'store.get_business_day_drink_delivery_status',
+        'store.get_business_day_closing_attendance',
+        'store.get_tables',
+        'store.get_casts',
+        'store.get_casts_admin',
+        'store.get_business_day_slips',
+        'store.get_order_entry_slips',
+        'store.get_order_items',
+        'store.get_item_admin_catalog',
+        'store.get_nomination_back_master',
+        'store.save_nomination_back_master',
+        'store.get_order_attending_casts',
+        'store.get_slip_detail',
+        'store.get_pending_receipts',
+        'store.open_business_day',
+        'store.open_business_day_with_attendance',
+        'store.save_business_day_attendance',
+        'store.save_business_day_drink_delivery_amount',
+        'store.save_business_day_closing_attendance',
+        'store.get_business_day_cast_sales_adjustment_status',
+        'store.get_cast_sales_adjustment_slips',
+        'store.get_cast_sales_adjustment_detail',
+        'store.save_cast_sales_adjustment',
+        'store.close_business_day',
+        'store.create_cast',
+        'store.delete_cast',
+        'store.upsert_item_category',
+        'store.upsert_item',
+        'store.delete_item',
+        'store.reorder_items',
+        'store.add_order_lines',
+        'store.add_slip_customers',
+        'store.add_slip_nominations',
+        'store.save_slip_adjustments',
+        'store.save_karaoke_lines',
+        'store.leave_slip_customer',
+        'store.update_slip_customer_label',
+        'store.void_order_line',
+        'store.confirm_checkout',
+        'store.create_slip',
+        'store.quick_enter_receipt',
+        'store.mark_receipt_scan_mistake'
     ];
     r record;
 begin
+    revoke usage on schema store from public, anon, authenticated, service_role;
+
     for r in
         select
             n.nspname as schema_name,
@@ -59,8 +61,7 @@ begin
             pg_get_function_identity_arguments(p.oid) as identity_arguments
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public'
-          and p.proname = any(target_functions)
+        where (n.nspname || '.' || p.proname) = any(target_functions)
     loop
         execute format(
             'revoke execute on function %I.%I(%s) from public, anon, authenticated, service_role',

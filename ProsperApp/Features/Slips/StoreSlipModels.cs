@@ -266,32 +266,20 @@ public class SlipDetailNomination
     public long CastId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? DepartmentName { get; set; }
+    public string NominationKind { get; set; } = string.Empty;
     public string NominationType { get; set; } = string.Empty;
+    public string? NominationDisplayNameFromMaster { get; set; }
     public decimal NominationPrice { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public string Status { get; set; } = string.Empty;
 
     public string CastDisplayName => DisplayName;
 
-    public string NominationDisplayName => NominationType switch
-    {
-        "companion" => ToCompanionDisplayName(),
-        "in_store" => "場内指名",
-        "nomination" => "本指名",
-        _ => NominationType
-    };
-
-    private string ToCompanionDisplayName()
-    {
-        return StoreBusinessTime.FormatStoreTime(StartedAt) switch
-        {
-            "19:29" => "同伴 19:29まで",
-            "19:59" => "同伴 19:59まで",
-            "20:59" => "同伴 20:59まで",
-            "21:00" => "同伴 21:00以降",
-            _ => "同伴"
-        };
-    }
+    public string NominationDisplayName => !string.IsNullOrWhiteSpace(NominationDisplayNameFromMaster)
+        ? NominationDisplayNameFromMaster
+        : !string.IsNullOrWhiteSpace(NominationKind)
+            ? NominationKind
+            : NominationType;
 }
 
 public class SlipDetailOrderLine

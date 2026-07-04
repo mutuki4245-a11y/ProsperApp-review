@@ -1,6 +1,6 @@
-drop function if exists public.get_business_day_cast_sales_adjustment_status(bigint, bigint);
+drop function if exists store.get_business_day_cast_sales_adjustment_status(bigint, bigint);
 
-create or replace function public.get_business_day_cast_sales_adjustment_status(
+create or replace function store.get_business_day_cast_sales_adjustment_status(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -47,9 +47,9 @@ as $$
     from slip_status;
 $$;
 
-drop function if exists public.get_cast_sales_adjustment_slips(bigint, bigint);
+drop function if exists store.get_cast_sales_adjustment_slips(bigint, bigint);
 
-create or replace function public.get_cast_sales_adjustment_slips(
+create or replace function store.get_cast_sales_adjustment_slips(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -184,9 +184,9 @@ as $$
     order by ts.checkout_at asc, ts.slip_id asc;
 $$;
 
-drop function if exists public.get_cast_sales_adjustment_detail(bigint, bigint);
+drop function if exists store.get_cast_sales_adjustment_detail(bigint, bigint);
 
-create or replace function public.get_cast_sales_adjustment_detail(
+create or replace function store.get_cast_sales_adjustment_detail(
     p_department_id bigint,
     p_slip_id bigint
 )
@@ -207,7 +207,9 @@ returns table (
     cast_id bigint,
     cast_display_name text,
     cast_department_name text,
+    nomination_kind text,
     nomination_type text,
+    nomination_display_name text,
     started_at timestamp with time zone,
     sales_amount numeric,
     source_amount_type text,
@@ -234,7 +236,9 @@ as $$
         sc.cast_id,
         cm.display_name as cast_display_name,
         d.department_name as cast_department_name,
+        sc.nomination_kind,
         sc.nomination_type,
+        m.display_name as nomination_display_name,
         sc.started_at,
         a.sales_amount,
         a.source_amount_type,
@@ -251,6 +255,10 @@ as $$
       on cm.cast_id = sc.cast_id
     left join public.department_master d
       on d.department_id = cm.department_id
+    left join public.store_nomination_back_master m
+      on m.company_id = s.company_id
+     and m.department_id = s.department_id
+     and m.nomination_kind = sc.nomination_kind
     left join public.store_table_master t
       on t.table_id = s.table_id
     left join public.store_slip_cast_sales_adjustments a
@@ -262,9 +270,9 @@ as $$
     order by sc.started_at asc nulls last, sc.slip_cast_id asc;
 $$;
 
-drop function if exists public.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text);
+drop function if exists store.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text);
 
-create or replace function public.save_cast_sales_adjustment(
+create or replace function store.save_cast_sales_adjustment(
     p_department_id bigint,
     p_slip_id bigint,
     p_adjustments jsonb default '[]'::jsonb,

@@ -26,7 +26,7 @@ public class SupabaseStoreCastAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_cast_admin_list",
+            "store.get_casts_admin",
             new { p_department_id = departmentId },
             ct);
 
@@ -55,7 +55,7 @@ public class SupabaseStoreCastAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "create_store_cast",
+            "store.create_cast",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -92,7 +92,7 @@ public class SupabaseStoreCastAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "delete_store_cast",
+            "store.delete_cast",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,

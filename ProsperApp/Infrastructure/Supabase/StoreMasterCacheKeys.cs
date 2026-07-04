@@ -18,7 +18,7 @@ internal static class StoreMasterCacheKeys
 
     public static string CastAdminList(long departmentId) => $"store-master:{departmentId}:cast-admin-list";
 
-    public static string NominationBackMaster(long departmentId) => $"store-master:{departmentId}:nomination-back-master";
+    public static string NominationBackMaster(long departmentId) => $"store-runtime:{departmentId}:nomination-back-master";
 
     public static string CurrentBusinessDay(long departmentId) => $"store-runtime:{departmentId}:current-business-day";
 

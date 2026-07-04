@@ -16,7 +16,7 @@ public class SupabaseReceiptRepository(
     public async Task<IReadOnlyList<PendingReceiptItem>> GetPendingAsync(CancellationToken ct)
     {
         var rows = await PostRpcArrayAsync(
-            "get_pending_receipts",
+            "store.get_pending_receipts",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -57,13 +57,13 @@ public class SupabaseReceiptRepository(
         var companyId = await GetCompanyIdAsync(ct);
         if (companyId is null)
         {
-            return SaveReceiptResult.Failed("店舗の会社IDを取得できません。店舗設定とget_store_context RPCを確認してください。");
+            return SaveReceiptResult.Failed("店舗の会社IDを取得できません。店舗設定とstore.get_context RPCを確認してください。");
         }
 
         var journalPayload = BuildJournalPayload(input, companyId.Value, CurrentStoreDepartmentId);
 
         var result = await RpcClient.PostArrayAsync(
-            "quick_enter_receipt",
+            "store.quick_enter_receipt",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -101,7 +101,7 @@ public class SupabaseReceiptRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "mark_receipt_scan_mistake",
+            "store.mark_receipt_scan_mistake",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -140,7 +140,7 @@ public class SupabaseReceiptRepository(
     private async Task<long?> GetCompanyIdAsync(CancellationToken ct)
     {
         var rows = await PostRpcArrayAsync(
-            "get_store_context",
+            "store.get_context",
             new { p_department_id = CurrentStoreDepartmentId },
             ct);
 

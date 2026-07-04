@@ -27,7 +27,7 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_item_admin_catalog",
+            "store.get_item_admin_catalog",
             new { p_department_id = departmentId },
             ct);
 
@@ -83,7 +83,7 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "upsert_store_item_category",
+            "store.upsert_item_category",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -119,7 +119,7 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "upsert_store_item",
+            "store.upsert_item",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -164,7 +164,7 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "delete_store_item",
+            "store.delete_item",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -206,7 +206,7 @@ public class SupabaseStoreItemAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "reorder_store_items",
+            "store.reorder_items",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,

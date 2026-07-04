@@ -15,7 +15,7 @@ public class SupabaseStoreOrderRepository(
     public async Task<IReadOnlyList<StoreOrderSlipOption>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct)
     {
         var rows = await PostRpcArrayAsync(
-            "get_order_entry_slips",
+            "store.get_order_entry_slips",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -52,7 +52,7 @@ public class SupabaseStoreOrderRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_order_items",
+            "store.get_order_items",
             new { p_department_id = departmentId },
             ct);
 
@@ -95,7 +95,7 @@ public class SupabaseStoreOrderRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_order_attending_casts",
+            "store.get_order_attending_casts",
             new
             {
                 p_department_id = departmentId,
@@ -145,7 +145,7 @@ public class SupabaseStoreOrderRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "add_store_order_lines",
+            "store.add_order_lines",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,

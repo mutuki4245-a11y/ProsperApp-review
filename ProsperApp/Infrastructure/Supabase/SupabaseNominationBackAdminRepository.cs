@@ -27,7 +27,7 @@ public class SupabaseNominationBackAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_nomination_back_master",
+            "store.get_nomination_back_master",
             new { p_department_id = departmentId },
             ct);
 
@@ -39,19 +39,21 @@ public class SupabaseNominationBackAdminRepository(
         var settings = result.Rows
             .Select(row => new NominationBackMasterItem
             {
+                NominationKind = ReadString(row, "nomination_kind") ?? ReadString(row, "nomination_type") ?? string.Empty,
                 NominationType = ReadString(row, "nomination_type") ?? string.Empty,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                CompanionTime = ReadString(row, "companion_time"),
                 BackType = ReadString(row, "back_type") ?? "nomination",
                 BackUnitAmount = ReadDecimal(row, "back_unit_amount") ?? 0,
                 SortOrder = (int)(ReadLong(row, "sort_order") ?? 0),
                 IsActive = ReadBool(row, "is_active") ?? true
             })
-            .Where(x => !string.IsNullOrWhiteSpace(x.NominationType))
+            .Where(x => !string.IsNullOrWhiteSpace(x.NominationKind))
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.DisplayName)
             .ToList();
 
-        _memoryCache.Set(cacheKey, settings, StoreMasterCacheKeys.CreateOptions());
+        _memoryCache.Set(cacheKey, settings, StoreMasterCacheKeys.CreateRuntimeOptions());
         return settings;
     }
 
@@ -65,9 +67,12 @@ public class SupabaseNominationBackAdminRepository(
         }
 
         var payload = settings
-            .Where(x => !string.IsNullOrWhiteSpace(x.NominationType))
+            .Where(x => !string.IsNullOrWhiteSpace(x.NominationKind))
             .Select(x => new NominationBackMasterPayload(
+                x.NominationKind.Trim(),
                 x.NominationType.Trim(),
+                x.DisplayName.Trim(),
+                string.IsNullOrWhiteSpace(x.CompanionTime) ? null : x.CompanionTime.Trim(),
                 x.BackUnitAmount,
                 x.SortOrder,
                 x.IsActive))
@@ -79,7 +84,7 @@ public class SupabaseNominationBackAdminRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "save_store_nomination_back_master",
+            "store.save_nomination_back_master",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -104,7 +109,10 @@ public class SupabaseNominationBackAdminRepository(
     }
 
     private sealed record NominationBackMasterPayload(
+        [property: JsonPropertyName("nomination_kind")] string NominationKind,
         [property: JsonPropertyName("nomination_type")] string NominationType,
+        [property: JsonPropertyName("display_name")] string DisplayName,
+        [property: JsonPropertyName("companion_time")] string? CompanionTime,
         [property: JsonPropertyName("back_unit_amount")] decimal BackUnitAmount,
         [property: JsonPropertyName("sort_order")] int SortOrder,
         [property: JsonPropertyName("is_active")] bool IsActive);

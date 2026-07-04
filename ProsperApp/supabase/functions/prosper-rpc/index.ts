@@ -27,20 +27,25 @@ type RpcDefinition = {
   params: RpcParam[];
 };
 
+type RpcName = {
+  schemaName: string;
+  functionName: string;
+};
+
 type RequestBody = {
   function_name?: string;
   payload?: Record<string, unknown> | unknown;
 };
 
 const rpcDefinitions = new Map<string, RpcDefinition>([
-  ["get_store_departments", { result: "rows", params: [] }],
-  ["get_store_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["get_store_tables", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["get_store_casts", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["get_store_cast_admin_list", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_departments", { result: "rows", params: [] }],
+  ["store.get_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_tables", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_casts", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_casts_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
-    "get_business_day_slips",
+    "store.get_business_day_slips",
     {
       result: "rows",
       params: [
@@ -50,7 +55,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_order_entry_slips",
+    "store.get_order_entry_slips",
     {
       result: "rows",
       params: [
@@ -59,11 +64,11 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       ],
     },
   ],
-  ["get_store_order_items", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["get_store_item_admin_catalog", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["get_store_nomination_back_master", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_order_items", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_item_admin_catalog", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_nomination_back_master", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
-    "save_store_nomination_back_master",
+    "store.save_nomination_back_master",
     {
       result: "rows",
       params: [
@@ -73,7 +78,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_store_slip_detail",
+    "store.get_slip_detail",
     {
       result: "rows",
       params: [
@@ -83,7 +88,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_order_attending_casts",
+    "store.get_order_attending_casts",
     {
       result: "rows",
       params: [
@@ -93,7 +98,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_pending_receipts",
+    "store.get_pending_receipts",
     {
       result: "rows",
       params: [
@@ -103,7 +108,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_business_day_drink_delivery_status",
+    "store.get_business_day_drink_delivery_status",
     {
       result: "rows",
       params: [
@@ -113,7 +118,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_business_day_closing_attendance",
+    "store.get_business_day_closing_attendance",
     {
       result: "rows",
       params: [
@@ -123,7 +128,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_business_day_cast_sales_adjustment_status",
+    "store.get_business_day_cast_sales_adjustment_status",
     {
       result: "rows",
       params: [
@@ -133,7 +138,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_cast_sales_adjustment_slips",
+    "store.get_cast_sales_adjustment_slips",
     {
       result: "rows",
       params: [
@@ -143,7 +148,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_cast_sales_adjustment_detail",
+    "store.get_cast_sales_adjustment_detail",
     {
       result: "rows",
       params: [
@@ -153,7 +158,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "open_business_day",
+    "store.open_business_day",
     {
       result: "rows",
       params: [
@@ -164,7 +169,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "open_business_day_with_attendance",
+    "store.open_business_day_with_attendance",
     {
       result: "rows",
       params: [
@@ -176,7 +181,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "save_business_day_attendance",
+    "store.save_business_day_attendance",
     {
       result: "rows",
       params: [
@@ -187,7 +192,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "get_open_slip_count",
+    "store.get_open_slip_count",
     {
       result: "scalar",
       params: [
@@ -197,7 +202,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "save_business_day_drink_delivery_amount",
+    "store.save_business_day_drink_delivery_amount",
     {
       result: "scalar",
       params: [
@@ -208,7 +213,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "save_business_day_closing_attendance",
+    "store.save_business_day_closing_attendance",
     {
       result: "scalar",
       params: [
@@ -219,7 +224,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "close_business_day",
+    "store.close_business_day",
     {
       result: "rows",
       params: [
@@ -232,7 +237,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "create_store_cast",
+    "store.create_cast",
     {
       result: "rows",
       params: [
@@ -242,7 +247,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "delete_store_cast",
+    "store.delete_cast",
     {
       result: "rows",
       params: [
@@ -252,7 +257,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "upsert_store_item_category",
+    "store.upsert_item_category",
     {
       result: "rows",
       params: [
@@ -266,7 +271,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "upsert_store_item",
+    "store.upsert_item",
     {
       result: "rows",
       params: [
@@ -284,7 +289,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "delete_store_item",
+    "store.delete_item",
     {
       result: "rows",
       params: [
@@ -294,7 +299,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "reorder_store_items",
+    "store.reorder_items",
     {
       result: "rows",
       params: [
@@ -304,7 +309,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "create_store_slip",
+    "store.create_slip",
     {
       result: "rows",
       params: [
@@ -318,7 +323,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "add_store_slip_customers",
+    "store.add_slip_customers",
     {
       result: "rows",
       params: [
@@ -330,7 +335,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "add_store_slip_nominations",
+    "store.add_slip_nominations",
     {
       result: "rows",
       params: [
@@ -341,7 +346,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "save_store_slip_adjustments",
+    "store.save_slip_adjustments",
     {
       result: "rows",
       params: [
@@ -352,7 +357,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "save_store_karaoke_lines",
+    "store.save_karaoke_lines",
     {
       result: "rows",
       params: [
@@ -363,7 +368,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "leave_store_slip_customer",
+    "store.leave_slip_customer",
     {
       result: "rows",
       params: [
@@ -374,7 +379,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "update_store_slip_customer_label",
+    "store.update_slip_customer_label",
     {
       result: "rows",
       params: [
@@ -385,7 +390,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "void_store_order_line",
+    "store.void_order_line",
     {
       result: "rows",
       params: [
@@ -395,7 +400,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "add_store_order_lines",
+    "store.add_order_lines",
     {
       result: "rows",
       params: [
@@ -406,7 +411,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "confirm_store_checkout",
+    "store.confirm_checkout",
     {
       result: "rows",
       params: [
@@ -419,7 +424,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "quick_enter_receipt",
+    "store.quick_enter_receipt",
     {
       result: "rows",
       params: [
@@ -436,7 +441,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "mark_receipt_scan_mistake",
+    "store.mark_receipt_scan_mistake",
     {
       result: "rows",
       params: [
@@ -447,7 +452,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "save_cast_sales_adjustment",
+    "store.save_cast_sales_adjustment",
     {
       result: "scalar",
       params: [
@@ -491,14 +496,15 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "invalid_json" }, 400);
   }
 
-  const functionName = body.function_name ?? "";
-  const definition = rpcDefinitions.get(functionName);
-  if (!definition || !isSqlIdentifier(functionName)) {
+  const requestedFunctionName = body.function_name ?? "";
+  const definition = rpcDefinitions.get(requestedFunctionName);
+  const rpcName = parseRpcName(requestedFunctionName);
+  if (!definition || !rpcName) {
     return jsonResponse({ error: "invalid_function_name" }, 400);
   }
 
   try {
-    const result = await runRpc(functionName, definition, body.payload);
+    const result = await runRpc(rpcName, definition, body.payload);
     return definition.result === "scalar"
       ? jsonResponse({ result }, 200)
       : jsonResponse({ data: result }, 200);
@@ -511,15 +517,15 @@ Deno.serve(async (req) => {
   }
 });
 
-async function runRpc(functionName: string, definition: RpcDefinition, payload: unknown): Promise<unknown> {
+async function runRpc(rpcName: RpcName, definition: RpcDefinition, payload: unknown): Promise<unknown> {
   const source = isRecord(payload) ? payload : {};
   const values = definition.params.map((param) => toSqlValue(source[param.name], param.type));
   const args = definition.params
     .map((param, index) => `$${index + 1}::${param.type}`)
     .join(", ");
   const query = definition.result === "scalar"
-    ? `select public.${functionName}(${args}) as result`
-    : `select * from public.${functionName}(${args})`;
+    ? `select ${rpcName.schemaName}.${rpcName.functionName}(${args}) as result`
+    : `select * from ${rpcName.schemaName}.${rpcName.functionName}(${args})`;
 
   const rows = await sql!.unsafe(query, values);
   return definition.result === "scalar" ? rows[0]?.result ?? null : rows;
@@ -613,6 +619,18 @@ function toSqlValue(value: unknown, type: PgType): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseRpcName(value: string): RpcName | null {
+  const parts = value.split(".");
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const [schemaName, functionName] = parts;
+  return isSqlIdentifier(schemaName) && isSqlIdentifier(functionName)
+    ? { schemaName, functionName }
+    : null;
 }
 
 function isSqlIdentifier(value: string): boolean {

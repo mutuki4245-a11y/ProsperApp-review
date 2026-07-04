@@ -1,17 +1,12 @@
 @using ProsperApp.Models
 @model SlipEditModel
 @{
-    var nominationOptions = new[]
-    {
-        ("nomination", "本指名"),
-        ("in_store", "場内指名"),
-        ("companion_until_1929", "同伴 19:29まで"),
-        ("companion_until_1959", "同伴 19:59まで"),
-        ("companion_until_2059", "同伴 20:59まで"),
-        ("companion_after_2100", "同伴 21:00以降")
-    };
+    var nominationOptions = Model.NominationOptions
+        .Select(x => (Value: x.NominationKind, Label: x.DisplayName))
+        .ToArray();
+    var hasNominationOptions = nominationOptions.Length > 0;
     var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
-    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = "nomination" };
+    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = nominationOptions.FirstOrDefault().Value };
 }
 
 <div class="slip-create__panel" id="slipNominationsPanel">
@@ -19,7 +14,7 @@
         <h2>指名一覧</h2>
         @if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0)
         {
-            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addNominationModal">指名を追加</button>
+            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addNominationModal" disabled="@(!hasNominationOptions)">指名を追加</button>
         }
     </div>
 
@@ -66,12 +61,20 @@
                         </td>
                     </tr>
                 }
+                @if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0 && !hasNominationOptions)
+                {
+                    <tr class="slip-detail-add-row">
+                        <td colspan="4">
+                            <div class="alert alert-secondary mb-0">指名種別マスタが未登録です。</div>
+                        </td>
+                    </tr>
+                }
             </tbody>
         </table>
     </div>
 </div>
 
-@if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0)
+@if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0 && hasNominationOptions)
 {
     <div class="modal fade" id="addNominationModal" tabindex="-1" aria-labelledby="addNominationModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-scrollable">
@@ -95,13 +98,13 @@
                                     <option value="">指名区分</option>
                                     @foreach (var option in nominationOptions)
                                     {
-                                        if (addNomination.NominationKind == option.Item1)
+                                        if (addNomination.NominationKind == option.Value)
                                         {
-                                            <option value="@option.Item1" selected>@option.Item2</option>
+                                            <option value="@option.Value" selected>@option.Label</option>
                                         }
                                         else
                                         {
-                                            <option value="@option.Item1">@option.Item2</option>
+                                            <option value="@option.Value">@option.Label</option>
                                         }
                                     }
                                 </select>

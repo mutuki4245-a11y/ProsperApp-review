@@ -3,9 +3,9 @@ begin;
 alter table public.cast_master
     add column if not exists joined_on date not null default ((now() at time zone 'Asia/Tokyo')::date);
 
-drop function if exists public.get_store_context(bigint);
+drop function if exists store.get_context(bigint);
 
-create or replace function public.get_store_context(p_department_id bigint)
+create or replace function store.get_context(p_department_id bigint)
 returns table (
     company_id bigint,
     department_id bigint,
@@ -40,7 +40,7 @@ as $$
     limit 1;
 $$;
 
-create or replace function public.get_current_business_day(p_department_id bigint)
+create or replace function store.get_current_business_day(p_department_id bigint)
 returns table (
     business_day_id bigint,
     company_id bigint,
@@ -71,7 +71,7 @@ as $$
     limit 1;
 $$;
 
-create or replace function public.open_business_day(
+create or replace function store.open_business_day(
     p_department_id bigint,
     p_business_date date,
     p_memo text default null
@@ -143,9 +143,9 @@ begin
 end;
 $$;
 
-drop function if exists public.open_business_day_with_attendance(bigint, date, bigint[], text);
+drop function if exists store.open_business_day_with_attendance(bigint, date, bigint[], text);
 
-create or replace function public.open_business_day_with_attendance(
+create or replace function store.open_business_day_with_attendance(
     p_department_id bigint,
     p_business_date date,
     p_attendance_entries jsonb,
@@ -174,7 +174,7 @@ declare
 begin
     select *
       into v_business_day
-    from public.open_business_day(p_department_id, p_business_date, p_memo)
+    from store.open_business_day(p_department_id, p_business_date, p_memo)
     limit 1;
 
     if v_business_day.business_day_id is null then
@@ -269,9 +269,9 @@ $$;
 
 drop function if exists public.add_business_day_attendance(bigint, bigint, jsonb);
 
-drop function if exists public.save_business_day_attendance(bigint, bigint, jsonb);
+drop function if exists store.save_business_day_attendance(bigint, bigint, jsonb);
 
-create or replace function public.save_business_day_attendance(
+create or replace function store.save_business_day_attendance(
     p_department_id bigint,
     p_business_day_id bigint,
     p_attendance_entries jsonb
@@ -410,7 +410,7 @@ begin
 end;
 $$;
 
-create or replace function public.get_business_day_closing_attendance(
+create or replace function store.get_business_day_closing_attendance(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -455,7 +455,7 @@ as $$
         a.attendance_id asc;
 $$;
 
-create or replace function public.save_business_day_closing_attendance(
+create or replace function store.save_business_day_closing_attendance(
     p_department_id bigint,
     p_business_day_id bigint,
     p_attendance_entries jsonb
@@ -566,7 +566,7 @@ begin
 end;
 $$;
 
-create or replace function public.get_open_slip_count(
+create or replace function store.get_open_slip_count(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -582,7 +582,7 @@ as $$
       and s.status = 'open';
 $$;
 
-create or replace function public.get_business_day_drink_delivery_status(
+create or replace function store.get_business_day_drink_delivery_status(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -605,7 +605,7 @@ $$;
 
 drop function if exists public.get_business_day_drink_delivery_amount(bigint, bigint);
 
-create or replace function public.save_business_day_drink_delivery_amount(
+create or replace function store.save_business_day_drink_delivery_amount(
     p_department_id bigint,
     p_business_day_id bigint,
     p_drink_delivery_amount numeric
@@ -642,11 +642,11 @@ begin
 end;
 $$;
 
-drop function if exists public.close_business_day(bigint, bigint, text);
-drop function if exists public.close_business_day(bigint, bigint, text, text);
-drop function if exists public.close_business_day(bigint, bigint, text, text, boolean);
+drop function if exists store.close_business_day(bigint, bigint, text);
+drop function if exists store.close_business_day(bigint, bigint, text, text);
+drop function if exists store.close_business_day(bigint, bigint, text, text, boolean);
 
-create or replace function public.close_business_day(
+create or replace function store.close_business_day(
     p_department_id bigint,
     p_business_day_id bigint,
     p_memo text default null,
@@ -688,7 +688,7 @@ begin
     end if;
 
     if coalesce(p_ignore_closing_requirements, false) = false then
-        select public.get_open_slip_count(p_department_id, p_business_day_id)
+        select store.get_open_slip_count(p_department_id, p_business_day_id)
           into v_open_slip_count;
 
         if coalesce(v_open_slip_count, 0) > 0 then
@@ -719,7 +719,7 @@ begin
 
         select s.missing_slip_count
           into v_cast_sales_adjustment_missing_count
-        from public.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id) s
+        from store.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id) s
         limit 1;
 
         if coalesce(v_cast_sales_adjustment_missing_count, 0) > 0 then

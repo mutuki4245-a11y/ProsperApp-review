@@ -89,7 +89,7 @@ public partial class SlipEditModel
     {
         if (AddNominationsInput.CastNominations.Count == 0)
         {
-            AddNominationsInput.CastNominations.Add(new CastNominationInputModel { NominationKind = "nomination" });
+            AddNominationsInput.CastNominations.Add(new CastNominationInputModel { NominationKind = GetDefaultNominationKind() });
         }
     }
 
@@ -120,9 +120,7 @@ public partial class SlipEditModel
             return nomination.NominationKind.Trim();
         }
 
-        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName)
-            ? "nomination"
-            : null;
+        return null;
     }
 
     private void ValidateNominations()
@@ -139,6 +137,9 @@ public partial class SlipEditModel
         }
 
         var allowedCastIds = AttendanceCasts.Select(x => x.CastId).ToHashSet();
+        var allowedNominationKinds = NominationOptions
+            .Select(x => x.NominationKind)
+            .ToHashSet(StringComparer.Ordinal);
         for (var i = 0; i < AddNominationsInput.CastNominations.Count; i++)
         {
             var nomination = AddNominationsInput.CastNominations[i];
@@ -147,7 +148,11 @@ public partial class SlipEditModel
                 nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.SearchDisplayName;
             }
 
-            if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !AllowedNominationKinds.Contains(nomination.NominationKind))
+            if (allowedNominationKinds.Count == 0)
+            {
+                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationKind", "指名種別マスタを登録してください。");
+            }
+            else if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !allowedNominationKinds.Contains(nomination.NominationKind))
             {
                 ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationKind", "指名区分を選択してください。");
             }
@@ -176,5 +181,11 @@ public partial class SlipEditModel
     private static bool IsValidNominationPrice(decimal price)
     {
         return price is >= 1000 and <= 20000 && price % 1000 == 0;
+    }
+
+    private string? GetDefaultNominationKind()
+    {
+        return NominationOptions.FirstOrDefault(x => string.Equals(x.NominationType, "nomination", StringComparison.Ordinal))?.NominationKind
+            ?? NominationOptions.FirstOrDefault()?.NominationKind;
     }
 }

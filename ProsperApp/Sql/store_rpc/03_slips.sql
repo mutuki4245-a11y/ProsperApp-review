@@ -1,6 +1,6 @@
-drop function if exists public.get_store_slip_detail(bigint, bigint);
+drop function if exists store.get_slip_detail(bigint, bigint);
 
-create or replace function public.get_store_slip_detail(
+create or replace function store.get_slip_detail(
     p_department_id bigint,
     p_slip_id bigint
 )
@@ -39,7 +39,9 @@ returns table (
     ordered_at timestamp with time zone,
     order_status text,
     charge_line_id bigint,
-    charge_type text
+    charge_type text,
+    nomination_kind text,
+    nomination_display_name text
 )
 language sql
 security definer
@@ -80,7 +82,9 @@ as $$
         null::timestamp with time zone as ordered_at,
         null::text as order_status,
         null::bigint as charge_line_id,
-        null::text as charge_type
+        null::text as charge_type,
+        null::text as nomination_kind,
+        null::text as nomination_display_name
     from public.store_slips s
     left join public.store_table_master t
       on t.table_id = s.table_id
@@ -124,6 +128,8 @@ as $$
         null::timestamp with time zone,
         null::text,
         null::bigint,
+        null::text,
+        null::text,
         null::text
     from public.store_slips s
     join public.store_slip_customers c
@@ -170,7 +176,9 @@ as $$
         null::timestamp with time zone,
         null::text,
         null::bigint,
-        null::text
+        null::text,
+        sc.nomination_kind,
+        m.display_name
     from public.store_slips s
     join public.store_slip_casts sc
       on sc.slip_id = s.slip_id
@@ -178,6 +186,10 @@ as $$
       on cm.cast_id = sc.cast_id
     left join public.department_master d
       on d.department_id = cm.department_id
+    left join public.store_nomination_back_master m
+      on m.company_id = s.company_id
+     and m.department_id = s.department_id
+     and m.nomination_kind = sc.nomination_kind
     left join public.store_table_master t
       on t.table_id = s.table_id
     where s.slip_id = p_slip_id
@@ -220,6 +232,8 @@ as $$
         ol.ordered_at,
         ol.status,
         null::bigint,
+        null::text,
+        null::text,
         null::text
     from public.store_slips s
     join public.store_order_lines ol
@@ -268,7 +282,9 @@ as $$
         cl.created_at,
         cl.status,
         cl.charge_line_id,
-        cl.charge_type
+        cl.charge_type,
+        null::text,
+        null::text
     from public.store_slips s
     join public.store_slip_charge_lines cl
       on cl.slip_id = s.slip_id
@@ -280,9 +296,9 @@ as $$
     order by row_type desc, line_no asc nulls first, ordered_at asc nulls first, started_at asc nulls first;
 $$;
 
-drop function if exists public.add_store_slip_customers(bigint, bigint, text[]);
+drop function if exists store.add_slip_customers(bigint, bigint, text[]);
 
-create or replace function public.add_store_slip_customers(
+create or replace function store.add_slip_customers(
     p_department_id bigint,
     p_slip_id bigint,
     p_customer_labels text[] default array[]::text[],
@@ -360,7 +376,7 @@ begin
 end;
 $$;
 
-create or replace function public.add_store_slip_nominations(
+create or replace function store.add_slip_nominations(
     p_department_id bigint,
     p_slip_id bigint,
     p_cast_nominations jsonb default '[]'::jsonb
@@ -377,6 +393,7 @@ declare
     v_slip public.store_slips%rowtype;
     v_nomination jsonb;
     v_cast_id bigint;
+    v_nomination_kind text;
     v_nomination_type text;
     v_nomination_price numeric(12, 0);
     v_companion_time time;
@@ -417,7 +434,7 @@ begin
         )
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
-        v_nomination_type := nullif(trim(coalesce(v_nomination->>'nomination_type', '')), '');
+        v_nomination_kind := nullif(trim(coalesce(v_nomination->>'nomination_kind', '')), '');
         v_nomination_price := nullif(v_nomination->>'nomination_price', '')::numeric;
 
         if v_cast_id is null then
@@ -431,17 +448,21 @@ begin
             raise exception 'invalid_nomination_price';
         end if;
 
-        if v_nomination_type not in ('nomination', 'in_store', 'companion') then
+        select
+            m.nomination_type,
+            m.companion_time
+          into v_nomination_type, v_companion_time
+        from public.store_nomination_back_master m
+        where m.company_id = v_company_id
+          and m.department_id = p_department_id
+          and m.nomination_kind = v_nomination_kind
+          and m.back_type = 'nomination'
+          and m.is_active = true
+        limit 1;
+
+        if v_nomination_type is null then
             raise exception 'invalid_nomination_type';
         end if;
-
-        v_companion_time := case nullif(v_nomination->>'companion_time', '')
-            when '19:29' then time '19:29'
-            when '19:59' then time '19:59'
-            when '20:59' then time '20:59'
-            when '21:00' then time '21:00'
-            else null
-        end;
 
         if v_nomination_type = 'companion' and v_companion_time is null then
             raise exception 'invalid_companion_time';
@@ -470,6 +491,7 @@ begin
         insert into public.store_slip_casts (
             slip_id,
             cast_id,
+            nomination_kind,
             nomination_type,
             nomination_price,
             started_at,
@@ -478,6 +500,7 @@ begin
         values (
             p_slip_id,
             v_cast_id,
+            v_nomination_kind,
             v_nomination_type,
             v_nomination_price,
             v_started_at,
@@ -493,6 +516,7 @@ begin
             company_id,
             department_id,
             cast_id,
+            nomination_kind,
             nomination_type,
             back_type,
             quantity,
@@ -508,6 +532,7 @@ begin
             v_company_id,
             p_department_id,
             v_cast_id,
+            v_nomination_kind,
             v_nomination_type,
             'nomination',
             1,
@@ -517,7 +542,7 @@ begin
         from public.store_nomination_back_master m
         where m.company_id = v_company_id
           and m.department_id = p_department_id
-          and m.nomination_type = v_nomination_type
+          and m.nomination_kind = v_nomination_kind
           and m.back_type = 'nomination'
           and m.is_active = true
           and m.back_unit_amount > 0;
@@ -529,7 +554,7 @@ begin
 end;
 $$;
 
-create or replace function public.leave_store_slip_customer(
+create or replace function store.leave_slip_customer(
     p_department_id bigint,
     p_slip_customer_id bigint,
     p_left_at timestamp with time zone
@@ -586,7 +611,7 @@ begin
 end;
 $$;
 
-create or replace function public.save_store_slip_adjustments(
+create or replace function store.save_slip_adjustments(
     p_department_id bigint,
     p_slip_id bigint,
     p_adjustment_lines jsonb default '[]'::jsonb
@@ -689,7 +714,7 @@ begin
 end;
 $$;
 
-create or replace function public.save_store_karaoke_lines(
+create or replace function store.save_karaoke_lines(
     p_department_id bigint,
     p_business_day_id bigint,
     p_karaoke_lines jsonb default '[]'::jsonb
@@ -870,7 +895,7 @@ begin
 end;
 $$;
 
-create or replace function public.update_store_slip_customer_label(
+create or replace function store.update_slip_customer_label(
     p_department_id bigint,
     p_slip_customer_id bigint,
     p_customer_label text default null
@@ -901,7 +926,7 @@ begin
 end;
 $$;
 
-create or replace function public.void_store_order_line(
+create or replace function store.void_order_line(
     p_department_id bigint,
     p_order_line_id bigint
 )

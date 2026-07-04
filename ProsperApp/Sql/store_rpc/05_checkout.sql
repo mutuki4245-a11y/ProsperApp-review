@@ -1,4 +1,4 @@
-create or replace function public.confirm_store_checkout(
+create or replace function store.confirm_checkout(
     p_department_id bigint,
     p_slip_id bigint,
     p_closed_at timestamp with time zone,
@@ -266,9 +266,9 @@ begin
 end;
 $$;
 
-drop function if exists public.create_store_slip(bigint, bigint, timestamp with time zone, text[], bigint[], text);
+drop function if exists store.create_slip(bigint, bigint, timestamp with time zone, text[], bigint[], text);
 
-create or replace function public.create_store_slip(
+create or replace function store.create_slip(
     p_department_id bigint,
     p_table_id bigint,
     p_opened_at timestamp with time zone,
@@ -291,6 +291,7 @@ declare
     v_label text;
     v_cast_id bigint;
     v_nomination jsonb;
+    v_nomination_kind text;
     v_nomination_type text;
     v_nomination_price numeric(12, 0);
     v_companion_time time;
@@ -391,7 +392,7 @@ begin
         )
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
-        v_nomination_type := nullif(trim(coalesce(v_nomination->>'nomination_type', '')), '');
+        v_nomination_kind := nullif(trim(coalesce(v_nomination->>'nomination_kind', '')), '');
         v_nomination_price := nullif(v_nomination->>'nomination_price', '')::numeric;
 
         if v_cast_id is null then
@@ -405,17 +406,21 @@ begin
             raise exception 'invalid_nomination_price';
         end if;
 
-        if v_nomination_type not in ('nomination', 'in_store', 'companion') then
+        select
+            m.nomination_type,
+            m.companion_time
+          into v_nomination_type, v_companion_time
+        from public.store_nomination_back_master m
+        where m.company_id = v_company_id
+          and m.department_id = p_department_id
+          and m.nomination_kind = v_nomination_kind
+          and m.back_type = 'nomination'
+          and m.is_active = true
+        limit 1;
+
+        if v_nomination_type is null then
             raise exception 'invalid_nomination_type';
         end if;
-
-        v_companion_time := case nullif(v_nomination->>'companion_time', '')
-            when '19:29' then time '19:29'
-            when '19:59' then time '19:59'
-            when '20:59' then time '20:59'
-            when '21:00' then time '21:00'
-            else null
-        end;
 
         if v_nomination_type = 'companion' and v_companion_time is null then
             raise exception 'invalid_companion_time';
@@ -441,6 +446,7 @@ begin
             insert into public.store_slip_casts (
                 slip_id,
                 cast_id,
+                nomination_kind,
                 nomination_type,
                 nomination_price,
                 started_at,
@@ -449,6 +455,7 @@ begin
             values (
                 v_slip_id,
                 v_cast_id,
+                v_nomination_kind,
                 v_nomination_type,
                 v_nomination_price,
                 v_started_at,
@@ -464,6 +471,7 @@ begin
                 company_id,
                 department_id,
                 cast_id,
+                nomination_kind,
                 nomination_type,
                 back_type,
                 quantity,
@@ -479,6 +487,7 @@ begin
                 v_company_id,
                 p_department_id,
                 v_cast_id,
+                v_nomination_kind,
                 v_nomination_type,
                 'nomination',
                 1,
@@ -488,7 +497,7 @@ begin
             from public.store_nomination_back_master m
             where m.company_id = v_company_id
               and m.department_id = p_department_id
-              and m.nomination_type = v_nomination_type
+              and m.nomination_kind = v_nomination_kind
               and m.back_type = 'nomination'
               and m.is_active = true
               and m.back_unit_amount > 0;

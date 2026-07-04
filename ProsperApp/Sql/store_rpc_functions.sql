@@ -4,14 +4,15 @@
 -- by feature to make review and maintenance easier. Execute the files below in
 -- this order when applying the full RPC set:
 --
---   1. Sql/store_rpc/01_business_day.sql
---   2. Sql/store_rpc/02_store_masters.sql
---   3. Sql/store_rpc/03_slips.sql
---   4. Sql/store_rpc/04_orders.sql
---   5. Sql/store_rpc/05_checkout.sql
---   6. Sql/store_rpc/06_receipts.sql
---   7. Sql/store_rpc/07_cast_sales_adjustments.sql
---   8. Sql/store_rpc/99_grants.sql
+--   1. Sql/store_rpc/00_schema.sql
+--   2. Sql/store_rpc/01_business_day.sql
+--   3. Sql/store_rpc/02_store_masters.sql
+--   4. Sql/store_rpc/03_slips.sql
+--   5. Sql/store_rpc/04_orders.sql
+--   6. Sql/store_rpc/05_checkout.sql
+--   7. Sql/store_rpc/06_receipts.sql
+--   8. Sql/store_rpc/07_cast_sales_adjustments.sql
+--   9. Sql/store_rpc/99_grants.sql
 --
 -- Keep function names, argument lists, return columns, and direct execute revokes
 -- in the split files aligned with the current C# RPC callers and prosper-rpc allowlist.

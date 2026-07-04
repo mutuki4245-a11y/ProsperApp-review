@@ -17,7 +17,7 @@ public class SupabaseCastSalesAdjustmentRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_business_day_cast_sales_adjustment_status",
+            "store.get_business_day_cast_sales_adjustment_status",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -47,7 +47,7 @@ public class SupabaseCastSalesAdjustmentRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_cast_sales_adjustment_slips",
+            "store.get_cast_sales_adjustment_slips",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -86,7 +86,7 @@ public class SupabaseCastSalesAdjustmentRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_cast_sales_adjustment_detail",
+            "store.get_cast_sales_adjustment_detail",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -125,7 +125,9 @@ public class SupabaseCastSalesAdjustmentRepository(
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 DisplayName = ReadString(row, "cast_display_name") ?? string.Empty,
                 DepartmentName = ReadString(row, "cast_department_name"),
+                NominationKind = ReadString(row, "nomination_kind") ?? string.Empty,
                 NominationType = ReadString(row, "nomination_type") ?? string.Empty,
+                NominationDisplayNameFromMaster = ReadString(row, "nomination_display_name"),
                 StartedAt = ReadDateTimeOffset(row, "started_at"),
                 SalesAmount = ReadDecimal(row, "sales_amount"),
                 SourceAmountType = ReadString(row, "source_amount_type"),
@@ -168,7 +170,7 @@ public class SupabaseCastSalesAdjustmentRepository(
         }
 
         var result = await RpcClient.PostScalarAsync(
-            "save_cast_sales_adjustment",
+            "store.save_cast_sales_adjustment",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,

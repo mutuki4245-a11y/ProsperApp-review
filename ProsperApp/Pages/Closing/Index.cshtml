@@ -5,14 +5,6 @@
     ViewData["Title"] = "締め作業";
     var hasBusinessDay = Model.CurrentBusinessDay is not null;
     ViewData["HasCurrentBusinessDay"] = hasBusinessDay;
-    var canCloseBusinessDay = Model.Readiness.CanClose || (hasBusinessDay && Model.IsAdminMode);
-    var drinkDeliveryPanelClass = hasBusinessDay && Model.IsDrinkDeliveryAmountEntered ? "is-ready" : "has-warning";
-    var attendancePanelClass = hasBusinessDay && Model.ClosingAttendanceMissingClockOutCount == 0 && Model.ClosingAttendanceCount > 0
-        ? "is-ready"
-        : "has-warning";
-    var castSalesAdjustmentPanelClass = Model.Readiness.IsCastSalesAdjustmentCompleted ? "is-ready" : "has-warning";
-    var receiptsPanelClass = Model.PendingReceiptCount > 0 ? "needs-action" : "is-ready";
-    var closingFinalPanelClass = canCloseBusinessDay ? "is-ready" : "has-warning";
 }
 
 <section class="store-home">
@@ -27,99 +19,53 @@
 
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    <div class="closing-list">
-        @if (hasBusinessDay)
-        {
-            <a class="closing-panel @drinkDeliveryPanelClass" asp-page="/Closing/DrinkCost">
-                <span class="closing-panel__body">
-                    <strong>酒代入力</strong>
-                    <small>@(Model.IsDrinkDeliveryAmountEntered ? $"営業日ごとの納品額 {Model.DrinkDeliveryAmount:N0} 円" : "納品額が未入力です。")</small>
-                </span>
-                <span class="closing-panel__badge @drinkDeliveryPanelClass">@(Model.IsDrinkDeliveryAmountEntered ? "入力済" : "要入力")</span>
-                <span class="closing-panel__action">開く</span>
-            </a>
-        }
-        else
-        {
-            <a class="closing-panel has-warning" asp-page="/Closing/DrinkCost">
-                <span class="closing-panel__body">
-                    <strong>酒代入力</strong>
-                    <small>酒代保存時に営業日を自動作成できます。</small>
-                </span>
-                <span class="closing-panel__badge has-warning">要入力</span>
-                <span class="closing-panel__action">入力</span>
-            </a>
-        }
+    <div class="closing-list"
+         data-closing-panels
+         data-current-business-day-id="@Model.CurrentBusinessDay?.BusinessDayId"
+         data-has-business-day="@hasBusinessDay.ToString().ToLowerInvariant()"
+         data-admin-mode="@Model.IsAdminMode.ToString().ToLowerInvariant()"
+         data-receipts-enabled="@Model.ReceiptsEnabled.ToString().ToLowerInvariant()"
+         data-open-slip-url="@Url.Page("/Closing/Index", "OpenSlipPanel")"
+         data-drink-delivery-url="@Url.Page("/Closing/Index", "DrinkDeliveryPanel")"
+         data-attendance-url="@Url.Page("/Closing/Index", "AttendancePanel")"
+         data-cast-sales-adjustment-url="@Url.Page("/Closing/Index", "CastSalesAdjustmentPanel")"
+         data-receipts-url="@Url.Page("/Closing/Index", "ReceiptsPanel")">
+        <a class="closing-panel is-preparing" asp-page="/Closing/DrinkCost" data-closing-panel="drinkDelivery">
+            <span class="closing-panel__body">
+                <strong>酒代入力</strong>
+                <small data-closing-message>状態を確認しています。</small>
+            </span>
+            <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
+            <span class="closing-panel__action" data-closing-action>開く</span>
+        </a>
 
-        @if (hasBusinessDay)
-        {
-            <a class="closing-panel @attendancePanelClass" href="@Url.Content("~/Closing/Attendance")">
-                <span class="closing-panel__body">
-                    <strong>勤怠確認</strong>
-                    <small>
-                        @if (Model.ClosingAttendanceMissingClockOutCount > 0)
-                        {
-                            @($"{Model.ClosingAttendanceMissingClockOutCount}名の退勤時刻が未入力です。")
-                        }
-                        else if (Model.ClosingAttendanceCount > 0)
-                        {
-                            @($"{Model.ClosingAttendanceCount}名の勤怠を入力済みです。")
-                        }
-                        else
-                        {
-                            @("出勤キャストが登録されていません。")
-                        }
-                    </small>
-                </span>
-                <span class="closing-panel__badge @attendancePanelClass">@(Model.ClosingAttendanceMissingClockOutCount == 0 && Model.ClosingAttendanceCount > 0 ? "確認済" : "要入力")</span>
-                <span class="closing-panel__action">確認/修正</span>
-            </a>
-        }
-        else
-        {
-            <a class="closing-panel has-warning" href="@Url.Content("~/Closing/Attendance")">
-                <span class="closing-panel__body">
-                    <strong>勤怠確認</strong>
-                    <small>勤怠保存時に営業日を自動作成できます。</small>
-                </span>
-                <span class="closing-panel__badge has-warning">要入力</span>
-                <span class="closing-panel__action">入力</span>
-            </a>
-        }
+        <a class="closing-panel is-preparing" href="@Url.Content("~/Closing/Attendance")" data-closing-panel="attendance">
+            <span class="closing-panel__body">
+                <strong>勤怠確認</strong>
+                <small data-closing-message>状態を確認しています。</small>
+            </span>
+            <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
+            <span class="closing-panel__action" data-closing-action>確認/修正</span>
+        </a>
 
-        <a class="closing-panel @castSalesAdjustmentPanelClass" asp-page="/Closing/CastSalesAdjustment">
+        <a class="closing-panel is-preparing" asp-page="/Closing/CastSalesAdjustment" data-closing-panel="castSalesAdjustment">
             <span class="closing-panel__body">
                 <strong>キャスト売上額調整</strong>
-                @if (!hasBusinessDay)
-                {
-                    <small>会計済み伝票ができたら、指名キャストへの売上額を調整します。</small>
-                }
-                else if (Model.CastSalesAdjustmentStatus.RequiredSlipCount == 0)
-                {
-                    <small>調整が必要な会計済み伝票はありません。</small>
-                }
-                else if (Model.Readiness.IsCastSalesAdjustmentCompleted)
-                {
-                    <small>@($"{Model.CastSalesAdjustmentStatus.CompletedSlipCount}件の伝票を調整済みです。")</small>
-                }
-                else
-                {
-                    <small>@($"{Model.CastSalesAdjustmentStatus.MissingSlipCount}件の伝票で売上額調整が未完了です。")</small>
-                }
+                <small data-closing-message>状態を確認しています。</small>
             </span>
-            <span class="closing-panel__badge @castSalesAdjustmentPanelClass">@(Model.Readiness.IsCastSalesAdjustmentCompleted ? "調整済" : "要入力")</span>
-            <span class="closing-panel__action">開く</span>
+            <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
+            <span class="closing-panel__action" data-closing-action>開く</span>
         </a>
 
         @if (Model.ReceiptsEnabled)
         {
-            <a class="closing-panel @receiptsPanelClass" asp-page="/Closing/Receipts">
+            <a class="closing-panel is-preparing" asp-page="/Closing/Receipts" data-closing-panel="receipts">
                 <span class="closing-panel__body">
                     <strong>領収書入力</strong>
-                    <small>@(Model.PendingReceiptCount > 0 ? $"未入力領収書が {Model.PendingReceiptCount} 件あります。" : "未入力領収書はありません。")</small>
+                    <small data-closing-message>状態を確認しています。</small>
                 </span>
-                <span class="closing-panel__badge @receiptsPanelClass">@(Model.PendingReceiptCount > 0 ? "要入力" : "入力済")</span>
-                <span class="closing-panel__action">入力</span>
+                <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
+                <span class="closing-panel__action" data-closing-action>入力</span>
             </a>
         }
     </div>
@@ -137,7 +83,7 @@
         }
         else
         {
-            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form closing-final-panel closing-final-panel--compact @closingFinalPanelClass">
+            <form method="post" asp-page-handler="CloseBusinessDay" class="closing-panel closing-panel--form closing-final-panel closing-final-panel--compact is-preparing" data-closing-final>
                 <input asp-for="BusinessDayId" type="hidden" />
                 <div class="closing-panel__form">
                     <div>
@@ -146,8 +92,349 @@
                         <span asp-validation-for="ClosingMemo" class="text-danger"></span>
                     </div>
                 </div>
-                <button class="btn btn-danger closing-panel__submit" type="submit" @(canCloseBusinessDay ? null : "disabled")>営業日を締める</button>
+                <button class="btn btn-danger closing-panel__submit" type="submit" data-closing-close-submit disabled>確認中</button>
+                <output class="visually-hidden" data-closing-final-status aria-live="polite">締め条件を確認しています。</output>
             </form>
         }
     </section>
 </section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const root = document.querySelector('[data-closing-panels]');
+            if (!root) {
+                return;
+            }
+
+            const stateClasses = ['is-ready', 'needs-action', 'has-warning', 'is-preparing'];
+            const refreshIntervalMs = 30000;
+            const initialBusinessDayId = root.dataset.currentBusinessDayId || '';
+            const state = {
+                hasBusinessDay: root.dataset.hasBusinessDay === 'true',
+                businessDayChanged: false,
+                isAdminMode: root.dataset.adminMode === 'true',
+                receiptsEnabled: root.dataset.receiptsEnabled === 'true',
+                openSlipLoaded: false,
+                drinkLoaded: false,
+                attendanceLoaded: false,
+                castLoaded: false,
+                receiptsLoaded: root.dataset.receiptsEnabled !== 'true',
+                openSlipCount: 0,
+                drink: { isEntered: false, amount: 0 },
+                attendance: { attendanceCount: 0, missingClockOutCount: 0 },
+                cast: { isCompleted: false, requiredSlipCount: 0, completedSlipCount: 0, missingSlipCount: 0 },
+                receipts: { pendingReceiptCount: 0 }
+            };
+            let refreshInFlight = false;
+
+            const toYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
+
+            const setStateClass = (element, nextClass) => {
+                if (!element) {
+                    return;
+                }
+
+                element.classList.remove(...stateClasses);
+                element.classList.add(nextClass);
+            };
+
+            const setPanel = (name, nextClass, badgeText, message, actionText = null) => {
+                const panel = root.querySelector(`[data-closing-panel="${name}"]`);
+                if (!panel) {
+                    return;
+                }
+
+                setStateClass(panel, nextClass);
+                const badge = panel.querySelector('[data-closing-badge]');
+                setStateClass(badge, nextClass);
+                if (badge) {
+                    badge.textContent = badgeText;
+                }
+
+                const messageElement = panel.querySelector('[data-closing-message]');
+                if (messageElement) {
+                    messageElement.textContent = message;
+                }
+
+                const action = panel.querySelector('[data-closing-action]');
+                if (action && actionText) {
+                    action.textContent = actionText;
+                }
+            };
+
+            const setPanelError = (name) => {
+                setPanel(name, 'has-warning', '未取得', '状態を取得できませんでした。時間をおいて再表示してください。');
+            };
+
+            const captureBusinessDay = (result) => {
+                if (!result || typeof result.hasBusinessDay !== 'boolean') {
+                    return true;
+                }
+
+                if (!result.hasBusinessDay) {
+                    state.hasBusinessDay = false;
+                    return true;
+                }
+
+                const businessDayId = result.businessDayId === null || result.businessDayId === undefined
+                    ? ''
+                    : String(result.businessDayId);
+                if (initialBusinessDayId && businessDayId && businessDayId !== initialBusinessDayId) {
+                    state.businessDayChanged = true;
+                    return false;
+                }
+
+                state.hasBusinessDay = true;
+                return true;
+            };
+
+            const updateFinalPanel = () => {
+                const finalPanel = document.querySelector('[data-closing-final]');
+                if (!finalPanel) {
+                    return;
+                }
+
+                const submit = finalPanel.querySelector('[data-closing-close-submit]');
+                const status = finalPanel.querySelector('[data-closing-final-status]');
+                const setFinal = (nextClass, disabled, buttonText, statusText) => {
+                    setStateClass(finalPanel, nextClass);
+                    if (submit) {
+                        submit.disabled = disabled;
+                        submit.textContent = buttonText;
+                    }
+                    if (status) {
+                        status.textContent = statusText;
+                    }
+                };
+
+                if (state.businessDayChanged) {
+                    setFinal('has-warning', true, '営業日を締める', '営業日情報が更新されています。画面を再読み込みしてください。');
+                    return;
+                }
+
+                if (!state.hasBusinessDay) {
+                    setFinal('is-preparing', true, '営業日を締める', '営業中の営業日がありません。');
+                    return;
+                }
+
+                const loaded = state.openSlipLoaded &&
+                    state.drinkLoaded &&
+                    state.attendanceLoaded &&
+                    state.castLoaded &&
+                    (!state.receiptsEnabled || state.receiptsLoaded);
+
+                if (!loaded) {
+                    setFinal('is-preparing', true, '確認中', '締め条件を確認しています。');
+                    return;
+                }
+
+                const canClose = state.openSlipCount === 0 &&
+                    state.drink.isEntered &&
+                    state.attendance.attendanceCount > 0 &&
+                    state.attendance.missingClockOutCount === 0 &&
+                    state.cast.isCompleted &&
+                    (!state.receiptsEnabled || state.receipts.pendingReceiptCount === 0);
+                const canSubmit = state.isAdminMode || canClose;
+                setFinal(
+                    canSubmit ? 'is-ready' : 'has-warning',
+                    !canSubmit,
+                    '営業日を締める',
+                    canSubmit ? '営業日を締められます。' : '締め条件が未完了です。'
+                );
+            };
+
+            const loadJson = async (url) => {
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error('Closing panel load failed.');
+                }
+
+                return response.json();
+            };
+
+            const loadOpenSlipPanel = async () => {
+                try {
+                    const result = await loadJson(root.dataset.openSlipUrl);
+                    if (!captureBusinessDay(result)) {
+                        return;
+                    }
+
+                    state.openSlipCount = Number(result.openSlipCount) || 0;
+                    state.isAdminMode = Boolean(result.isAdminMode);
+                    state.openSlipLoaded = true;
+                } catch {
+                    state.openSlipLoaded = false;
+                } finally {
+                    updateFinalPanel();
+                }
+            };
+
+            const loadDrinkDeliveryPanel = async () => {
+                try {
+                    const result = await loadJson(root.dataset.drinkDeliveryUrl);
+                    if (!captureBusinessDay(result)) {
+                        setPanel('drinkDelivery', 'has-warning', '要入力', '営業日情報が更新されています。画面を再読み込みしてください。');
+                        return;
+                    }
+
+                    state.drink = {
+                        isEntered: Boolean(result.isEntered),
+                        amount: Number(result.amount) || 0
+                    };
+                    state.drinkLoaded = true;
+
+                    if (!result.hasBusinessDay) {
+                        setPanel('drinkDelivery', 'has-warning', '要入力', '酒代保存時に営業日を自動作成できます。', '入力');
+                    } else if (state.drink.isEntered) {
+                        setPanel('drinkDelivery', 'is-ready', '入力済', `営業日ごとの納品額 ${toYen(state.drink.amount)}`);
+                    } else {
+                        setPanel('drinkDelivery', 'has-warning', '要入力', '納品額が未入力です。', '入力');
+                    }
+                } catch {
+                    setPanelError('drinkDelivery');
+                } finally {
+                    updateFinalPanel();
+                }
+            };
+
+            const loadAttendancePanel = async () => {
+                try {
+                    const result = await loadJson(root.dataset.attendanceUrl);
+                    if (!captureBusinessDay(result)) {
+                        setPanel('attendance', 'has-warning', '要入力', '営業日情報が更新されています。画面を再読み込みしてください。');
+                        return;
+                    }
+
+                    state.attendance = {
+                        attendanceCount: Number(result.attendanceCount) || 0,
+                        missingClockOutCount: Number(result.missingClockOutCount) || 0
+                    };
+                    state.attendanceLoaded = true;
+
+                    if (!result.hasBusinessDay) {
+                        setPanel('attendance', 'has-warning', '要入力', '勤怠保存時に営業日を自動作成できます。', '入力');
+                    } else if (state.attendance.missingClockOutCount > 0) {
+                        setPanel('attendance', 'has-warning', '要入力', `${state.attendance.missingClockOutCount}名の退勤時刻が未入力です。`);
+                    } else if (state.attendance.attendanceCount > 0) {
+                        setPanel('attendance', 'is-ready', '確認済', `${state.attendance.attendanceCount}名の勤怠を入力済みです。`);
+                    } else {
+                        setPanel('attendance', 'has-warning', '要入力', '出勤キャストが登録されていません。', '入力');
+                    }
+                } catch {
+                    setPanelError('attendance');
+                } finally {
+                    updateFinalPanel();
+                }
+            };
+
+            const loadCastSalesAdjustmentPanel = async () => {
+                try {
+                    const result = await loadJson(root.dataset.castSalesAdjustmentUrl);
+                    if (!captureBusinessDay(result)) {
+                        setPanel('castSalesAdjustment', 'has-warning', '要入力', '営業日情報が更新されています。画面を再読み込みしてください。');
+                        return;
+                    }
+
+                    state.cast = {
+                        isCompleted: Boolean(result.isCompleted),
+                        requiredSlipCount: Number(result.requiredSlipCount) || 0,
+                        completedSlipCount: Number(result.completedSlipCount) || 0,
+                        missingSlipCount: Number(result.missingSlipCount) || 0
+                    };
+                    state.castLoaded = true;
+
+                    if (!result.hasBusinessDay) {
+                        setPanel('castSalesAdjustment', 'has-warning', '要入力', '会計済み伝票ができたら、指名キャストへの売上額を調整します。');
+                    } else if (state.cast.requiredSlipCount === 0) {
+                        setPanel('castSalesAdjustment', 'is-ready', '調整済', '調整が必要な会計済み伝票はありません。');
+                    } else if (state.cast.isCompleted) {
+                        setPanel('castSalesAdjustment', 'is-ready', '調整済', `${state.cast.completedSlipCount}件の伝票を調整済みです。`);
+                    } else {
+                        setPanel('castSalesAdjustment', 'has-warning', '要入力', `${state.cast.missingSlipCount}件の伝票で売上額調整が未完了です。`);
+                    }
+                } catch {
+                    setPanelError('castSalesAdjustment');
+                } finally {
+                    updateFinalPanel();
+                }
+            };
+
+            const loadReceiptsPanel = async () => {
+                if (!state.receiptsEnabled || !root.dataset.receiptsUrl) {
+                    state.receiptsLoaded = true;
+                    updateFinalPanel();
+                    return;
+                }
+
+                try {
+                    const result = await loadJson(root.dataset.receiptsUrl);
+                    if (!captureBusinessDay(result)) {
+                        setPanel('receipts', 'has-warning', '要入力', '営業日情報が更新されています。画面を再読み込みしてください。');
+                        return;
+                    }
+
+                    state.receipts = {
+                        pendingReceiptCount: Number(result.pendingReceiptCount) || 0
+                    };
+                    state.receiptsLoaded = true;
+
+                    if (!result.hasBusinessDay) {
+                        setPanel('receipts', 'is-ready', '入力済', '営業日作成後に未入力領収書を確認します。');
+                    } else if (state.receipts.pendingReceiptCount > 0) {
+                        setPanel('receipts', 'needs-action', '要入力', `未入力領収書が ${state.receipts.pendingReceiptCount} 件あります。`);
+                    } else {
+                        setPanel('receipts', 'is-ready', '入力済', '未入力領収書はありません。');
+                    }
+                } catch {
+                    setPanelError('receipts');
+                } finally {
+                    updateFinalPanel();
+                }
+            };
+
+            const loadPanels = async () => {
+                if (refreshInFlight) {
+                    return;
+                }
+
+                refreshInFlight = true;
+                try {
+                    await Promise.all([
+                        loadOpenSlipPanel(),
+                        loadDrinkDeliveryPanel(),
+                        loadAttendancePanel(),
+                        loadCastSalesAdjustmentPanel(),
+                        loadReceiptsPanel()
+                    ]);
+                } finally {
+                    refreshInFlight = false;
+                }
+            };
+
+            window.addEventListener('focus', () => {
+                if (document.visibilityState === 'visible') {
+                    void loadPanels();
+                }
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    void loadPanels();
+                }
+            });
+            window.setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    void loadPanels();
+                }
+            }, refreshIntervalMs);
+
+            updateFinalPanel();
+            void loadPanels();
+        })();
+    </script>
+}

@@ -31,7 +31,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_context",
+            "store.get_context",
             new { p_department_id = departmentId },
             ct);
 
@@ -69,7 +69,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_tables",
+            "store.get_tables",
             new { p_department_id = departmentId },
             ct);
 
@@ -105,7 +105,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "get_store_casts",
+            "store.get_casts",
             new { p_department_id = departmentId },
             ct);
 
@@ -130,7 +130,7 @@ public class SupabaseStoreSlipRepository(
     public async Task<IReadOnlyList<BusinessSlipListItem>> GetBusinessDaySlipsAsync(long businessDayId, CancellationToken ct)
     {
         var rows = await PostRpcArrayAsync(
-            "get_business_day_slips",
+            "store.get_business_day_slips",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -166,7 +166,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var rows = await PostRpcArrayAsync(
-            "get_store_slip_detail",
+            "store.get_slip_detail",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -221,7 +221,9 @@ public class SupabaseStoreSlipRepository(
                     CastId = ReadLong(row, "cast_id") ?? 0,
                     DisplayName = ReadString(row, "cast_display_name") ?? string.Empty,
                     DepartmentName = ReadString(row, "cast_department_name"),
+                    NominationKind = ReadString(row, "nomination_kind") ?? string.Empty,
                     NominationType = ReadString(row, "nomination_type") ?? string.Empty,
+                    NominationDisplayNameFromMaster = ReadString(row, "nomination_display_name"),
                     NominationPrice = ReadDecimal(row, "nomination_price") ?? 0,
                     StartedAt = ReadDateTimeOffset(row, "started_at") ?? DateTimeOffset.MinValue,
                     Status = ReadString(row, "nomination_status") ?? string.Empty
@@ -293,13 +295,12 @@ public class SupabaseStoreSlipRepository(
             .Where(x => x.CastId is not null && !string.IsNullOrWhiteSpace(x.NominationKind))
             .Select(x => new CastNominationPayload(
                 x.CastId!.Value,
-                ToNominationType(x.NominationKind!),
-                ToCompanionTime(x.NominationKind!),
+                x.NominationKind!.Trim(),
                 x.NominationPrice))
             .ToArray();
 
         var result = await RpcClient.PostArrayAsync(
-            "create_store_slip",
+            "store.create_slip",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -339,7 +340,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "add_store_slip_customers",
+            "store.add_slip_customers",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -369,8 +370,7 @@ public class SupabaseStoreSlipRepository(
             .Where(x => x.CastId is not null && !string.IsNullOrWhiteSpace(x.NominationKind))
             .Select(x => new CastNominationPayload(
                 x.CastId!.Value,
-                ToNominationType(x.NominationKind!),
-                ToCompanionTime(x.NominationKind!),
+                x.NominationKind!.Trim(),
                 x.NominationPrice))
             .ToArray();
 
@@ -380,7 +380,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "add_store_slip_nominations",
+            "store.add_slip_nominations",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -411,7 +411,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "leave_store_slip_customer",
+            "store.leave_slip_customer",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -441,7 +441,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "update_store_slip_customer_label",
+            "store.update_slip_customer_label",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -471,7 +471,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "void_store_order_line",
+            "store.void_order_line",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -505,7 +505,7 @@ public class SupabaseStoreSlipRepository(
             .ToArray();
 
         var result = await RpcClient.PostArrayAsync(
-            "save_store_slip_adjustments",
+            "store.save_slip_adjustments",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -546,7 +546,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "save_store_karaoke_lines",
+            "store.save_karaoke_lines",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
@@ -566,8 +566,7 @@ public class SupabaseStoreSlipRepository(
 
     private sealed record CastNominationPayload(
         [property: JsonPropertyName("cast_id")] long CastId,
-        [property: JsonPropertyName("nomination_type")] string NominationType,
-        [property: JsonPropertyName("companion_time")] string? CompanionTime,
+        [property: JsonPropertyName("nomination_kind")] string NominationKind,
         [property: JsonPropertyName("nomination_price")] decimal NominationPrice);
 
     private sealed record AdjustmentLinePayload(
@@ -597,31 +596,6 @@ public class SupabaseStoreSlipRepository(
         return value is LocalSettings.CastSalesSplitModeFull
             ? LocalSettings.CastSalesSplitModeFull
             : LocalSettings.CastSalesSplitModeSplit;
-    }
-
-    private static string ToNominationType(string nominationKind)
-    {
-        return nominationKind switch
-        {
-            "companion_until_1929" or
-            "companion_until_1959" or
-            "companion_until_2059" or
-            "companion_after_2100" => "companion",
-            "in_store" => "in_store",
-            _ => "nomination"
-        };
-    }
-
-    private static string? ToCompanionTime(string nominationKind)
-    {
-        return nominationKind switch
-        {
-            "companion_until_1929" => "19:29",
-            "companion_until_1959" => "19:59",
-            "companion_until_2059" => "20:59",
-            "companion_after_2100" => "21:00",
-            _ => null
-        };
     }
 
     private static string ToFriendlyError(string? rawError)

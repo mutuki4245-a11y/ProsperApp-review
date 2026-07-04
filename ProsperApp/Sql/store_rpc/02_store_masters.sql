@@ -1,4 +1,4 @@
-create or replace function public.get_store_tables(p_department_id bigint)
+create or replace function store.get_tables(p_department_id bigint)
 returns table (
     table_id bigint,
     table_code text,
@@ -18,9 +18,9 @@ as $$
     order by t.sort_order asc, t.table_code asc;
 $$;
 
-drop function if exists public.get_store_casts(bigint);
+drop function if exists store.get_casts(bigint);
 
-create or replace function public.get_store_casts(p_department_id bigint)
+create or replace function store.get_casts(p_department_id bigint)
 returns table (
     cast_id bigint,
     cast_code text,
@@ -36,26 +36,24 @@ as $$
         c.cast_code,
         c.display_name,
         d.department_name
-    from public.department_master current_department
-    join public.cast_master c
-      on c.company_id = current_department.company_id
+    from public.cast_master c
     join public.department_master d
       on d.department_id = c.department_id
-    where current_department.department_id = p_department_id
-      and current_department.is_active = true
-      and c.is_active = true
+    where c.is_active = true
       and c.status = 'active'
       and d.is_active = true
     order by
         case when c.department_id = p_department_id then 0 else 1 end,
+        d.company_id asc,
         d.department_name asc,
         c.sort_order asc,
         c.display_name asc;
 $$;
 
-drop function if exists public.get_store_cast_admin_list(bigint);
+drop function if exists store.get_cast_admin_list(bigint);
+drop function if exists store.get_casts_admin(bigint);
 
-create or replace function public.get_store_cast_admin_list(p_department_id bigint)
+create or replace function store.get_casts_admin(p_department_id bigint)
 returns table (
     cast_id bigint,
     display_name text,
@@ -79,9 +77,9 @@ as $$
     order by c.joined_on asc, c.cast_id asc;
 $$;
 
-drop function if exists public.create_store_cast(bigint, text);
+drop function if exists store.create_cast(bigint, text);
 
-create or replace function public.create_store_cast(
+create or replace function store.create_cast(
     p_department_id bigint,
     p_display_name text
 )
@@ -142,9 +140,9 @@ begin
 end;
 $$;
 
-drop function if exists public.delete_store_cast(bigint, bigint);
+drop function if exists store.delete_cast(bigint, bigint);
 
-create or replace function public.delete_store_cast(
+create or replace function store.delete_cast(
     p_department_id bigint,
     p_cast_id bigint
 )
@@ -177,9 +175,9 @@ begin
 end;
 $$;
 
-drop function if exists public.get_business_day_slips(bigint, bigint);
+drop function if exists store.get_business_day_slips(bigint, bigint);
 
-create or replace function public.get_business_day_slips(
+create or replace function store.get_business_day_slips(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -324,7 +322,7 @@ as $$
     order by ts.opened_at asc;
 $$;
 
-create or replace function public.get_order_entry_slips(
+create or replace function store.get_order_entry_slips(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -358,9 +356,9 @@ as $$
     order by t.sort_order asc nulls last, t.table_code asc nulls last, s.opened_at asc;
 $$;
 
-drop function if exists public.get_store_order_items(bigint);
+drop function if exists store.get_order_items(bigint);
 
-create or replace function public.get_store_order_items(p_department_id bigint)
+create or replace function store.get_order_items(p_department_id bigint)
 returns table (
     item_id bigint,
     item_name text,
@@ -398,9 +396,9 @@ as $$
     order by c.sort_order asc nulls last, c.category_name asc nulls last, i.sort_order asc, i.item_name asc;
 $$;
 
-drop function if exists public.get_store_item_admin_catalog(bigint);
+drop function if exists store.get_item_admin_catalog(bigint);
 
-create or replace function public.get_store_item_admin_catalog(p_department_id bigint)
+create or replace function store.get_item_admin_catalog(p_department_id bigint)
 returns table (
     row_type text,
     item_category_id bigint,
@@ -471,12 +469,14 @@ as $$
         rows.item_name asc nulls last;
 $$;
 
-drop function if exists public.get_store_nomination_back_master(bigint);
+drop function if exists store.get_nomination_back_master(bigint);
 
-create or replace function public.get_store_nomination_back_master(p_department_id bigint)
+create or replace function store.get_nomination_back_master(p_department_id bigint)
 returns table (
+    nomination_kind text,
     nomination_type text,
     display_name text,
+    companion_time text,
     back_type text,
     back_unit_amount numeric,
     sort_order integer,
@@ -486,15 +486,7 @@ language sql
 security definer
 set search_path = public
 as $$
-    with nomination_types as (
-        select *
-        from (values
-            ('nomination'::text, '本指名'::text, 10),
-            ('in_store'::text, '場内指名'::text, 20),
-            ('companion'::text, '同伴'::text, 30)
-        ) as t(nomination_type, display_name, sort_order)
-    ),
-    target_department as (
+    with target_department as (
         select
             d.company_id,
             d.department_id
@@ -504,24 +496,24 @@ as $$
         limit 1
     )
     select
-        nt.nomination_type,
-        nt.display_name,
-        coalesce(m.back_type, 'nomination') as back_type,
-        coalesce(m.back_unit_amount, 0) as back_unit_amount,
-        coalesce(m.sort_order, nt.sort_order) as sort_order,
-        coalesce(m.is_active, true) as is_active
+        m.nomination_kind,
+        m.nomination_type,
+        m.display_name,
+        to_char(m.companion_time, 'HH24:MI') as companion_time,
+        m.back_type,
+        m.back_unit_amount,
+        m.sort_order,
+        m.is_active
     from target_department d
-    cross join nomination_types nt
-    left join public.store_nomination_back_master m
+    join public.store_nomination_back_master m
       on m.company_id = d.company_id
      and m.department_id = d.department_id
-     and m.nomination_type = nt.nomination_type
-    order by coalesce(m.sort_order, nt.sort_order), nt.display_name;
+    order by m.sort_order, m.display_name;
 $$;
 
-drop function if exists public.save_store_nomination_back_master(bigint, jsonb);
+drop function if exists store.save_nomination_back_master(bigint, jsonb);
 
-create or replace function public.save_store_nomination_back_master(
+create or replace function store.save_nomination_back_master(
     p_department_id bigint,
     p_settings jsonb default '[]'::jsonb
 )
@@ -556,12 +548,22 @@ begin
 
     with payload as (
         select
+            nullif(trim(coalesce(x.nomination_kind, '')), '') as nomination_kind,
             nullif(trim(coalesce(x.nomination_type, '')), '') as nomination_type,
+            nullif(trim(coalesce(x.display_name, '')), '') as display_name,
+            case
+                when nullif(trim(coalesce(x.companion_time, '')), '') is null then null::time
+                when trim(x.companion_time) ~ '^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$' then trim(x.companion_time)::time
+                else null::time
+            end as companion_time,
             coalesce(x.back_unit_amount, 0) as back_unit_amount,
             coalesce(x.is_active, true) as is_active,
             coalesce(x.sort_order, 0) as sort_order
         from jsonb_to_recordset(p_settings) as x(
+            nomination_kind text,
             nomination_type text,
+            display_name text,
+            companion_time text,
             back_unit_amount numeric,
             is_active boolean,
             sort_order integer
@@ -569,9 +571,13 @@ begin
     )
     select
         count(*)::integer,
-        count(distinct nomination_type)::integer,
+        count(distinct nomination_kind)::integer,
         count(*) filter (
-            where nomination_type not in ('nomination', 'in_store', 'companion')
+            where nomination_kind is null
+               or display_name is null
+               or nomination_type not in ('nomination', 'in_store', 'companion')
+               or (nomination_type = 'companion' and companion_time is null)
+               or (nomination_type <> 'companion' and companion_time is not null)
                or back_unit_amount < 0
                or sort_order < 0
         )::integer
@@ -586,12 +592,22 @@ begin
 
     with payload as (
         select
+            nullif(trim(coalesce(x.nomination_kind, '')), '') as nomination_kind,
             nullif(trim(coalesce(x.nomination_type, '')), '') as nomination_type,
+            nullif(trim(coalesce(x.display_name, '')), '') as display_name,
+            case
+                when nullif(trim(coalesce(x.companion_time, '')), '') is null then null::time
+                when trim(x.companion_time) ~ '^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$' then trim(x.companion_time)::time
+                else null::time
+            end as companion_time,
             coalesce(x.back_unit_amount, 0) as back_unit_amount,
             coalesce(x.is_active, true) as is_active,
             coalesce(x.sort_order, 0) as sort_order
         from jsonb_to_recordset(p_settings) as x(
+            nomination_kind text,
             nomination_type text,
+            display_name text,
+            companion_time text,
             back_unit_amount numeric,
             is_active boolean,
             sort_order integer
@@ -601,7 +617,10 @@ begin
         insert into public.store_nomination_back_master (
             company_id,
             department_id,
+            nomination_kind,
             nomination_type,
+            display_name,
+            companion_time,
             back_type,
             back_unit_amount,
             sort_order,
@@ -610,15 +629,21 @@ begin
         select
             v_company_id,
             p_department_id,
+            p.nomination_kind,
             p.nomination_type,
+            p.display_name,
+            p.companion_time,
             'nomination',
             p.back_unit_amount,
             p.sort_order,
             p.is_active
         from payload p
-        on conflict (company_id, department_id, nomination_type)
+        on conflict (company_id, department_id, nomination_kind)
         do update
-           set back_type = 'nomination',
+           set nomination_type = excluded.nomination_type,
+               display_name = excluded.display_name,
+               companion_time = excluded.companion_time,
+               back_type = 'nomination',
                back_unit_amount = excluded.back_unit_amount,
                sort_order = excluded.sort_order,
                is_active = excluded.is_active,
@@ -633,9 +658,9 @@ begin
 end;
 $$;
 
-drop function if exists public.upsert_store_item_category(bigint, bigint, text, text, integer, boolean);
+drop function if exists store.upsert_item_category(bigint, bigint, text, text, integer, boolean);
 
-create or replace function public.upsert_store_item_category(
+create or replace function store.upsert_item_category(
     p_department_id bigint,
     p_item_category_id bigint default null,
     p_category_code text default null,
@@ -714,11 +739,11 @@ begin
 end;
 $$;
 
-drop function if exists public.upsert_store_item(bigint, bigint, bigint, text, text, numeric, integer, boolean, boolean, numeric, text);
-drop function if exists public.upsert_store_item(bigint, bigint, bigint, text, text, numeric, integer, boolean, boolean, numeric, numeric, text);
-drop function if exists public.upsert_store_item(bigint, bigint, bigint, text, numeric, boolean, boolean, numeric, numeric, text);
+drop function if exists store.upsert_item(bigint, bigint, bigint, text, text, numeric, integer, boolean, boolean, numeric, text);
+drop function if exists store.upsert_item(bigint, bigint, bigint, text, text, numeric, integer, boolean, boolean, numeric, numeric, text);
+drop function if exists store.upsert_item(bigint, bigint, bigint, text, numeric, boolean, boolean, numeric, numeric, text);
 
-create or replace function public.upsert_store_item(
+create or replace function store.upsert_item(
     p_department_id bigint,
     p_item_id bigint default null,
     p_item_category_id bigint default null,
@@ -860,9 +885,9 @@ begin
 end;
 $$;
 
-drop function if exists public.delete_store_item(bigint, bigint);
+drop function if exists store.delete_item(bigint, bigint);
 
-create or replace function public.delete_store_item(
+create or replace function store.delete_item(
     p_department_id bigint,
     p_item_id bigint
 )
@@ -915,9 +940,9 @@ begin
 end;
 $$;
 
-drop function if exists public.reorder_store_items(bigint, jsonb);
+drop function if exists store.reorder_items(bigint, jsonb);
 
-create or replace function public.reorder_store_items(
+create or replace function store.reorder_items(
     p_department_id bigint,
     p_items jsonb default '[]'::jsonb
 )
