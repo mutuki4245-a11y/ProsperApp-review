@@ -82,16 +82,33 @@ public class SupabaseStoreOrderRepository(
 
     public async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsAsync(long businessDayId, CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (!HasRequiredSettings() || businessDayId <= 0)
+        {
+            return [];
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.OrderAttendingCasts(departmentId, businessDayId);
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderAttendanceCastOption>? cachedCasts))
+        {
+            return cachedCasts ?? [];
+        }
+
+        var result = await RpcClient.PostArrayAsync(
             "get_order_attending_casts",
             new
             {
-                p_department_id = CurrentStoreDepartmentId,
+                p_department_id = departmentId,
                 p_business_day_id = businessDayId
             },
             ct);
 
-        return rows.Select(row => new StoreOrderAttendanceCastOption
+        if (!result.Succeeded)
+        {
+            return [];
+        }
+
+        var casts = result.Rows.Select(row => new StoreOrderAttendanceCastOption
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
@@ -100,6 +117,9 @@ public class SupabaseStoreOrderRepository(
             })
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
+
+        _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateRuntimeOptions());
+        return casts;
     }
 
     public async Task<AddStoreOrderLinesResult> AddOrderLinesAsync(long slipId, IReadOnlyList<OrderQueueInputModel> lines, CancellationToken ct)

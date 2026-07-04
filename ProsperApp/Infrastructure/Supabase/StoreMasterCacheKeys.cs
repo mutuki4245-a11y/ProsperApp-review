@@ -22,6 +22,8 @@ internal static class StoreMasterCacheKeys
 
     public static string CurrentBusinessDay(long departmentId) => $"store-runtime:{departmentId}:current-business-day";
 
+    public static string OrderAttendingCasts(long departmentId, long businessDayId) => $"store-runtime:{departmentId}:{businessDayId}:order-attending-casts";
+
     public static MemoryCacheEntryOptions CreateOptions()
     {
         return new MemoryCacheEntryOptions
@@ -58,5 +60,15 @@ internal static class StoreMasterCacheKeys
     public static void ClearCurrentBusinessDay(IMemoryCache memoryCache, long departmentId)
     {
         memoryCache.Remove(CurrentBusinessDay(departmentId));
+    }
+
+    public static void ClearOrderAttendingCasts(IMemoryCache memoryCache, long departmentId, long businessDayId)
+    {
+        if (businessDayId <= 0)
+        {
+            return;
+        }
+
+        memoryCache.Remove(OrderAttendingCasts(departmentId, businessDayId));
     }
 }

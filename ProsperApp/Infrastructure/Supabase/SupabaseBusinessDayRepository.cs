@@ -113,13 +113,14 @@ public class SupabaseBusinessDayRepository(
             .Select(x => new AttendanceEntryPayload(x.CastId, x.ClockInTime, x.IsSelected))
             .ToArray() ?? [];
         var trimmedMemo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim();
+        var departmentId = CurrentStoreDepartmentId;
 
         var result = attendancePayload.Length == 0
             ? await RpcClient.PostArrayAsync(
                 "open_business_day",
                 new
                 {
-                    p_department_id = CurrentStoreDepartmentId,
+                    p_department_id = departmentId,
                     p_business_date = businessDate,
                     p_memo = trimmedMemo
                 },
@@ -128,7 +129,7 @@ public class SupabaseBusinessDayRepository(
                 "open_business_day_with_attendance",
                 new
                 {
-                    p_department_id = CurrentStoreDepartmentId,
+                    p_department_id = departmentId,
                     p_business_date = businessDate,
                     p_attendance_entries = attendancePayload,
                     p_memo = trimmedMemo
@@ -146,7 +147,8 @@ public class SupabaseBusinessDayRepository(
         }
 
         var businessDay = ParseBusinessDay(result.Rows[0]);
-        _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(CurrentStoreDepartmentId), businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
+        _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(departmentId), businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDay.BusinessDayId);
         return BusinessDayOperationResult.Success(businessDay);
     }
 
@@ -157,11 +159,12 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
         }
 
+        var departmentId = CurrentStoreDepartmentId;
         var result = await RpcClient.PostArrayAsync(
             "close_business_day",
             new
             {
-                p_department_id = CurrentStoreDepartmentId,
+                p_department_id = departmentId,
                 p_business_day_id = businessDayId,
                 p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
                 p_pending_receipt_status = _options.PendingStatus
@@ -178,7 +181,8 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("現在営業中の営業日が見つかりません。");
         }
 
-        StoreMasterCacheKeys.ClearCurrentBusinessDay(_memoryCache, CurrentStoreDepartmentId);
+        StoreMasterCacheKeys.ClearCurrentBusinessDay(_memoryCache, departmentId);
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
 
@@ -204,11 +208,12 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("出勤キャストを選択してください。");
         }
 
+        var departmentId = CurrentStoreDepartmentId;
         var result = await RpcClient.PostArrayAsync(
             "save_business_day_attendance",
             new
             {
-                p_department_id = CurrentStoreDepartmentId,
+                p_department_id = departmentId,
                 p_business_day_id = businessDayId,
                 p_attendance_entries = payload
             },
@@ -224,6 +229,7 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("勤怠入力を更新できませんでした。");
         }
 
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
 
@@ -361,11 +367,12 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayAttendanceSaveResult.Failed("退勤情報を1名以上入力してください。");
         }
 
+        var departmentId = CurrentStoreDepartmentId;
         var result = await RpcClient.PostScalarAsync(
             "save_business_day_closing_attendance",
             new
             {
-                p_department_id = CurrentStoreDepartmentId,
+                p_department_id = departmentId,
                 p_business_day_id = businessDayId,
                 p_attendance_entries = payload
             },
@@ -377,9 +384,13 @@ public class SupabaseBusinessDayRepository(
         }
 
         var value = NormalizeScalarBody(result.Body);
-        return int.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedCount)
-            ? BusinessDayAttendanceSaveResult.Success(savedCount)
-            : BusinessDayAttendanceSaveResult.Failed("勤怠入力を保存できませんでした。");
+        if (!int.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedCount))
+        {
+            return BusinessDayAttendanceSaveResult.Failed("勤怠入力を保存できませんでした。");
+        }
+
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
+        return BusinessDayAttendanceSaveResult.Success(savedCount);
     }
 
     private sealed record AttendanceEntryPayload(
