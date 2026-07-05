@@ -18,6 +18,38 @@
   margin-bottom: 0.85rem;
 }
 
+.settings-card--danger {
+  border-color: #fecaca;
+}
+
+.settings-debug-result {
+  margin-bottom: 1rem;
+}
+
+.settings-debug-result summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.settings-debug-result dl {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  max-width: 560px;
+}
+
+.settings-debug-result dl > div {
+  align-items: baseline;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-debug-result dt,
+.settings-debug-result dd {
+  margin: 0;
+}
+
 .settings-login {
   max-width: 640px;
 }
@@ -78,4 +110,3 @@
   gap: 0.75rem;
   margin-top: 1rem;
 }
-

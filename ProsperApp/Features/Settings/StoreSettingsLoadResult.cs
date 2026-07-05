@@ -38,3 +38,39 @@ public class StoreSettingsLoadResult
         };
     }
 }
+
+public class DebugDeleteNonMasterRecordsResult
+{
+    public bool Succeeded { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public IReadOnlyList<DebugDeletedTableCount> TableCounts { get; init; } = [];
+
+    public int DeletedCount => TableCounts.Sum(x => x.DeletedCount);
+
+    public static DebugDeleteNonMasterRecordsResult Success(IReadOnlyList<DebugDeletedTableCount> tableCounts)
+    {
+        return new DebugDeleteNonMasterRecordsResult
+        {
+            Succeeded = true,
+            TableCounts = tableCounts
+        };
+    }
+
+    public static DebugDeleteNonMasterRecordsResult Failed(string message)
+    {
+        return new DebugDeleteNonMasterRecordsResult
+        {
+            Succeeded = false,
+            ErrorMessage = message
+        };
+    }
+}
+
+public class DebugDeletedTableCount
+{
+    public string TableName { get; init; } = string.Empty;
+
+    public int DeletedCount { get; init; }
+}

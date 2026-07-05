@@ -17,7 +17,7 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 | ファイル | 役割 |
 | --- | --- |
 | `Sql/store_order_accounting_tables.sql` | 店舗営業、伝票、客行、指名、注文、自由入力調整、会計、締め調整のテーブル定義。`department_master` の店舗別運用設定列、RLS有効化、`updated_at` トリガー、主要インデックスを含む。 |
-| `Sql/store_settings_functions.sql` | 店舗設定画面用RPC。`store.get_departments()` で有効店舗一覧を返す。 |
+| `Sql/store_settings_functions.sql` | 店舗設定画面用RPC。`store.get_departments()` で有効店舗一覧を返し、`store.delete_non_master_records` でデバッグ用に選択店舗の営業データを削除する。 |
 | `Sql/store_rpc_functions.sql` | 分割済みRPCファイルの実行順を示す非実行インデックス。実行対象ではない。 |
 | `Sql/store_rpc/00_schema.sql` | `store` schemaを作成し、旧 `public.*` RPCを削除する。 |
 | `Sql/store_rpc/01_business_day.sql` | 店舗コンテキスト、営業日開始/取得/締め、勤怠、酒代、未会計伝票数を扱う。 |
@@ -96,6 +96,7 @@ DB反映時の基本順序は以下。
 | RPC | 主な用途 |
 | --- | --- |
 | `store.get_departments` | 有効な店舗一覧を返す。 |
+| `store.delete_non_master_records` | デバッグ用に選択店舗の営業日、出勤、伝票、注文、会計、バック集計のレコードを削除する。マスタ表は削除しない。 |
 
 ### 店舗コンテキスト・営業日
 
@@ -209,6 +210,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | RPC | 結果の保持単位 | ライフサイクル |
 | --- | --- | --- |
 | `store.get_departments` | 店舗一覧マスタ。アプリプロセス単位。 | 初回成功時に保持する。アプリ内に店舗マスタ更新画面がないため明示破棄はせず、プロセス再起動または将来の店舗更新機能で更新する。 |
+| `store.delete_non_master_records` | デバッグ削除結果のみ。 | 戻り値のテーブル別削除件数を画面結果表示に使い、キャッシュしない。成功時に現在営業日と指名バック設定のruntimeキャッシュを破棄する。 |
 | `store.get_context` | 店舗別マスタ。`department_id` 単位。 | 通常画面では初回成功時に保持する。店舗別運用設定がアプリ内で更新された場合は破棄が必要。領収書保存時の会社ID取得だけは現状キャッシュを経由せず都度取得する。 |
 | `store.get_tables` | 店舗別マスタ。`department_id` 単位。 | 初回成功時に保持する。卓マスタ更新をアプリ内で扱うまでは明示破棄しない。 |
 | `store.get_casts` | 店舗別キャスト候補。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.delete_cast` 成功時に破棄する。 |

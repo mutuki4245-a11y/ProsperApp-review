@@ -46,7 +46,7 @@
   - RLS有効化、updated_atトリガー、主要インデックスを含みます。
 
 - `Sql/store_settings_functions.sql`
-  - 店舗設定画面用の `store.get_departments()` RPCです。
+  - 店舗設定画面用の `store.get_departments()` とデバッグ用の `store.delete_non_master_records(p_department_id, p_confirmation)` RPCです。
   - `department_master` から有効店舗一覧を取得します。
 
 - `Sql/store_rpc_functions.sql`
@@ -102,6 +102,7 @@
 - マスタ系候補、現在営業日、当日出勤キャスト候補は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、現在営業日、指名バック設定、`store.get_order_attending_casts` の店舗別・営業日別結果です。指名バック設定は現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。
 - 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は店舗別マスター値です。`/Settings` には表示せず、`store.get_context` の店舗コンテキストとして利用します。
 - 営業中一覧と注文対象伝票は初期表示後のAjax取得と30秒自動更新で扱います。`store.get_business_day_slips` と `store.get_order_entry_slips` はキャッシュせず、保存成功POST直後の再取得を削ります。
+- `/Settings` の管理者解除後に、デバッグ用の「マスタ以外のテーブルのレコードを削除する」操作を表示します。`store.delete_non_master_records` は選択店舗の営業日、出勤、伝票、注文、会計、バック集計の営業データだけを削除し、`company_master`、`department_master`、`cast_master`、卓、商品、指名バック、支払方法などのマスタ表は削除しません。成功時は現在営業日と指名バック設定のruntimeキャッシュを破棄します。
 
 ### 後続仕様・検討候補
 
@@ -134,6 +135,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 ### 店舗設定
 
 - `store.get_departments()`
+- `store.delete_non_master_records(p_department_id, p_confirmation)`
 
 ### 店舗コンテキスト・営業日
 

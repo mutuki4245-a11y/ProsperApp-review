@@ -39,6 +39,16 @@ type RequestBody = {
 
 const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_departments", { result: "rows", params: [] }],
+  [
+    "store.delete_non_master_records",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_confirmation", type: "text" },
+      ],
+    },
+  ],
   ["store.get_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_tables", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],

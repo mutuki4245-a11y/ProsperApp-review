@@ -34,6 +34,8 @@ public class SettingsModel(
 
     public string? SuccessMessage { get; private set; }
 
+    public IReadOnlyList<DebugDeletedTableCount> DebugDeletedTableCounts { get; private set; } = [];
+
     public string? LocalSettingsJsonForClient { get; private set; }
 
     public IReadOnlyList<DepartmentOption> Departments { get; private set; } = [];
@@ -136,6 +138,45 @@ public class SettingsModel(
         return Page();
     }
 
+    public async Task<IActionResult> OnPostDeleteNonMasterRecordsAsync(CancellationToken ct)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Settings))
+        {
+            return NotFound();
+        }
+
+        IsUnlocked = IsValidSaveToken();
+        if (!IsUnlocked)
+        {
+            LockSettings();
+            LoadCurrentSettings();
+            await LoadDepartmentsAsync(ct);
+            ModelState.AddModelError(string.Empty, "デバッグ操作を実行するには、もう一度パスワードを入力してください。");
+            return Page();
+        }
+
+        await LoadDepartmentsAsync(ct);
+        var selectedDepartment = ValidateSettings();
+        if (!ModelState.IsValid || selectedDepartment is null)
+        {
+            RefreshSaveToken();
+            return Page();
+        }
+
+        var result = await _storeSettingsRepository.DeleteNonMasterRecordsAsync(selectedDepartment.DepartmentId, ct);
+        RefreshSaveToken();
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "マスタ以外のレコード削除に失敗しました。");
+            return Page();
+        }
+
+        DebugDeletedTableCounts = result.TableCounts;
+        Input.StoreName = selectedDepartment.DisplayName;
+        SuccessMessage = $"{selectedDepartment.DisplayName} のマスタ以外のレコードを {result.DeletedCount} 件削除しました。";
+        return Page();
+    }
+
     private async Task LoadDepartmentsAsync(CancellationToken ct)
     {
         var result = await _storeSettingsRepository.GetDepartmentsAsync(ct);
@@ -174,6 +215,13 @@ public class SettingsModel(
         IsUnlocked = false;
         SaveToken = null;
         HttpContext.Session.Remove(SaveTokenSessionKey);
+    }
+
+    private void RefreshSaveToken()
+    {
+        IsUnlocked = true;
+        SaveToken = Guid.NewGuid().ToString("N");
+        HttpContext.Session.SetString(SaveTokenSessionKey, SaveToken);
     }
 
     private void WriteSettingsCookie(LocalSettings settings)

@@ -4,6 +4,7 @@ do $$
 declare
     target_functions text[] := array[
         'store.get_departments',
+        'store.delete_non_master_records',
         'store.get_context',
         'store.get_current_business_day',
         'store.get_open_slip_count',
