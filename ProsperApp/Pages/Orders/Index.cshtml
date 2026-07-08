@@ -173,7 +173,7 @@
             const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
             const initialSlipId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SelectedSlipId));
             const slipOptionsUrl = '@Url.Page("/Orders/Index", "SlipOptions")';
-            const refreshIntervalMs = 30000;
+            const refreshIntervalMs = 10000;
 
             const selectedSlipInput = document.getElementById('selectedSlipId');
             const orderForm = document.getElementById('orderForm');
@@ -215,6 +215,12 @@
 
             const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
             const hasSlip = (slipId) => slips.some((slip) => String(slip.id) === String(slipId));
+            const setText = (element, text) => {
+                const value = String(text);
+                if (element && element.textContent !== value) {
+                    element.textContent = value;
+                }
+            };
 
             const setSlipWarning = (message) => {
                 if (!slipOptionsWarning) {
@@ -230,35 +236,80 @@
                     return;
                 }
 
-                slipPicker.innerHTML = '';
+                const removeSlipButtons = () => {
+                    slipPicker.querySelectorAll('[data-slip-id]').forEach((button) => button.remove());
+                };
+
+                slipPicker.querySelector('[data-order-slip-error]')?.remove();
+
                 if (!slipOptionsLoaded) {
-                    const loading = document.createElement('div');
-                    loading.className = 'alert alert-secondary mb-0';
-                    loading.textContent = '注文対象の卓番を読み込み中です。';
-                    slipPicker.appendChild(loading);
+                    removeSlipButtons();
+                    slipPicker.querySelector('[data-order-slip-empty]')?.remove();
+                    let loading = slipPicker.querySelector('[data-order-slip-loading]');
+                    if (!loading) {
+                        loading = document.createElement('div');
+                        loading.className = 'alert alert-secondary mb-0';
+                        loading.dataset.orderSlipLoading = '';
+                        slipPicker.appendChild(loading);
+                    }
+                    setText(loading, '注文対象の卓番を読み込み中です。');
                     return;
                 }
+
+                slipPicker.querySelector('[data-order-slip-loading]')?.remove();
 
                 if (slips.length === 0) {
-                    const empty = document.createElement('div');
-                    empty.className = 'alert alert-secondary mb-0';
-                    empty.textContent = '注文登録できるopen伝票がありません。';
-                    slipPicker.appendChild(empty);
+                    removeSlipButtons();
+                    let empty = slipPicker.querySelector('[data-order-slip-empty]');
+                    if (!empty) {
+                        empty = document.createElement('div');
+                        empty.className = 'alert alert-secondary mb-0';
+                        empty.dataset.orderSlipEmpty = '';
+                        slipPicker.appendChild(empty);
+                    }
+                    setText(empty, '注文登録できるopen伝票がありません。');
                     return;
                 }
 
-                slips.forEach((slip) => {
-                    const button = document.createElement('button');
-                    button.className = 'order-slip-picker__button';
-                    button.type = 'button';
-                    button.dataset.slipId = String(slip.id);
-                    button.classList.toggle('is-selected', String(selectedSlipInput?.value ?? '') === String(slip.id));
-                    const name = document.createElement('strong');
-                    name.textContent = slip.display;
-                    const meta = document.createElement('span');
-                    meta.textContent = `${slip.openedTime} 入店 / ${slip.customerCount} 人`;
-                    button.append(name, meta);
-                    slipPicker.appendChild(button);
+                slipPicker.querySelector('[data-order-slip-empty]')?.remove();
+
+                const buttonsBySlipId = new Map(
+                    Array.from(slipPicker.querySelectorAll('[data-slip-id]'))
+                        .map((button) => [button.dataset.slipId, button])
+                );
+                const renderedSlipIds = new Set();
+
+                slips.forEach((slip, index) => {
+                    const slipId = String(slip.id);
+                    let button = buttonsBySlipId.get(slipId);
+                    if (!button) {
+                        button = document.createElement('button');
+                        button.className = 'order-slip-picker__button';
+                        button.type = 'button';
+                        button.dataset.slipId = slipId;
+
+                        const name = document.createElement('strong');
+                        name.dataset.orderSlipName = '';
+                        const meta = document.createElement('span');
+                        meta.dataset.orderSlipMeta = '';
+                        button.append(name, meta);
+                    }
+
+                    button.classList.toggle('is-selected', String(selectedSlipInput?.value ?? '') === slipId);
+                    setText(button.querySelector('[data-order-slip-name]'), slip.display);
+                    setText(button.querySelector('[data-order-slip-meta]'), `${slip.openedTime} 入店 / ${slip.customerCount} 人`);
+
+                    renderedSlipIds.add(slipId);
+                    const current = slipPicker.children[index] ?? null;
+                    if (current !== button) {
+                        slipPicker.insertBefore(button, current);
+                    }
+                });
+
+                buttonsBySlipId.forEach((button, slipId) => {
+                    if (!renderedSlipIds.has(slipId)) {
+                        button.remove();
+                    }
                 });
             };
 
@@ -267,18 +318,15 @@
                     return;
                 }
 
-                let changed = false;
                 let removed = false;
                 if (selectedSlipInput?.value && !hasSlip(selectedSlipInput.value)) {
                     selectedSlipInput.value = '';
-                    changed = true;
                     removed = true;
                 }
 
                 queue.forEach((line, key) => {
                     if (!hasSlip(line.slipId)) {
                         queue.delete(key);
-                        changed = true;
                         removed = true;
                     }
                 });
@@ -287,9 +335,6 @@
                     setSlipWarning('会計済みまたは利用できなくなった卓番をキューから外しました。');
                 }
 
-                if (changed) {
-                    render();
-                }
             };
 
             const loadSlipOptions = async () => {
@@ -311,12 +356,21 @@
                     const result = await response.json();
                     slips = Array.isArray(result.slips) ? result.slips : [];
                     slipOptionsLoaded = true;
-                    renderSlipPicker();
                     removeUnavailableSlipLines();
                     render();
                 } catch {
                     if (!slipOptionsLoaded && slipPicker) {
-                        slipPicker.innerHTML = '<div class="alert alert-secondary mb-0">注文対象の卓番を取得できませんでした。</div>';
+                        slipPicker.querySelectorAll('[data-slip-id]').forEach((button) => button.remove());
+                        slipPicker.querySelector('[data-order-slip-loading]')?.remove();
+                        slipPicker.querySelector('[data-order-slip-empty]')?.remove();
+                        let error = slipPicker.querySelector('[data-order-slip-error]');
+                        if (!error) {
+                            error = document.createElement('div');
+                            error.className = 'alert alert-secondary mb-0';
+                            error.dataset.orderSlipError = '';
+                            slipPicker.appendChild(error);
+                        }
+                        setText(error, '注文対象の卓番を取得できませんでした。');
                     }
                 } finally {
                     slipOptionsLoading = false;

@@ -283,7 +283,7 @@
             const slipEditUrl = '@Url.Page("/Slips/Edit")';
             const canCreateSalesInput = @Json.Serialize(Model.CanCreateSalesInput);
             const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
-            const refreshIntervalMs = 30000;
+            const refreshIntervalMs = 10000;
             const autoSaveDelay = 500;
             const accountingUnit = 240;
             let slips = [];
