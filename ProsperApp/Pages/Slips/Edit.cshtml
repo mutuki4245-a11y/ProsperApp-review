@@ -3,9 +3,26 @@
 @{
     ViewData["Title"] = "伝票詳細";
     ViewData["HasCurrentBusinessDay"] = Model.Detail is not null;
+    var detailStatusDisplay = Model.Detail?.Status switch
+    {
+        "open" => "在席",
+        "checked_out" => "会計済",
+        "cancelled" => "取消",
+        null => "-",
+        _ => Model.Detail.Status
+    };
+    var detailStatusBadgeClass = Model.Detail?.Status switch
+    {
+        "open" => "text-bg-success",
+        "checked_out" => "text-bg-secondary",
+        "cancelled" => "text-bg-danger",
+        _ => "text-bg-light"
+    };
+    var activeOrderCount = Model.Detail?.Orders.Count(x => string.Equals(x.Status, "active", StringComparison.Ordinal)) ?? 0;
+    var activeChargeCount = Model.Detail?.ChargeLines.Count(x => string.Equals(x.Status, "active", StringComparison.Ordinal)) ?? 0;
 }
 
-<section class="slip-create">
+<section class="slip-create terminal-page terminal-page--slip-detail">
     <div class="page-section-heading">
         <h1>伝票詳細</h1>
         @if (Model.Detail is not null)
@@ -39,20 +56,73 @@
     }
     else
     {
-        <div id="slipCustomersSection">
-            <partial name="_SlipCustomers" model="Model" />
-        </div>
+        <section class="slip-detail-hero" aria-label="伝票サマリー">
+            <div class="slip-detail-hero__items">
+                <div>
+                    <span>卓番</span>
+                    <strong>@Model.Detail.TableDisplayName</strong>
+                </div>
+                <div>
+                    <span>状態</span>
+                    <strong class="badge @detailStatusBadgeClass">@detailStatusDisplay</strong>
+                </div>
+                <div>
+                    <span>入店</span>
+                    <strong>@Model.FormatStoreTime(Model.Detail.OpenedAt)</strong>
+                </div>
+                <div>
+                    <span>客数</span>
+                    <strong>@Model.Detail.CustomerCount 人</strong>
+                </div>
+                <div>
+                    <span>注文</span>
+                    <strong>@activeOrderCount 件</strong>
+                </div>
+                <div>
+                    <span>調整</span>
+                    <strong>@activeChargeCount 件</strong>
+                </div>
+                <div>
+                    <span>合計</span>
+                    <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                </div>
+            </div>
+            <div class="slip-detail-hero__actions">
+                @if (Model.CanAddOrders)
+                {
+                    <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#slipOrderModal">オーダー追加</button>
+                }
+                @if (Model.CanCheckout)
+                {
+                    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#slipCheckoutModal">会計処理へ</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-secondary" type="button" disabled>会計処理できません</button>
+                }
+            </div>
+        </section>
 
-        <div id="slipNominationsSection">
-            <partial name="_SlipNominations" model="Model" />
-        </div>
+        <div class="slip-detail-dashboard">
+            <div class="slip-detail-dashboard__column">
+                <div id="slipCustomersSection">
+                    <partial name="_SlipCustomers" model="Model" />
+                </div>
 
-        <div id="slipOrdersSection">
-            <partial name="_SlipOrders" model="Model" />
-        </div>
+                <div id="slipNominationsSection">
+                    <partial name="_SlipNominations" model="Model" />
+                </div>
+            </div>
 
-        <div id="slipCheckoutSection">
-            <partial name="_SlipCheckout" model="Model" />
+            <div class="slip-detail-dashboard__column slip-detail-dashboard__column--primary">
+                <div id="slipOrdersSection">
+                    <partial name="_SlipOrders" model="Model" />
+                </div>
+
+                <div id="slipCheckoutSection">
+                    <partial name="_SlipCheckout" model="Model" />
+                </div>
+            </div>
         </div>
 
         <div class="modal fade" id="attendingCastSelectModal" tabindex="-1" aria-labelledby="attendingCastSelectModalLabel" aria-hidden="true">

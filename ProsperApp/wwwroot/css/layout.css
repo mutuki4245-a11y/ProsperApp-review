@@ -3,6 +3,38 @@
   max-width: 1280px;
 }
 
+.terminal-page {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1680px;
+  width: min(100%, 1680px);
+}
+
+.store-home.terminal-page,
+.slip-create.terminal-page,
+.tablet-entry.terminal-page {
+  max-width: 1680px;
+}
+
+.terminal-page .page-section-heading {
+  align-items: end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.terminal-page .page-section-heading h1 {
+  font-size: 1.35rem;
+}
+
+.terminal-page .page-section-heading p {
+  font-weight: 700;
+}
+
+.terminal-page--receipts {
+  padding-bottom: 1rem;
+}
+
 .app-workflow-nav {
   background: #f8fafc;
   border-bottom: 1px solid #d9e2ec;
@@ -205,7 +237,8 @@
   display: flex;
   gap: 0.75rem;
   justify-content: space-between;
-  padding: 0.45rem 0.6rem;
+  min-height: 3.4rem;
+  padding: 0.5rem 0.65rem;
 }
 
 .sales-summary__items {
@@ -232,9 +265,19 @@
   font-size: 0.9rem;
 }
 
+.sales-summary__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.sales-summary__create,
 .sales-summary__attendance {
   font-weight: 700;
-  min-width: 5.5rem;
+  min-height: 2.35rem;
+  min-width: 6.5rem;
 }
 
 .sales-block-alert {
@@ -515,8 +558,15 @@
     flex-direction: column;
   }
 
+  .sales-summary__actions,
   .sales-summary .btn {
-    align-self: flex-start;
+    align-self: stretch;
+    width: 100%;
+  }
+
+  .sales-summary__actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .operations-header__actions {
@@ -545,6 +595,39 @@
   .business-actions,
   .slip-list__row,
   .order-entry__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .terminal-page .page-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .slip-list__header {
+    display: none;
+  }
+
+  .slip-list__row--action,
+  .slip-list__row-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .slip-list__karaoke {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .slip-detail-hero__items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .slip-detail-hero__actions,
+  .slip-detail-hero__actions .btn {
+    width: 100%;
+  }
+
+  .slip-detail-hero__actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 

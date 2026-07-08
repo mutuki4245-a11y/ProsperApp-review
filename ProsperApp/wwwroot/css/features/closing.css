@@ -1,7 +1,7 @@
 .closing-list {
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 1rem;
 }
 
@@ -11,6 +11,9 @@
   gap: 0.75rem;
   margin-top: 0.25rem;
   padding-top: 1rem;
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
 }
 
 .closing-panel {
@@ -23,7 +26,7 @@
   display: grid;
   gap: 0.75rem;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  min-height: 74px;
+  min-height: 82px;
   padding: 0.85rem;
   text-decoration: none;
 }
@@ -145,7 +148,7 @@ a.closing-panel:focus {
 
 .closing-panel__submit {
   justify-self: end;
-  min-height: 2.4rem;
+  min-height: 3rem;
   white-space: nowrap;
 }
 
@@ -253,6 +256,10 @@ a.closing-panel:focus {
   padding: 1rem;
 }
 
+.terminal-page--closing-entry .closing-entry-panel {
+  max-width: 920px;
+}
+
 .closing-entry-panel__body {
   display: grid;
   gap: 0.45rem;
@@ -276,7 +283,7 @@ a.closing-panel:focus {
   align-items: center;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: minmax(0, 18rem) auto;
+  grid-template-columns: minmax(0, 22rem) auto;
 }
 
 .closing-amount-input span {
@@ -329,8 +336,8 @@ a.closing-panel:focus {
   border-radius: 10px;
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: minmax(150px, 1fr) 10rem 10rem 7rem auto;
-  min-height: 4rem;
+  grid-template-columns: minmax(190px, 1fr) 11rem 11rem 7rem auto;
+  min-height: 4.25rem;
   padding: 0.65rem;
 }
 
@@ -408,8 +415,22 @@ a.closing-panel:focus {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: auto minmax(0, 1fr);
+  min-height: 3.4rem;
   padding: 0.75rem 0.9rem;
   text-align: left;
+}
+
+.closing-attendance-modal__search {
+  min-height: 3.2rem;
+}
+
+.cast-sales-adjustment-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.terminal-page--closing-list .cast-sales-adjustment-confirm {
+  margin-top: 1rem;
 }
 
 .closing-attendance-modal__item:has(.form-check-input:checked),
@@ -438,6 +459,15 @@ a.closing-panel:focus {
 }
 
 @media (max-width: 767px) {
+  .closing-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .closing-final {
+    bottom: auto;
+    position: static;
+  }
+
   .closing-panel {
     grid-template-columns: minmax(0, 1fr) auto;
   }

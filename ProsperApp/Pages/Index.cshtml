@@ -11,7 +11,7 @@
     var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
 }
 
-<section class="store-home">
+<section class="store-home terminal-page terminal-page--sales">
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
     {
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
@@ -42,19 +42,28 @@
                         <span data-business-checked-out-slip-count>取得中</span>
                     </span>
                 </div>
-                <a class="btn btn-outline-primary btn-sm sales-summary__attendance" asp-page="/Attendance">勤怠管理</a>
+                <div class="sales-summary__actions">
+                    @if (Model.CanCreateSalesInput)
+                    {
+                        <button class="btn btn-primary sales-summary__create" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                    }
+                    <a class="btn btn-outline-primary sales-summary__attendance" asp-page="/Attendance">勤怠管理</a>
+                </div>
             </div>
             <section class="slip-list-section" id="slipListPanel">
-                @if (Model.CanCreateSalesInput)
-                {
-                    <div class="slip-list-section__actions">
-                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
-                    </div>
-                }
-
                 <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
                     <div id="businessKaraokeFields"></div>
                     <output class="visually-hidden" data-business-karaoke-status aria-live="polite"></output>
+                    <div class="slip-list__header" aria-hidden="true">
+                        <span>卓</span>
+                        <span>状態</span>
+                        <span>入店</span>
+                        <span>客</span>
+                        <span>指名</span>
+                        <span>メモ</span>
+                        <span>会計</span>
+                        <span>カラオケ</span>
+                    </div>
                     <div class="slip-list" data-business-slip-list>
                         <article class="slip-list__row slip-list__row--add" data-business-slip-loading>
                             <div class="slip-list__main">
@@ -85,13 +94,13 @@
                             </div>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
                         </div>
-                        <div class="modal-body slip-modal-form">
+                        <div class="modal-body slip-modal-form slip-modal-form--create">
                             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
                             <input asp-for="CreateSlipInput.OpenedAt" type="hidden" />
                             <input asp-for="CreateSlipInput.BusinessDate" type="hidden" data-business-create-date-input />
                             <input asp-for="CreateSlipInput.BusinessDayId" type="hidden" data-business-create-day-id-input />
 
-                            <section class="slip-create__panel">
+                            <section class="slip-create__panel slip-create__panel--entry">
                                 <h3>入店情報</h3>
                                 <div class="row g-3">
                                     <div class="col-md-5">
@@ -119,7 +128,7 @@
                                 </div>
                             </section>
 
-                            <section class="slip-create__panel">
+                            <section class="slip-create__panel slip-create__panel--tables">
                                 <h3>卓番</h3>
                                 <input asp-for="CreateSlipInput.TableId" type="hidden" id="businessCreateSlipTableId" />
                                 <span asp-validation-for="CreateSlipInput.TableId" class="text-danger"></span>
@@ -141,7 +150,7 @@
                                 }
                             </section>
 
-                            <section class="slip-create__panel">
+                            <section class="slip-create__panel slip-create__panel--customers">
                                 <div class="slip-create__panel-title">
                                     <h3>客情報</h3>
                                     <button class="btn btn-outline-primary" type="button" id="businessAddCustomerButton">客行追加</button>
@@ -159,7 +168,7 @@
                                 </div>
                             </section>
 
-                            <section class="slip-create__panel">
+                            <section class="slip-create__panel slip-create__panel--nominations">
                                 <div class="slip-create__panel-title">
                                     <h3>指名情報</h3>
                                     <button class="btn btn-outline-primary" type="button" id="businessAddNominationButton" disabled="@(!hasNominationOptions)">指名行追加</button>
@@ -218,7 +227,7 @@
                                 }
                             </section>
 
-                            <section class="slip-create__panel">
+                            <section class="slip-create__panel slip-create__panel--memo">
                                 <h3>メモ</h3>
                                 <textarea asp-for="CreateSlipInput.Memo" class="form-control form-control-lg" rows="2" placeholder="共有事項があれば入力"></textarea>
                                 <span asp-validation-for="CreateSlipInput.Memo" class="text-danger"></span>
@@ -456,8 +465,8 @@
                 link.href = `${slipEditUrl}?slipId=${encodeURIComponent(slip.id)}`;
                 link.append(
                     buildElement('strong', 'slip-list__table', slip.tableDisplay),
-                    buildElement('span', `badge ${slip.statusBadgeClass}`, slip.statusDisplay),
-                    buildElement('span', null, slip.openedTime),
+                    buildElement('span', `badge slip-list__status ${slip.statusBadgeClass}`, slip.statusDisplay),
+                    buildElement('span', 'slip-list__time', slip.openedTime),
                     buildElement('span', 'slip-list__customers', slip.customerNames || '客名なし'),
                     buildElement('span', 'slip-list__casts', slip.castNames || '指名なし'),
                     buildElement('span', 'slip-list__memo', slip.memo || '-')
