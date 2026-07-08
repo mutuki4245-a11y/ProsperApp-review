@@ -1,19 +1,20 @@
 .store-home {
   margin: 0 auto;
-  max-width: 1280px;
+  max-width: 1180px;
 }
 
 .terminal-page {
+  --terminal-content-width: 1180px;
   margin-left: auto;
   margin-right: auto;
-  max-width: 1680px;
-  width: min(100%, 1680px);
+  max-width: var(--terminal-content-width);
+  width: min(100%, var(--terminal-content-width));
 }
 
 .store-home.terminal-page,
 .slip-create.terminal-page,
 .tablet-entry.terminal-page {
-  max-width: 1680px;
+  max-width: var(--terminal-content-width);
 }
 
 .terminal-page .page-section-heading {
@@ -217,6 +218,74 @@
   margin: 0;
 }
 
+.terminal-count-badge,
+.terminal-save-status {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  min-height: 1.7rem;
+  padding: 0.25rem 0.65rem;
+  white-space: nowrap;
+}
+
+.terminal-count-badge {
+  background: #eef2f7;
+  color: #475569;
+}
+
+.terminal-save-status {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.terminal-save-status[data-save-state="saving"] {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.terminal-save-status[data-save-state="dirty"] {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.terminal-save-status[data-save-state="error"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.terminal-page .modal-content {
+  border-radius: 10px;
+}
+
+.terminal-page .modal-footer {
+  background: #fff;
+  border-top: 1px solid #d9e2ec;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.terminal-page .modal-footer .btn {
+  min-height: 2.75rem;
+  min-width: 7rem;
+}
+
+.terminal-page .modal-dialog-scrollable .modal-content {
+  max-height: calc(100dvh - 1rem);
+}
+
+.terminal-page .modal-content > form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.terminal-page .modal-content > form > .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .operations-summary__list {
   margin-bottom: 0;
 }
@@ -278,6 +347,14 @@
   font-weight: 700;
   min-height: 2.35rem;
   min-width: 6.5rem;
+}
+
+.slip-list-section__statusbar {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.35rem;
+  min-height: 1.9rem;
 }
 
 .sales-block-alert {
@@ -497,8 +574,18 @@
 
 
 @media (max-width: 1199.98px) and (min-width: 768px) {
+  .terminal-page {
+    --terminal-content-width: 100%;
+  }
+
+  .app-shell {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
   .tablet-entry__workspace {
-    grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+    gap: 0.75rem;
+    grid-template-columns: minmax(430px, 1.05fr) minmax(310px, 0.95fr);
   }
 
   .tablet-entry__preview {

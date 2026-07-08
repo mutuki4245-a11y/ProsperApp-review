@@ -53,7 +53,9 @@
             <section class="slip-list-section" id="slipListPanel">
                 <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
                     <div id="businessKaraokeFields"></div>
-                    <output class="visually-hidden" data-business-karaoke-status aria-live="polite"></output>
+                    <div class="slip-list-section__statusbar">
+                        <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite">同期済み</output>
+                    </div>
                     <div class="slip-list__header" aria-hidden="true">
                         <span>卓</span>
                         <span>状態</span>
@@ -297,7 +299,15 @@
 
             const setStatus = (message) => {
                 if (status) {
-                    status.textContent = message;
+                    const text = message || '同期済み';
+                    status.textContent = text;
+                    if (text.includes('保存中')) {
+                        status.dataset.saveState = 'saving';
+                    } else if (text.includes('未保存')) {
+                        status.dataset.saveState = 'dirty';
+                    } else {
+                        status.dataset.saveState = 'saved';
+                    }
                 }
             };
 

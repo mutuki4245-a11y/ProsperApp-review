@@ -93,7 +93,7 @@
                     </div>
                 </div>
                 <button class="btn btn-danger closing-panel__submit" type="submit" data-closing-close-submit disabled>確認中</button>
-                <output class="visually-hidden" data-closing-final-status aria-live="polite">締め条件を確認しています。</output>
+                <output class="terminal-save-status closing-final__status" data-closing-final-status data-save-state="saving" aria-live="polite">締め条件を確認しています。</output>
             </form>
         }
     </section>
@@ -206,6 +206,13 @@
                     }
                     if (status) {
                         status.textContent = statusText;
+                        if (nextClass === 'is-ready') {
+                            status.dataset.saveState = 'saved';
+                        } else if (nextClass === 'has-warning') {
+                            status.dataset.saveState = 'dirty';
+                        } else {
+                            status.dataset.saveState = 'saving';
+                        }
                     }
                 };
 

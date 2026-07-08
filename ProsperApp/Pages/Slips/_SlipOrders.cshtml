@@ -41,7 +41,17 @@
 
         <div class="slip-create__panel">
             <div class="slip-create__panel-title">
-                <h2>オーダー一覧</h2>
+                <div class="slip-create__panel-heading">
+                    <h2>オーダー一覧</h2>
+                    <small>@activeOrders.Count 件 / @activeOrderTotal.ToString("N0") 円</small>
+                </div>
+                <div class="slip-create__panel-title-actions">
+                    @if (Model.IsOpenSlip && showKaraokeOrderRow)
+                    {
+                        <output class="terminal-save-status" data-detail-karaoke-status data-save-state="saved" aria-live="polite">保存済み</output>
+                    }
+                    <span class="terminal-count-badge">@activeOrders.Count 件</span>
+                </div>
             </div>
 
             @if (showKaraokeOrderRow && Model.IsOpenSlip)
@@ -155,8 +165,11 @@
 
         <div class="slip-create__panel">
             <div class="slip-create__panel-title">
-                <h2>自由入力明細</h2>
-                <span class="badge text-bg-secondary">@chargeTotal.ToString("N0") 円</span>
+                <div class="slip-create__panel-heading">
+                    <h2>自由入力明細</h2>
+                    <small>@activeAdjustments.Count 件 / @chargeTotal.ToString("N0") 円</small>
+                </div>
+                <span class="terminal-count-badge">@chargeTotal.ToString("N0") 円</span>
             </div>
 
             <div class="table-responsive">
@@ -204,8 +217,14 @@
                     <form method="post" asp-page-handler="SaveAdjustments" data-adjustment-form>
                         <input type="hidden" asp-for="SlipId" />
                         <div class="slip-create__panel-title">
-                            <h3>自由入力明細</h3>
-                            <button class="btn btn-outline-primary" type="button" data-add-adjustment-row>明細を追加</button>
+                            <div class="slip-create__panel-heading">
+                                <h3>自由入力明細</h3>
+                                <small>明細名と金額を入力して保存</small>
+                            </div>
+                            <div class="slip-create__panel-title-actions">
+                                <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
+                                <button class="btn btn-outline-primary" type="button" data-add-adjustment-row>明細を追加</button>
+                            </div>
                         </div>
                         <span asp-validation-for="AdjustmentsInput.Lines" class="text-danger"></span>
                         <div class="adjustment-list" data-adjustment-list>
@@ -298,7 +317,10 @@
                                                     <h3>注文キュー</h3>
                                                     <small>@detail.TableDisplayName</small>
                                                 </div>
-                                                <button class="btn btn-outline-secondary" type="button" id="detailClearQueueButton">クリア</button>
+                                                <div class="slip-create__panel-title-actions">
+                                                    <span class="terminal-save-status" data-save-state="saved" id="detailOrderQueueStatus" aria-live="polite">空</span>
+                                                    <button class="btn btn-outline-secondary" type="button" id="detailClearQueueButton">クリア</button>
+                                                </div>
                                             </div>
                                             <span asp-validation-for="QueueLines" class="text-danger"></span>
 

@@ -12,6 +12,30 @@
     const businessDayId = pageData.businessDayId ? String(pageData.businessDayId) : '';
     const draftPrefix = `prosper:slip:${businessDayId}:${slipId}`;
 
+    const setSaveStatus = (target, message) => {
+        if (!target) {
+            return;
+        }
+
+        const text = message || '保存済み';
+        target.textContent = text;
+        if (text.includes('保存中')) {
+            target.dataset.saveState = 'saving';
+        } else if (text.includes('未保存')) {
+            target.dataset.saveState = 'dirty';
+        } else if (text.includes('失敗')) {
+            target.dataset.saveState = 'error';
+        } else {
+            target.dataset.saveState = 'saved';
+        }
+    };
+
+    const setPartialStatus = (sectionId, message) => {
+        const section = document.getElementById(sectionId);
+        const status = section?.querySelector('[data-partial-status]');
+        setSaveStatus(status, message);
+    };
+
     const parseValidation = (root) => {
         if (window.jQuery?.validator?.unobtrusive) {
             window.jQuery.validator.unobtrusive.parse(root);
@@ -25,6 +49,7 @@
             return;
         }
 
+        setPartialStatus(sectionId, '保存中');
         const response = await fetch(form.action, {
             method: 'POST',
             body: new FormData(form),
@@ -36,6 +61,7 @@
         const html = await response.text();
         section.innerHTML = html;
         parseValidation(section);
+        setPartialStatus(sectionId, '保存済み');
         window.AppLoading?.hide(form);
     };
 
@@ -85,6 +111,7 @@
     const addNominationModal = addNominationModalElement ? new bootstrap.Modal(addNominationModalElement) : null;
     const slipOrderModalElement = document.getElementById('slipOrderModal');
     const slipOrderModal = slipOrderModalElement ? new bootstrap.Modal(slipOrderModalElement) : null;
+    const slipOrderForm = document.getElementById('slipOrderForm');
     const orderAttendingCastModalElement = document.getElementById('orderAttendingCastSelectModal');
     const orderAttendingCastModalList = document.getElementById('orderAttendingCastModalList');
     const orderAttendingCastModal = orderAttendingCastModalElement ? new bootstrap.Modal(orderAttendingCastModalElement) : null;
@@ -92,6 +119,7 @@
     const detailOrderQueueList = document.getElementById('detailOrderQueueList');
     const detailOrderQueueEmpty = document.getElementById('detailOrderQueueEmpty');
     const detailOrderQueueTotal = document.getElementById('detailOrderQueueTotal');
+    const detailOrderQueueStatus = document.getElementById('detailOrderQueueStatus');
     const detailSubmitOrderButton = document.getElementById('detailSubmitOrderButton');
     const detailClearQueueButton = document.getElementById('detailClearQueueButton');
     const slipCheckoutModalElement = document.getElementById('slipCheckoutModal');
@@ -114,9 +142,11 @@
     const detailKaraokeAmount = document.querySelector('[data-detail-karaoke-amount]');
     const detailOrderTotal = document.querySelector('[data-detail-order-total]');
     const detailKaraokeSave = document.querySelector('[data-detail-karaoke-save]');
+    const detailKaraokeStatus = document.querySelector('[data-detail-karaoke-status]');
     const adjustmentForm = document.querySelector('[data-adjustment-form]');
     const adjustmentList = document.querySelector('[data-adjustment-list]');
     const addAdjustmentButton = document.querySelector('[data-add-adjustment-row]');
+    const adjustmentStatus = document.querySelector('[data-adjustment-status]');
     let detailCashAmount = Number(detailCashDisplay?.dataset.cashAmount ?? 0);
     const orderQueue = new Map();
     const submitOrderBaseDisabled = detailSubmitOrderButton?.disabled ?? false;
@@ -163,6 +193,7 @@
         }
         if (markDirty && slipId) {
             localStorage.setItem(karaokeDraftKey, String(normalized));
+            setSaveStatus(detailKaraokeStatus, '未保存');
         }
     };
 
@@ -178,6 +209,7 @@
         }
 
         localStorage.setItem(adjustmentDraftKey, JSON.stringify(readAdjustmentRows()));
+        setSaveStatus(adjustmentStatus, '未保存');
     };
 
     const renumberAdjustmentRows = () => {
@@ -231,6 +263,7 @@
                         if (rows.length === 0) {
                             appendAdjustmentRow();
                         }
+                        setSaveStatus(adjustmentStatus, '未保存');
                     }
                 } catch {
                     localStorage.removeItem(adjustmentDraftKey);
@@ -550,6 +583,10 @@
         if (detailOrderQueueEmpty) {
             detailOrderQueueEmpty.hidden = hasQueue;
         }
+        if (detailOrderQueueStatus) {
+            detailOrderQueueStatus.textContent = hasQueue ? '未送信' : '空';
+            detailOrderQueueStatus.dataset.saveState = hasQueue ? 'dirty' : 'saved';
+        }
         if (detailOrderQueueTotal) {
             detailOrderQueueTotal.textContent = formatYen(total);
         }
@@ -651,10 +688,12 @@
     adjustmentList?.addEventListener('input', saveAdjustmentDraft);
 
     detailKaraokeForm?.addEventListener('submit', () => {
+        setSaveStatus(detailKaraokeStatus, '保存中');
         localStorage.removeItem(karaokeDraftKey);
     });
 
     adjustmentForm?.addEventListener('submit', () => {
+        setSaveStatus(adjustmentStatus, '保存中');
         renumberAdjustmentRows();
         localStorage.removeItem(adjustmentDraftKey);
     });
@@ -662,6 +701,10 @@
     detailClearQueueButton?.addEventListener('click', () => {
         orderQueue.clear();
         renderOrderQueue();
+    });
+
+    slipOrderForm?.addEventListener('submit', () => {
+        setSaveStatus(detailOrderQueueStatus, '保存中');
     });
 
     detailCheckoutClosedTime?.addEventListener('change', syncCheckoutClosedTimeFields);

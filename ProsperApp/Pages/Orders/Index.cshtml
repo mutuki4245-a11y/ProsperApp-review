@@ -39,7 +39,11 @@
             <div class="order-entry__grid">
                 <section class="slip-create__panel order-entry__panel order-entry__slips">
                     <div class="slip-create__panel-title">
-                        <h2>1. 卓番選択</h2>
+                        <div class="slip-create__panel-heading">
+                            <h2>1. 卓番選択</h2>
+                            <small>注文対象のopen伝票</small>
+                        </div>
+                        <span class="terminal-count-badge">@Model.Slips.Count 件</span>
                     </div>
                     <div class="order-entry__panel-body">
                         <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
@@ -53,10 +57,11 @@
 
                 <section class="slip-create__panel order-entry__panel order-entry__items" id="itemPanel">
                     <div class="slip-create__panel-title">
-                        <h2>2. 商品一覧</h2>
-                        <span class="badge text-bg-secondary" id="selectedSlipBadge">
-                            @(Model.SelectedSlip?.TableDisplayName ?? "卓番未選択")
-                        </span>
+                        <div class="slip-create__panel-heading">
+                            <h2>2. 商品一覧</h2>
+                            <small>@Model.Items.Count 件</small>
+                        </div>
+                        <span class="terminal-count-badge" id="selectedSlipBadge">@(Model.SelectedSlip?.TableDisplayName ?? "卓番未選択")</span>
                     </div>
 
                     <div class="order-entry__panel-body">
@@ -109,7 +114,10 @@
                             <h2>3. 注文キュー</h2>
                             <small id="selectedSlipQueueLabel">@(Model.SelectedSlip?.TableDisplayName ?? "卓番未選択")</small>
                         </div>
-                        <button class="btn btn-outline-secondary" type="button" id="clearQueueButton">クリア</button>
+                        <div class="slip-create__panel-title-actions">
+                            <span class="terminal-save-status" data-save-state="dirty" id="queueStatus" aria-live="polite">未送信</span>
+                            <button class="btn btn-outline-secondary" type="button" id="clearQueueButton">クリア</button>
+                        </div>
                     </div>
                     <div class="order-entry__panel-body order-entry__panel-body--queue">
                         <span asp-validation-for="QueueLines" class="text-danger"></span>
@@ -165,6 +173,7 @@
             const refreshIntervalMs = 30000;
 
             const selectedSlipInput = document.getElementById('selectedSlipId');
+            const orderForm = document.getElementById('orderForm');
             const selectedSlipBadge = document.getElementById('selectedSlipBadge');
             const selectedSlipQueueLabel = document.getElementById('selectedSlipQueueLabel');
             const slipPicker = document.querySelector('[data-order-slip-picker]');
@@ -175,6 +184,7 @@
             const queueTotal = document.getElementById('queueTotal');
             const submitOrderButton = document.getElementById('submitOrderButton');
             const clearQueueButton = document.getElementById('clearQueueButton');
+            const queueStatus = document.getElementById('queueStatus');
             const queue = new Map();
             const submitBaseDisabled = submitOrderButton?.disabled ?? false;
             let pendingBackItemId = null;
@@ -421,6 +431,10 @@
                 if (queueEmpty) {
                     queueEmpty.hidden = hasQueue;
                 }
+                if (queueStatus) {
+                    queueStatus.textContent = hasQueue ? '未送信' : '空';
+                    queueStatus.dataset.saveState = hasQueue ? 'dirty' : 'saved';
+                }
                 if (queueTotal) {
                     queueTotal.textContent = formatYen(total);
                 }
@@ -472,6 +486,13 @@
             clearQueueButton?.addEventListener('click', () => {
                 queue.clear();
                 render();
+            });
+
+            orderForm?.addEventListener('submit', () => {
+                if (queueStatus) {
+                    queueStatus.textContent = '保存中';
+                    queueStatus.dataset.saveState = 'saving';
+                }
             });
 
             document.querySelectorAll('[data-category-tab]').forEach((button) => {

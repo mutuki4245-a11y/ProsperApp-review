@@ -7,15 +7,23 @@
     var hasNominationOptions = nominationOptions.Length > 0;
     var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
     var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = nominationOptions.FirstOrDefault().Value };
+    var nominationCount = Model.Detail?.Nominations.Count ?? 0;
+    var nominationTotal = Model.Detail?.Nominations.Sum(x => x.NominationPrice) ?? 0;
 }
 
 <div class="slip-create__panel" id="slipNominationsPanel">
     <div class="slip-create__panel-title">
-        <h2>指名一覧</h2>
-        @if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0)
-        {
-            <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addNominationModal" disabled="@(!hasNominationOptions)">指名を追加</button>
-        }
+        <div class="slip-create__panel-heading">
+            <h2>指名一覧</h2>
+            <small>@nominationCount 件 / @nominationTotal.ToString("N0") 円</small>
+        </div>
+        <div class="slip-create__panel-title-actions">
+            <output class="terminal-save-status" data-partial-status="nominations" data-save-state="saved" aria-live="polite">保存済み</output>
+            @if (Model.IsOpenSlip && Model.AttendanceCasts.Count > 0)
+            {
+                <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addNominationModal" disabled="@(!hasNominationOptions)">指名を追加</button>
+            }
+        </div>
     </div>
 
     <div class="table-responsive">
