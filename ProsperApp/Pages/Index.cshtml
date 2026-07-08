@@ -296,6 +296,11 @@
 
             const formatYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
             const toQuantity = (value) => Math.max(0, Math.trunc(Number(value) || 0));
+            const setText = (element, text) => {
+                if (element && element.textContent !== String(text)) {
+                    element.textContent = String(text);
+                }
+            };
 
             const setStatus = (message) => {
                 if (status) {
@@ -447,62 +452,67 @@
             };
 
             const renderEmpty = (title, message) => {
-                list.innerHTML = '';
-                const row = buildElement('article', 'slip-list__row slip-list__row--add');
-                const main = buildElement('div', 'slip-list__main');
-                main.append(buildElement('strong', null, title), buildElement('span', null, message));
-                row.appendChild(main);
+                Array.from(list.querySelectorAll('[data-business-slip-row]')).forEach((row) => row.remove());
+                let row = list.querySelector('[data-business-empty-row]');
+                if (!row) {
+                    list.innerHTML = '';
+                    row = buildElement('article', 'slip-list__row slip-list__row--add');
+                    row.dataset.businessEmptyRow = '';
+                    const main = buildElement('div', 'slip-list__main');
+                    const titleElement = buildElement('strong');
+                    titleElement.dataset.businessEmptyTitle = '';
+                    const messageElement = buildElement('span');
+                    messageElement.dataset.businessEmptyMessage = '';
+                    main.append(titleElement, messageElement);
+                    row.appendChild(main);
 
-                if (canCreateSalesInput) {
-                    const actions = buildElement('div', 'slip-list__actions');
-                    const button = buildElement('button', 'btn btn-primary btn-lg', '伝票を追加');
-                    button.type = 'button';
-                    button.dataset.bsToggle = 'modal';
-                    button.dataset.bsTarget = '#createSlipModal';
-                    actions.appendChild(button);
-                    row.appendChild(actions);
+                    if (canCreateSalesInput) {
+                        const actions = buildElement('div', 'slip-list__actions');
+                        const button = buildElement('button', 'btn btn-primary btn-lg', '伝票を追加');
+                        button.type = 'button';
+                        button.dataset.bsToggle = 'modal';
+                        button.dataset.bsTarget = '#createSlipModal';
+                        actions.appendChild(button);
+                        row.appendChild(actions);
+                    }
+
+                    list.appendChild(row);
                 }
 
-                list.appendChild(row);
+                setText(row.querySelector('[data-business-empty-title]'), title);
+                setText(row.querySelector('[data-business-empty-message]'), message);
                 if (revealButton) {
                     revealButton.hidden = true;
                 }
             };
 
-            const buildSlipRow = (slip) => {
-                const row = buildElement('article', 'slip-list__row slip-list__row--action');
-                const link = buildElement('a', 'slip-list__row-main');
-                link.href = `${slipEditUrl}?slipId=${encodeURIComponent(slip.id)}`;
-                link.append(
-                    buildElement('strong', 'slip-list__table', slip.tableDisplay),
-                    buildElement('span', `badge slip-list__status ${slip.statusBadgeClass}`, slip.statusDisplay),
-                    buildElement('span', 'slip-list__time', slip.openedTime),
-                    buildElement('span', 'slip-list__customers', slip.customerNames || '客名なし'),
-                    buildElement('span', 'slip-list__casts', slip.castNames || '指名なし'),
-                    buildElement('span', 'slip-list__memo', slip.memo || '-')
-                );
-
+            const buildAmountElement = (slip) => {
                 const amount = buildElement('span', 'slip-list__amount slip-list__amount--concealed');
                 amount.setAttribute('aria-label', '会計額');
+                const amountValueElement = buildElement('strong', 'slip-list__amount-value', formatYen(slip.accountingAmount));
+                amountValueElement.dataset.businessSlipAmountValue = '';
                 amount.append(
                     buildElement('span', 'slip-list__amount-mask', '**** 円'),
-                    buildElement('strong', 'slip-list__amount-value', formatYen(slip.accountingAmount))
+                    amountValueElement
                 );
-                link.appendChild(amount);
-                row.appendChild(link);
+                return amount;
+            };
 
-                if (slip.status === 'open') {
-                    const initialQuantity = getInitialQuantity(slip);
-                    const displayQuantity = getDisplayQuantity(slip);
-                    const baseAmount = Number(slip.accountingAmount || 0) - initialQuantity * accountingUnit;
-                    const karaoke = buildElement('div', 'slip-list__karaoke');
+            const syncKaraokeControl = (row, slip) => {
+                const amountValue = row.querySelector('[data-business-slip-amount-value]');
+                let karaoke = row.querySelector('[data-business-karaoke-row]');
+                if (slip.status !== 'open') {
+                    karaoke?.remove();
+                    setText(amountValue, formatYen(slip.accountingAmount));
+                    return;
+                }
+
+                const initialQuantity = getInitialQuantity(slip);
+                const displayQuantity = getDisplayQuantity(slip);
+                const baseAmount = Number(slip.accountingAmount || 0) - initialQuantity * accountingUnit;
+                if (!karaoke) {
+                    karaoke = buildElement('div', 'slip-list__karaoke');
                     karaoke.dataset.businessKaraokeRow = '';
-                    karaoke.dataset.slipId = String(slip.id);
-                    karaoke.dataset.initialQuantity = String(initialQuantity);
-                    karaoke.dataset.quantity = String(displayQuantity);
-                    karaoke.dataset.accountingBaseAmount = String(baseAmount);
-                    karaoke.dataset.karaokeAccountingUnit = String(accountingUnit);
-                    karaoke.classList.toggle('is-dirty', displayQuantity !== initialQuantity);
 
                     const decrement = buildElement('button', 'btn btn-outline-secondary', '-');
                     decrement.type = 'button';
@@ -514,9 +524,62 @@
                     quantity.dataset.businessKaraokeDisplay = '';
                     karaoke.append(buildElement('span', null, 'カラオケ'), decrement, quantity, increment);
                     row.appendChild(karaoke);
-
-                    amount.querySelector('.slip-list__amount-value').textContent = formatYen(baseAmount + displayQuantity * accountingUnit);
                 }
+
+                karaoke.dataset.slipId = String(slip.id);
+                karaoke.dataset.initialQuantity = String(initialQuantity);
+                karaoke.dataset.quantity = String(displayQuantity);
+                karaoke.dataset.accountingBaseAmount = String(baseAmount);
+                karaoke.dataset.karaokeAccountingUnit = String(accountingUnit);
+                karaoke.classList.toggle('is-dirty', displayQuantity !== initialQuantity);
+                setText(karaoke.querySelector('[data-business-karaoke-display]'), displayQuantity);
+                setText(amountValue, formatYen(baseAmount + displayQuantity * accountingUnit));
+            };
+
+            const syncSlipRow = (row, slip) => {
+                row.dataset.slipId = String(slip.id);
+                const link = row.querySelector('[data-business-slip-link]');
+                if (link) {
+                    link.href = `${slipEditUrl}?slipId=${encodeURIComponent(slip.id)}`;
+                }
+
+                setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
+                const statusElement = row.querySelector('[data-business-slip-status]');
+                if (statusElement) {
+                    statusElement.className = `badge slip-list__status ${slip.statusBadgeClass}`;
+                    setText(statusElement, slip.statusDisplay);
+                }
+                setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
+                setText(row.querySelector('[data-business-slip-customers]'), slip.customerNames || '客名なし');
+                setText(row.querySelector('[data-business-slip-casts]'), slip.castNames || '指名なし');
+                setText(row.querySelector('[data-business-slip-memo]'), slip.memo || '-');
+                syncKaraokeControl(row, slip);
+            };
+
+            const buildSlipRow = (slip) => {
+                const row = buildElement('article', 'slip-list__row slip-list__row--action');
+                row.dataset.businessSlipRow = '';
+                const link = buildElement('a', 'slip-list__row-main');
+                link.dataset.businessSlipLink = '';
+
+                const table = buildElement('strong', 'slip-list__table');
+                table.dataset.businessSlipTable = '';
+                const statusElement = buildElement('span');
+                statusElement.dataset.businessSlipStatus = '';
+                const openedTime = buildElement('span', 'slip-list__time');
+                openedTime.dataset.businessSlipTime = '';
+                const customers = buildElement('span', 'slip-list__customers');
+                customers.dataset.businessSlipCustomers = '';
+                const casts = buildElement('span', 'slip-list__casts');
+                casts.dataset.businessSlipCasts = '';
+                const memo = buildElement('span', 'slip-list__memo');
+                memo.dataset.businessSlipMemo = '';
+
+                link.append(table, statusElement, openedTime, customers, casts, memo);
+                link.appendChild(buildAmountElement(slip));
+                row.appendChild(link);
+
+                syncSlipRow(row, slip);
 
                 return row;
             };
@@ -528,9 +591,36 @@
                     return;
                 }
 
-                list.innerHTML = '';
-                slips.forEach((slip) => {
-                    list.appendChild(buildSlipRow(slip));
+                Array.from(list.children).forEach((child) => {
+                    if (!child.matches('[data-business-slip-row]')) {
+                        child.remove();
+                    }
+                });
+
+                const rowsBySlipId = new Map(
+                    Array.from(list.querySelectorAll('[data-business-slip-row]'))
+                        .map((row) => [row.dataset.slipId, row])
+                );
+                const renderedSlipIds = new Set();
+                slips.forEach((slip, index) => {
+                    const slipId = String(slip.id);
+                    const existingRow = rowsBySlipId.get(slipId);
+                    const row = existingRow ?? buildSlipRow(slip);
+                    if (existingRow) {
+                        syncSlipRow(row, slip);
+                    }
+
+                    renderedSlipIds.add(slipId);
+                    const current = list.children[index] ?? null;
+                    if (current !== row) {
+                        list.insertBefore(row, current);
+                    }
+                });
+
+                rowsBySlipId.forEach((row, slipId) => {
+                    if (!renderedSlipIds.has(slipId)) {
+                        row.remove();
+                    }
                 });
                 if (revealButton) {
                     revealButton.hidden = false;
