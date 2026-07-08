@@ -284,7 +284,7 @@
             const canCreateSalesInput = @Json.Serialize(Model.CanCreateSalesInput);
             const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
             const refreshIntervalMs = 30000;
-            const autoSaveDelay = 700;
+            const autoSaveDelay = 500;
             const accountingUnit = 240;
             let slips = [];
             let hasLoaded = false;
