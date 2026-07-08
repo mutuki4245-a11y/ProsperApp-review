@@ -973,7 +973,7 @@
   align-items: center;
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: minmax(6rem, 0.65fr) minmax(4.5rem, 0.45fr) minmax(5rem, 0.45fr) minmax(4rem, 0.4fr) minmax(4rem, 0.4fr) minmax(4rem, 0.4fr) minmax(8rem, 0.7fr);
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   min-width: 0;
 }
 
@@ -1013,7 +1013,7 @@
   align-items: start;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(420px, 0.78fr) minmax(0, 1.22fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .slip-detail-dashboard__column {
