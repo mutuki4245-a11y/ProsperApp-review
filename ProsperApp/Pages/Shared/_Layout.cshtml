@@ -123,7 +123,18 @@
     <script>
         (() => {
             const key = "ProsperApp.LocalSettings";
-            if (document.cookie.includes(`${key}=`)) {
+            const cookieValue = document.cookie
+                .split("; ")
+                .find((part) => part.startsWith(`${key}=`))
+                ?.slice(key.length + 1);
+
+            if (cookieValue) {
+                try {
+                    localStorage.setItem(key, decodeURIComponent(cookieValue));
+                } catch {
+                    // Keep the server cookie authoritative if browser storage is unavailable.
+                }
+
                 return;
             }
 

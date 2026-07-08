@@ -53,8 +53,16 @@ public class SettingsModel(
             return NotFound();
         }
 
-        LockSettings();
         LoadCurrentSettings();
+        if (Input.IsAdminMode)
+        {
+            RefreshSaveToken();
+        }
+        else
+        {
+            LockSettings();
+        }
+
         await LoadDepartmentsAsync(ct);
         return Page();
     }
@@ -66,7 +74,7 @@ public class SettingsModel(
             return NotFound();
         }
 
-        if (Password != SettingsPassword)
+        if (!CanAccessSettings() && Password != SettingsPassword)
         {
             IsUnlocked = false;
             LoadCurrentSettings();
@@ -75,9 +83,7 @@ public class SettingsModel(
             return Page();
         }
 
-        IsUnlocked = true;
-        SaveToken = Guid.NewGuid().ToString("N");
-        HttpContext.Session.SetString(SaveTokenSessionKey, SaveToken);
+        RefreshSaveToken();
         LoadCurrentSettings();
         await LoadDepartmentsAsync(ct);
         return Page();
@@ -90,7 +96,7 @@ public class SettingsModel(
             return NotFound();
         }
 
-        IsUnlocked = IsValidSaveToken();
+        IsUnlocked = CanAccessSettings();
         if (!IsUnlocked)
         {
             LockSettings();
@@ -118,11 +124,9 @@ public class SettingsModel(
         };
 
         WriteSettingsCookie(settings);
-        LocalSettingsJsonForClient = JsonSerializer.Serialize(settings, JsonOptions);
-        SuccessMessage = "設定をこの端末に保存しました。";
+        TempData["SuccessMessage"] = "設定をこの端末に保存しました。";
         LockSettings();
-        Input = ToInput(settings);
-        return Page();
+        return RedirectToPage("/Index");
     }
 
     public async Task<IActionResult> OnPostLockAsync(CancellationToken ct)
@@ -132,8 +136,16 @@ public class SettingsModel(
             return NotFound();
         }
 
-        LockSettings();
         LoadCurrentSettings();
+        if (Input.IsAdminMode)
+        {
+            RefreshSaveToken();
+        }
+        else
+        {
+            LockSettings();
+        }
+
         await LoadDepartmentsAsync(ct);
         return Page();
     }
@@ -145,7 +157,7 @@ public class SettingsModel(
             return NotFound();
         }
 
-        IsUnlocked = IsValidSaveToken();
+        IsUnlocked = CanAccessSettings();
         if (!IsUnlocked)
         {
             LockSettings();
@@ -208,6 +220,11 @@ public class SettingsModel(
         return !string.IsNullOrWhiteSpace(SaveToken) &&
                !string.IsNullOrWhiteSpace(sessionToken) &&
                string.Equals(SaveToken, sessionToken, StringComparison.Ordinal);
+    }
+
+    private bool CanAccessSettings()
+    {
+        return IsValidSaveToken() || _localSettingsProvider.GetCurrent().IsAdminMode;
     }
 
     private void LockSettings()
