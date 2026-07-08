@@ -1009,23 +1009,6 @@
   white-space: nowrap;
 }
 
-.slip-detail-dashboard {
-  align-items: start;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.slip-detail-dashboard__column {
-  display: grid;
-  gap: 1rem;
-  min-width: 0;
-}
-
-.slip-detail-dashboard__column--primary {
-  align-content: start;
-}
-
 #createSlipModal .modal-dialog,
 #slipOrderModal .modal-dialog,
 #slipCheckoutModal .modal-dialog {
@@ -1125,9 +1108,6 @@
     justify-content: flex-start;
   }
 
-  .slip-detail-dashboard {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .slip-create__actions {

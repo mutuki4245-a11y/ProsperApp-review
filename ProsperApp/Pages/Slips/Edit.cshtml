@@ -103,26 +103,20 @@
             </div>
         </section>
 
-        <div class="slip-detail-dashboard">
-            <div class="slip-detail-dashboard__column">
-                <div id="slipCustomersSection">
-                    <partial name="_SlipCustomers" model="Model" />
-                </div>
+        <div id="slipCustomersSection">
+            <partial name="_SlipCustomers" model="Model" />
+        </div>
 
-                <div id="slipNominationsSection">
-                    <partial name="_SlipNominations" model="Model" />
-                </div>
-            </div>
+        <div id="slipNominationsSection">
+            <partial name="_SlipNominations" model="Model" />
+        </div>
 
-            <div class="slip-detail-dashboard__column slip-detail-dashboard__column--primary">
-                <div id="slipOrdersSection">
-                    <partial name="_SlipOrders" model="Model" />
-                </div>
+        <div id="slipOrdersSection">
+            <partial name="_SlipOrders" model="Model" />
+        </div>
 
-                <div id="slipCheckoutSection">
-                    <partial name="_SlipCheckout" model="Model" />
-                </div>
-            </div>
+        <div id="slipCheckoutSection">
+            <partial name="_SlipCheckout" model="Model" />
         </div>
 
         <div class="modal fade" id="attendingCastSelectModal" tabindex="-1" aria-labelledby="attendingCastSelectModalLabel" aria-hidden="true">
