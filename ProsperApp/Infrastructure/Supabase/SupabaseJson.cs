@@ -66,10 +66,31 @@ internal static class SupabaseJson
 
     public static DateOnly? ReadDateOnly(JsonElement item, string name)
     {
-        return item.TryGetProperty(name, out var value) &&
-               value.ValueKind == JsonValueKind.String &&
-               DateOnly.TryParse(value.GetString(), CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
+        if (!item.TryGetProperty(name, out var value) ||
+            value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var rawValue = value.GetString();
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return null;
+        }
+
+        if (DateOnly.TryParse(rawValue, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (rawValue.Length >= 10 &&
+            DateOnly.TryParseExact(rawValue[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed))
+        {
+            return parsed;
+        }
+
+        return DateTimeOffset.TryParse(rawValue, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDateTime)
+            ? DateOnly.FromDateTime(parsedDateTime.DateTime)
             : null;
     }
 
