@@ -227,6 +227,7 @@ public class IndexModel(
             return Page();
         }
 
+        RemoveModelStateEntries(nameof(CreateSlipInput));
         NormalizeKaraokeLines();
         ValidateKaraokeLines();
         if (!ModelState.IsValid)
@@ -521,6 +522,20 @@ public class IndexModel(
             {
                 ModelState.AddModelError($"KaraokeLines[{i}].Quantity", "カラオケ回数を確認してください。");
             }
+        }
+    }
+
+    private void RemoveModelStateEntries(string prefix)
+    {
+        var keys = ModelState.Keys
+            .Where(key => string.Equals(key, prefix, StringComparison.Ordinal) ||
+                          key.StartsWith($"{prefix}.", StringComparison.Ordinal) ||
+                          key.StartsWith($"{prefix}[", StringComparison.Ordinal))
+            .ToArray();
+
+        foreach (var key in keys)
+        {
+            ModelState.Remove(key);
         }
     }
 
