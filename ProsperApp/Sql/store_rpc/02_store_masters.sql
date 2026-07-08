@@ -393,6 +393,7 @@ as $$
      and c.is_active = true
     where i.department_id = p_department_id
       and i.is_active = true
+      and i.item_type = 'standard'
     order by c.sort_order asc nulls last, c.category_name asc nulls last, i.sort_order asc, i.item_name asc;
 $$;
 

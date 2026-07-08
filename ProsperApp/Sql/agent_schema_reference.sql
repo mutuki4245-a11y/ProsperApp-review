@@ -631,6 +631,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   store.get_order_items(p_department_id bigint)
 --     returns item_id, item_name, item_type, default_price, category_code, category_name,
 --       is_cast_back_target, cast_back_regular_unit_amount, cast_back_nomination_unit_amount, cast_back_type
+--     returns only standard orderable items; system items such as karaoke are excluded.
 --   store.get_item_admin_catalog(p_department_id bigint)
 --     returns category and item rows for Management/Items management.
 --   store.get_nomination_back_master(p_department_id bigint)
@@ -653,6 +654,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     returns inserted_count
 --     p_order_lines supports { slip_id, item_id, quantity, cast_back_cast_id }.
 --     p_slip_id is used as the fallback slip when order-line slip_id is omitted.
+--     Rejects non-standard system items; karaoke is saved via store.save_karaoke_lines.
 --     Back target items create store_order_line_cast_backs rows only when cast_back_cast_id is present.
 --   store.get_slip_detail(p_department_id bigint, p_slip_id bigint)
 --     returns flattened slip, customer, nomination, order, and charge rows for Slips/Edit.

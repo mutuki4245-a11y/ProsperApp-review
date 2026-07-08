@@ -4,7 +4,10 @@
 @{
     ViewData["Title"] = "オーダー入力";
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
-    var itemGroups = Model.Items
+    var orderableItems = Model.Items
+        .Where(x => !x.IsKaraoke)
+        .ToList();
+    var itemGroups = orderableItems
         .GroupBy(x => x.CategoryName)
         .ToList();
 }
@@ -59,15 +62,15 @@
                     <div class="slip-create__panel-title">
                         <div class="slip-create__panel-heading">
                             <h2>2. 商品一覧</h2>
-                            <small>@Model.Items.Count 件</small>
+                            <small>@orderableItems.Count 件</small>
                         </div>
                         <span class="terminal-count-badge" id="selectedSlipBadge">@(Model.SelectedSlip?.TableDisplayName ?? "卓番未選択")</span>
                     </div>
 
                     <div class="order-entry__panel-body">
-                        @if (Model.Items.Count == 0)
+                        @if (orderableItems.Count == 0)
                         {
-                            <div class="alert alert-secondary mb-0">商品マスタが未登録です。</div>
+                            <div class="alert alert-secondary mb-0">注文可能な商品が未登録です。</div>
                         }
                         else
                         {
@@ -165,7 +168,7 @@
     <script>
         (() => {
             let slips = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName })));
-            const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Items.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType })));
+            const items = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(orderableItems.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType })));
             const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true })));
             const initialQueue = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId })));
             const initialSlipId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SelectedSlipId));
@@ -464,6 +467,10 @@
 
                     const itemId = button.dataset.itemId ?? '';
                     const item = items.find((candidate) => String(candidate.id) === String(itemId));
+                    if (!item || item.isKaraoke) {
+                        return;
+                    }
+
                     if (item?.isCastBackTarget) {
                         openBackPicker(itemId);
                         return;

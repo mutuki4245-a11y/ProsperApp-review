@@ -621,6 +621,10 @@
         if (orderItemButton) {
             const itemId = orderItemButton.dataset.detailItemId ?? '';
             const item = orderItems.find((candidate) => String(candidate.id) === String(itemId));
+            if (!item || item.isKaraoke) {
+                return;
+            }
+
             if (item?.isCastBackTarget) {
                 openOrderBackPicker(itemId);
                 return;

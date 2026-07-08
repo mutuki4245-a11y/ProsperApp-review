@@ -24,7 +24,7 @@ public sealed class OrderQueueService : IOrderQueueService
         IReadOnlyList<StoreOrderItemOption> items,
         IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts,
         bool requireAttendingCastForBackTarget,
-        string missingItemsMessage = "商品マスタが未登録です。")
+        string missingItemsMessage = "注文可能な商品が未登録です。")
     {
         List<string> errors = [];
 

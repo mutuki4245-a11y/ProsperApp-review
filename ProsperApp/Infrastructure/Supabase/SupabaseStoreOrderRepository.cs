@@ -186,6 +186,11 @@ public class SupabaseStoreOrderRepository(
             return "注文キューに利用できない商品があります。";
         }
 
+        if (rawError.Contains("store_order_item_not_orderable", StringComparison.OrdinalIgnoreCase))
+        {
+            return "システム商品は注文端末から登録できません。";
+        }
+
         if (rawError.Contains("invalid_order_quantity", StringComparison.OrdinalIgnoreCase))
         {
             return "注文数量を確認してください。";

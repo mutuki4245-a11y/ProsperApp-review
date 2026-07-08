@@ -15,6 +15,9 @@
     var activeKaraokeQuantity = activeOrders
         .Where(x => x.IsKaraoke)
         .Sum(x => x.Quantity);
+    var orderableItems = Model.OrderItems
+        .Where(x => !x.IsKaraoke)
+        .ToList();
     var karaokeItem = Model.OrderItems.FirstOrDefault(x => x.IsKaraoke);
     var karaokeUnitPrice = activeKaraokeOrder?.UnitPrice ?? karaokeItem?.DefaultPrice ?? 200;
     var karaokeAmount = activeKaraokeQuantity * karaokeUnitPrice;
@@ -34,7 +37,7 @@
         .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
         .ToList();
     var chargeTotal = activeAdjustments.Sum(x => x.Amount);
-    var orderItemGroups = Model.OrderItems
+    var orderItemGroups = orderableItems
         .GroupBy(x => x.CategoryName)
         .ToList();
 }
@@ -263,9 +266,9 @@
                                 <input type="hidden" asp-for="SlipId" />
                                 <div id="detailOrderQueueFields"></div>
 
-                                @if (Model.OrderItems.Count == 0)
+                                @if (orderableItems.Count == 0)
                                 {
-                                    <div class="alert alert-secondary mb-0">商品マスタが未登録です。</div>
+                                    <div class="alert alert-secondary mb-0">注文可能な商品が未登録です。</div>
                                 }
                                 else
                                 {

@@ -125,7 +125,7 @@ DB反映時の基本順序は以下。
 | `store.delete_cast` | キャストを論理削除する。`cast_master.status = 'inactive'`、`is_active = false` に更新する。 |
 | `store.get_business_day_slips` | 営業中画面向けの伝票一覧と会計表示額を返す。 |
 | `store.get_order_entry_slips` | `/Orders` 向けの注文入力対象伝票一覧を返す。 |
-| `store.get_order_items` | 注文入力用の商品一覧を返す。 |
+| `store.get_order_items` | 注文入力用の商品一覧を返す。標準商品だけを返し、カラオケなどのシステム商品は返さない。 |
 | `store.get_item_admin_catalog` | 商品管理画面用のカテゴリ/商品一覧を返す。 |
 | `store.get_nomination_back_master` | 指名バック設定画面と指名入力用に、店舗別DBマスタの指名種別候補とバック単価を返す。 |
 | `store.save_nomination_back_master` | 指名種別候補と指名バック設定を店舗別に保存する。 |
@@ -153,7 +153,7 @@ DB反映時の基本順序は以下。
 | RPC | 主な用途 |
 | --- | --- |
 | `store.get_order_attending_casts` | 当日出勤キャストを返す。退勤済みも候補に残す。 |
-| `store.add_order_lines` | 注文行とバック対象キャストを登録する。`p_order_lines` に伝票IDを含められるため、`/Orders` では複数卓のキューをまとめて登録できる。 |
+| `store.add_order_lines` | 注文行とバック対象キャストを登録する。`p_order_lines` に伝票IDを含められるため、`/Orders` では複数卓のキューをまとめて登録できる。登録できる商品は標準商品だけで、システム商品は拒否する。 |
 
 ### 会計
 
@@ -217,7 +217,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.get_casts_admin` | 店舗別キャスト管理一覧。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.delete_cast` 成功時に `store.get_casts` と同時に破棄する。 |
 | `store.create_cast` | 保存結果のみ。 | 戻り値の `cast_id` を画面結果判定に使い、キャッシュしない。成功時にキャスト候補/管理一覧キャッシュを破棄する。 |
 | `store.delete_cast` | 保存結果のみ。 | 戻り値の `cast_id` を画面結果判定に使い、キャッシュしない。成功時にキャスト候補/管理一覧キャッシュを破棄する。 |
-| `store.get_order_items` | 店舗別商品候補。`department_id` 単位。 | 初回成功時に保持する。商品カテゴリ/商品保存、商品削除、商品並び順保存の成功時に破棄する。 |
+| `store.get_order_items` | 店舗別の注文可能商品候補。`department_id` 単位。標準商品だけを返す。 | 初回成功時に保持する。商品カテゴリ/商品保存、商品削除、商品並び順保存の成功時に破棄する。 |
 | `store.get_item_admin_catalog` | 店舗別商品管理カタログ。`department_id` 単位。 | 初回成功時に保持する。`store.get_order_items` と同じ商品関連更新の成功時に破棄する。 |
 | `store.upsert_item_category` | 保存結果のみ。 | 戻り値の `item_category_id` を画面結果判定に使い、キャッシュしない。成功時に商品候補/商品管理カタログキャッシュを破棄する。 |
 | `store.upsert_item` | 保存結果のみ。 | 戻り値の `item_id` を画面結果判定に使い、キャッシュしない。成功時に商品候補/商品管理カタログキャッシュを破棄する。 |
@@ -262,6 +262,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | 項目 | 状態 | SQL/RPC上の整理 |
 | --- | --- | --- |
 | カラオケ商品化 | 実装済み | `store_item_master.item_type = 'karaoke'` のシステム商品を使い、`store_order_lines` に1伝票1行で集約する。旧 `store_slip_charge_lines.charge_type = 'karaoke'` のアクティブ行は注文行へ移行してvoid化する。 |
+| システム商品の注文端末除外 | 実装済み | `store.get_order_items` は標準商品だけを返し、`store.add_order_lines` も標準商品以外を拒否する。カラオケなどのシステム商品は専用RPCで保存する。 |
 | カラオケのサービス料対象化 | 実装済み | `store.get_business_day_slips` と `store.confirm_checkout` は、カラオケを含む注文小計に20%サービス料を掛ける。カラオケは自由入力調整ではない。 |
 | 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。会計額へ直接加減し、商品マスタには登録しない。 |
 | 指名価格 | 実装済み | `store_slip_casts.nomination_price` を会計額へ加算する。 |

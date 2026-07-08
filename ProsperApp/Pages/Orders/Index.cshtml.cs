@@ -147,9 +147,9 @@ public class IndexModel(
         foreach (var error in _orderQueueService.Validate(
                      QueueLines,
                      Items,
-                     AttendanceCasts,
-                     requireAttendingCastForBackTarget: false,
-                     missingItemsMessage: "商品マスタが未登録です。store_item_masterを確認してください。"))
+                      AttendanceCasts,
+                      requireAttendingCastForBackTarget: false,
+                      missingItemsMessage: "注文可能な商品が未登録です。商品マスタを確認してください。"))
         {
             ModelState.AddModelError(nameof(QueueLines), error);
         }
