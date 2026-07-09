@@ -55,7 +55,7 @@
             </div>
         }
 
-        <form method="post" class="closing-attendance-form" data-attendance-form>
+        <form method="post" class="closing-attendance-form" data-attendance-form="true">
             <input asp-for="Input.BusinessDayId" type="hidden" />
             <input asp-for="Input.SelectedCastIds" type="hidden" id="selectedAttendanceCastIds" />
             <div class="closing-attendance-toolbar">
@@ -166,7 +166,7 @@
             const emptyMessage = document.getElementById('attendanceEmptyMessage');
             const selectedCount = document.getElementById('selectedAttendanceCount');
             const selectedCastIdsInput = document.getElementById('selectedAttendanceCastIds');
-            const attendanceForm = document.querySelector('[data-attendance-form]');
+            const attendanceForm = document.querySelector('[data-attendance-form]') ?? document.querySelector('.closing-attendance-form');
             const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
 
             const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
@@ -236,6 +236,31 @@
                 addSelectedButton.disabled = modalList.querySelectorAll('[data-attendance-cast-check]:checked').length === 0;
             };
 
+            const selectAttendanceRows = (indexes) => {
+                indexes.forEach((index) => {
+                    const row = getRow(index);
+                    const selected = getSelectedInput(row);
+                    const clockIn = getClockInSelect(row);
+                    const clockOut = getClockOutSelect(row);
+                    if (!row || !selected) {
+                        return;
+                    }
+
+                    selected.value = 'true';
+                    if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
+                        clockIn.value = row.dataset.defaultClockIn;
+                    }
+                    if (clockOut && !clockOut.value && row.dataset.defaultClockOut) {
+                        clockOut.value = row.dataset.defaultClockOut;
+                    }
+                    row.hidden = false;
+                });
+            };
+
+            const getCheckedModalIndexes = () => modalList
+                ? Array.from(modalList.querySelectorAll('[data-attendance-cast-check]:checked')).map((checkbox) => checkbox.value)
+                : [];
+
             const renderModal = () => {
                 if (!modalList) {
                     return;
@@ -290,26 +315,13 @@
                 }
 
                 const checked = Array.from(modalList.querySelectorAll('[data-attendance-cast-check]:checked'));
+                selectAttendanceRows(checked.map((checkbox) => checkbox.value));
                 checked.forEach((checkbox) => {
-                    const row = getRow(checkbox.value);
-                    const selected = getSelectedInput(row);
-                    const clockIn = getClockInSelect(row);
-                    const clockOut = getClockOutSelect(row);
-                    if (!row || !selected) {
-                        return;
-                    }
-
-                    selected.value = 'true';
-                    if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
-                        clockIn.value = row.dataset.defaultClockIn;
-                    }
-                    if (clockOut && !clockOut.value && row.dataset.defaultClockOut) {
-                        clockOut.value = row.dataset.defaultClockOut;
-                    }
-                    row.hidden = false;
+                    checkbox.checked = false;
                 });
 
                 updateSelectedState();
+                updateAddSelectedButton();
                 modal?.hide();
             };
 
@@ -330,6 +342,10 @@
                     }
                     if (row) {
                         row.hidden = true;
+                        const modalCheckbox = modalList?.querySelector(`[data-attendance-cast-check][value="${row.dataset.attendanceIndex}"]`);
+                        if (modalCheckbox) {
+                            modalCheckbox.checked = false;
+                        }
                     }
                     updateSelectedState();
                 });
@@ -339,7 +355,10 @@
             homeStoreFilter?.addEventListener('change', renderModal);
             addSelectedButton?.addEventListener('click', addSelectedCasts);
             modalElement?.addEventListener('shown.bs.modal', () => searchInput?.focus());
-            attendanceForm?.addEventListener('submit', syncVisibleRowsForSubmit);
+            attendanceForm?.addEventListener('submit', () => {
+                selectAttendanceRows(getCheckedModalIndexes());
+                syncVisibleRowsForSubmit();
+            });
             updateSelectedState();
         })();
     </script>
