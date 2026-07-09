@@ -241,7 +241,10 @@ public class SupabaseStoreSlipRepository(
                     UnitPrice = ReadDecimal(row, "unit_price") ?? 0,
                     Amount = ReadDecimal(row, "amount") ?? 0,
                     OrderedAt = ReadDateTimeOffset(row, "ordered_at") ?? DateTimeOffset.MinValue,
-                    Status = ReadString(row, "order_status") ?? string.Empty
+                    Status = ReadString(row, "order_status") ?? string.Empty,
+                    BackCastId = ReadLong(row, "order_back_cast_id"),
+                    BackCastDisplayName = ReadString(row, "order_back_cast_display_name"),
+                    BackCastDepartmentName = ReadString(row, "order_back_cast_department_name")
                 });
             }
             else if (rowType == "charge")

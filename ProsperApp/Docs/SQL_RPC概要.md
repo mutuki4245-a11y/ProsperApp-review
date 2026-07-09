@@ -141,7 +141,7 @@ DB反映時の基本順序は以下。
 
 | RPC | 主な用途 |
 | --- | --- |
-| `store.get_slip_detail` | 伝票詳細、客行、指名、注文、自由入力調整、会計候補を返す。カラオケは注文行の `item_type = 'karaoke'`、指名料金は `item_type = 'nomination_fee'` で判定する。 |
+| `store.get_slip_detail` | 伝票詳細、客行、指名、注文、自由入力調整、会計候補を返す。カラオケは注文行の `item_type = 'karaoke'`、指名料金は `item_type = 'nomination_fee'` で判定する。注文バック実績がある注文行は `order_back_cast_*` 列でバック対象キャスト名も返す。 |
 | `store.create_slip` | 伝票を作成する。初期指名がある場合は指名料金のシステム注文行と、指名バック設定に基づく `store_slip_cast_backs` を作成する。 |
 | `store.add_slip_customers` | 既存伝票へ客行を追加する。 |
 | `store.add_slip_nominations` | 既存伝票へ指名を追加する。指名料金のシステム注文行と、指名バック設定が有効かつ0円より大きい場合は `store_slip_cast_backs` を作成する。 |

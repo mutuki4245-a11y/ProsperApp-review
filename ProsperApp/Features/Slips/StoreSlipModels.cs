@@ -293,10 +293,14 @@ public class SlipDetailOrderLine
     public decimal Amount { get; set; }
     public DateTimeOffset OrderedAt { get; set; }
     public string Status { get; set; } = string.Empty;
+    public long? BackCastId { get; set; }
+    public string? BackCastDisplayName { get; set; }
+    public string? BackCastDepartmentName { get; set; }
     public bool IsStandard => string.Equals(ItemType, "standard", StringComparison.Ordinal);
     public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
     public bool IsNominationFee => string.Equals(ItemType, "nomination_fee", StringComparison.Ordinal);
     public bool IsSystemItem => !IsStandard;
+    public bool HasCastBack => BackCastId is > 0 && !string.IsNullOrWhiteSpace(BackCastDisplayName);
 }
 
 public class SlipDetailChargeLine

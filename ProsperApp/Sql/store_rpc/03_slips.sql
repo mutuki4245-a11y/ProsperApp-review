@@ -38,6 +38,9 @@ returns table (
     amount numeric,
     ordered_at timestamp with time zone,
     order_status text,
+    order_back_cast_id bigint,
+    order_back_cast_display_name text,
+    order_back_cast_department_name text,
     charge_line_id bigint,
     charge_type text,
     nomination_kind text,
@@ -81,6 +84,9 @@ as $$
         null::numeric as amount,
         null::timestamp with time zone as ordered_at,
         null::text as order_status,
+        null::bigint as order_back_cast_id,
+        null::text as order_back_cast_display_name,
+        null::text as order_back_cast_department_name,
         null::bigint as charge_line_id,
         null::text as charge_type,
         null::text as nomination_kind,
@@ -130,6 +136,9 @@ as $$
         null::bigint,
         null::text,
         null::text,
+        null::bigint,
+        null::text,
+        null::text,
         null::text
     from public.store_slips s
     join public.store_slip_customers c
@@ -174,6 +183,9 @@ as $$
         null::numeric,
         null::numeric,
         null::timestamp with time zone,
+        null::text,
+        null::bigint,
+        null::text,
         null::text,
         null::bigint,
         null::text,
@@ -231,6 +243,9 @@ as $$
         ol.amount,
         ol.ordered_at,
         ol.status,
+        ob.cast_id,
+        ob.cast_display_name,
+        ob.cast_department_name,
         null::bigint,
         null::text,
         null::text,
@@ -240,6 +255,21 @@ as $$
       on ol.slip_id = s.slip_id
     left join public.store_item_master i
       on i.item_id = ol.item_id
+    left join lateral (
+        select
+            b.cast_id,
+            cm.display_name as cast_display_name,
+            d.department_name as cast_department_name
+        from public.store_order_line_cast_backs b
+        join public.cast_master cm
+          on cm.cast_id = b.cast_id
+        left join public.department_master d
+          on d.department_id = cm.department_id
+        where b.order_line_id = ol.order_line_id
+          and b.status = 'active'
+        order by b.order_line_cast_back_id desc
+        limit 1
+    ) ob on true
     left join public.store_table_master t
       on t.table_id = s.table_id
     where s.slip_id = p_slip_id
@@ -281,6 +311,9 @@ as $$
         cl.amount,
         cl.created_at,
         cl.status,
+        null::bigint,
+        null::text,
+        null::text,
         cl.charge_line_id,
         cl.charge_type,
         null::text,

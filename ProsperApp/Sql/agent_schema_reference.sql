@@ -663,6 +663,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   store.get_slip_detail(p_department_id bigint, p_slip_id bigint)
 --     returns flattened slip, customer, nomination, order, and charge rows for Slips/Edit.
 --     order rows include item_type; karaoke is item_type karaoke and appears as one product order row.
+--     order rows with active store_order_line_cast_backs include order_back_cast_id, order_back_cast_display_name, and order_back_cast_department_name.
 --     nomination_fee rows are system order rows generated from nomination additions.
 --     charge rows are separate from product order rows and use charge_type adjustment.
 --   store.add_slip_customers(p_department_id bigint, p_slip_id bigint, p_customer_labels text[], p_entered_at timestamptz)

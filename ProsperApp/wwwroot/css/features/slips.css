@@ -915,6 +915,14 @@
   overflow-wrap: anywhere;
 }
 
+.slip-order-back-cast {
+  color: #0f766e;
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-top: 0.15rem;
+}
+
 .slip-detail-inline-form {
   border-top: 1px solid #e2e8f0;
   margin-top: 1rem;

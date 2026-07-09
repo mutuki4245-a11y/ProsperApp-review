@@ -92,7 +92,13 @@
                                 var quantityIndex = editableOrderIndex++;
                                 <tr data-order-line-row data-order-line-id="@order.OrderLineId" data-order-unit-price="@order.UnitPrice" data-order-initial-quantity="@order.Quantity.ToString("0.##")">
                                     <td class="slip-detail-table__time">@Model.FormatStoreTime(order.OrderedAt)</td>
-                                    <td class="slip-detail-table__primary">@order.ItemNameSnapshot</td>
+                                    <td class="slip-detail-table__primary">
+                                        <span>@order.ItemNameSnapshot</span>
+                                        @if (order.HasCastBack)
+                                        {
+                                            <small class="slip-order-back-cast">バック: @order.BackCastDisplayName</small>
+                                        }
+                                    </td>
                                     <td class="slip-detail-table__amount text-end">@order.UnitPrice.ToString("N0")</td>
                                     <td class="slip-detail-table__quantity text-end">
                                         <span data-order-quantity-text>@order.Quantity.ToString("0.##")</span>
@@ -125,6 +131,10 @@
                                     <td class="slip-detail-table__primary">
                                         @order.ItemNameSnapshot
                                         <span class="badge text-bg-secondary">自動</span>
+                                        @if (order.HasCastBack)
+                                        {
+                                            <small class="slip-order-back-cast">バック: @order.BackCastDisplayName</small>
+                                        }
                                     </td>
                                     <td class="slip-detail-table__amount text-end">@order.UnitPrice.ToString("N0")</td>
                                     <td class="slip-detail-table__quantity text-end">@order.Quantity.ToString("0.##")</td>
