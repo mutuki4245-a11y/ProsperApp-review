@@ -192,7 +192,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `store.confirm_checkout(p_department_id, p_slip_id, p_closed_at, p_payments, p_received_amount)`
 - `store.cancel_checkout(p_department_id, p_slip_id)`
   - 会計取消は、開いている営業日の会計済み伝票だけを対象にします。
-  - 確定済み会計、支払明細、会計に紐づくキャスト売上額調整を `cancelled` にし、伝票を `open` へ戻します。再会計できるよう `store_checkouts` は `cancelled` 以外の会計だけが伝票単位で一意です。
+  - 確定済み会計と支払明細を `cancelled` にし、伝票を `open` へ戻します。客行の退店状態と退店時刻は変更しません。会計に紐づくキャスト売上額調整は削除してリセットし、再会計後に必要なら締め作業で再保存します。再会計できるよう `store_checkouts` は `cancelled` 以外の会計だけが伝票単位で一意です。
 
 ### 領収書
 

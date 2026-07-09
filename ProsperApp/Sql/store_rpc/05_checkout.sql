@@ -340,24 +340,14 @@ begin
      where p.checkout_id = v_checkout.checkout_id
        and p.status = 'confirmed';
 
-    update public.store_slip_cast_sales_adjustments a
-       set status = 'cancelled',
-           updated_at = now()
-     where a.checkout_id = v_checkout.checkout_id
-       and a.status = 'confirmed';
+    delete from public.store_slip_cast_sales_adjustments a
+     where a.department_id = p_department_id
+       and a.slip_id = p_slip_id;
 
     update public.store_checkouts c
        set status = 'cancelled',
            updated_at = now()
      where c.checkout_id = v_checkout.checkout_id;
-
-    update public.store_slip_customers c
-       set status = 'active',
-           left_at = null,
-           updated_at = now()
-     where c.slip_id = p_slip_id
-       and c.status = 'left'
-       and c.left_at = v_checkout.checkout_at;
 
     update public.store_slips s
        set closed_at = null,

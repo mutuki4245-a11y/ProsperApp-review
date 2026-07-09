@@ -690,8 +690,8 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     total includes product subtotal excluding nomination_fee, 20% service tax on product subtotal, nomination_fee system order lines, and active adjustment charge lines.
 --     p_payments supports { method_code, amount } with method_code in cash/cat/paypay.
 --   store.cancel_checkout(p_department_id bigint, p_slip_id bigint)
---     cancels a confirmed checkout for an open business day, marks payments and related cast-sales adjustments cancelled,
---     reopens the slip, and restores customers left exactly at the checkout timestamp.
+--     cancels a confirmed checkout for an open business day, marks payments cancelled,
+--     deletes related cast-sales adjustments, reopens the slip, and does not change customer left_at/status.
 --   store.create_slip(
 --       p_department_id bigint,
 --       p_table_id bigint,
