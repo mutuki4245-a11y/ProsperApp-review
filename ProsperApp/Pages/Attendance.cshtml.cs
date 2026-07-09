@@ -23,6 +23,8 @@ public class AttendanceModel(
 
     public StoreBusinessDay? CurrentBusinessDay { get; private set; }
 
+    public StoreContext? StoreContext { get; private set; }
+
     public DateOnly CurrentBusinessDate { get; private set; }
 
     public IReadOnlyList<AttendanceTimeOption> ClockInTimeOptions { get; private set; } = [];
@@ -163,6 +165,7 @@ public class AttendanceModel(
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
     {
         var storeContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
+        StoreContext = storeContext;
         var minuteStep = storeContext?.AttendanceMinuteStep ?? 15;
         ClockInTimeOptions = BuildAttendanceTimeOptions(19, 0, minuteStep);
         ClockOutTimeOptions = BuildAttendanceTimeOptions(24, 0, minuteStep);
@@ -314,6 +317,15 @@ public class AttendanceModel(
 
     private void ValidateAttendanceInput()
     {
+        var selectedCastIds = ParseSelectedCastIds(Input.SelectedCastIds);
+        if (selectedCastIds.Count > 0)
+        {
+            foreach (var entry in Input.Entries)
+            {
+                entry.IsSelected = selectedCastIds.Contains(entry.CastId);
+            }
+        }
+
         if (Input.Entries.Count == 0)
         {
             ModelState.AddModelError(string.Empty, "キャスト情報が未登録です。先にキャスト情報を登録してください。");

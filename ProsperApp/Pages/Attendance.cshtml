@@ -7,6 +7,7 @@
         .Select((entry, index) => new { Entry = entry, Index = index })
         .ToList();
     var selectedAttendanceCount = attendanceRows.Count(x => x.Entry.IsSelected);
+    var currentDepartmentName = Model.StoreContext?.DepartmentName;
 }
 
 <section class="store-home terminal-page terminal-page--attendance">
@@ -45,7 +46,7 @@
             </div>
         }
 
-        <form method="post" class="closing-attendance-form">
+        <form method="post" class="closing-attendance-form" data-attendance-form>
             <input asp-for="Input.BusinessDayId" type="hidden" />
             <input asp-for="Input.SelectedCastIds" type="hidden" id="selectedAttendanceCastIds" />
             <div class="closing-attendance-toolbar">
@@ -125,6 +126,10 @@
                         </div>
                         <div class="modal-body closing-attendance-modal">
                             <input class="form-control form-control-lg closing-attendance-modal__search" id="castSearchInput" type="search" placeholder="キャスト名を入力" autocomplete="off" />
+                            <label class="form-check closing-attendance-modal__filter">
+                                <input class="form-check-input" type="checkbox" id="homeStoreCastFilter" checked />
+                                <span class="form-check-label">自店舗のみ</span>
+                            </label>
                             <div class="closing-attendance-modal__list" id="castModalList"></div>
                         </div>
                         <div class="modal-footer">
@@ -142,15 +147,17 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Input.Entries.Select((x, index) => new { index, name = x.DisplayName, department = x.DepartmentName })));
+            const castOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Input.Entries.Select((x, index) => new { index, name = x.DisplayName, department = x.DepartmentName, isHome = !string.IsNullOrWhiteSpace(currentDepartmentName) && string.Equals(x.DepartmentName, currentDepartmentName, StringComparison.Ordinal) })));
             const addButton = document.getElementById('addAttendanceCastButton');
             const modalElement = document.getElementById('castSelectModal');
             const modalList = document.getElementById('castModalList');
             const searchInput = document.getElementById('castSearchInput');
+            const homeStoreFilter = document.getElementById('homeStoreCastFilter');
             const addSelectedButton = document.getElementById('addSelectedAttendanceButton');
             const emptyMessage = document.getElementById('attendanceEmptyMessage');
             const selectedCount = document.getElementById('selectedAttendanceCount');
             const selectedCastIdsInput = document.getElementById('selectedAttendanceCastIds');
+            const attendanceForm = document.querySelector('[data-attendance-form]');
             const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
 
             const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
@@ -160,6 +167,14 @@
             const getClockOutSelect = (row) => row?.querySelector('[data-clock-out-select]');
             const isSelected = (row) => (getSelectedInput(row)?.value ?? '').toLocaleLowerCase('en-US') === 'true';
             const normalize = (value) => (value ?? '').toString().trim().toLocaleLowerCase('ja-JP');
+            const displayCastName = (cast) => {
+                const name = cast.name ?? '';
+                const department = cast.department ?? '';
+                const suffix = department ? `：${department}` : '';
+                return suffix && name.endsWith(suffix)
+                    ? name.slice(0, -suffix.length)
+                    : name;
+            };
 
             const updateSelectedState = () => {
                 const rows = Array.from(document.querySelectorAll('[data-attendance-row]'));
@@ -179,6 +194,31 @@
                 }
             };
 
+            const syncVisibleRowsForSubmit = () => {
+                document.querySelectorAll('[data-attendance-row]').forEach((row) => {
+                    if (row.hidden) {
+                        return;
+                    }
+
+                    const selected = getSelectedInput(row);
+                    if (!selected) {
+                        return;
+                    }
+
+                    selected.value = 'true';
+                    const clockIn = getClockInSelect(row);
+                    const clockOut = getClockOutSelect(row);
+                    if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
+                        clockIn.value = row.dataset.defaultClockIn;
+                    }
+                    if (clockOut && !clockOut.value && row.dataset.defaultClockOut) {
+                        clockOut.value = row.dataset.defaultClockOut;
+                    }
+                });
+
+                updateSelectedState();
+            };
+
             const updateAddSelectedButton = () => {
                 if (!addSelectedButton || !modalList) {
                     return;
@@ -193,8 +233,11 @@
                 }
 
                 const query = normalize(searchInput?.value);
+                const onlyHomeStore = homeStoreFilter?.checked ?? true;
+                const hasHomeCandidates = castOptions.some((cast) => cast.isHome);
                 const matches = castOptions
-                    .filter((cast) => !query || normalize(cast.name).includes(query))
+                    .filter((cast) => !query || normalize(cast.name).includes(query) || normalize(cast.department).includes(query))
+                    .filter((cast) => !onlyHomeStore || !hasHomeCandidates || cast.isHome)
                     .filter((cast) => !isSelected(getRow(cast.index)))
                     .slice(0, 80);
 
@@ -222,7 +265,7 @@
                     const text = document.createElement('span');
                     text.className = 'closing-attendance-modal__item-text';
                     const name = document.createElement('strong');
-                    name.textContent = cast.name;
+                    name.textContent = displayCastName(cast);
                     const department = document.createElement('span');
                     department.textContent = cast.department ?? '';
                     text.append(name, department);
@@ -284,8 +327,10 @@
             });
 
             searchInput?.addEventListener('input', renderModal);
+            homeStoreFilter?.addEventListener('change', renderModal);
             addSelectedButton?.addEventListener('click', addSelectedCasts);
             modalElement?.addEventListener('shown.bs.modal', () => searchInput?.focus());
+            attendanceForm?.addEventListener('submit', syncVisibleRowsForSubmit);
             updateSelectedState();
         })();
     </script>
