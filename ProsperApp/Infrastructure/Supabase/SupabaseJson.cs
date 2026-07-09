@@ -12,6 +12,11 @@ internal static class SupabaseJson
             return null;
         }
 
+        return ReadLongValue(value);
+    }
+
+    public static long? ReadLongValue(JsonElement value)
+    {
         if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number))
         {
             return number;

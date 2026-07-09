@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
@@ -159,7 +160,7 @@ public class SupabaseStoreOrderRepository(
             return AddStoreOrderLinesResult.Failed(ToFriendlyError(result.ErrorMessage));
         }
 
-        var insertedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "inserted_count") ?? 0) : 0;
+        var insertedCount = ReadInsertedCount(result);
         if (insertedCount <= 0)
         {
             return AddStoreOrderLinesResult.Failed("注文をDBに登録できませんでした。画面を再読み込みして再度お試しください。");
@@ -173,6 +174,60 @@ public class SupabaseStoreOrderRepository(
         [property: JsonPropertyName("item_id")] long ItemId,
         [property: JsonPropertyName("quantity")] int Quantity,
         [property: JsonPropertyName("cast_back_cast_id")] long? CastBackCastId);
+
+    private static int ReadInsertedCount(SupabaseRpcResult result)
+    {
+        if (result.Rows.Count > 0)
+        {
+            var rowCount = TryReadCount(result.Rows[0]);
+            if (rowCount is > 0)
+            {
+                return (int)rowCount.Value;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(result.Body))
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(result.Body);
+            return TryReadCount(document.RootElement) is { } count ? (int)count : 0;
+        }
+        catch (JsonException)
+        {
+            return 0;
+        }
+    }
+
+    private static long? TryReadCount(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            return element.GetArrayLength() == 0 ? null : TryReadCount(element[0]);
+        }
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var propertyName in new[] { "inserted_count", "add_order_lines", "result", "data" })
+            {
+                if (element.TryGetProperty(propertyName, out var value))
+                {
+                    var count = TryReadCount(value);
+                    if (count is not null)
+                    {
+                        return count;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        return ReadLongValue(element);
+    }
 
     private static string ToFriendlyError(string? rawError)
     {

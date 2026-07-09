@@ -50,12 +50,12 @@ public sealed class SupabaseRpcClient(
         try
         {
             using var doc = JsonDocument.Parse(result.Body);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            if (!TryReadRows(doc.RootElement, out var rows))
             {
                 return result with { Rows = [] };
             }
 
-            return result with { Rows = doc.RootElement.EnumerateArray().Select(x => x.Clone()).ToList() };
+            return result with { Rows = rows };
         }
         catch (JsonException ex)
         {
@@ -190,6 +190,34 @@ public sealed class SupabaseRpcClient(
         }
 
         return body;
+    }
+
+    private static bool TryReadRows(JsonElement element, out IReadOnlyList<JsonElement> rows)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            rows = element.EnumerateArray().Select(x => x.Clone()).ToList();
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("data", out var data) && TryReadRows(data, out rows))
+            {
+                return true;
+            }
+
+            if (element.TryGetProperty("result", out var result) && TryReadRows(result, out rows))
+            {
+                return true;
+            }
+
+            rows = [element.Clone()];
+            return true;
+        }
+
+        rows = [];
+        return false;
     }
 
     private static string? FirstNonEmpty(params string?[] values)
