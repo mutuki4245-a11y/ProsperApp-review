@@ -16,17 +16,16 @@ public partial class SlipEditModel
             ? _orderRepository.GetItemsAsync(cancellationToken)
             : Task.FromResult<IReadOnlyList<StoreOrderItemOption>>([]);
         var nominationOptionsTask = _nominationBackRepository.GetSettingsAsync(cancellationToken);
+        var attendanceCastsTask = GetAttendanceCastsForCurrentBusinessDayAsync(currentBusinessDayTask, cancellationToken);
 
-        await Task.WhenAll(currentBusinessDayTask, detailTask, orderItemsTask, nominationOptionsTask);
+        await Task.WhenAll(detailTask, orderItemsTask, nominationOptionsTask, attendanceCastsTask);
 
         CurrentBusinessDay = await currentBusinessDayTask;
         Detail = await detailTask;
         OrderItems = CurrentBusinessDay is null
             ? []
             : await orderItemsTask;
-        AttendanceCasts = CurrentBusinessDay is null
-            ? []
-            : await _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
+        AttendanceCasts = await attendanceCastsTask;
         NominationOptions = (await nominationOptionsTask)
             .Where(x => x.IsActive)
             .OrderBy(x => x.SortOrder)
@@ -34,6 +33,16 @@ public partial class SlipEditModel
             .ToList();
         TimeOptions = _storeClock.BuildTimeOptions(5);
         CheckoutTotals = CalculateCheckoutTotals();
+    }
+
+    private async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsForCurrentBusinessDayAsync(
+        Task<StoreBusinessDay?> currentBusinessDayTask,
+        CancellationToken cancellationToken)
+    {
+        var currentBusinessDay = await currentBusinessDayTask;
+        return currentBusinessDay is null
+            ? []
+            : await _orderRepository.GetAttendanceCastsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
     }
 
     private bool EnsureSlipLoaded()
