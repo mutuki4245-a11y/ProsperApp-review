@@ -77,7 +77,7 @@
                 </div>
                 @for (var i = 0; i < Model.Input.Entries.Count; i++)
                 {
-                    <div class="closing-attendance-table__row" data-attendance-row data-attendance-index="@i" data-default-clock-in="@Model.DefaultClockInTime" data-default-clock-out="@Model.DefaultClockOutTime" @(Model.Input.Entries[i].IsSelected ? null : "hidden")>
+                    <div class="closing-attendance-table__row" data-attendance-row data-attendance-index="@i" data-default-clock-in="@Model.DefaultClockInTime" @(Model.Input.Entries[i].IsSelected ? null : "hidden")>
                         <input asp-for="Input.Entries[i].CastId" type="hidden" />
                         <input asp-for="Input.Entries[i].AttendanceId" type="hidden" />
                         <input asp-for="Input.Entries[i].DisplayName" type="hidden" />
@@ -216,16 +216,22 @@
                 }
                 if (selectedEntriesJsonInput) {
                     selectedEntriesJsonInput.value = JSON.stringify(selectedRows
-                        .map((row) => ({
-                            cast_id: toNumber(getCastIdInput(row)?.value),
-                            attendance_id: toNumber(getAttendanceIdInput(row)?.value),
-                            display_name: getDisplayNameInput(row)?.value ?? '',
-                            department_name: getDepartmentNameInput(row)?.value ?? '',
-                            is_registered: toBool(getRegisteredInput(row)?.value),
-                            clock_in_time: getClockInSelect(row)?.value ?? '',
-                            clock_out_time: getClockOutSelect(row)?.value ?? '',
-                            uses_send_service: getUsesSendServiceInput(row)?.checked ?? false
-                        }))
+                        .map((row) => {
+                            const clockOutTime = getClockOutSelect(row)?.value ?? '';
+                            const entry = {
+                                cast_id: toNumber(getCastIdInput(row)?.value),
+                                attendance_id: toNumber(getAttendanceIdInput(row)?.value),
+                                display_name: getDisplayNameInput(row)?.value ?? '',
+                                department_name: getDepartmentNameInput(row)?.value ?? '',
+                                is_registered: toBool(getRegisteredInput(row)?.value),
+                                clock_in_time: getClockInSelect(row)?.value ?? '',
+                                uses_send_service: getUsesSendServiceInput(row)?.checked ?? false
+                            };
+                            if (clockOutTime) {
+                                entry.clock_out_time = clockOutTime;
+                            }
+                            return entry;
+                        })
                         .filter((entry) => entry.cast_id > 0));
                 }
             };
@@ -243,12 +249,8 @@
 
                     selected.value = 'true';
                     const clockIn = getClockInSelect(row);
-                    const clockOut = getClockOutSelect(row);
                     if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
                         clockIn.value = row.dataset.defaultClockIn;
-                    }
-                    if (clockOut && !clockOut.value && row.dataset.defaultClockOut) {
-                        clockOut.value = row.dataset.defaultClockOut;
                     }
                 });
 
@@ -268,7 +270,6 @@
                     const row = getRow(index);
                     const selected = getSelectedInput(row);
                     const clockIn = getClockInSelect(row);
-                    const clockOut = getClockOutSelect(row);
                     if (!row || !selected) {
                         return;
                     }
@@ -276,9 +277,6 @@
                     selected.value = 'true';
                     if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
                         clockIn.value = row.dataset.defaultClockIn;
-                    }
-                    if (clockOut && !clockOut.value && row.dataset.defaultClockOut) {
-                        clockOut.value = row.dataset.defaultClockOut;
                     }
                     row.hidden = false;
                 });

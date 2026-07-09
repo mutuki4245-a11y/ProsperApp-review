@@ -148,6 +148,7 @@
     const adjustmentModal = adjustmentModalElement ? new bootstrap.Modal(adjustmentModalElement) : null;
     const adjustmentForm = document.querySelector('[data-adjustment-form]');
     const adjustmentList = document.querySelector('[data-adjustment-list]');
+    const adjustmentLinesJson = document.getElementById('adjustmentLinesJson');
     const addAdjustmentButton = document.querySelector('[data-add-adjustment-row]');
     const adjustmentStatus = document.querySelector('[data-adjustment-status]');
     let detailCashAmount = Number(detailCashDisplay?.dataset.cashAmount ?? 0);
@@ -250,7 +251,21 @@
             amount: row.querySelector('[data-adjustment-amount]')?.value ?? ''
         }));
 
+    const syncAdjustmentLinesJson = () => {
+        if (!adjustmentLinesJson) {
+            return;
+        }
+
+        adjustmentLinesJson.value = JSON.stringify(readAdjustmentRows()
+            .map((row) => ({
+                lineName: row.lineName.trim(),
+                amount: row.amount === '' ? '0' : row.amount
+            }))
+            .filter((row) => row.lineName || Number(row.amount || 0) !== 0));
+    };
+
     const saveAdjustmentDraft = () => {
+        syncAdjustmentLinesJson();
         if (!slipId || !adjustmentList) {
             return;
         }
@@ -289,6 +304,7 @@
         row.querySelector('[data-adjustment-amount]').value = amount;
         adjustmentList.appendChild(row);
         renumberAdjustmentRows();
+        syncAdjustmentLinesJson();
     };
 
     const restoreDetailDrafts = () => {
@@ -311,6 +327,7 @@
             }
         }
         renumberAdjustmentRows();
+        syncAdjustmentLinesJson();
     };
 
     const syncCheckoutClosedTimeFields = () => {
@@ -760,6 +777,7 @@
     adjustmentForm?.addEventListener('submit', () => {
         setSaveStatus(adjustmentStatus, '保存中');
         renumberAdjustmentRows();
+        syncAdjustmentLinesJson();
         localStorage.removeItem(adjustmentDraftKey);
     });
 

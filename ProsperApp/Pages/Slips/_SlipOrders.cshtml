@@ -222,6 +222,7 @@
                             </div>
                             <div class="modal-body slip-modal-form">
                                 <input type="hidden" asp-for="SlipId" />
+                                <input type="hidden" asp-for="AdjustmentLinesJson" id="adjustmentLinesJson" value="[]" />
                                 <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
                                 <span asp-validation-for="AdjustmentsInput.Lines" class="text-danger"></span>
                                 <div class="slip-create__panel-title slip-modal-form__subheader">

@@ -59,6 +59,9 @@ public partial class SlipEditModel(
     public string OrderQueueJson { get; set; } = string.Empty;
 
     [BindProperty]
+    public string AdjustmentLinesJson { get; set; } = "[]";
+
+    [BindProperty]
     public CheckoutInputModel CheckoutInput { get; set; } = new();
 
     [BindProperty]

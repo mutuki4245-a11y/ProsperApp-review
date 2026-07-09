@@ -35,7 +35,7 @@ public class AttendanceModel(
 
     public string DefaultClockInTime { get; private set; } = "19:00";
 
-    public string DefaultClockOutTime { get; private set; } = "00:00";
+    public string DefaultClockOutTime { get; private set; } = string.Empty;
 
     public string? SuccessMessage { get; private set; }
 
@@ -175,7 +175,7 @@ public class AttendanceModel(
         ClockInTimeOptions = BuildAttendanceTimeOptions(19, 0, minuteStep);
         ClockOutTimeOptions = BuildAttendanceTimeOptions(24, 0, minuteStep);
         DefaultClockInTime = ResolveDefaultTime(ClockInTimeOptions, "19:00");
-        DefaultClockOutTime = ResolveDefaultTime(ClockOutTimeOptions, "00:00");
+        DefaultClockOutTime = string.Empty;
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
         var postedByCastId = preserveInput
@@ -211,10 +211,6 @@ public class AttendanceModel(
                 }
 
                 var clockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty);
-                if (string.IsNullOrWhiteSpace(clockOutTime))
-                {
-                    clockOutTime = DefaultClockOutTime;
-                }
 
                 return new BusinessDayAttendanceEntryInput
                 {
@@ -238,10 +234,6 @@ public class AttendanceModel(
                 postedByCastId.TryGetValue(item.CastId, out var posted);
                 var clockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(item.ClockInAt, string.Empty);
                 var clockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(item.ClockOutAt, string.Empty);
-                if (string.IsNullOrWhiteSpace(clockOutTime))
-                {
-                    clockOutTime = DefaultClockOutTime;
-                }
 
                 return new BusinessDayAttendanceEntryInput
                 {

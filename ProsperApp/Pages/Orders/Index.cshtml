@@ -593,13 +593,6 @@
 
                 attendingCastModalList.innerHTML = '';
                 const matches = castOptions.slice(0, 80);
-                if (matches.length === 0) {
-                    const empty = document.createElement('p');
-                    empty.className = 'text-muted mb-0';
-                    empty.textContent = '出勤キャストが登録されていません。';
-                    attendingCastModalList.appendChild(empty);
-                    return;
-                }
 
                 const noBack = document.createElement('button');
                 noBack.type = 'button';
@@ -616,6 +609,10 @@
                     closeBackPicker();
                 });
                 attendingCastModalList.appendChild(noBack);
+
+                if (matches.length === 0) {
+                    return;
+                }
 
                 matches.forEach((cast) => {
                     const button = document.createElement('button');
