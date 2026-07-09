@@ -630,15 +630,7 @@ function addClientKey(keys: Set<string>, value: unknown) {
 
 function toSqlValue(value: unknown, type: PgType): unknown {
   if (type === "jsonb") {
-    if (value === undefined || value === null) {
-      return null;
-    }
-
-    if (typeof value === "string") {
-      return value;
-    }
-
-    return JSON.stringify(value ?? null);
+    return toJsonbText(value);
   }
 
   if (type === "text[]") {
@@ -650,6 +642,27 @@ function toSqlValue(value: unknown, type: PgType): unknown {
   }
 
   return value;
+}
+
+function toJsonbText(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+
+    try {
+      return JSON.stringify(JSON.parse(trimmed));
+    } catch {
+      return JSON.stringify(value);
+    }
+  }
+
+  return JSON.stringify(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -75,7 +75,12 @@ begin
 
     for v_order_line in
         select value
-        from jsonb_array_elements(store.jsonb_array_payload(p_order_lines))
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_order_lines) = 'array' then p_order_lines
+                else '[]'::jsonb
+            end
+        )
     loop
         v_line_slip_id := coalesce(nullif(v_order_line->>'slip_id', '')::bigint, p_slip_id);
         v_item_id := nullif(v_order_line->>'item_id', '')::bigint;

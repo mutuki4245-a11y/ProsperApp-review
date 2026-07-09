@@ -141,7 +141,7 @@ public class SupabaseBusinessDayRepository(
                 {
                     p_department_id = departmentId,
                     p_business_date = businessDate,
-                    p_attendance_entries = ToJsonb(attendancePayload),
+                    p_attendance_entries = attendancePayload,
                     p_memo = trimmedMemo
                 },
                 ct);
@@ -232,7 +232,7 @@ public class SupabaseBusinessDayRepository(
             {
                 p_department_id = departmentId,
                 p_business_day_id = businessDayId,
-                p_attendance_entries = ToJsonb(payload)
+                p_attendance_entries = payload
             },
             ct);
 
@@ -391,7 +391,7 @@ public class SupabaseBusinessDayRepository(
             {
                 p_department_id = departmentId,
                 p_business_day_id = businessDayId,
-                p_attendance_entries = ToJsonb(payload)
+                p_attendance_entries = payload
             },
             ct);
 

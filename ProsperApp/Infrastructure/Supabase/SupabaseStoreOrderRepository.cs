@@ -151,7 +151,7 @@ public class SupabaseStoreOrderRepository(
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_slip_id = slipId > 0 ? slipId : (long?)null,
-                p_order_lines = ToJsonb(payload)
+                p_order_lines = payload
             },
             ct);
 

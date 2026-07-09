@@ -560,7 +560,7 @@ public class SupabaseStoreSlipRepository(
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_slip_id = slipId,
-                p_adjustment_lines = ToJsonb(payload)
+                p_adjustment_lines = payload
             },
             ct);
 

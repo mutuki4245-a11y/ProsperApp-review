@@ -6,45 +6,6 @@ revoke usage on schema store from public, anon, authenticated, service_role;
 alter default privileges in schema store revoke execute on functions from public;
 alter default privileges in schema store revoke execute on functions from anon, authenticated, service_role;
 
-create or replace function store.jsonb_array_payload(p_payload jsonb)
-returns jsonb
-language plpgsql
-immutable
-set search_path = public
-as $$
-declare
-    v_payload_text text;
-    v_payload jsonb;
-begin
-    if p_payload is null then
-        return '[]'::jsonb;
-    end if;
-
-    if jsonb_typeof(p_payload) = 'array' then
-        return p_payload;
-    end if;
-
-    if jsonb_typeof(p_payload) = 'string' then
-        v_payload_text := nullif(trim(p_payload #>> '{}'), '');
-        if v_payload_text is null then
-            return '[]'::jsonb;
-        end if;
-
-        begin
-            v_payload := v_payload_text::jsonb;
-        exception when others then
-            return '[]'::jsonb;
-        end;
-
-        if jsonb_typeof(v_payload) = 'array' then
-            return v_payload;
-        end if;
-    end if;
-
-    return '[]'::jsonb;
-end;
-$$;
-
 drop function if exists public.get_store_departments();
 drop function if exists public.get_store_context(bigint);
 drop function if exists public.get_current_business_day(bigint);

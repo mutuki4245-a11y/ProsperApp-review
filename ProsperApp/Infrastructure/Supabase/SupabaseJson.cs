@@ -5,13 +5,6 @@ namespace ProsperApp.Services;
 
 internal static class SupabaseJson
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    public static string ToJsonb<TValue>(TValue value)
-    {
-        return JsonSerializer.Serialize(value, JsonOptions);
-    }
-
     public static long? ReadLong(JsonElement item, string name)
     {
         if (!item.TryGetProperty(name, out var value))
