@@ -116,6 +116,7 @@
     const orderAttendingCastModalElement = document.getElementById('orderAttendingCastSelectModal');
     const orderAttendingCastModalList = document.getElementById('orderAttendingCastModalList');
     const orderAttendingCastModal = orderAttendingCastModalElement ? new bootstrap.Modal(orderAttendingCastModalElement) : null;
+    const detailOrderQueueJson = document.getElementById('detailOrderQueueJson');
     const detailOrderQueueFields = document.getElementById('detailOrderQueueFields');
     const detailOrderQueueList = document.getElementById('detailOrderQueueList');
     const detailOrderQueueEmpty = document.getElementById('detailOrderQueueEmpty');
@@ -573,18 +574,28 @@
 
         let index = 0;
         let total = 0;
+        const serializedLines = [];
         orderQueue.forEach((line, key) => {
             const item = orderItems.find((candidate) => String(candidate.id) === String(line.itemId));
             if (!item) {
                 return;
             }
 
-            const quantity = line.quantity;
+            const quantity = Math.max(0, Math.trunc(Number(line.quantity) || 0));
+            if (quantity <= 0) {
+                return;
+            }
+
             const subtotal = Number(item.price) * quantity;
             total += subtotal;
             const cast = line.castBackCastId
                 ? castOptions.find((candidate) => String(candidate.id) === String(line.castBackCastId))
                 : null;
+            serializedLines.push({
+                itemId: Number(item.id),
+                quantity,
+                castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null
+            });
 
             detailOrderQueueFields?.insertAdjacentHTML('beforeend', `
                 <input type="hidden" name="QueueLines[${index}].ItemId" value="${item.id}" />
@@ -618,7 +629,11 @@
             index += 1;
         });
 
-        const hasQueue = orderQueue.size > 0;
+        if (detailOrderQueueJson) {
+            detailOrderQueueJson.value = JSON.stringify(serializedLines);
+        }
+
+        const hasQueue = serializedLines.length > 0;
         if (detailOrderQueueEmpty) {
             detailOrderQueueEmpty.hidden = hasQueue;
         }
@@ -754,6 +769,7 @@
     });
 
     slipOrderForm?.addEventListener('submit', () => {
+        renderOrderQueue();
         setSaveStatus(detailOrderQueueStatus, '保存中');
     });
 

@@ -134,10 +134,19 @@ public partial class SlipEditModel
         return Page();
     }
 
-
     private void NormalizeQueue()
     {
+        MergeOrderQueueJsonIntoInput();
         QueueLines = _orderQueueService.Normalize(QueueLines);
+    }
+
+    private void MergeOrderQueueJsonIntoInput()
+    {
+        var postedLines = OrderQueueJsonSerializer.Parse(OrderQueueJson);
+        if (postedLines.Count > 0)
+        {
+            QueueLines = postedLines;
+        }
     }
 
     private void NormalizeOrderQuantities()

@@ -24,6 +24,9 @@ public class IndexModel(
     [BindProperty]
     public List<OrderQueueInputModel> QueueLines { get; set; } = [];
 
+    [BindProperty]
+    public string OrderQueueJson { get; set; } = string.Empty;
+
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
     public IReadOnlyList<StoreOrderSlipOption> Slips { get; set; } = [];
@@ -81,6 +84,12 @@ public class IndexModel(
         if (!_featureGate.IsEnabled(FeatureNames.Orders))
         {
             return NotFound();
+        }
+
+        var postedQueueLines = OrderQueueJsonSerializer.Parse(OrderQueueJson);
+        if (postedQueueLines.Count > 0)
+        {
+            QueueLines = postedQueueLines;
         }
 
         QueueLines = _orderQueueService.Normalize(QueueLines);

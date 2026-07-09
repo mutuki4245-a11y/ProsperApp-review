@@ -160,6 +160,11 @@ public class SupabaseStoreOrderRepository(
         }
 
         var insertedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "inserted_count") ?? 0) : 0;
+        if (insertedCount <= 0)
+        {
+            return AddStoreOrderLinesResult.Failed("注文をDBに登録できませんでした。画面を再読み込みして再度お試しください。");
+        }
+
         return AddStoreOrderLinesResult.Success(insertedCount);
     }
 

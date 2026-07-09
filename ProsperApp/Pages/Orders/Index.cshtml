@@ -29,6 +29,7 @@
     <form method="post" class="order-entry__form" id="orderForm">
         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
         <input type="hidden" asp-for="SelectedSlipId" id="selectedSlipId" />
+        <input type="hidden" asp-for="OrderQueueJson" id="orderQueueJson" value="[]" />
         <div id="queueFields"></div>
 
         @if (Model.CurrentBusinessDay is null)
@@ -176,6 +177,7 @@
             const refreshIntervalMs = 10000;
 
             const selectedSlipInput = document.getElementById('selectedSlipId');
+            const orderQueueJson = document.getElementById('orderQueueJson');
             const orderForm = document.getElementById('orderForm');
             const selectedSlipBadge = document.getElementById('selectedSlipBadge');
             const selectedSlipQueueLabel = document.getElementById('selectedSlipQueueLabel');
@@ -426,6 +428,7 @@
 
                 let index = 0;
                 let total = 0;
+                const serializedLines = [];
                 queue.forEach((line, key) => {
                     const item = items.find((candidate) => String(candidate.id) === String(line.itemId));
                     const lineSlip = slips.find((candidate) => String(candidate.id) === String(line.slipId));
@@ -433,12 +436,22 @@
                         return;
                     }
 
-                    const quantity = line.quantity;
+                    const quantity = Math.max(0, Math.trunc(Number(line.quantity) || 0));
+                    if (quantity <= 0) {
+                        return;
+                    }
+
                     const subtotal = Number(item.price) * quantity;
                     total += subtotal;
                     const cast = line.castBackCastId
                         ? castOptions.find((candidate) => String(candidate.id) === String(line.castBackCastId))
                         : null;
+                    serializedLines.push({
+                        slipId: Number(lineSlip.id),
+                        itemId: Number(item.id),
+                        quantity,
+                        castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null
+                    });
 
                     if (queueFields) {
                         queueFields.insertAdjacentHTML('beforeend', `
@@ -484,7 +497,11 @@
                     index += 1;
                 });
 
-                const hasQueue = index > 0;
+                if (orderQueueJson) {
+                    orderQueueJson.value = JSON.stringify(serializedLines);
+                }
+
+                const hasQueue = serializedLines.length > 0;
                 if (queueEmpty) {
                     queueEmpty.hidden = hasQueue;
                 }
@@ -550,6 +567,7 @@
             });
 
             orderForm?.addEventListener('submit', () => {
+                render();
                 if (queueStatus) {
                     queueStatus.textContent = '保存中';
                     queueStatus.dataset.saveState = 'saving';
