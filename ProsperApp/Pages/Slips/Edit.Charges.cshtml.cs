@@ -52,49 +52,6 @@ public partial class SlipEditModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostSaveKaraokeAsync(CancellationToken cancellationToken)
-    {
-        if (!_featureGate.IsEnabled(FeatureNames.Slips))
-        {
-            return NotFound();
-        }
-
-        ClearCrossFormValidationState();
-        NormalizeKaraokeInput();
-        await LoadAsync(cancellationToken);
-
-        if (!EnsureSlipLoaded())
-        {
-            SetDefaultInputs();
-            return Page();
-        }
-
-        ValidateKaraokeInput();
-        if (!ModelState.IsValid)
-        {
-            SetDefaultInputs();
-            return Page();
-        }
-
-        var result = await _slipRepository.SaveKaraokeLinesAsync(
-            Detail!.BusinessDate == default || CurrentBusinessDay is null ? 0 : CurrentBusinessDay.BusinessDayId,
-            KaraokeLines,
-            cancellationToken);
-        if (!result.Succeeded)
-        {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "カラオケ回数を保存できませんでした。");
-            SetDefaultInputs();
-            return Page();
-        }
-
-        SuccessMessage = "カラオケ回数を保存しました。";
-        ModelState.Clear();
-        KaraokeLines = [];
-        await LoadAsync(cancellationToken);
-        SetDefaultInputs();
-        return Page();
-    }
-
     private void NormalizeAdjustmentInput()
     {
         AdjustmentsInput.Lines = AdjustmentsInput.Lines
@@ -126,40 +83,6 @@ public partial class SlipEditModel
             {
                 ModelState.AddModelError($"AdjustmentsInput.Lines[{i}].Amount", "価格を確認してください。");
             }
-        }
-    }
-
-    private void NormalizeKaraokeInput()
-    {
-        KaraokeLines = KaraokeLines
-            .Where(x => x.SlipId > 0)
-            .GroupBy(x => x.SlipId)
-            .Select(x => new KaraokeQuantityInputModel
-            {
-                SlipId = x.Key,
-                Quantity = x.Last().Quantity
-            })
-            .ToList();
-    }
-
-    private void ValidateKaraokeInput()
-    {
-        if (CurrentBusinessDay is null)
-        {
-            ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
-            return;
-        }
-
-        if (KaraokeLines.Count != 1 || KaraokeLines[0].SlipId != SlipId)
-        {
-            ModelState.AddModelError(nameof(KaraokeLines), "カラオケ回数を保存する伝票を確認してください。");
-            return;
-        }
-
-        var quantity = KaraokeLines[0].Quantity;
-        if (quantity < 0 || quantity > 999 || quantity != decimal.Truncate(quantity))
-        {
-            ModelState.AddModelError("KaraokeLines[0].Quantity", "カラオケ回数を確認してください。");
         }
     }
 }

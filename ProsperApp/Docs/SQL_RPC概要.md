@@ -80,14 +80,13 @@ DB反映時の基本順序は以下。
 
 営業中の会計額は以下を元に集計する。
 
-- 有効な `store_order_lines` のうち指名料金以外の注文小計
+- 有効な `store_order_lines` 全体の注文小計。標準商品、カラオケ、指名料金などのシステム商品を含む。
 - 注文小計に対する20%サービス料
-- 有効な `store_order_lines` のうち `item_type = 'nomination_fee'` の指名料金合計
 - 有効な `store_slip_charge_lines` のうち自由入力調整の合計
 
 カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、`store_order_lines` に1伝票1行で集約する。単価は1回200円固定で、注文小計に含まれるためサービス料20%の対象になる。`ordered_at` は入店時刻に合わせ、異なるタイミングで追加したカラオケも同一伝票では数量だけを更新する。
 
-指名料金は `store_item_master.item_type = 'nomination_fee'` のシステム商品として扱い、指名登録時に `store_order_lines` へ1指名1行で自動追加する。商品注文端末からは注文できず、通常注文の数量訂正・削除対象にも含めない。指名料金行は商品小計とサービス料20%の対象から除外し、指名料金合計として会計額に加算する。
+指名料金は `store_item_master.item_type = 'nomination_fee'` のシステム商品として扱い、指名登録時に `store_order_lines` へ1指名1行で自動追加する。商品注文端末からは注文できず、通常注文の数量訂正・削除対象にも含めない。カラオケと指名料金を含むシステム商品は、会計では標準商品と同じく商品小計とサービス料20%の対象にする。
 
 用語は、会計額へ加算する料金を `指名料金`、指名時にキャストへ支払うバックを `指名バック`、商品注文時にキャストへ支払う通常バックを `ドリンクバック`、商品注文バック対象が当該伝票の指名キャストだった場合のバックを `担当バック` と呼び分ける。
 
@@ -271,9 +270,9 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | --- | --- | --- |
 | カラオケ商品化 | 実装済み | `store_item_master.item_type = 'karaoke'` のシステム商品を使い、`store_order_lines` に1伝票1行で集約する。旧 `store_slip_charge_lines.charge_type = 'karaoke'` のアクティブ行は注文行へ移行してvoid化する。 |
 | システム商品の注文端末除外 | 実装済み | `store.get_order_items` は標準商品だけを返し、`store.add_order_lines` も標準商品以外を拒否する。カラオケなどのシステム商品は専用RPCで保存する。 |
-| カラオケのサービス料対象化 | 実装済み | `store.get_business_day_slips` と `store.confirm_checkout` は、カラオケを含む注文小計に20%サービス料を掛ける。カラオケは自由入力調整ではない。 |
+| カラオケ/指名料金のサービス料対象化 | 実装済み | `store.get_business_day_slips` と `store.confirm_checkout` は、カラオケや指名料金を含む全注文行の小計に20%サービス料を掛ける。システム商品も自由入力調整ではなく注文小計に含める。 |
 | 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。会計額へ直接加減し、商品マスタには登録しない。 |
-| 指名料金のシステム商品化 | 実装済み | 指名登録時に `store_item_master.item_type = 'nomination_fee'` のシステム商品を使って `store_order_lines` へ1指名1行を作成する。`store_slip_casts.nomination_price` は入力値の保持と表示に使い、会計集計は指名料金の注文行を参照する。 |
+| 指名料金のシステム商品化 | 実装済み | 指名登録時に `store_item_master.item_type = 'nomination_fee'` のシステム商品を使って `store_order_lines` へ1指名1行を作成する。`store_slip_casts.nomination_price` は入力値の保持と表示に使い、会計集計は指名料金の注文行を商品小計として参照する。 |
 | 指名種別別キャストバック | 実装済み | `store_nomination_back_master` で店舗別の指名種別候補と単価を管理し、`store.create_slip` / `store.add_slip_nominations` が `nomination_kind` から基本種別と同伴時刻を解決して `store_slip_cast_backs` へ営業実績を作成する。 |
 | 店舗別運用設定 | 実装済み | `department_master.attendance_minute_step`, `cast_sales_amount_basis`, `cast_sales_split_mode` を `store.get_context` で返し、勤怠時刻選択とキャスト売上額調整の初期配分に使う。 |
 | 管理者モード締め | 実装済み | `store.close_business_day` は `p_ignore_closing_requirements = true` の場合、未会計伝票、酒代、勤怠、退勤、キャスト売上額調整、未入力領収書の条件検証を無視して営業日を締める。営業日IDと店舗IDの一致確認は維持する。 |

@@ -687,7 +687,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     marks an active standard order line and related store_order_line_cast_backs rows voided.
 --   store.confirm_checkout(p_department_id bigint, p_slip_id bigint, p_closed_at timestamptz, p_payments jsonb, p_received_amount numeric)
 --     confirms checkout, stores subtotal/service tax/total snapshots, split payment rows, closes active customers, and marks the slip checked_out.
---     total includes product subtotal excluding nomination_fee, 20% service tax on product subtotal, nomination_fee system order lines, and active adjustment charge lines.
+--     total includes all active order lines, 20% service tax on that subtotal, and active adjustment charge lines.
 --     p_payments supports { method_code, amount } with method_code in cash/cat/paypay.
 --   store.cancel_checkout(p_department_id bigint, p_slip_id bigint)
 --     cancels a confirmed checkout for an open business day, marks payments cancelled,

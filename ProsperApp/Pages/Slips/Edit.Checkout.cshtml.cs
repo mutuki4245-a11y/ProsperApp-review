@@ -251,25 +251,18 @@ public partial class SlipEditModel
         var activeOrders = Detail?.Orders
             .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
             .ToList() ?? [];
-        var subtotal = activeOrders
-            .Where(x => !x.IsNominationFee)
-            .Sum(x => x.Amount);
+        var subtotal = activeOrders.Sum(x => x.Amount);
         var serviceTax = Math.Round(subtotal * 0.20m, 0, MidpointRounding.AwayFromZero);
-        var nominationAmount = activeOrders
-            .Where(x => x.IsNominationFee)
-            .Sum(x => x.Amount);
         var adjustmentAmount = Detail?.ChargeLines
             .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal) &&
                         string.Equals(x.Status, "active", StringComparison.Ordinal))
             .Sum(x => x.Amount) ?? 0;
-        var total = subtotal + serviceTax + nominationAmount + adjustmentAmount;
+        var total = subtotal + serviceTax + adjustmentAmount;
 
         return new CheckoutTotals
         {
             SubtotalAmount = subtotal,
             ServiceTaxAmount = serviceTax,
-            NominationAmount = nominationAmount,
-            KaraokeAmount = 0,
             AdjustmentAmount = adjustmentAmount,
             TotalAmount = Math.Max(total, 0)
         };
@@ -303,8 +296,6 @@ public partial class SlipEditModel
             ClosedAt = _storeClock.ToStoreDateTimeOffset(CheckoutInput.ClosedAt!.Value),
             SubtotalAmount = CheckoutTotals.SubtotalAmount,
             ServiceTaxAmount = CheckoutTotals.ServiceTaxAmount,
-            NominationAmount = CheckoutTotals.NominationAmount,
-            KaraokeAmount = CheckoutTotals.KaraokeAmount,
             AdjustmentAmount = CheckoutTotals.AdjustmentAmount,
             TotalAmount = CheckoutTotals.TotalAmount,
             ReceivedAmount = CheckoutInput.ReceivedAmount,

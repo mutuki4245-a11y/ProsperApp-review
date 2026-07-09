@@ -29,7 +29,6 @@ declare
     v_amount numeric(12, 0);
     v_subtotal_amount numeric(12, 0);
     v_service_tax_amount numeric(12, 0);
-    v_nomination_amount numeric(12, 0);
     v_charge_amount numeric(12, 0);
     v_total_amount numeric(12, 0);
     v_payment_total numeric(12, 0) := 0;
@@ -99,20 +98,8 @@ begin
     select coalesce(sum(ol.amount), 0)
       into v_subtotal_amount
     from public.store_order_lines ol
-    left join public.store_item_master i
-      on i.item_id = ol.item_id
     where ol.slip_id = p_slip_id
-      and ol.status = 'active'
-      and coalesce(i.item_type, 'standard') <> 'nomination_fee';
-
-    select coalesce(sum(ol.amount), 0)
-      into v_nomination_amount
-    from public.store_order_lines ol
-    join public.store_item_master i
-      on i.item_id = ol.item_id
-    where ol.slip_id = p_slip_id
-      and ol.status = 'active'
-      and i.item_type = 'nomination_fee';
+      and ol.status = 'active';
 
     select coalesce(sum(cl.amount), 0)
       into v_charge_amount
@@ -122,7 +109,7 @@ begin
       and cl.status = 'active';
 
     v_service_tax_amount := round(v_subtotal_amount * 0.20, 0);
-    v_total_amount := v_subtotal_amount + v_service_tax_amount + v_nomination_amount + v_charge_amount;
+    v_total_amount := v_subtotal_amount + v_service_tax_amount + v_charge_amount;
 
     if v_total_amount < 0 then
         raise exception 'invalid_checkout_total';

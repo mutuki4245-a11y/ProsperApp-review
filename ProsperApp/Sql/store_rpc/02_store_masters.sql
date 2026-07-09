@@ -261,14 +261,7 @@ as $$
     order_summary as (
         select
             l.slip_id,
-            coalesce(sum(l.amount) filter (
-                where l.status = 'active'
-                  and coalesce(i.item_type, 'standard') <> 'nomination_fee'
-            ), 0) as order_subtotal_amount,
-            coalesce(sum(l.amount) filter (
-                where l.status = 'active'
-                  and i.item_type = 'nomination_fee'
-            ), 0) as nomination_amount,
+            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount,
             coalesce(sum(l.quantity) filter (where l.status = 'active' and i.item_type = 'karaoke'), 0) as karaoke_quantity
         from target_slips s
         join public.store_order_lines l
@@ -300,7 +293,6 @@ as $$
         greatest(
             coalesce(os.order_subtotal_amount, 0) +
             round(coalesce(os.order_subtotal_amount, 0) * 0.20, 0) +
-            coalesce(os.nomination_amount, 0) +
             coalesce(charges.charge_amount, 0),
             0
         ) as accounting_amount,

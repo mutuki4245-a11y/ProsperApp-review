@@ -62,9 +62,6 @@ public partial class SlipEditModel(
     public SaveSlipAdjustmentsInputModel AdjustmentsInput { get; set; } = new();
 
     [BindProperty]
-    public List<KaraokeQuantityInputModel> KaraokeLines { get; set; } = [];
-
-    [BindProperty]
     public List<OrderLineQuantityInputModel> OrderQuantityLines { get; set; } = [];
 
     public SlipDetail? Detail { get; private set; }

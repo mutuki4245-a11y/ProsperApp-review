@@ -9,29 +9,13 @@
         .Where(x => x.IsStandard)
         .ToList();
     var activeSystemOrders = activeOrders
-        .Where(x => !x.IsStandard && !x.IsKaraoke)
+        .Where(x => !x.IsStandard)
         .ToList();
-    var activeKaraokeOrder = activeOrders
-        .Where(x => x.IsKaraoke)
-        .OrderBy(x => x.LineNo)
-        .FirstOrDefault();
-    var activeKaraokeQuantity = activeOrders
-        .Where(x => x.IsKaraoke)
-        .Sum(x => x.Quantity);
     var orderableItems = Model.OrderItems
         .Where(x => x.IsStandard)
         .ToList();
-    var karaokeItem = Model.OrderItems.FirstOrDefault(x => x.IsKaraoke);
-    var karaokeUnitPrice = activeKaraokeOrder?.UnitPrice ?? karaokeItem?.DefaultPrice ?? 200;
-    var karaokeAmount = activeKaraokeQuantity * karaokeUnitPrice;
     var activeOrderTotal = activeOrders.Sum(x => x.Amount);
     var fixedSystemOrderTotal = activeSystemOrders.Sum(x => x.Amount);
-    var firstCustomer = detail.Customers
-        .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.Ordinal))
-        .OrderBy(x => x.EnteredAt)
-        .FirstOrDefault();
-    var karaokeOrderedAt = activeKaraokeOrder?.OrderedAt ?? firstCustomer?.EnteredAt ?? detail.OpenedAt;
-    var showKaraokeOrderRow = Model.IsOpenSlip || activeKaraokeQuantity > 0;
     var activeCharges = detail.ChargeLines
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
         .OrderBy(x => x.LineNo)
@@ -52,10 +36,6 @@
                     <small>@activeOrders.Count 件 / @activeOrderTotal.ToString("N0") 円</small>
                 </div>
                 <div class="slip-create__panel-title-actions">
-                    @if (Model.IsOpenSlip && showKaraokeOrderRow)
-                    {
-                        <output class="terminal-save-status" data-detail-karaoke-status data-save-state="saved" aria-live="polite">保存済み</output>
-                    }
                     @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
                     {
                         <output class="terminal-save-status" data-order-quantity-status data-save-state="saved" aria-live="polite">保存済み</output>
@@ -69,11 +49,6 @@
                     <span class="terminal-count-badge">@activeOrders.Count 件</span>
                 </div>
             </div>
-
-            @if (showKaraokeOrderRow && Model.IsOpenSlip)
-            {
-                <form method="post" asp-page-handler="SaveKaraoke" id="detailKaraokeForm" data-detail-karaoke-form></form>
-            }
 
             @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
             {
@@ -103,7 +78,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (activeStandardOrders.Count == 0 && activeSystemOrders.Count == 0 && !showKaraokeOrderRow)
+                        @if (activeStandardOrders.Count == 0 && activeSystemOrders.Count == 0)
                         {
                             <tr>
                                 <td colspan="6" class="text-muted">注文はまだ登録されていません。</td>
@@ -156,39 +131,6 @@
                                     <td class="slip-detail-table__amount text-end">@order.Amount.ToString("N0")</td>
                                     <td class="slip-detail-table__action text-end">
                                         <span class="text-muted">削除不可</span>
-                                    </td>
-                                </tr>
-                            }
-
-                            @if (showKaraokeOrderRow)
-                            {
-                                <tr>
-                                    <td class="slip-detail-table__time">@Model.FormatStoreTime(karaokeOrderedAt)</td>
-                                    <td class="slip-detail-table__primary">カラオケ</td>
-                                    <td class="slip-detail-table__amount text-end">@karaokeUnitPrice.ToString("N0")</td>
-                                    <td class="slip-detail-table__quantity text-end">
-                                        @if (Model.IsOpenSlip)
-                                        {
-                                            <input form="detailKaraokeForm" type="hidden" name="SlipId" value="@detail.SlipId" />
-                                            <input form="detailKaraokeForm" type="hidden" name="KaraokeLines[0].SlipId" value="@detail.SlipId" />
-                                            <input form="detailKaraokeForm" type="hidden" name="KaraokeLines[0].Quantity" value="@activeKaraokeQuantity" data-detail-karaoke-input />
-                                            <div class="quantity-stepper quantity-stepper--compact">
-                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-detail-karaoke-decrement>-</button>
-                                                <strong data-detail-karaoke-display>@activeKaraokeQuantity.ToString("0")</strong>
-                                                <button class="btn btn-outline-primary btn-sm" type="button" data-detail-karaoke-increment>+</button>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            @activeKaraokeQuantity.ToString("0.##")
-                                        }
-                                    </td>
-                                    <td class="slip-detail-table__amount text-end" data-detail-karaoke-amount data-detail-karaoke-unit-price="@karaokeUnitPrice">@karaokeAmount.ToString("N0")</td>
-                                    <td class="slip-detail-table__action text-end">
-                                        @if (Model.IsOpenSlip)
-                                        {
-                                            <button class="btn btn-primary btn-sm" type="submit" form="detailKaraokeForm" data-detail-karaoke-save disabled>保存</button>
-                                        }
                                     </td>
                                 </tr>
                             }

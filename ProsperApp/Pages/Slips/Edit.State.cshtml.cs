@@ -89,7 +89,6 @@ public partial class SlipEditModel
         SetDefaultLeaveInput();
         SetDefaultCheckoutInput();
         SetDefaultAdjustmentInput();
-        SetDefaultKaraokeInput();
     }
 
     private void ClearCrossFormValidationState()
@@ -136,27 +135,5 @@ public partial class SlipEditModel
         {
             AdjustmentsInput.Lines.Add(new SlipAdjustmentInputModel());
         }
-    }
-
-    private void SetDefaultKaraokeInput()
-    {
-        if (KaraokeLines.Count > 0 || Detail is null)
-        {
-            return;
-        }
-
-        var quantity = Detail.Orders
-            .Where(x => x.IsKaraoke &&
-                        string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .Sum(x => x.Quantity);
-
-        KaraokeLines =
-        [
-            new KaraokeQuantityInputModel
-            {
-                SlipId = Detail.SlipId,
-                Quantity = quantity
-            }
-        ];
     }
 }

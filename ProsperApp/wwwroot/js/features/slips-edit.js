@@ -137,13 +137,7 @@
     const detailBackToPaymentsButton = document.getElementById('detailBackToPaymentsButton');
     const detailCashDisplay = document.getElementById('detailCashAmountDisplay');
     const detailChangeDisplay = document.getElementById('detailChangeAmountDisplay');
-    const detailKaraokeForm = document.querySelector('[data-detail-karaoke-form]');
-    const detailKaraokeInput = document.querySelector('[data-detail-karaoke-input]');
-    const detailKaraokeDisplay = document.querySelector('[data-detail-karaoke-display]');
-    const detailKaraokeAmount = document.querySelector('[data-detail-karaoke-amount]');
     const detailOrderTotal = document.querySelector('[data-detail-order-total]');
-    const detailKaraokeSave = document.querySelector('[data-detail-karaoke-save]');
-    const detailKaraokeStatus = document.querySelector('[data-detail-karaoke-status]');
     const orderCorrectionPanel = document.querySelector('[data-order-correction-panel]');
     const orderCorrectionToggle = document.querySelector('[data-order-correction-toggle]');
     const orderQuantityForm = document.querySelector('[data-order-quantity-form]');
@@ -176,7 +170,6 @@
     }
 
     const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
-    const karaokeDraftKey = `${draftPrefix}:karaoke`;
     const adjustmentDraftKey = `${draftPrefix}:adjustments`;
     let isOrderCorrectionMode = false;
 
@@ -194,9 +187,7 @@
             const unitPrice = Number(row.dataset.orderUnitPrice ?? 0);
             return total + unitPrice * quantity;
         }, fixedOrderTotal);
-        const karaokeUnitPrice = Number(detailKaraokeAmount?.dataset.detailKaraokeUnitPrice ?? 200);
-        const karaokeQuantity = Number(detailKaraokeInput?.value ?? 0);
-        detailOrderTotal.textContent = formatYen(orderTotal + karaokeUnitPrice * karaokeQuantity).replace(' 円', '');
+        detailOrderTotal.textContent = formatYen(orderTotal).replace(' 円', '');
     };
 
     const updateOrderQuantityState = () => {
@@ -252,28 +243,6 @@
         updateOrderQuantityState();
     };
 
-    const setDetailKaraokeQuantity = (quantity, markDirty = true) => {
-        const normalized = Math.max(0, Math.trunc(Number(quantity) || 0));
-        if (detailKaraokeInput) {
-            detailKaraokeInput.value = String(normalized);
-        }
-        if (detailKaraokeDisplay) {
-            detailKaraokeDisplay.textContent = String(normalized);
-        }
-        if (detailKaraokeAmount) {
-            const unitPrice = Number(detailKaraokeAmount.dataset.detailKaraokeUnitPrice ?? 200);
-            detailKaraokeAmount.textContent = formatYen(unitPrice * normalized).replace(' 円', '');
-        }
-        recalculateOrderTotal();
-        if (detailKaraokeSave) {
-            detailKaraokeSave.disabled = !markDirty;
-        }
-        if (markDirty && slipId) {
-            localStorage.setItem(karaokeDraftKey, String(normalized));
-            setSaveStatus(detailKaraokeStatus, '未保存');
-        }
-    };
-
     const readAdjustmentRows = () => Array.from(adjustmentList?.querySelectorAll('[data-adjustment-row]') ?? [])
         .map((row) => ({
             lineName: row.querySelector('[data-adjustment-name]')?.value ?? '',
@@ -322,13 +291,6 @@
     };
 
     const restoreDetailDrafts = () => {
-        if (detailKaraokeInput && slipId) {
-            const draft = localStorage.getItem(karaokeDraftKey);
-            if (draft !== null) {
-                setDetailKaraokeQuantity(draft, true);
-            }
-        }
-
         if (adjustmentList && slipId) {
             const draft = localStorage.getItem(adjustmentDraftKey);
             if (draft) {
@@ -747,16 +709,6 @@
             return;
         }
 
-        if (event.target.closest('[data-detail-karaoke-decrement]')) {
-            setDetailKaraokeQuantity(Number(detailKaraokeInput?.value ?? 0) - 1);
-            return;
-        }
-
-        if (event.target.closest('[data-detail-karaoke-increment]')) {
-            setDetailKaraokeQuantity(Number(detailKaraokeInput?.value ?? 0) + 1);
-            return;
-        }
-
         if (event.target.closest('[data-add-adjustment-row]')) {
             appendAdjustmentRow();
             saveAdjustmentDraft();
@@ -785,11 +737,6 @@
     });
 
     adjustmentList?.addEventListener('input', saveAdjustmentDraft);
-
-    detailKaraokeForm?.addEventListener('submit', () => {
-        setSaveStatus(detailKaraokeStatus, '保存中');
-        localStorage.removeItem(karaokeDraftKey);
-    });
 
     orderQuantityForm?.addEventListener('submit', () => {
         setSaveStatus(orderQuantityStatus, '保存中');
