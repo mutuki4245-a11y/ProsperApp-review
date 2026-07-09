@@ -58,6 +58,7 @@
         <form method="post" class="closing-attendance-form" data-attendance-form="true">
             <input asp-for="Input.BusinessDayId" type="hidden" />
             <input asp-for="Input.SelectedCastIds" type="hidden" id="selectedAttendanceCastIds" />
+            <input asp-for="Input.SelectedEntriesJson" type="hidden" id="selectedAttendanceEntriesJson" />
             <div class="closing-attendance-toolbar">
                 <div class="closing-attendance-toolbar__summary">
                     <strong>出勤キャスト</strong>
@@ -166,15 +167,27 @@
             const emptyMessage = document.getElementById('attendanceEmptyMessage');
             const selectedCount = document.getElementById('selectedAttendanceCount');
             const selectedCastIdsInput = document.getElementById('selectedAttendanceCastIds');
+            const selectedEntriesJsonInput = document.getElementById('selectedAttendanceEntriesJson');
             const attendanceForm = document.querySelector('[data-attendance-form]') ?? document.querySelector('.closing-attendance-form');
             const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
 
             const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
+            const getInputBySuffix = (row, suffix) => row?.querySelector(`input[name$=".${suffix}"]`);
             const getSelectedInput = (row) => row?.querySelector('[data-attendance-selected]');
             const getCastIdInput = (row) => row?.querySelector('input[name$=".CastId"]');
+            const getAttendanceIdInput = (row) => getInputBySuffix(row, 'AttendanceId');
+            const getDisplayNameInput = (row) => getInputBySuffix(row, 'DisplayName');
+            const getDepartmentNameInput = (row) => getInputBySuffix(row, 'DepartmentName');
+            const getRegisteredInput = (row) => getInputBySuffix(row, 'IsRegistered');
+            const getUsesSendServiceInput = (row) => row?.querySelector('input[type="checkbox"][name$=".UsesSendService"]');
             const getClockInSelect = (row) => row?.querySelector('[data-clock-in-select]');
             const getClockOutSelect = (row) => row?.querySelector('[data-clock-out-select]');
             const isSelected = (row) => (getSelectedInput(row)?.value ?? '').toLocaleLowerCase('en-US') === 'true';
+            const toNumber = (value) => {
+                const parsed = Number(value);
+                return Number.isFinite(parsed) ? parsed : 0;
+            };
+            const toBool = (value) => (value ?? '').toString().toLocaleLowerCase('en-US') === 'true';
             const normalize = (value) => (value ?? '').toString().trim().toLocaleLowerCase('ja-JP');
             const displayCastName = (cast) => {
                 const name = cast.name ?? '';
@@ -200,6 +213,20 @@
                         .map((row) => getCastIdInput(row)?.value ?? '')
                         .filter((value) => value.length > 0)
                         .join(',');
+                }
+                if (selectedEntriesJsonInput) {
+                    selectedEntriesJsonInput.value = JSON.stringify(selectedRows
+                        .map((row) => ({
+                            cast_id: toNumber(getCastIdInput(row)?.value),
+                            attendance_id: toNumber(getAttendanceIdInput(row)?.value),
+                            display_name: getDisplayNameInput(row)?.value ?? '',
+                            department_name: getDepartmentNameInput(row)?.value ?? '',
+                            is_registered: toBool(getRegisteredInput(row)?.value),
+                            clock_in_time: getClockInSelect(row)?.value ?? '',
+                            clock_out_time: getClockOutSelect(row)?.value ?? '',
+                            uses_send_service: getUsesSendServiceInput(row)?.checked ?? false
+                        }))
+                        .filter((entry) => entry.cast_id > 0));
                 }
             };
 
@@ -358,6 +385,12 @@
             attendanceForm?.addEventListener('submit', () => {
                 selectAttendanceRows(getCheckedModalIndexes());
                 syncVisibleRowsForSubmit();
+            });
+            attendanceForm?.addEventListener('formdata', (event) => {
+                selectAttendanceRows(getCheckedModalIndexes());
+                syncVisibleRowsForSubmit();
+                event.formData.set('Input.SelectedCastIds', selectedCastIdsInput?.value ?? '');
+                event.formData.set('Input.SelectedEntriesJson', selectedEntriesJsonInput?.value ?? '[]');
             });
             updateSelectedState();
         })();

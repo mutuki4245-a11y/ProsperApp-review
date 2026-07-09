@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Models;
@@ -63,6 +65,7 @@ public class AttendanceModel(
         }
 
         var postedBusinessDayId = Input.BusinessDayId;
+        MergeSelectedEntriesJsonIntoInput();
         await LoadAsync(cancellationToken, preserveInput: true);
         if (CurrentBusinessDay is not null && postedBusinessDayId != CurrentBusinessDay.BusinessDayId)
         {
@@ -258,7 +261,7 @@ public class AttendanceModel(
         {
             foreach (var entry in entries)
             {
-                entry.IsSelected = postedSelectedCastIds.Contains(entry.CastId);
+                entry.IsSelected = entry.IsSelected || postedSelectedCastIds.Contains(entry.CastId);
             }
         }
 
@@ -266,8 +269,79 @@ public class AttendanceModel(
         {
             BusinessDayId = CurrentBusinessDay?.BusinessDayId,
             SelectedCastIds = string.Join(',', entries.Where(x => x.IsSelected).Select(x => x.CastId)),
+            SelectedEntriesJson = Input.SelectedEntriesJson,
             Entries = entries
         };
+    }
+
+    private void MergeSelectedEntriesJsonIntoInput()
+    {
+        var selectedEntries = ParseSelectedEntries(Input.SelectedEntriesJson);
+        if (selectedEntries.Count == 0)
+        {
+            return;
+        }
+
+        var inputByCastId = Input.Entries
+            .Where(x => x.CastId > 0)
+            .GroupBy(x => x.CastId)
+            .ToDictionary(x => x.Key, x => x.Last());
+
+        foreach (var posted in selectedEntries)
+        {
+            if (posted.CastId <= 0)
+            {
+                continue;
+            }
+
+            if (!inputByCastId.TryGetValue(posted.CastId, out var entry))
+            {
+                entry = new BusinessDayAttendanceEntryInput { CastId = posted.CastId };
+                Input.Entries.Add(entry);
+                inputByCastId[posted.CastId] = entry;
+            }
+
+            entry.IsSelected = true;
+            entry.AttendanceId = posted.AttendanceId > 0 ? posted.AttendanceId : entry.AttendanceId;
+            entry.DisplayName = FirstNonEmpty(posted.DisplayName, entry.DisplayName);
+            entry.DepartmentName = FirstNonEmpty(posted.DepartmentName, entry.DepartmentName);
+            entry.IsRegistered = posted.IsRegistered || entry.IsRegistered;
+            entry.ClockInTime = FirstNonEmpty(posted.ClockInTime, entry.ClockInTime);
+            entry.ClockOutTime = FirstNonEmpty(posted.ClockOutTime, entry.ClockOutTime);
+            entry.UsesSendService = posted.UsesSendService || entry.UsesSendService;
+        }
+
+        var selectedCastIds = ParseSelectedCastIds(Input.SelectedCastIds);
+        foreach (var castId in selectedEntries.Select(x => x.CastId).Where(x => x > 0))
+        {
+            selectedCastIds.Add(castId);
+        }
+
+        Input.SelectedCastIds = string.Join(',', selectedCastIds);
+    }
+
+    private static IReadOnlyList<PostedAttendanceEntry> ParseSelectedEntries(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<PostedAttendanceEntry>>(value) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static string FirstNonEmpty(string? primary, string? fallback)
+    {
+        return string.IsNullOrWhiteSpace(primary)
+            ? fallback ?? string.Empty
+            : primary.Trim();
     }
 
     private static HashSet<long> ParseSelectedCastIds(string? value)
@@ -326,7 +400,7 @@ public class AttendanceModel(
         {
             foreach (var entry in Input.Entries)
             {
-                entry.IsSelected = selectedCastIds.Contains(entry.CastId);
+                entry.IsSelected = entry.IsSelected || selectedCastIds.Contains(entry.CastId);
             }
         }
 
@@ -414,6 +488,8 @@ public class ClosingAttendanceInputModel
 
     public string SelectedCastIds { get; set; } = string.Empty;
 
+    public string SelectedEntriesJson { get; set; } = string.Empty;
+
     public List<BusinessDayAttendanceEntryInput> Entries { get; set; } = [];
 }
 
@@ -441,3 +517,13 @@ public class BusinessDayAttendanceEntryInput
 }
 
 public sealed record AttendanceTimeOption(string Value, string Label);
+
+internal sealed record PostedAttendanceEntry(
+    [property: JsonPropertyName("cast_id")] long CastId,
+    [property: JsonPropertyName("attendance_id")] long AttendanceId,
+    [property: JsonPropertyName("display_name")] string? DisplayName,
+    [property: JsonPropertyName("department_name")] string? DepartmentName,
+    [property: JsonPropertyName("is_registered")] bool IsRegistered,
+    [property: JsonPropertyName("clock_in_time")] string? ClockInTime,
+    [property: JsonPropertyName("clock_out_time")] string? ClockOutTime,
+    [property: JsonPropertyName("uses_send_service")] bool UsesSendService);
