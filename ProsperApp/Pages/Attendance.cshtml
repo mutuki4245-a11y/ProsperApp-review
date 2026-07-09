@@ -32,10 +32,19 @@
 
     @if (Model.Input.Entries.Count == 0)
     {
-        <div class="alert alert-secondary">
-            キャスト情報が未登録です。
-            <a class="alert-link" asp-page="/Management/Casts">キャスト情報へ</a>
-        </div>
+        @if (!string.IsNullOrWhiteSpace(Model.CastLoadErrorMessage))
+        {
+            <div class="alert alert-warning">
+                @Model.CastLoadErrorMessage
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-secondary">
+                キャスト情報が未登録です。出勤キャストを追加する前に、キャスト情報を登録してください。
+                <a class="alert-link" asp-page="/Management/Casts">キャスト情報へ</a>
+            </div>
+        }
     }
     else
     {

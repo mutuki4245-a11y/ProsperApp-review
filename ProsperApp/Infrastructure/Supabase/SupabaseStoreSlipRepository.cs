@@ -92,16 +92,22 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<IReadOnlyList<CastOption>> GetCastsAsync(CancellationToken ct)
     {
+        var result = await GetCastsResultAsync(ct);
+        return result.Succeeded ? result.Casts : [];
+    }
+
+    public async Task<CastOptionsLoadResult> GetCastsResultAsync(CancellationToken ct)
+    {
         if (!HasRequiredSettings())
         {
-            return [];
+            return CastOptionsLoadResult.Failed("店舗設定またはSupabase Edge Function設定が未設定です。管理者設定で利用店舗を保存し、RPCキー設定を確認してください。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.StoreCasts(departmentId);
         if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<CastOption>? cachedCasts))
         {
-            return cachedCasts ?? [];
+            return CastOptionsLoadResult.Success(cachedCasts ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -111,7 +117,7 @@ public class SupabaseStoreSlipRepository(
 
         if (!result.Succeeded)
         {
-            return [];
+            return CastOptionsLoadResult.Failed(ToCastLoadFriendlyError(result.ErrorMessage));
         }
 
         var casts = result.Rows.Select(row => new CastOption
@@ -124,7 +130,7 @@ public class SupabaseStoreSlipRepository(
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
         _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateOptions());
-        return casts;
+        return CastOptionsLoadResult.Success(casts);
     }
 
     public async Task<IReadOnlyList<BusinessSlipListItem>> GetBusinessDaySlipsAsync(long businessDayId, CancellationToken ct)
@@ -751,5 +757,26 @@ public class SupabaseStoreSlipRepository(
         }
 
         return $"伝票を作成できません。{rawError}";
+    }
+
+    private static string ToCastLoadFriendlyError(string? rawError)
+    {
+        if (string.IsNullOrWhiteSpace(rawError))
+        {
+            return "出勤候補のキャスト情報を取得できません。Supabase RPC設定を確認してください。";
+        }
+
+        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "店舗設定を取得できません。管理者設定で利用店舗を選択してください。";
+        }
+
+        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
+            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        {
+            return PermissionErrorMessage();
+        }
+
+        return $"出勤候補のキャスト情報を取得できません。{rawError}";
     }
 }

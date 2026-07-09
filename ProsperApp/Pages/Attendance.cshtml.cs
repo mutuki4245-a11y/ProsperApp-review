@@ -37,6 +37,8 @@ public class AttendanceModel(
 
     public string? SuccessMessage { get; private set; }
 
+    public string? CastLoadErrorMessage { get; private set; }
+
     public bool IsClosingContext => Request.Path.StartsWithSegments("/Closing/Attendance", StringComparison.OrdinalIgnoreCase);
 
     public string WorkflowLabel => IsClosingContext ? "締め作業" : "営業中";
@@ -190,7 +192,9 @@ public class AttendanceModel(
         var attendanceByCastId = attendanceItems
             .GroupBy(x => x.CastId)
             .ToDictionary(x => x.Key, x => x.Last());
-        var casts = await _slipRepository.GetCastsAsync(cancellationToken);
+        var castLoadResult = await _slipRepository.GetCastsResultAsync(cancellationToken);
+        CastLoadErrorMessage = castLoadResult.Succeeded ? null : castLoadResult.ErrorMessage;
+        var casts = castLoadResult.Casts;
         var entries = casts
             .Select(cast =>
             {
@@ -328,7 +332,11 @@ public class AttendanceModel(
 
         if (Input.Entries.Count == 0)
         {
-            ModelState.AddModelError(string.Empty, "キャスト情報が未登録です。先にキャスト情報を登録してください。");
+            ModelState.AddModelError(
+                string.Empty,
+                string.IsNullOrWhiteSpace(CastLoadErrorMessage)
+                    ? "キャスト情報が未登録です。先にキャスト情報を登録してください。"
+                    : CastLoadErrorMessage);
             return;
         }
 

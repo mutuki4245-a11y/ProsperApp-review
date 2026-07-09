@@ -10,6 +10,8 @@ public interface IStoreSlipRepository
 
     Task<IReadOnlyList<CastOption>> GetCastsAsync(CancellationToken ct);
 
+    Task<CastOptionsLoadResult> GetCastsResultAsync(CancellationToken ct);
+
     Task<IReadOnlyList<BusinessSlipListItem>> GetBusinessDaySlipsAsync(long businessDayId, CancellationToken ct);
 
     Task<SlipDetail?> GetSlipDetailAsync(long slipId, CancellationToken ct);

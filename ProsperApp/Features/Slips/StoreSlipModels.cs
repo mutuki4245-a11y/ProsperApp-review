@@ -36,6 +36,25 @@ public class CastOption
         : $"{DisplayName}：{DepartmentName}";
 }
 
+public class CastOptionsLoadResult
+{
+    public bool Succeeded { get; init; }
+
+    public IReadOnlyList<CastOption> Casts { get; init; } = [];
+
+    public string? ErrorMessage { get; init; }
+
+    public static CastOptionsLoadResult Success(IReadOnlyList<CastOption> casts)
+    {
+        return new CastOptionsLoadResult { Succeeded = true, Casts = casts };
+    }
+
+    public static CastOptionsLoadResult Failed(string message)
+    {
+        return new CastOptionsLoadResult { Succeeded = false, ErrorMessage = message };
+    }
+}
+
 public class StoreCastAdminItem
 {
     public long CastId { get; set; }
