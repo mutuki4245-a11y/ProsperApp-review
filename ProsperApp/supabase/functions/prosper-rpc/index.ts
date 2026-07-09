@@ -634,6 +634,10 @@ function toSqlValue(value: unknown, type: PgType): unknown {
       return null;
     }
 
+    if (typeof value === "string") {
+      return value;
+    }
+
     return JSON.stringify(value ?? null);
   }
 
