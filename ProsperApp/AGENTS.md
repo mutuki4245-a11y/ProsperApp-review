@@ -203,7 +203,7 @@ Codexは原則としてローカル開発サーバーを起動しない。
 
 原則として、すべてのタスクは `main` で直接作業し、確認後に `origin/main` へpushしてよい。
 
-ただし、`main` へのpushが自動デプロイを起動する前提で扱う。push前に、変更内容・確認結果・戻し方を説明できる状態にする。
+ただし、GitHub Actionsのデプロイworkflowが有効な間は、`main` へのpushが自動デプロイを起動する前提で扱う。push前に、変更内容・確認結果・戻し方を説明できる状態にする。
 
 main直の基本手順:
 
@@ -213,6 +213,25 @@ main直の基本手順:
 4. `dotnet build --no-restore` など、変更内容に応じた確認を実行する。
 5. 意味のある単位で `git add` / `git commit` する。
 6. 問題なければ `git push origin main` でリモートへ反映する。
+
+### Azure App Service デプロイ運用
+
+Azure App Serviceへの反映は、ユーザーが `.codex/prosper-web.PublishSettings` を配置している場合、そのローカルpublish profileを使った直接デプロイを優先する。タスク完了後に本番反映が必要な場合は、GitHub Actions経由の自動デプロイを前提にせず、このpublish profileを使ってdeployする。
+
+直接デプロイの基本手順:
+
+1. タスクの実装、確認、必要なcommitまで完了させる。
+2. `dotnet build --no-restore` など、変更内容に応じた確認を通す。
+3. `dotnet publish ProsperApp.csproj --configuration Release --no-build --output .codex/deploy/<task>/publish /p:UseAppHost=false` のように、ignored配下へRelease publishを作成する。
+4. publish出力をzip化し、`.codex/prosper-web.PublishSettings` のKudu/ZipDeploy認証情報でAzure App Serviceへアップロードする。
+5. 成功/失敗のHTTP status、対象App Service、確認したURLまたは画面、残った未確認事項を報告する。
+
+運用上の注意:
+
+- `.codex/prosper-web.PublishSettings` は秘密情報として扱い、内容を表示、引用、コミット、ログ出力しない。
+- `.codex/deploy/` など一時publish/zip出力もコミットしない。
+- profileが存在しない、認証失敗、Kuduエラーが出た場合は、非秘密のstatus/errorだけ報告し、無断で別経路に切り替えない。
+- GitHub ActionsのAzure deploy workflowは、直接デプロイが使える場合は削除または無効化してよい。ただし削除/無効化は本番反映経路の変更なので、単独の明示指示を受けてから行う。
 
 高リスク変更でも、ユーザーから別指示がなければ `main` で進めてよい。ただし、push前に戻し方を明確にする。
 
