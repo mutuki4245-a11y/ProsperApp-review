@@ -64,6 +64,9 @@ public partial class SlipEditModel(
     [BindProperty]
     public List<KaraokeQuantityInputModel> KaraokeLines { get; set; } = [];
 
+    [BindProperty]
+    public List<OrderLineQuantityInputModel> OrderQuantityLines { get; set; } = [];
+
     public SlipDetail? Detail { get; private set; }
 
     public StoreBusinessDay? CurrentBusinessDay { get; private set; }
@@ -86,6 +89,8 @@ public partial class SlipEditModel(
 
     public bool ShowAddNominationModal { get; private set; }
 
+    public bool ShowAdjustmentModal { get; private set; }
+
     public bool ShowCashReceivedStep { get; private set; }
 
     public CheckoutTotals CheckoutTotals { get; private set; } = new();
@@ -93,6 +98,10 @@ public partial class SlipEditModel(
     public bool CanCheckout => _featureGate.IsEnabled(FeatureNames.Checkout)
         && Detail is not null
         && string.Equals(Detail.Status, "open", StringComparison.Ordinal);
+
+    public bool CanCancelCheckout => _featureGate.IsEnabled(FeatureNames.Checkout)
+        && Detail is not null
+        && string.Equals(Detail.Status, "checked_out", StringComparison.Ordinal);
 
     public bool CanAddOrders => _featureGate.IsEnabled(FeatureNames.Orders)
         && Detail is not null

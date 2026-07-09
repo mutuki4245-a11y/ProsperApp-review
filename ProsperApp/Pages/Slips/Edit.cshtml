@@ -25,11 +25,7 @@
 <section class="slip-create terminal-page terminal-page--slip-detail">
     <div class="page-section-heading">
         <h1>伝票詳細</h1>
-        @if (Model.Detail is not null)
-        {
-            <p>@Model.Detail.TableDisplayName / 入店 @Model.FormatStoreTime(Model.Detail.OpenedAt)</p>
-        }
-        else
+        @if (Model.Detail is null)
         {
             <p>伝票未選択</p>
         }
@@ -87,20 +83,6 @@
                     <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
                 </div>
             </div>
-            <div class="slip-detail-hero__actions">
-                @if (Model.CanAddOrders)
-                {
-                    <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#slipOrderModal">オーダー追加</button>
-                }
-                @if (Model.CanCheckout)
-                {
-                    <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#slipCheckoutModal">会計処理へ</button>
-                }
-                else
-                {
-                    <button class="btn btn-outline-secondary" type="button" disabled>会計処理できません</button>
-                }
-            </div>
         </section>
 
         <div id="slipCustomersSection">
@@ -146,6 +128,7 @@
             orderItems = Model.OrderItems.Where(x => !x.IsKaraoke).Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
             initialOrderQueue = Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
             showOrderModal = Model.ShowOrderModal,
+            showAdjustmentModal = Model.ShowAdjustmentModal,
             showCheckoutModal = Model.ShowCheckoutModal,
             showAddCustomerModal = Model.ShowAddCustomerModal,
             showAddNominationModal = Model.ShowAddNominationModal

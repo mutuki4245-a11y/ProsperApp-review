@@ -55,6 +55,38 @@ public class SupabaseCheckoutRepository(
             : ConfirmCheckoutResult.Success(checkoutId.Value, changeAmount);
     }
 
+    public async Task<CancelCheckoutResult> CancelCheckoutAsync(long slipId, CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return CancelCheckoutResult.Failed("Supabase Edge Function設定が未設定です。会計取消を実行できません。");
+        }
+
+        if (slipId <= 0)
+        {
+            return CancelCheckoutResult.Failed("会計取消する伝票を確認してください。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.cancel_checkout",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_slip_id = slipId
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return CancelCheckoutResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var checkoutId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "checkout_id") : null;
+        return checkoutId is null
+            ? CancelCheckoutResult.Failed("会計IDを取得できません。")
+            : CancelCheckoutResult.Success(checkoutId.Value);
+    }
+
     private sealed record CheckoutPaymentPayload(
         [property: JsonPropertyName("method_code")] string MethodCode,
         [property: JsonPropertyName("amount")] decimal Amount);
@@ -63,7 +95,7 @@ public class SupabaseCheckoutRepository(
     {
         if (string.IsNullOrWhiteSpace(rawError))
         {
-            return "会計を確定できません。";
+            return "会計処理を実行できません。";
         }
 
         if (rawError.Contains("store_checkout_slip_not_found", StringComparison.OrdinalIgnoreCase))
@@ -74,6 +106,17 @@ public class SupabaseCheckoutRepository(
         if (rawError.Contains("checkout_already_exists", StringComparison.OrdinalIgnoreCase))
         {
             return "この伝票はすでに会計済みです。";
+        }
+
+        if (rawError.Contains("checkout_not_found", StringComparison.OrdinalIgnoreCase) ||
+            rawError.Contains("store_checkout_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "取消できる会計を確認してください。";
+        }
+
+        if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
+        {
+            return "締め済みの営業日は会計取消できません。";
         }
 
         if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase))
@@ -96,7 +139,7 @@ public class SupabaseCheckoutRepository(
             return "決済方法と金額を確認してください。";
         }
 
-        return $"会計を確定できません。{rawError}";
+        return $"会計処理を実行できません。{rawError}";
     }
 
 }

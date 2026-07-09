@@ -895,6 +895,118 @@ begin
 end;
 $$;
 
+drop function if exists store.save_order_line_quantities(bigint, bigint, jsonb);
+
+create or replace function store.save_order_line_quantities(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_order_lines jsonb default '[]'::jsonb
+)
+returns table (
+    saved_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_line jsonb;
+    v_order_line public.store_order_lines%rowtype;
+    v_order_line_id_text text;
+    v_quantity_text text;
+    v_order_line_id bigint;
+    v_quantity numeric(10, 0);
+    v_saved_count integer := 0;
+begin
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    for v_line in
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_order_lines) = 'array' then p_order_lines
+                else '[]'::jsonb
+            end
+        )
+    loop
+        v_order_line_id_text := nullif(trim(coalesce(v_line->>'order_line_id', '')), '');
+        v_quantity_text := nullif(trim(coalesce(v_line->>'quantity', '')), '');
+
+        if v_order_line_id_text is null or v_order_line_id_text !~ '^[0-9]+$' then
+            raise exception 'store_order_line_not_found';
+        end if;
+
+        if v_quantity_text is null or v_quantity_text !~ '^[0-9]+(\.0+)?$' then
+            raise exception 'invalid_order_quantity';
+        end if;
+
+        v_order_line_id := v_order_line_id_text::bigint;
+        v_quantity := v_quantity_text::numeric;
+
+        if v_quantity < 0 or v_quantity > 999 or v_quantity <> trunc(v_quantity) then
+            raise exception 'invalid_order_quantity';
+        end if;
+
+        select ol.*
+          into v_order_line
+        from public.store_order_lines ol
+        left join public.store_item_master i
+          on i.item_id = ol.item_id
+        where ol.order_line_id = v_order_line_id
+          and ol.slip_id = p_slip_id
+          and ol.status = 'active'
+          and coalesce(i.item_type, 'standard') <> 'karaoke'
+        limit 1;
+
+        if not found then
+            raise exception 'store_order_line_not_found';
+        end if;
+
+        if v_quantity <= 0 then
+            update public.store_order_lines ol
+               set status = 'voided',
+                   voided_at = coalesce(ol.voided_at, now()),
+                   updated_at = now()
+             where ol.order_line_id = v_order_line_id;
+
+            update public.store_order_line_cast_backs b
+               set status = 'voided',
+                   updated_at = now()
+             where b.order_line_id = v_order_line_id
+               and b.status = 'active';
+        else
+            update public.store_order_lines ol
+               set quantity = v_quantity,
+                   amount = ol.unit_price * v_quantity,
+                   updated_at = now()
+             where ol.order_line_id = v_order_line_id;
+
+            update public.store_order_line_cast_backs b
+               set quantity = v_quantity,
+                   back_amount = b.back_unit_amount * v_quantity,
+                   updated_at = now()
+             where b.order_line_id = v_order_line_id
+               and b.status = 'active';
+        end if;
+
+        v_saved_count := v_saved_count + 1;
+    end loop;
+
+    return query select v_saved_count;
+end;
+$$;
+
 create or replace function store.update_slip_customer_label(
     p_department_id bigint,
     p_slip_customer_id bigint,

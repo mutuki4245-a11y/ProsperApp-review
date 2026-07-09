@@ -43,10 +43,12 @@ declare
         'store.add_slip_nominations',
         'store.save_slip_adjustments',
         'store.save_karaoke_lines',
+        'store.save_order_line_quantities',
         'store.leave_slip_customer',
         'store.update_slip_customer_label',
         'store.void_order_line',
         'store.confirm_checkout',
+        'store.cancel_checkout',
         'store.create_slip',
         'store.quick_enter_receipt',
         'store.mark_receipt_scan_mistake'

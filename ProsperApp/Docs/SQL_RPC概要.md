@@ -22,9 +22,9 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 | `Sql/store_rpc/00_schema.sql` | `store` schemaを作成し、旧 `public.*` RPCを削除する。 |
 | `Sql/store_rpc/01_business_day.sql` | 店舗コンテキスト、営業日開始/取得/締め、勤怠、酒代、未会計伝票数を扱う。 |
 | `Sql/store_rpc/02_store_masters.sql` | 卓、キャスト、商品、商品管理、指名バック設定、営業中/注文入力向け伝票一覧を扱う。 |
-| `Sql/store_rpc/03_slips.sql` | 伝票詳細、客追加/退店、指名追加、自由入力調整、カラオケ商品数量、客名更新、注文取消を扱う。 |
+| `Sql/store_rpc/03_slips.sql` | 伝票詳細、客追加/退店、指名追加、自由入力調整、カラオケ商品数量、通常注文数量訂正、客名更新、注文取消を扱う。 |
 | `Sql/store_rpc/04_orders.sql` | 注文登録と、バックキャスト候補用の当日出勤キャスト取得を扱う。 |
-| `Sql/store_rpc/05_checkout.sql` | 会計確定と伝票作成を扱う。 |
+| `Sql/store_rpc/05_checkout.sql` | 会計確定、会計取消、伝票作成を扱う。 |
 | `Sql/store_rpc/06_receipts.sql` | 領収書入力、簡易入力、スキャンミス除外を扱う。 |
 | `Sql/store_rpc/07_cast_sales_adjustments.sql` | 締め作業のキャスト売上額調整を扱う。 |
 | `Sql/store_rpc/99_grants.sql` | アプリRPCの直接PostgREST実行権限を剥奪する。RPC追加時はこの対象一覧も更新する。 |
@@ -145,6 +145,7 @@ DB反映時の基本順序は以下。
 | `store.leave_slip_customer` | 客行を退店扱いにする。 |
 | `store.save_slip_adjustments` | 自由入力の会計調整行を保存する。 |
 | `store.save_karaoke_lines` | 営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
+| `store.save_order_line_quantities` | 伝票詳細の訂正モードから通常注文行の数量を保存する。数量0は対象注文行と紐づくバック実績を取消扱いにする。 |
 | `store.update_slip_customer_label` | 客行の表示名を更新する。 |
 | `store.void_order_line` | 注文行を取消する。 |
 
@@ -160,6 +161,7 @@ DB反映時の基本順序は以下。
 | RPC | 主な用途 |
 | --- | --- |
 | `store.confirm_checkout` | 会計額を再計算し、支払合計を検証して会計確定する。 |
+| `store.cancel_checkout` | 開いている営業日の会計済み伝票を営業中へ戻す。会計、支払明細、会計に紐づくキャスト売上額調整は `cancelled` にする。 |
 
 ### 領収書入力
 
@@ -252,7 +254,9 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.void_order_line` | 保存結果のみ。 | 戻り値は成功判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
 | `store.save_slip_adjustments` | 保存結果のみ。 | 戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
 | `store.save_karaoke_lines` | 保存結果のみ。 | 戻り値の `saved_count` をAjax結果判定に使い、キャッシュしない。営業中一覧や伝票詳細は次回取得で反映する。 |
+| `store.save_order_line_quantities` | 保存結果のみ。 | 戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。通常注文数量、バック実績、伝票詳細、営業中一覧は次回取得で反映する。 |
 | `store.confirm_checkout` | 保存結果のみ。 | 戻り値の `checkout_id` と `change_amount` を会計結果判定に使い、キャッシュしない。会計後の営業中一覧、注文対象伝票、締め可否は次回取得で反映する。 |
+| `store.cancel_checkout` | 保存結果のみ。 | 戻り値の `checkout_id` を画面結果判定に使い、キャッシュしない。会計取消後の営業中一覧、注文対象伝票、締め可否、キャスト売上額調整状態は次回取得で反映する。 |
 | `store.get_pending_receipts` | 未処理領収書の動的一覧。 | キャッシュしない。領収書入力や締め可否に直結するため、領収書画面、Driveプレビュー許可判定、`/Closing` のパネル状態JSON handler、締めPOST検証で最新取得する。 |
 | `store.quick_enter_receipt` | 保存結果のみ。 | 戻り値を保存成功判定に使い、キャッシュしない。未処理領収書一覧と締め可否は次回取得で反映する。 |
 | `store.mark_receipt_scan_mistake` | 保存結果のみ。 | 戻り値を保存成功判定に使い、キャッシュしない。未処理領収書一覧と締め可否は次回取得で反映する。 |
@@ -271,4 +275,4 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | 管理者モード締め | 実装済み | `store.close_business_day` は `p_ignore_closing_requirements = true` の場合、未会計伝票、酒代、勤怠、退勤、キャスト売上額調整、未入力領収書の条件検証を無視して営業日を締める。営業日IDと店舗IDの一致確認は維持する。 |
 | 当日出勤キャスト候補キャッシュ | 実装済み | RPC定義変更は不要。アプリ側に店舗別・営業日別キャッシュキーを持ち、勤怠保存/退勤情報保存/営業日開始/営業日締め時に破棄する。 |
 | 営業中一覧と注文対象伝票の再取得削減 | 実装済み | RPC定義変更は不要。`store.get_business_day_slips` と `store.get_order_entry_slips` はページ用JSON handlerから非同期取得し、初期表示や保存成功POSTをブロックしない。 |
-| レシートプリンター正式仕様 | 後続仕様 | SQL/RPC変更は現時点で不要。再印刷履歴や印刷状態をDB保存する場合は、会計テーブルまたは印刷ログテーブルの追加を検討する。 |
+| レシートプリンター正式仕様 | 一部実装 | 80mm紙向けに店舗名、現在時刻、伝票番号、「飲食代として」、会計額、支払い方法、内消費税額を印字し、50,001円以上では収入印紙欄を追加する。再印刷履歴や印刷状態をDB保存する場合は、会計テーブルまたは印刷ログテーブルの追加を検討する。 |

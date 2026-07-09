@@ -100,6 +100,7 @@
         lines.push(centerLine('領収書'));
         lines.push(separator());
         lines.push(twoColumnLine('現在時刻', formatDateTime(new Date())));
+        lines.push(twoColumnLine('伝票番号', compact(request.slipNo, request.slipId)));
         lines.push('');
         lines.push(centerLine('飲食代として'));
         lines.push('');

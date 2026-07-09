@@ -378,6 +378,17 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.save_order_line_quantities",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+        { name: "p_order_lines", type: "jsonb" },
+      ],
+    },
+  ],
+  [
     "store.leave_slip_customer",
     {
       result: "rows",
@@ -430,6 +441,16 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_closed_at", type: "timestamp with time zone" },
         { name: "p_payments", type: "jsonb" },
         { name: "p_received_amount", type: "numeric" },
+      ],
+    },
+  ],
+  [
+    "store.cancel_checkout",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
       ],
     },
   ],

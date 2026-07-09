@@ -87,6 +87,36 @@ public partial class SlipEditModel
         return RedirectToPage("/Index");
     }
 
+    public async Task<IActionResult> OnPostCancelCheckoutAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Slips) || !_featureGate.IsEnabled(FeatureNames.Checkout))
+        {
+            return NotFound();
+        }
+
+        ClearCrossFormValidationState();
+        await LoadAsync(cancellationToken);
+        if (!EnsureCheckedOutSlipLoaded())
+        {
+            SetDefaultInputs();
+            return Page();
+        }
+
+        var result = await _checkoutRepository.CancelCheckoutAsync(SlipId!.Value, cancellationToken);
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "会計取消を実行できませんでした。");
+            SetDefaultInputs();
+            return Page();
+        }
+
+        SuccessMessage = "会計を取消しました。";
+        ModelState.Clear();
+        await LoadAsync(cancellationToken);
+        SetDefaultInputs();
+        return Page();
+    }
+
 
     private void SetDefaultCheckoutInput()
     {

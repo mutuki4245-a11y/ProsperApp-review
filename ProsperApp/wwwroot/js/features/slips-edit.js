@@ -5,6 +5,7 @@
     const orderItems = pageData.orderItems ?? [];
     const initialOrderQueue = pageData.initialOrderQueue ?? [];
     const showOrderModal = pageData.showOrderModal === true;
+    const showAdjustmentModal = pageData.showAdjustmentModal === true;
     const showCheckoutModal = pageData.showCheckoutModal === true;
     const showAddCustomerModal = pageData.showAddCustomerModal === true;
     const showAddNominationModal = pageData.showAddNominationModal === true;
@@ -143,6 +144,13 @@
     const detailOrderTotal = document.querySelector('[data-detail-order-total]');
     const detailKaraokeSave = document.querySelector('[data-detail-karaoke-save]');
     const detailKaraokeStatus = document.querySelector('[data-detail-karaoke-status]');
+    const orderCorrectionPanel = document.querySelector('[data-order-correction-panel]');
+    const orderCorrectionToggle = document.querySelector('[data-order-correction-toggle]');
+    const orderQuantityForm = document.querySelector('[data-order-quantity-form]');
+    const orderQuantitySave = document.querySelector('[data-order-quantity-save]');
+    const orderQuantityStatus = document.querySelector('[data-order-quantity-status]');
+    const adjustmentModalElement = document.getElementById('adjustmentModal');
+    const adjustmentModal = adjustmentModalElement ? new bootstrap.Modal(adjustmentModalElement) : null;
     const adjustmentForm = document.querySelector('[data-adjustment-form]');
     const adjustmentList = document.querySelector('[data-adjustment-list]');
     const addAdjustmentButton = document.querySelector('[data-add-adjustment-row]');
@@ -170,6 +178,78 @@
     const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
     const karaokeDraftKey = `${draftPrefix}:karaoke`;
     const adjustmentDraftKey = `${draftPrefix}:adjustments`;
+    let isOrderCorrectionMode = false;
+
+    const orderLineRows = () => Array.from(document.querySelectorAll('[data-order-line-row]'));
+
+    const recalculateOrderTotal = () => {
+        if (!detailOrderTotal) {
+            return;
+        }
+
+        const orderTotal = orderLineRows().reduce((total, row) => {
+            const input = row.querySelector('[data-order-quantity-input]');
+            const quantity = Number(input?.value ?? row.dataset.orderInitialQuantity ?? 0);
+            const unitPrice = Number(row.dataset.orderUnitPrice ?? 0);
+            return total + unitPrice * quantity;
+        }, 0);
+        const karaokeUnitPrice = Number(detailKaraokeAmount?.dataset.detailKaraokeUnitPrice ?? 200);
+        const karaokeQuantity = Number(detailKaraokeInput?.value ?? 0);
+        detailOrderTotal.textContent = formatYen(orderTotal + karaokeUnitPrice * karaokeQuantity).replace(' 円', '');
+    };
+
+    const updateOrderQuantityState = () => {
+        const dirty = orderLineRows().some((row) => {
+            const input = row.querySelector('[data-order-quantity-input]');
+            return input && Number(input.value) !== Number(row.dataset.orderInitialQuantity ?? 0);
+        });
+        if (orderQuantitySave) {
+            orderQuantitySave.disabled = !dirty;
+        }
+        setSaveStatus(orderQuantityStatus, dirty ? '未保存' : '保存済み');
+    };
+
+    const setOrderCorrectionMode = (enabled) => {
+        isOrderCorrectionMode = enabled;
+        orderCorrectionPanel?.classList.toggle('is-order-correction', enabled);
+        orderCorrectionToggle?.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        if (orderCorrectionToggle) {
+            orderCorrectionToggle.textContent = enabled ? '訂正を閉じる' : '訂正モード';
+        }
+        if (orderQuantitySave) {
+            orderQuantitySave.hidden = !enabled;
+        }
+        document.querySelectorAll('[data-order-quantity-control]').forEach((control) => {
+            control.hidden = !enabled;
+        });
+        document.querySelectorAll('[data-order-quantity-text]').forEach((text) => {
+            text.hidden = enabled;
+        });
+        updateOrderQuantityState();
+    };
+
+    const setOrderLineQuantity = (row, quantity) => {
+        const normalized = Math.max(0, Math.trunc(Number(quantity) || 0));
+        const input = row.querySelector('[data-order-quantity-input]');
+        const display = row.querySelector('[data-order-quantity-display]');
+        const text = row.querySelector('[data-order-quantity-text]');
+        const amount = row.querySelector('[data-order-line-amount]');
+        const unitPrice = Number(row.dataset.orderUnitPrice ?? 0);
+        if (input) {
+            input.value = String(normalized);
+        }
+        if (display) {
+            display.textContent = String(normalized);
+        }
+        if (text) {
+            text.textContent = String(normalized);
+        }
+        if (amount) {
+            amount.textContent = Math.round(unitPrice * normalized).toLocaleString('ja-JP');
+        }
+        recalculateOrderTotal();
+        updateOrderQuantityState();
+    };
 
     const setDetailKaraokeQuantity = (quantity, markDirty = true) => {
         const normalized = Math.max(0, Math.trunc(Number(quantity) || 0));
@@ -183,11 +263,7 @@
             const unitPrice = Number(detailKaraokeAmount.dataset.detailKaraokeUnitPrice ?? 200);
             detailKaraokeAmount.textContent = formatYen(unitPrice * normalized).replace(' 円', '');
         }
-        if (detailOrderTotal) {
-            const baseTotal = Number(detailOrderTotal.dataset.detailOrderBaseTotal ?? 0);
-            const unitPrice = Number(detailKaraokeAmount?.dataset.detailKaraokeUnitPrice ?? 200);
-            detailOrderTotal.textContent = formatYen(baseTotal + unitPrice * normalized).replace(' 円', '');
-        }
+        recalculateOrderTotal();
         if (detailKaraokeSave) {
             detailKaraokeSave.disabled = !markDirty;
         }
@@ -489,7 +565,7 @@
         noBack.type = 'button';
         noBack.className = 'cast-select-modal__item';
         const noBackName = document.createElement('strong');
-        noBackName.textContent = 'なし';
+        noBackName.textContent = '指定なし';
         const noBackHelp = document.createElement('span');
         noBackHelp.textContent = 'バックの摘要を付けずに登録';
         noBack.append(noBackName, noBackHelp);
@@ -652,6 +728,24 @@
             });
         }
 
+        if (event.target.closest('[data-order-correction-toggle]')) {
+            setOrderCorrectionMode(!isOrderCorrectionMode);
+            return;
+        }
+
+        const orderQuantityDecrement = event.target.closest('[data-order-quantity-decrement]');
+        const orderQuantityIncrement = event.target.closest('[data-order-quantity-increment]');
+        if (orderQuantityDecrement || orderQuantityIncrement) {
+            const row = event.target.closest('[data-order-line-row]');
+            const input = row?.querySelector('[data-order-quantity-input]');
+            if (!row || !input) {
+                return;
+            }
+
+            setOrderLineQuantity(row, Number(input.value || 0) + (orderQuantityIncrement ? 1 : -1));
+            return;
+        }
+
         if (event.target.closest('[data-detail-karaoke-decrement]')) {
             setDetailKaraokeQuantity(Number(detailKaraokeInput?.value ?? 0) - 1);
             return;
@@ -694,6 +788,10 @@
     detailKaraokeForm?.addEventListener('submit', () => {
         setSaveStatus(detailKaraokeStatus, '保存中');
         localStorage.removeItem(karaokeDraftKey);
+    });
+
+    orderQuantityForm?.addEventListener('submit', () => {
+        setSaveStatus(orderQuantityStatus, '保存中');
     });
 
     adjustmentForm?.addEventListener('submit', () => {
@@ -741,6 +839,13 @@
     detailReceivedInput?.addEventListener('input', refreshDetailChange);
     refreshDetailChange();
 
+    document.querySelector('[data-checkout-cancel-form]')?.addEventListener('submit', (event) => {
+        const confirmed = window.confirm('確定済み会計を訂正します。この操作は売上、残金、印刷済み領収書などに影響します');
+        if (!confirmed) {
+            event.preventDefault();
+        }
+    });
+
     document.addEventListener('submit', (event) => {
         const form = event.target.closest('[data-partial-form]');
         if (!form) {
@@ -766,6 +871,10 @@
         slipOrderModal?.show();
     }
 
+    if (showAdjustmentModal) {
+        adjustmentModal?.show();
+    }
+
     if (showCheckoutModal) {
         slipCheckoutModal?.show();
     }
@@ -779,5 +888,7 @@
     }
 
     restoreDetailDrafts();
+    recalculateOrderTotal();
+    setOrderCorrectionMode(false);
     renderOrderQueue();
 })();

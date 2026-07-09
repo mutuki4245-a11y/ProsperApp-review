@@ -176,6 +176,9 @@ public class AttendanceModel(
                 .GroupBy(x => x.CastId)
                 .ToDictionary(x => x.Key, x => x.Last())
             : [];
+        var postedSelectedCastIds = preserveInput
+            ? ParseSelectedCastIds(Input.SelectedCastIds)
+            : new HashSet<long>();
         IReadOnlyList<BusinessDayClosingAttendanceItem> attendanceItems = CurrentBusinessDay is null
             ? []
             : await _businessDayRepository.GetClosingAttendanceAsync(
@@ -244,11 +247,29 @@ public class AttendanceModel(
                 };
             }));
 
+        if (postedSelectedCastIds.Count > 0)
+        {
+            foreach (var entry in entries)
+            {
+                entry.IsSelected = postedSelectedCastIds.Contains(entry.CastId);
+            }
+        }
+
         Input = new ClosingAttendanceInputModel
         {
             BusinessDayId = CurrentBusinessDay?.BusinessDayId,
+            SelectedCastIds = string.Join(',', entries.Where(x => x.IsSelected).Select(x => x.CastId)),
             Entries = entries
         };
+    }
+
+    private static HashSet<long> ParseSelectedCastIds(string? value)
+    {
+        return (value ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => long.TryParse(x, CultureInfo.InvariantCulture, out var castId) ? castId : 0)
+            .Where(x => x > 0)
+            .ToHashSet();
     }
 
     private static IReadOnlyList<AttendanceTimeOption> BuildAttendanceTimeOptions(
@@ -370,6 +391,8 @@ public class AttendanceModel(
 public class ClosingAttendanceInputModel
 {
     public long? BusinessDayId { get; set; }
+
+    public string SelectedCastIds { get; set; } = string.Empty;
 
     public List<BusinessDayAttendanceEntryInput> Entries { get; set; } = [];
 }

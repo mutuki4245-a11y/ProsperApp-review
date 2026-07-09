@@ -19,6 +19,7 @@ public partial class SlipEditModel
 
         if (!EnsureSlipLoaded())
         {
+            ShowAdjustmentModal = true;
             SetDefaultInputs();
             return Page();
         }
@@ -26,6 +27,7 @@ public partial class SlipEditModel
         ValidateAdjustmentInput();
         if (!ModelState.IsValid)
         {
+            ShowAdjustmentModal = true;
             SetDefaultInputs();
             return Page();
         }
@@ -37,6 +39,7 @@ public partial class SlipEditModel
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "調整明細を保存できませんでした。");
+            ShowAdjustmentModal = true;
             SetDefaultInputs();
             return Page();
         }

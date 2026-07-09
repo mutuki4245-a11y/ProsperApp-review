@@ -487,6 +487,47 @@ public class SupabaseStoreSlipRepository(
         return SlipMutationResult.Success(1);
     }
 
+    public async Task<SlipMutationResult> SaveOrderLineQuantitiesAsync(long slipId, IReadOnlyList<OrderLineQuantityInputModel> orderLines, CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。注文数量を保存できません。");
+        }
+
+        if (slipId <= 0)
+        {
+            return SlipMutationResult.Failed("注文数量を保存する伝票を確認してください。");
+        }
+
+        var payload = orderLines
+            .Where(x => x.OrderLineId > 0 && x.Quantity >= 0)
+            .Select(x => new OrderLineQuantityPayload(x.OrderLineId, x.Quantity))
+            .ToArray();
+
+        if (payload.Length == 0)
+        {
+            return SlipMutationResult.Failed("保存する注文数量がありません。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.save_order_line_quantities",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_slip_id = slipId,
+                p_order_lines = payload
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return SlipMutationResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var savedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "saved_count") ?? 0) : 0;
+        return SlipMutationResult.Success(savedCount);
+    }
+
     public async Task<SlipMutationResult> SaveSlipAdjustmentsAsync(long slipId, IReadOnlyList<SlipAdjustmentInputModel> adjustments, CancellationToken ct)
     {
         if (!HasMutationSettings())
@@ -577,6 +618,10 @@ public class SupabaseStoreSlipRepository(
         [property: JsonPropertyName("slip_id")] long SlipId,
         [property: JsonPropertyName("quantity")] decimal Quantity);
 
+    private sealed record OrderLineQuantityPayload(
+        [property: JsonPropertyName("order_line_id")] long OrderLineId,
+        [property: JsonPropertyName("quantity")] decimal Quantity);
+
     private static int NormalizeAttendanceMinuteStep(long? value)
     {
         return value is 5L or 10L or 15L or 20L or 30L or 60L
@@ -632,7 +677,12 @@ public class SupabaseStoreSlipRepository(
 
         if (rawError.Contains("store_order_line_not_found", StringComparison.OrdinalIgnoreCase))
         {
-            return "削除する注文を確認してください。";
+            return "対象の注文を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_order_quantity", StringComparison.OrdinalIgnoreCase))
+        {
+            return "注文数量を確認してください。";
         }
 
         if (rawError.Contains("store_cast_not_found", StringComparison.OrdinalIgnoreCase))

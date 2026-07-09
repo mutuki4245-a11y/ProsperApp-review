@@ -29,4 +29,6 @@ public interface IStoreSlipRepository
     Task<SlipMutationResult> UpdateSlipCustomerLabelAsync(long slipCustomerId, string? customerLabel, CancellationToken ct);
 
     Task<SlipMutationResult> VoidOrderLineAsync(long orderLineId, CancellationToken ct);
+
+    Task<SlipMutationResult> SaveOrderLineQuantitiesAsync(long slipId, IReadOnlyList<OrderLineQuantityInputModel> orderLines, CancellationToken ct);
 }

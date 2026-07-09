@@ -47,6 +47,7 @@
 
         <form method="post" class="closing-attendance-form">
             <input asp-for="Input.BusinessDayId" type="hidden" />
+            <input asp-for="Input.SelectedCastIds" type="hidden" id="selectedAttendanceCastIds" />
             <div class="closing-attendance-toolbar">
                 <div class="closing-attendance-toolbar__summary">
                     <strong>出勤キャスト</strong>
@@ -149,10 +150,12 @@
             const addSelectedButton = document.getElementById('addSelectedAttendanceButton');
             const emptyMessage = document.getElementById('attendanceEmptyMessage');
             const selectedCount = document.getElementById('selectedAttendanceCount');
+            const selectedCastIdsInput = document.getElementById('selectedAttendanceCastIds');
             const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
 
             const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
             const getSelectedInput = (row) => row?.querySelector('[data-attendance-selected]');
+            const getCastIdInput = (row) => row?.querySelector('input[name$=".CastId"]');
             const getClockInSelect = (row) => row?.querySelector('[data-clock-in-select]');
             const getClockOutSelect = (row) => row?.querySelector('[data-clock-out-select]');
             const isSelected = (row) => (getSelectedInput(row)?.value ?? '').toLocaleLowerCase('en-US') === 'true';
@@ -160,12 +163,19 @@
 
             const updateSelectedState = () => {
                 const rows = Array.from(document.querySelectorAll('[data-attendance-row]'));
-                const count = rows.filter((row) => isSelected(row)).length;
+                const selectedRows = rows.filter((row) => isSelected(row));
+                const count = selectedRows.length;
                 if (selectedCount) {
                     selectedCount.textContent = `${count} 名`;
                 }
                 if (emptyMessage) {
                     emptyMessage.hidden = count > 0;
+                }
+                if (selectedCastIdsInput) {
+                    selectedCastIdsInput.value = selectedRows
+                        .map((row) => getCastIdInput(row)?.value ?? '')
+                        .filter((value) => value.length > 0)
+                        .join(',');
                 }
             };
 

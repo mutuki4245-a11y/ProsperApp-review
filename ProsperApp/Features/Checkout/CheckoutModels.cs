@@ -57,3 +57,20 @@ public class ConfirmCheckoutResult
         return new ConfirmCheckoutResult { Succeeded = false, ErrorMessage = message };
     }
 }
+
+public class CancelCheckoutResult
+{
+    public bool Succeeded { get; init; }
+    public string? ErrorMessage { get; init; }
+    public long? CheckoutId { get; init; }
+
+    public static CancelCheckoutResult Success(long checkoutId)
+    {
+        return new CancelCheckoutResult { Succeeded = true, CheckoutId = checkoutId };
+    }
+
+    public static CancelCheckoutResult Failed(string message)
+    {
+        return new CancelCheckoutResult { Succeeded = false, ErrorMessage = message };
+    }
+}

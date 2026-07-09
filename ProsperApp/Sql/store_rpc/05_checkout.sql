@@ -1,3 +1,10 @@
+alter table public.store_checkouts
+    drop constraint if exists uq_store_checkouts_slip;
+
+create unique index if not exists ux_store_checkouts_active_slip
+    on public.store_checkouts(slip_id)
+    where status <> 'cancelled';
+
 create or replace function store.confirm_checkout(
     p_department_id bigint,
     p_slip_id bigint,
@@ -263,6 +270,102 @@ begin
      where s.slip_id = p_slip_id;
 
     return query select v_checkout_id, v_change_amount;
+end;
+$$;
+
+drop function if exists store.cancel_checkout(bigint, bigint);
+
+create or replace function store.cancel_checkout(
+    p_department_id bigint,
+    p_slip_id bigint
+)
+returns table (
+    checkout_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_business_day_status text;
+    v_checkout public.store_checkouts%rowtype;
+begin
+    select s.*
+      into v_slip
+    from public.store_slips s
+    join public.store_business_days b
+      on b.business_day_id = s.business_day_id
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'checked_out'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_checkout_not_found';
+    end if;
+
+    select b.status
+      into v_business_day_status
+    from public.store_business_days b
+    where b.business_day_id = v_slip.business_day_id
+    limit 1;
+
+    if v_business_day_status <> 'open' then
+        raise exception 'business_day_not_open';
+    end if;
+
+    select *
+      into v_checkout
+    from public.store_checkouts c
+    where c.slip_id = p_slip_id
+      and c.department_id = p_department_id
+      and c.status = 'confirmed'
+    order by c.checkout_at desc, c.checkout_id desc
+    limit 1;
+
+    if v_checkout.checkout_id is null then
+        raise exception 'store_checkout_not_found';
+    end if;
+
+    update public.store_checkout_payments p
+       set status = 'cancelled',
+           updated_at = now()
+     where p.checkout_id = v_checkout.checkout_id
+       and p.status = 'confirmed';
+
+    update public.store_slip_cast_sales_adjustments a
+       set status = 'cancelled',
+           updated_at = now()
+     where a.checkout_id = v_checkout.checkout_id
+       and a.status = 'confirmed';
+
+    update public.store_checkouts c
+       set status = 'cancelled',
+           updated_at = now()
+     where c.checkout_id = v_checkout.checkout_id;
+
+    update public.store_slip_customers c
+       set status = 'active',
+           left_at = null,
+           updated_at = now()
+     where c.slip_id = p_slip_id
+       and c.status = 'left'
+       and c.left_at = v_checkout.checkout_at;
+
+    update public.store_slips s
+       set closed_at = null,
+           status = 'open',
+           customer_count = (
+               select count(*)::integer
+               from public.store_slip_customers c
+               where c.slip_id = p_slip_id
+                 and c.status = 'active'
+           ),
+           updated_at = now()
+     where s.slip_id = p_slip_id;
+
+    return query select v_checkout.checkout_id;
 end;
 $$;
 

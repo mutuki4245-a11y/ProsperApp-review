@@ -5,4 +5,6 @@ namespace ProsperApp.Services;
 public interface ICheckoutRepository
 {
     Task<ConfirmCheckoutResult> ConfirmCheckoutAsync(long slipId, CheckoutInputModel input, CancellationToken ct);
+
+    Task<CancelCheckoutResult> CancelCheckoutAsync(long slipId, CancellationToken ct);
 }

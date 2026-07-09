@@ -784,6 +784,7 @@
             };
 
             const navigateAfterFlush = async (link) => {
+                window.AppLoading?.show();
                 const timeout = new Promise((resolve) => {
                     window.setTimeout(() => resolve(false), 1200);
                 });

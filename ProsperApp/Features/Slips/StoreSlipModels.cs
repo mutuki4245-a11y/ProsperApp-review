@@ -338,6 +338,14 @@ public class KaraokeQuantityInputModel
     public decimal Quantity { get; set; }
 }
 
+public class OrderLineQuantityInputModel
+{
+    public long OrderLineId { get; set; }
+
+    [Range(0, 999, ErrorMessage = "注文数量を確認してください。")]
+    public decimal Quantity { get; set; }
+}
+
 public class StoreBusinessDay
 {
     public long BusinessDayId { get; set; }

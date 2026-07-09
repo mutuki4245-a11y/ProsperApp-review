@@ -92,10 +92,63 @@ public partial class SlipEditModel
         return Page();
     }
 
+    public async Task<IActionResult> OnPostSaveOrderQuantitiesAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Slips))
+        {
+            return NotFound();
+        }
+
+        ClearCrossFormValidationState();
+        NormalizeOrderQuantities();
+        await LoadAsync(cancellationToken);
+
+        if (!EnsureSlipLoaded())
+        {
+            SetDefaultInputs();
+            return Page();
+        }
+
+        ValidateOrderQuantities();
+        if (!ModelState.IsValid)
+        {
+            SetDefaultInputs();
+            return Page();
+        }
+
+        var result = await _slipRepository.SaveOrderLineQuantitiesAsync(SlipId!.Value, OrderQuantityLines, cancellationToken);
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文数量を保存できませんでした。");
+            SetDefaultInputs();
+            return Page();
+        }
+
+        SuccessMessage = "注文数量を保存しました。";
+        ModelState.Clear();
+        OrderQuantityLines = [];
+        await LoadAsync(cancellationToken);
+        SetDefaultInputs();
+        return Page();
+    }
+
 
     private void NormalizeQueue()
     {
         QueueLines = _orderQueueService.Normalize(QueueLines);
+    }
+
+    private void NormalizeOrderQuantities()
+    {
+        OrderQuantityLines = OrderQuantityLines
+            .Where(x => x.OrderLineId > 0)
+            .GroupBy(x => x.OrderLineId)
+            .Select(x => new OrderLineQuantityInputModel
+            {
+                OrderLineId = x.Key,
+                Quantity = x.Last().Quantity
+            })
+            .ToList();
     }
 
     private void ValidateOrderQueue()
@@ -117,6 +170,44 @@ public partial class SlipEditModel
                      requireAttendingCastForBackTarget: true))
         {
             ModelState.AddModelError(nameof(QueueLines), error);
+        }
+    }
+
+    private void ValidateOrderQuantities()
+    {
+        if (Detail is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(Detail.Status, "open", StringComparison.Ordinal))
+        {
+            ModelState.AddModelError(string.Empty, "営業中の伝票のみ注文数量を訂正できます。");
+        }
+
+        if (OrderQuantityLines.Count == 0)
+        {
+            ModelState.AddModelError(nameof(OrderQuantityLines), "訂正する注文数量がありません。");
+            return;
+        }
+
+        var editableOrderIds = Detail.Orders
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) && !x.IsKaraoke)
+            .Select(x => x.OrderLineId)
+            .ToHashSet();
+
+        for (var i = 0; i < OrderQuantityLines.Count; i++)
+        {
+            var line = OrderQuantityLines[i];
+            if (!editableOrderIds.Contains(line.OrderLineId))
+            {
+                ModelState.AddModelError($"OrderQuantityLines[{i}].OrderLineId", "訂正する注文を確認してください。");
+            }
+
+            if (line.Quantity < 0 || line.Quantity > 999 || line.Quantity != decimal.Truncate(line.Quantity))
+            {
+                ModelState.AddModelError($"OrderQuantityLines[{i}].Quantity", "注文数量を確認してください。");
+            }
         }
     }
 }

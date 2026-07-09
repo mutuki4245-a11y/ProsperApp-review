@@ -42,7 +42,7 @@
         .ToList();
 }
 
-        <div class="slip-create__panel">
+        <div class="slip-create__panel" data-order-correction-panel>
             <div class="slip-create__panel-title">
                 <div class="slip-create__panel-heading">
                     <h2>オーダー一覧</h2>
@@ -53,6 +53,16 @@
                     {
                         <output class="terminal-save-status" data-detail-karaoke-status data-save-state="saved" aria-live="polite">保存済み</output>
                     }
+                    @if (Model.IsOpenSlip && activeNonKaraokeOrders.Count > 0)
+                    {
+                        <output class="terminal-save-status" data-order-quantity-status data-save-state="saved" aria-live="polite">保存済み</output>
+                        <button class="btn btn-outline-primary" type="button" data-order-correction-toggle aria-pressed="false">訂正モード</button>
+                        <button class="btn btn-primary" type="submit" form="orderQuantityForm" data-order-quantity-save hidden disabled>数量を保存</button>
+                    }
+                    @if (Model.CanAddOrders)
+                    {
+                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#slipOrderModal">オーダー追加</button>
+                    }
                     <span class="terminal-count-badge">@activeOrders.Count 件</span>
                 </div>
             </div>
@@ -60,6 +70,13 @@
             @if (showKaraokeOrderRow && Model.IsOpenSlip)
             {
                 <form method="post" asp-page-handler="SaveKaraoke" id="detailKaraokeForm" data-detail-karaoke-form></form>
+            }
+
+            @if (Model.IsOpenSlip && activeNonKaraokeOrders.Count > 0)
+            {
+                <form method="post" asp-page-handler="SaveOrderQuantities" id="orderQuantityForm" data-order-quantity-form>
+                    <input type="hidden" asp-for="SlipId" />
+                </form>
             }
 
             <div class="table-responsive">
@@ -91,14 +108,28 @@
                         }
                         else
                         {
+                            var editableOrderIndex = 0;
                             @foreach (var order in activeNonKaraokeOrders)
                             {
-                                <tr>
+                                var quantityIndex = editableOrderIndex++;
+                                <tr data-order-line-row data-order-line-id="@order.OrderLineId" data-order-unit-price="@order.UnitPrice" data-order-initial-quantity="@order.Quantity.ToString("0.##")">
                                     <td class="slip-detail-table__time">@Model.FormatStoreTime(order.OrderedAt)</td>
                                     <td class="slip-detail-table__primary">@order.ItemNameSnapshot</td>
                                     <td class="slip-detail-table__amount text-end">@order.UnitPrice.ToString("N0")</td>
-                                    <td class="slip-detail-table__quantity text-end">@order.Quantity.ToString("0.##")</td>
-                                    <td class="slip-detail-table__amount text-end">@order.Amount.ToString("N0")</td>
+                                    <td class="slip-detail-table__quantity text-end">
+                                        <span data-order-quantity-text>@order.Quantity.ToString("0.##")</span>
+                                        @if (Model.IsOpenSlip)
+                                        {
+                                            <input form="orderQuantityForm" type="hidden" name="OrderQuantityLines[@quantityIndex].OrderLineId" value="@order.OrderLineId" />
+                                            <input form="orderQuantityForm" type="hidden" name="OrderQuantityLines[@quantityIndex].Quantity" value="@order.Quantity.ToString("0.##")" data-order-quantity-input />
+                                            <div class="quantity-stepper quantity-stepper--compact order-correction-control" data-order-quantity-control hidden>
+                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-order-quantity-decrement>-</button>
+                                                <strong data-order-quantity-display>@order.Quantity.ToString("0.##")</strong>
+                                                <button class="btn btn-outline-primary btn-sm" type="button" data-order-quantity-increment>+</button>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="slip-detail-table__amount text-end" data-order-line-amount>@order.Amount.ToString("N0")</td>
                                     <td class="slip-detail-table__action text-end">
                                         <form method="post" asp-page-handler="VoidOrder" class="d-inline">
                                             <input type="hidden" asp-for="SlipId" />
@@ -142,18 +173,6 @@
                                 </tr>
                             }
                         }
-                        <tr class="slip-detail-add-row">
-                            <td colspan="6">
-                                @if (Model.CanAddOrders)
-                                {
-                                    <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="modal" data-bs-target="#slipOrderModal">オーダー追加</button>
-                                }
-                                else
-                                {
-                                    <button class="btn btn-outline-secondary w-100" type="button" disabled>オーダー追加できません</button>
-                                }
-                            </td>
-                        </tr>
                     </tbody>
                     <tfoot>
                         <tr>
@@ -172,22 +191,25 @@
                     <h2>自由入力明細</h2>
                     <small>@activeAdjustments.Count 件 / @chargeTotal.ToString("N0") 円</small>
                 </div>
-                <span class="terminal-count-badge">@chargeTotal.ToString("N0") 円</span>
+                <div class="slip-create__panel-title-actions">
+                    <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
+                    @if (Model.IsOpenSlip)
+                    {
+                        <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#adjustmentModal">自由入力明細を入力</button>
+                    }
+                    <span class="terminal-count-badge">@chargeTotal.ToString("N0") 円</span>
+                </div>
             </div>
 
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0 slip-detail-table">
                     <colgroup>
-                        <col class="slip-detail-table__col--type" />
                         <col class="slip-detail-table__col--primary" />
-                        <col class="slip-detail-table__col--quantity" />
                         <col class="slip-detail-table__col--amount" />
                     </colgroup>
                     <thead>
                         <tr>
-                            <th>種別</th>
                             <th>明細</th>
-                            <th class="text-end">数量</th>
                             <th class="text-end">金額</th>
                         </tr>
                     </thead>
@@ -195,7 +217,7 @@
                         @if (activeAdjustments.Count == 0)
                         {
                             <tr>
-                                <td colspan="4" class="text-muted">自由入力明細はまだ登録されていません。</td>
+                                <td colspan="2" class="text-muted">自由入力明細はまだ登録されていません。</td>
                             </tr>
                         }
                         else
@@ -203,9 +225,7 @@
                             @foreach (var charge in activeAdjustments)
                             {
                                 <tr>
-                                    <td>@charge.ChargeTypeDisplayName</td>
                                     <td>@charge.LineName</td>
-                                    <td class="text-end">@charge.Quantity.ToString("0.##")</td>
                                     <td class="text-end">@charge.Amount.ToString("N0")</td>
                                 </tr>
                             }
@@ -213,40 +233,52 @@
                     </tbody>
                 </table>
             </div>
-
-            @if (Model.IsOpenSlip)
-            {
-                <div class="slip-charge-editor">
-                    <form method="post" asp-page-handler="SaveAdjustments" data-adjustment-form>
-                        <input type="hidden" asp-for="SlipId" />
-                        <div class="slip-create__panel-title">
-                            <div class="slip-create__panel-heading">
-                                <h3>自由入力明細</h3>
-                                <small>明細名と金額を入力して保存</small>
-                            </div>
-                            <div class="slip-create__panel-title-actions">
-                                <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
-                                <button class="btn btn-outline-primary" type="button" data-add-adjustment-row>明細を追加</button>
-                            </div>
-                        </div>
-                        <span asp-validation-for="AdjustmentsInput.Lines" class="text-danger"></span>
-                        <div class="adjustment-list" data-adjustment-list>
-                            @for (var i = 0; i < Model.AdjustmentsInput.Lines.Count; i++)
-                            {
-                                <div class="adjustment-row" data-adjustment-row>
-                                    <input class="form-control" name="AdjustmentsInput.Lines[@i].LineName" value="@Model.AdjustmentsInput.Lines[i].LineName" maxlength="160" placeholder="明細名" data-adjustment-name />
-                                    <input class="form-control" name="AdjustmentsInput.Lines[@i].Amount" value="@Model.AdjustmentsInput.Lines[i].Amount" type="number" step="1" placeholder="価格" data-adjustment-amount />
-                                    <button class="btn btn-outline-danger" type="button" data-remove-adjustment-row>削除</button>
-                                </div>
-                            }
-                        </div>
-                        <div class="slip-detail-add-actions">
-                            <button class="btn btn-primary" type="submit">調整明細を保存</button>
-                        </div>
-                    </form>
-                </div>
-            }
         </div>
+
+        @if (Model.IsOpenSlip)
+        {
+            <div class="modal fade" id="adjustmentModal" tabindex="-1" aria-labelledby="adjustmentModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <form method="post" asp-page-handler="SaveAdjustments" data-adjustment-form>
+                            <div class="modal-header">
+                                <div>
+                                    <p class="store-home__eyebrow mb-1">自由入力明細</p>
+                                    <h2 class="modal-title fs-5" id="adjustmentModalLabel">自由入力明細を入力</h2>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                            </div>
+                            <div class="modal-body slip-modal-form">
+                                <input type="hidden" asp-for="SlipId" />
+                                <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+                                <span asp-validation-for="AdjustmentsInput.Lines" class="text-danger"></span>
+                                <div class="slip-create__panel-title slip-modal-form__subheader">
+                                    <div class="slip-create__panel-heading">
+                                        <h3>明細</h3>
+                                        <small>金額はマイナス入力もできます</small>
+                                    </div>
+                                    <button class="btn btn-outline-primary" type="button" data-add-adjustment-row>明細を追加</button>
+                                </div>
+                                <div class="adjustment-list" data-adjustment-list>
+                                    @for (var i = 0; i < Model.AdjustmentsInput.Lines.Count; i++)
+                                    {
+                                        <div class="adjustment-row" data-adjustment-row>
+                                            <input class="form-control" name="AdjustmentsInput.Lines[@i].LineName" value="@Model.AdjustmentsInput.Lines[i].LineName" maxlength="160" placeholder="明細名" data-adjustment-name />
+                                            <input class="form-control" name="AdjustmentsInput.Lines[@i].Amount" value="@Model.AdjustmentsInput.Lines[i].Amount" type="number" step="1" placeholder="価格" data-adjustment-amount />
+                                            <button class="btn btn-outline-danger" type="button" data-remove-adjustment-row>削除</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                                <button class="btn btn-primary btn-lg" type="submit">保存</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
 
         @if (Model.CanAddOrders)
         {
