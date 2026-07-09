@@ -22,72 +22,97 @@
     const formatYen = (value) => `${toAmount(value).toLocaleString('ja-JP')}円`;
     const compact = (value, fallback = '') => String(value ?? fallback).trim();
 
-    const formatDateTime = (value) => {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) {
-            return compact(value);
-        }
+    const receiptWidth = 48;
+    const revenueStampThreshold = 50001;
+    const consumptionTaxRate = 0.10;
 
-        return new Intl.DateTimeFormat('ja-JP', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        }).format(date);
+    const formatDateTime = (value) => new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(value);
+
+    const charWidth = (char) => {
+        const code = char.codePointAt(0) ?? 0;
+        return code > 0x00ff ? 2 : 1;
     };
 
-    const appendAmountLine = (lines, label, amount) => {
-        if (toAmount(amount) !== 0) {
-            lines.push(`${label}: ${formatYen(amount)}`);
+    const textWidth = (text) => Array.from(String(text)).reduce((total, char) => total + charWidth(char), 0);
+    const spaces = (count) => ' '.repeat(Math.max(0, count));
+    const separator = () => '-'.repeat(receiptWidth);
+
+    const centerLine = (text) => {
+        const value = String(text);
+        const left = Math.floor((receiptWidth - textWidth(value)) / 2);
+        return `${spaces(left)}${value}`;
+    };
+
+    const twoColumnLine = (left, right) => {
+        const leftValue = String(left);
+        const rightValue = String(right);
+        return `${leftValue}${spaces(receiptWidth - textWidth(leftValue) - textWidth(rightValue))}${rightValue}`;
+    };
+
+    const paymentText = (request) => {
+        const payments = Array.isArray(request.payments) ? request.payments : [];
+        if (payments.length === 0) {
+            return '-';
         }
+
+        return payments
+            .map((payment) => compact(payment.methodName, payment.methodCode))
+            .filter((methodName) => methodName.length > 0)
+            .join(' / ') || '-';
+    };
+
+    const appendPaymentLine = (lines, value) => {
+        const label = '支払い方法';
+        if (textWidth(value) <= receiptWidth - textWidth(label)) {
+            lines.push(twoColumnLine(label, value));
+            return;
+        }
+
+        lines.push(`${label}:`);
+        value.split(' / ').forEach((methodName) => {
+            lines.push(`  ${methodName}`);
+        });
+    };
+
+    const consumptionTaxAmount = (amount) =>
+        Math.round(toAmount(amount) * consumptionTaxRate / (1 + consumptionTaxRate));
+
+    const appendRevenueStampBox = (lines) => {
+        lines.push('');
+        lines.push('収入印紙欄');
+        lines.push('+------------------------------+');
+        lines.push('|                              |');
+        lines.push('|                              |');
+        lines.push('+------------------------------+');
     };
 
     const buildReceiptText = (request) => {
         const lines = [];
+        const totalAmount = toAmount(request.totalAmount);
+
         lines.push(compact(request.storeName, '店舗'));
-        lines.push('領収書');
-        lines.push('------------------------------');
-        lines.push(`伝票: ${compact(request.slipNo, String(request.slipId ?? ''))}`);
-        lines.push(`卓: ${compact(request.tableDisplayName, '-')}`);
-        lines.push(`日時: ${formatDateTime(request.closedAt)}`);
-        lines.push('------------------------------');
-
-        const detailLines = Array.isArray(request.lines) ? request.lines : [];
-        if (detailLines.length === 0) {
-            lines.push('明細なし');
-        } else {
-            detailLines.forEach((line) => {
-                const name = compact(line.name, '明細');
-                const quantity = Number(line.quantity) || 0;
-                lines.push(name);
-                lines.push(`  ${quantity.toLocaleString('ja-JP')} x ${formatYen(line.unitPrice)} = ${formatYen(line.amount)}`);
-            });
-        }
-
-        lines.push('------------------------------');
-        appendAmountLine(lines, '小計', request.subtotalAmount);
-        appendAmountLine(lines, 'サービス料', request.serviceTaxAmount);
-        appendAmountLine(lines, '指名', request.nominationAmount);
-        appendAmountLine(lines, 'カラオケ', request.karaokeAmount);
-        appendAmountLine(lines, '調整', request.adjustmentAmount);
-        lines.push(`合計: ${formatYen(request.totalAmount)}`);
-
-        const payments = Array.isArray(request.payments) ? request.payments : [];
-        if (payments.length > 0) {
-            lines.push('------------------------------');
-            payments.forEach((payment) => {
-                lines.push(`${compact(payment.methodName, payment.methodCode)}: ${formatYen(payment.amount)}`);
-            });
-        }
-
-        if (request.receivedAmount !== null && request.receivedAmount !== undefined) {
-            lines.push(`お預り: ${formatYen(request.receivedAmount)}`);
-            lines.push(`お釣り: ${formatYen(request.changeAmount)}`);
-        }
-
+        lines.push(centerLine('領収書'));
+        lines.push(separator());
+        lines.push(twoColumnLine('現在時刻', formatDateTime(new Date())));
         lines.push('');
-        lines.push('ありがとうございました');
+        lines.push(centerLine('飲食代として'));
+        lines.push('');
+        lines.push(twoColumnLine('会計額', formatYen(totalAmount)));
+        appendPaymentLine(lines, paymentText(request));
+        lines.push(twoColumnLine('内消費税額', formatYen(consumptionTaxAmount(totalAmount))));
+
+        if (totalAmount >= revenueStampThreshold) {
+            appendRevenueStampBox(lines);
+        }
+
+        lines.push(separator());
+        lines.push('');
         lines.push('');
         return `${lines.join('\n')}\n`;
     };
