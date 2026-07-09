@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ProsperApp.Models;
 using ProsperApp.Services;
@@ -6,6 +7,8 @@ namespace ProsperApp.Pages;
 
 public partial class SlipEditModel
 {
+    private static readonly JsonSerializerOptions ReceiptPrintJsonOptions = new(JsonSerializerDefaults.Web);
+
     public async Task<IActionResult> OnPostStartCheckoutAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Slips) || !_featureGate.IsEnabled(FeatureNames.Checkout))
@@ -247,7 +250,11 @@ public partial class SlipEditModel
         }
 
         var request = BuildReceiptPrintRequest(result);
-        _ = _receiptPrinterClient.TryPrintCheckoutReceiptAsync(request, CancellationToken.None);
+        if (_receiptPrinterOptions.Enabled)
+        {
+            TempData[ReceiptPrintTempDataKeys.PendingCheckoutReceipt] =
+                JsonSerializer.Serialize(request, ReceiptPrintJsonOptions);
+        }
     }
 
     private ReceiptPrintRequest BuildReceiptPrintRequest(ConfirmCheckoutResult result)

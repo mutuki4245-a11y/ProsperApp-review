@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using ProsperApp.Models;
+using ProsperApp.Options;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -12,6 +14,7 @@ public class IndexModel(
     IStoreOrderRepository orderRepository,
     INominationBackAdminRepository nominationBackRepository,
     ILocalSettingsProvider localSettingsProvider,
+    IOptions<ReceiptPrinterOptions> receiptPrinterOptions,
     IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
@@ -20,6 +23,7 @@ public class IndexModel(
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
     private readonly INominationBackAdminRepository _nominationBackRepository = nominationBackRepository;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly ReceiptPrinterOptions _receiptPrinterOptions = receiptPrinterOptions.Value;
     private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
@@ -47,6 +51,21 @@ public class IndexModel(
     public bool ShowCreateSlipModal { get; private set; }
 
     public string? SuccessMessage { get; private set; }
+
+    public string? PendingReceiptPrintRequestJson { get; private set; }
+
+    public bool ShouldRunBrowserReceiptPrint => _receiptPrinterOptions.Enabled &&
+        !string.IsNullOrWhiteSpace(PendingReceiptPrintRequestJson);
+
+    public string ReceiptPrinterBrowserSdkScriptUrl => _receiptPrinterOptions.BrowserSdkScriptUrl;
+
+    public string ReceiptPrinterBrowserWebSocketHost => string.IsNullOrWhiteSpace(_receiptPrinterOptions.BrowserWebSocketHost)
+        ? "localhost"
+        : _receiptPrinterOptions.BrowserWebSocketHost;
+
+    public string ReceiptPrinterBrowserCodePage => _receiptPrinterOptions.BrowserCodePage;
+
+    public string ReceiptPrinterBrowserInternationalCharacter => _receiptPrinterOptions.BrowserInternationalCharacter;
 
     public bool SlipsEnabled => _featureGate.IsEnabled(FeatureNames.Slips);
 
@@ -90,6 +109,7 @@ public class IndexModel(
         await LoadAsync(cancellationToken, includeAttendanceCasts: false);
         SetDefaultCreateSlipInput();
         SuccessMessage = TempData["SuccessMessage"] as string;
+        PendingReceiptPrintRequestJson = TempData[ReceiptPrintTempDataKeys.PendingCheckoutReceipt] as string;
         return Page();
     }
 

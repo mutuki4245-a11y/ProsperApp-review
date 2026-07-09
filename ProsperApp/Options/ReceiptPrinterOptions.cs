@@ -4,9 +4,11 @@ public class ReceiptPrinterOptions
 {
     public bool Enabled { get; set; }
 
-    public string BridgeUrl { get; set; } = string.Empty;
+    public string BrowserSdkScriptUrl { get; set; } = string.Empty;
 
-    public string ApiKey { get; set; } = string.Empty;
+    public string BrowserWebSocketHost { get; set; } = "localhost";
 
-    public int TimeoutMilliseconds { get; set; } = 1500;
+    public string BrowserCodePage { get; set; } = string.Empty;
+
+    public string BrowserInternationalCharacter { get; set; } = string.Empty;
 }

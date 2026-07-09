@@ -40,7 +40,6 @@ builder.Services.AddScoped<IStoreItemAdminRepository, SupabaseStoreItemAdminRepo
 builder.Services.AddScoped<IStoreCastAdminRepository, SupabaseStoreCastAdminRepository>();
 builder.Services.AddScoped<INominationBackAdminRepository, SupabaseNominationBackAdminRepository>();
 builder.Services.AddHttpClient<IDriveFileService, GoogleDriveFileService>();
-builder.Services.AddHttpClient<IReceiptPrinterClient, SiiReceiptPrinterClient>();
 
 var googleDriveOptions = builder.Configuration.GetSection("GoogleDrive").Get<GoogleDriveOptions>() ?? new();
 var googleAuthConfigured = !string.IsNullOrWhiteSpace(googleDriveOptions.ClientId) &&

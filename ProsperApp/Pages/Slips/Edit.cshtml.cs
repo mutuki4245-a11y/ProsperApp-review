@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using ProsperApp.Models;
+using ProsperApp.Options;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -14,7 +16,7 @@ public partial class SlipEditModel(
     ICheckoutRepository checkoutRepository,
     IStoreClock storeClock,
     IOrderQueueService orderQueueService,
-    IReceiptPrinterClient receiptPrinterClient,
+    IOptions<ReceiptPrinterOptions> receiptPrinterOptions,
     ILocalSettingsProvider localSettingsProvider) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
@@ -25,7 +27,7 @@ public partial class SlipEditModel(
     private readonly ICheckoutRepository _checkoutRepository = checkoutRepository;
     private readonly IStoreClock _storeClock = storeClock;
     private readonly IOrderQueueService _orderQueueService = orderQueueService;
-    private readonly IReceiptPrinterClient _receiptPrinterClient = receiptPrinterClient;
+    private readonly ReceiptPrinterOptions _receiptPrinterOptions = receiptPrinterOptions.Value;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
 
     private static readonly IReadOnlyList<CheckoutPaymentInputModel> PaymentTemplates =

@@ -17,6 +17,11 @@
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
     }
 
+    @if (Model.ShouldRunBrowserReceiptPrint)
+    {
+        <div class="alert alert-info" role="status" data-receipt-print-status>領収書を印刷しています。</div>
+    }
+
     @if (Model.IsPreviousBusinessDayOpen)
     {
         <div class="alert alert-danger sales-block-alert" role="alert">
@@ -262,6 +267,22 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    @if (Model.ShouldRunBrowserReceiptPrint)
+    {
+        @if (!string.IsNullOrWhiteSpace(Model.ReceiptPrinterBrowserSdkScriptUrl))
+        {
+            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"></script>
+        }
+        <script type="application/json" id="pendingCheckoutReceiptPrintRequest">@Html.Raw(Model.PendingReceiptPrintRequestJson)</script>
+        <script>
+            window.prosperSiiReceiptPrinter = {
+                host: @Json.Serialize(Model.ReceiptPrinterBrowserWebSocketHost),
+                codePage: @Json.Serialize(Model.ReceiptPrinterBrowserCodePage),
+                internationalCharacter: @Json.Serialize(Model.ReceiptPrinterBrowserInternationalCharacter)
+            };
+        </script>
+        <script src="~/js/features/sii-receipt-printer.js" asp-append-version="true"></script>
+    }
     <script>
         (() => {
             const form = document.querySelector('[data-business-karaoke-form]');
