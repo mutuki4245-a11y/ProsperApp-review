@@ -57,7 +57,6 @@
             </div>
             <section class="slip-list-section" id="slipListPanel">
                 <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
-                    <div id="businessKaraokeFields"></div>
                     <div class="slip-list-section__statusbar">
                         <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite">同期済み</output>
                     </div>
@@ -291,7 +290,6 @@
                 return;
             }
 
-            const fields = document.getElementById('businessKaraokeFields');
             const status = form.querySelector('[data-business-karaoke-status]');
             const revealButton = document.querySelector('[data-slip-amount-reveal]');
             const businessDateDisplay = document.querySelector('[data-business-date-display]');
@@ -426,25 +424,28 @@
                     .filter(Boolean);
             };
 
-            const buildFields = (payloadRows) => {
-                if (!fields) {
-                    return;
+            const getRequestVerificationToken = () =>
+                form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+            const buildSavePayload = (payloadRows) => ({
+                businessDayId: Number(form.dataset.businessDayId || 0) || null,
+                karaokeLines: payloadRows.map((line) => ({
+                    slipId: Number(line.slipId),
+                    quantity: line.quantity
+                }))
+            });
+
+            const buildSaveHeaders = () => {
+                const headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                };
+                const token = getRequestVerificationToken();
+                if (token) {
+                    headers.RequestVerificationToken = token;
                 }
-
-                fields.innerHTML = '';
-                payloadRows.forEach((line, index) => {
-                    const slipInput = document.createElement('input');
-                    slipInput.type = 'hidden';
-                    slipInput.name = `KaraokeLines[${index}].SlipId`;
-                    slipInput.value = line.slipId;
-                    fields.appendChild(slipInput);
-
-                    const quantityInput = document.createElement('input');
-                    quantityInput.type = 'hidden';
-                    quantityInput.name = `KaraokeLines[${index}].Quantity`;
-                    quantityInput.value = String(line.quantity);
-                    fields.appendChild(quantityInput);
-                });
+                return headers;
             };
 
             const updateSummary = (result) => {
@@ -462,6 +463,9 @@
                 }
                 if (createDayIdInput) {
                     createDayIdInput.value = businessDayId;
+                }
+                if (businessDayId) {
+                    form.dataset.businessDayId = businessDayId;
                 }
 
                 if (openSlipCount) {
@@ -669,6 +673,9 @@
                     hasLoaded = true;
                     updateSummary(result);
                     renderSlips();
+                    if (!isSaving && collectDirtyPayload().length > 0) {
+                        scheduleAutoSave();
+                    }
                 } catch {
                     if (!hasLoaded) {
                         renderEmpty('伝票を取得できませんでした', '次の自動更新で再取得します。');
@@ -712,23 +719,16 @@
                 setStatus('保存中');
 
                 try {
-                    buildFields(payloadRows);
                     const response = await fetch(form.action, {
                         method: 'POST',
-                        body: new FormData(form),
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
+                        body: JSON.stringify(buildSavePayload(payloadRows)),
+                        headers: buildSaveHeaders(),
                         keepalive: Boolean(options.keepalive)
                     });
 
-                    if (!response.ok) {
-                        throw new Error('Karaoke save failed.');
-                    }
-
                     const result = await response.json().catch(() => null);
-                    if (result && result.succeeded === false) {
-                        throw new Error(result.message || 'Karaoke save failed.');
+                    if (!response.ok || (result && result.succeeded === false)) {
+                        throw new Error(result?.message || 'Karaoke save failed.');
                     }
 
                     markSaved(payloadRows);
@@ -740,9 +740,6 @@
                     setStatus('未保存');
                     return false;
                 } finally {
-                    if (fields) {
-                        fields.innerHTML = '';
-                    }
                     isSaving = false;
                     if (succeeded && (resaveAfterCurrent || collectDirtyPayload().length > 0)) {
                         resaveAfterCurrent = false;
@@ -770,13 +767,10 @@
                     return;
                 }
 
-                buildFields(payloadRows);
                 fetch(form.action, {
                     method: 'POST',
-                    body: new FormData(form),
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
+                    body: JSON.stringify(buildSavePayload(payloadRows)),
+                    headers: buildSaveHeaders(),
                     keepalive: true
                 }).catch(() => {
                     writeDraft();
