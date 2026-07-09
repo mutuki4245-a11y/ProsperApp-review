@@ -183,12 +183,7 @@ begin
 
     for v_entry in
         select value
-        from jsonb_array_elements(
-            case
-                when jsonb_typeof(p_attendance_entries) = 'array' then p_attendance_entries
-                else '[]'::jsonb
-            end
-        )
+        from jsonb_array_elements(store.jsonb_array_payload(p_attendance_entries))
     loop
         v_cast_id := nullif(v_entry->>'cast_id', '')::bigint;
 
@@ -312,12 +307,7 @@ begin
 
     for v_entry in
         select value
-        from jsonb_array_elements(
-            case
-                when jsonb_typeof(p_attendance_entries) = 'array' then p_attendance_entries
-                else '[]'::jsonb
-            end
-        )
+        from jsonb_array_elements(store.jsonb_array_payload(p_attendance_entries))
     loop
         v_cast_id := nullif(v_entry->>'cast_id', '')::bigint;
 
@@ -491,12 +481,7 @@ begin
 
     for v_entry in
         select value
-        from jsonb_array_elements(
-            case
-                when jsonb_typeof(p_attendance_entries) = 'array' then p_attendance_entries
-                else '[]'::jsonb
-            end
-        )
+        from jsonb_array_elements(store.jsonb_array_payload(p_attendance_entries))
     loop
         v_attendance_id := nullif(v_entry->>'attendance_id', '')::bigint;
 

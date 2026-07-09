@@ -741,12 +741,7 @@ begin
 
     for v_line in
         select value
-        from jsonb_array_elements(
-            case
-                when jsonb_typeof(p_adjustment_lines) = 'array' then p_adjustment_lines
-                else '[]'::jsonb
-            end
-        )
+        from jsonb_array_elements(store.jsonb_array_payload(p_adjustment_lines))
     loop
         v_line_name := nullif(trim(coalesce(v_line->>'line_name', '')), '');
         v_amount := nullif(v_line->>'amount', '')::numeric;
