@@ -159,7 +159,7 @@ public partial class SlipEditModel
 
             if (!IsValidNominationPrice(nomination.NominationPrice))
             {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationPrice", "指名価格を選択してください。");
+                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationPrice", "指名料金を選択してください。");
             }
 
             if (nomination.CastId is null)

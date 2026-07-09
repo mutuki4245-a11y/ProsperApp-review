@@ -5,8 +5,11 @@
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
         .OrderBy(x => x.LineNo)
         .ToList();
-    var activeNonKaraokeOrders = activeOrders
-        .Where(x => !x.IsKaraoke)
+    var activeStandardOrders = activeOrders
+        .Where(x => x.IsStandard)
+        .ToList();
+    var activeSystemOrders = activeOrders
+        .Where(x => !x.IsStandard && !x.IsKaraoke)
         .ToList();
     var activeKaraokeOrder = activeOrders
         .Where(x => x.IsKaraoke)
@@ -16,13 +19,13 @@
         .Where(x => x.IsKaraoke)
         .Sum(x => x.Quantity);
     var orderableItems = Model.OrderItems
-        .Where(x => !x.IsKaraoke)
+        .Where(x => x.IsStandard)
         .ToList();
     var karaokeItem = Model.OrderItems.FirstOrDefault(x => x.IsKaraoke);
     var karaokeUnitPrice = activeKaraokeOrder?.UnitPrice ?? karaokeItem?.DefaultPrice ?? 200;
     var karaokeAmount = activeKaraokeQuantity * karaokeUnitPrice;
     var activeOrderTotal = activeOrders.Sum(x => x.Amount);
-    var nonKaraokeOrderTotal = activeOrderTotal - (activeKaraokeOrder?.Amount ?? 0);
+    var fixedSystemOrderTotal = activeSystemOrders.Sum(x => x.Amount);
     var firstCustomer = detail.Customers
         .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.Ordinal))
         .OrderBy(x => x.EnteredAt)
@@ -53,7 +56,7 @@
                     {
                         <output class="terminal-save-status" data-detail-karaoke-status data-save-state="saved" aria-live="polite">保存済み</output>
                     }
-                    @if (Model.IsOpenSlip && activeNonKaraokeOrders.Count > 0)
+                    @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
                     {
                         <output class="terminal-save-status" data-order-quantity-status data-save-state="saved" aria-live="polite">保存済み</output>
                         <button class="btn btn-outline-primary" type="button" data-order-correction-toggle aria-pressed="false">訂正モード</button>
@@ -72,7 +75,7 @@
                 <form method="post" asp-page-handler="SaveKaraoke" id="detailKaraokeForm" data-detail-karaoke-form></form>
             }
 
-            @if (Model.IsOpenSlip && activeNonKaraokeOrders.Count > 0)
+            @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
             {
                 <form method="post" asp-page-handler="SaveOrderQuantities" id="orderQuantityForm" data-order-quantity-form>
                     <input type="hidden" asp-for="SlipId" />
@@ -100,7 +103,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (activeNonKaraokeOrders.Count == 0 && !showKaraokeOrderRow)
+                        @if (activeStandardOrders.Count == 0 && activeSystemOrders.Count == 0 && !showKaraokeOrderRow)
                         {
                             <tr>
                                 <td colspan="6" class="text-muted">注文はまだ登録されていません。</td>
@@ -109,7 +112,7 @@
                         else
                         {
                             var editableOrderIndex = 0;
-                            @foreach (var order in activeNonKaraokeOrders)
+                            @foreach (var order in activeStandardOrders)
                             {
                                 var quantityIndex = editableOrderIndex++;
                                 <tr data-order-line-row data-order-line-id="@order.OrderLineId" data-order-unit-price="@order.UnitPrice" data-order-initial-quantity="@order.Quantity.ToString("0.##")">
@@ -136,6 +139,23 @@
                                             <input type="hidden" name="orderLineId" value="@order.OrderLineId" />
                                             <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
                                         </form>
+                                    </td>
+                                </tr>
+                            }
+
+                            @foreach (var order in activeSystemOrders)
+                            {
+                                <tr class="slip-detail-table__system-row">
+                                    <td class="slip-detail-table__time">@Model.FormatStoreTime(order.OrderedAt)</td>
+                                    <td class="slip-detail-table__primary">
+                                        @order.ItemNameSnapshot
+                                        <span class="badge text-bg-secondary">自動</span>
+                                    </td>
+                                    <td class="slip-detail-table__amount text-end">@order.UnitPrice.ToString("N0")</td>
+                                    <td class="slip-detail-table__quantity text-end">@order.Quantity.ToString("0.##")</td>
+                                    <td class="slip-detail-table__amount text-end">@order.Amount.ToString("N0")</td>
+                                    <td class="slip-detail-table__action text-end">
+                                        <span class="text-muted">削除不可</span>
                                     </td>
                                 </tr>
                             }
@@ -177,7 +197,7 @@
                     <tfoot>
                         <tr>
                             <th colspan="4">商品小計</th>
-                            <th class="slip-detail-table__amount text-end" data-detail-order-total data-detail-order-base-total="@nonKaraokeOrderTotal">@activeOrderTotal.ToString("N0")</th>
+                            <th class="slip-detail-table__amount text-end" data-detail-order-total data-detail-order-base-total="@fixedSystemOrderTotal">@activeOrderTotal.ToString("N0")</th>
                             <th class="slip-detail-table__action">円</th>
                         </tr>
                     </tfoot>
@@ -336,7 +356,7 @@
                                                                     <span>@item.DefaultPrice.ToString("N0") 円</span>
                                                                     @if (item.IsCastBackTarget)
                                                                     {
-                                                                        <small>通常 @item.CastBackRegularUnitAmount.ToString("N0") 円 / 指名 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
+                                                                        <small>ドリンク @item.CastBackRegularUnitAmount.ToString("N0") 円 / 担当 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
                                                                     }
                                                                 </button>
                                                             }

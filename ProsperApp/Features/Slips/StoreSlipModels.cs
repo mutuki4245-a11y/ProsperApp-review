@@ -72,7 +72,7 @@ public class CastNominationInputModel
 {
     public string? NominationKind { get; set; }
 
-    [Range(1000, 20000, ErrorMessage = "指名価格は1000円から20000円で選択してください。")]
+    [Range(1000, 20000, ErrorMessage = "指名料金は1000円から20000円で選択してください。")]
     public decimal NominationPrice { get; set; } = 1000;
 
     public long? CastId { get; set; }
@@ -293,7 +293,10 @@ public class SlipDetailOrderLine
     public decimal Amount { get; set; }
     public DateTimeOffset OrderedAt { get; set; }
     public string Status { get; set; } = string.Empty;
+    public bool IsStandard => string.Equals(ItemType, "standard", StringComparison.Ordinal);
     public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
+    public bool IsNominationFee => string.Equals(ItemType, "nomination_fee", StringComparison.Ordinal);
+    public bool IsSystemItem => !IsStandard;
 }
 
 public class SlipDetailChargeLine

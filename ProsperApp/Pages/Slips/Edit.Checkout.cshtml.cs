@@ -248,13 +248,16 @@ public partial class SlipEditModel
 
     private CheckoutTotals CalculateCheckoutTotals()
     {
-        var subtotal = Detail?.Orders
+        var activeOrders = Detail?.Orders
             .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .Sum(x => x.Amount) ?? 0;
+            .ToList() ?? [];
+        var subtotal = activeOrders
+            .Where(x => !x.IsNominationFee)
+            .Sum(x => x.Amount);
         var serviceTax = Math.Round(subtotal * 0.20m, 0, MidpointRounding.AwayFromZero);
-        var nominationAmount = Detail?.Nominations
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .Sum(x => x.NominationPrice) ?? 0;
+        var nominationAmount = activeOrders
+            .Where(x => x.IsNominationFee)
+            .Sum(x => x.Amount);
         var adjustmentAmount = Detail?.ChargeLines
             .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal) &&
                         string.Equals(x.Status, "active", StringComparison.Ordinal))
@@ -318,18 +321,6 @@ public partial class SlipEditModel
                 Quantity = x.Quantity,
                 UnitPrice = x.UnitPrice,
                 Amount = x.Amount
-            }));
-
-        request.Lines.AddRange(Detail.Nominations
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .OrderBy(x => x.StartedAt)
-            .Select(x => new ReceiptPrintLine
-            {
-                LineType = "nomination",
-                Name = $"{x.NominationDisplayName} {x.CastDisplayName}",
-                Quantity = 1,
-                UnitPrice = x.NominationPrice,
-                Amount = x.NominationPrice
             }));
 
         request.Lines.AddRange(Detail.ChargeLines

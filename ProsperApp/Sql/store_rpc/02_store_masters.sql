@@ -261,7 +261,14 @@ as $$
     order_summary as (
         select
             l.slip_id,
-            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount,
+            coalesce(sum(l.amount) filter (
+                where l.status = 'active'
+                  and coalesce(i.item_type, 'standard') <> 'nomination_fee'
+            ), 0) as order_subtotal_amount,
+            coalesce(sum(l.amount) filter (
+                where l.status = 'active'
+                  and i.item_type = 'nomination_fee'
+            ), 0) as nomination_amount,
             coalesce(sum(l.quantity) filter (where l.status = 'active' and i.item_type = 'karaoke'), 0) as karaoke_quantity
         from target_slips s
         join public.store_order_lines l
@@ -269,15 +276,6 @@ as $$
         left join public.store_item_master i
           on i.item_id = l.item_id
         group by l.slip_id
-    ),
-    nomination_summary as (
-        select
-            sc.slip_id,
-            coalesce(sum(sc.nomination_price) filter (where sc.status = 'active'), 0) as nomination_amount
-        from target_slips s
-        join public.store_slip_casts sc
-          on sc.slip_id = s.slip_id
-        group by sc.slip_id
     ),
     charge_summary as (
         select
@@ -302,7 +300,7 @@ as $$
         greatest(
             coalesce(os.order_subtotal_amount, 0) +
             round(coalesce(os.order_subtotal_amount, 0) * 0.20, 0) +
-            coalesce(ns.nomination_amount, 0) +
+            coalesce(os.nomination_amount, 0) +
             coalesce(charges.charge_amount, 0),
             0
         ) as accounting_amount,
@@ -315,8 +313,6 @@ as $$
       on casts.slip_id = ts.slip_id
     left join order_summary os
       on os.slip_id = ts.slip_id
-    left join nomination_summary ns
-      on ns.slip_id = ts.slip_id
     left join charge_summary charges
       on charges.slip_id = ts.slip_id
     order by ts.opened_at asc;
@@ -788,7 +784,7 @@ begin
         where i.item_id = p_item_id
           and i.company_id = v_company_id
           and i.department_id = p_department_id
-          and i.item_type = 'karaoke'
+          and i.item_type <> 'standard'
     ) then
         raise exception 'store_item_locked';
     end if;
@@ -907,7 +903,7 @@ begin
         from public.store_item_master i
         where i.department_id = p_department_id
           and i.item_id = p_item_id
-          and i.item_type = 'karaoke'
+          and i.item_type <> 'standard'
     ) then
         raise exception 'store_item_locked';
     end if;

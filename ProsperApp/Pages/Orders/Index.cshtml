@@ -5,7 +5,7 @@
     ViewData["Title"] = "オーダー入力";
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
     var orderableItems = Model.Items
-        .Where(x => !x.IsKaraoke)
+        .Where(x => x.IsStandard)
         .ToList();
     var itemGroups = orderableItems
         .GroupBy(x => x.CategoryName)
@@ -99,7 +99,7 @@
                                                     <span>@item.DefaultPrice.ToString("N0") 円</span>
                                                     @if (item.IsCastBackTarget)
                                                     {
-                                                        <small>通常 @item.CastBackRegularUnitAmount.ToString("N0") 円 / 指名 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
+                                                        <small>ドリンク @item.CastBackRegularUnitAmount.ToString("N0") 円 / 担当 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
                                                     }
                                                 </button>
                                             }
@@ -462,7 +462,7 @@
                     if (cast) {
                         const back = document.createElement('small');
                         back.className = 'order-queue__back';
-                        back.textContent = `${cast.display} / 通常 ${formatYen(Number(item.castBackRegularUnitAmount) * quantity)} / 指名 ${formatYen(Number(item.castBackNominationUnitAmount) * quantity)}`;
+                        back.textContent = `${cast.display} / ドリンク ${formatYen(Number(item.castBackRegularUnitAmount) * quantity)} / 担当 ${formatYen(Number(item.castBackNominationUnitAmount) * quantity)}`;
                         main.appendChild(back);
                     }
 

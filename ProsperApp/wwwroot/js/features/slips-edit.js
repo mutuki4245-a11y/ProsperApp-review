@@ -187,12 +187,13 @@
             return;
         }
 
+        const fixedOrderTotal = Number(detailOrderTotal.dataset.detailOrderBaseTotal ?? 0);
         const orderTotal = orderLineRows().reduce((total, row) => {
             const input = row.querySelector('[data-order-quantity-input]');
             const quantity = Number(input?.value ?? row.dataset.orderInitialQuantity ?? 0);
             const unitPrice = Number(row.dataset.orderUnitPrice ?? 0);
             return total + unitPrice * quantity;
-        }, 0);
+        }, fixedOrderTotal);
         const karaokeUnitPrice = Number(detailKaraokeAmount?.dataset.detailKaraokeUnitPrice ?? 200);
         const karaokeQuantity = Number(detailKaraokeInput?.value ?? 0);
         detailOrderTotal.textContent = formatYen(orderTotal + karaokeUnitPrice * karaokeQuantity).replace(' 円', '');
@@ -648,7 +649,7 @@
             if (cast) {
                 const back = document.createElement('small');
                 back.className = 'order-queue__back';
-                back.textContent = `${cast.display} / 通常 ${formatYen(Number(item.castBackRegularUnitAmount) * quantity)} / 指名 ${formatYen(Number(item.castBackNominationUnitAmount) * quantity)}`;
+                back.textContent = `${cast.display} / ドリンク ${formatYen(Number(item.castBackRegularUnitAmount) * quantity)} / 担当 ${formatYen(Number(item.castBackNominationUnitAmount) * quantity)}`;
                 row.appendChild(back);
             }
             detailOrderQueueList?.appendChild(row);

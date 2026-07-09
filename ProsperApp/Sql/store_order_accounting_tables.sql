@@ -139,7 +139,7 @@ create table if not exists public.store_item_master (
     is_active boolean not null default true,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
-    constraint chk_store_item_master_type check (item_type in ('standard', 'karaoke')),
+    constraint chk_store_item_master_type check (item_type in ('standard', 'karaoke', 'nomination_fee')),
     constraint chk_store_item_master_default_price check (default_price >= 0),
     constraint chk_store_item_master_cast_back_unit_amount check (cast_back_unit_amount >= 0),
     constraint chk_store_item_master_cast_back_regular_unit_amount check (cast_back_regular_unit_amount >= 0),
@@ -283,18 +283,12 @@ alter table public.store_item_master
 alter table public.store_item_master
     add column if not exists item_type text not null default 'standard';
 
-do $$
-begin
-    if not exists (
-        select 1
-        from pg_constraint
-        where conname = 'chk_store_item_master_type'
-    ) then
-        alter table public.store_item_master
-            add constraint chk_store_item_master_type
-            check (item_type in ('standard', 'karaoke'));
-    end if;
-end $$;
+alter table public.store_item_master
+    drop constraint if exists chk_store_item_master_type;
+
+alter table public.store_item_master
+    add constraint chk_store_item_master_type
+    check (item_type in ('standard', 'karaoke', 'nomination_fee'));
 
 do $$
 begin
@@ -459,6 +453,91 @@ do update
    set item_category_id = excluded.item_category_id,
        item_type = 'karaoke',
        default_price = 200,
+       is_cast_back_target = false,
+       cast_back_unit_amount = 0,
+       cast_back_regular_unit_amount = 0,
+       cast_back_nomination_unit_amount = 0,
+       cast_back_type = 'other',
+       is_active = true,
+       updated_at = now();
+
+with target_departments as (
+    select
+        d.company_id,
+        d.department_id
+    from public.department_master d
+    where d.is_active = true
+),
+upsert_categories as (
+    insert into public.store_item_category_master (
+        company_id,
+        department_id,
+        category_code,
+        category_name,
+        sort_order,
+        is_active
+    )
+    select
+        td.company_id,
+        td.department_id,
+        'system',
+        'システム',
+        9010,
+        true
+    from target_departments td
+    on conflict (company_id, department_id, category_code)
+    do update
+       set category_name = excluded.category_name,
+           sort_order = excluded.sort_order,
+           is_active = true,
+           updated_at = now()
+    returning item_category_id, company_id, department_id
+),
+system_categories as (
+    select item_category_id, company_id, department_id from upsert_categories
+    union
+    select c.item_category_id, c.company_id, c.department_id
+    from public.store_item_category_master c
+    join target_departments td
+      on td.company_id = c.company_id
+     and td.department_id = c.department_id
+    where c.category_code = 'system'
+)
+insert into public.store_item_master (
+    company_id,
+    department_id,
+    item_category_id,
+    item_name,
+    item_type,
+    default_price,
+    is_cast_back_target,
+    cast_back_unit_amount,
+    cast_back_regular_unit_amount,
+    cast_back_nomination_unit_amount,
+    cast_back_type,
+    sort_order,
+    is_active
+)
+select
+    sc.company_id,
+    sc.department_id,
+    sc.item_category_id,
+    '指名料金',
+    'nomination_fee',
+    0,
+    false,
+    0,
+    0,
+    0,
+    'other',
+    9010,
+    true
+from system_categories sc
+on conflict (company_id, department_id, item_name)
+do update
+   set item_category_id = excluded.item_category_id,
+       item_type = 'nomination_fee',
+       default_price = 0,
        is_cast_back_target = false,
        cast_back_unit_amount = 0,
        cast_back_regular_unit_amount = 0,
@@ -657,12 +736,15 @@ create table if not exists public.store_order_lines (
     status text not null default 'active',
     voided_at timestamp with time zone,
     memo text,
+    source_type text,
+    source_id bigint,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_order_lines_quantity check (quantity > 0),
     constraint chk_store_order_lines_unit_price check (unit_price >= 0),
     constraint chk_store_order_lines_amount check (amount >= 0),
     constraint chk_store_order_lines_status check (status in ('active', 'voided')),
+    constraint chk_store_order_lines_source_type check (source_type is null or source_type in ('nomination_fee')),
     constraint uq_store_order_lines_line unique (slip_id, line_no)
 );
 
@@ -674,6 +756,86 @@ alter table public.store_order_lines
     foreign key (item_id)
     references public.store_item_master(item_id)
     on delete set null;
+
+alter table public.store_order_lines
+    add column if not exists source_type text;
+
+alter table public.store_order_lines
+    add column if not exists source_id bigint;
+
+alter table public.store_order_lines
+    drop constraint if exists chk_store_order_lines_source_type;
+
+alter table public.store_order_lines
+    add constraint chk_store_order_lines_source_type
+    check (source_type is null or source_type in ('nomination_fee'));
+
+do $$
+declare
+    v_nomination record;
+    v_line_no integer;
+begin
+    for v_nomination in
+        select
+            s.slip_id,
+            s.company_id,
+            s.department_id,
+            sc.slip_cast_id,
+            sc.nomination_price,
+            coalesce(sc.started_at, s.opened_at) as ordered_at,
+            i.item_id,
+            i.item_name
+        from public.store_slip_casts sc
+        join public.store_slips s
+          on s.slip_id = sc.slip_id
+        join public.store_item_master i
+          on i.company_id = s.company_id
+         and i.department_id = s.department_id
+         and i.item_type = 'nomination_fee'
+         and i.is_active = true
+        where sc.status = 'active'
+          and sc.nomination_price > 0
+          and not exists (
+              select 1
+              from public.store_order_lines ol
+              where ol.source_type = 'nomination_fee'
+                and ol.source_id = sc.slip_cast_id
+                and ol.status = 'active'
+          )
+    loop
+        select coalesce(max(ol.line_no), 0) + 1
+          into v_line_no
+        from public.store_order_lines ol
+        where ol.slip_id = v_nomination.slip_id;
+
+        insert into public.store_order_lines (
+            slip_id,
+            line_no,
+            item_id,
+            item_name_snapshot,
+            quantity,
+            unit_price,
+            amount,
+            ordered_at,
+            status,
+            source_type,
+            source_id
+        )
+        values (
+            v_nomination.slip_id,
+            v_line_no,
+            v_nomination.item_id,
+            v_nomination.item_name,
+            1,
+            v_nomination.nomination_price,
+            v_nomination.nomination_price,
+            v_nomination.ordered_at,
+            'active',
+            'nomination_fee',
+            v_nomination.slip_cast_id
+        );
+    end loop;
+end $$;
 
 create table if not exists public.store_order_line_cast_backs (
     order_line_cast_back_id bigint generated by default as identity primary key,
@@ -961,6 +1123,10 @@ create unique index if not exists ux_store_item_master_karaoke_active
     on public.store_item_master(company_id, department_id)
     where item_type = 'karaoke' and is_active = true;
 
+create unique index if not exists ux_store_item_master_nomination_fee_active
+    on public.store_item_master(company_id, department_id)
+    where item_type = 'nomination_fee' and is_active = true;
+
 create index if not exists idx_payment_method_master_active
     on public.payment_method_master(company_id, department_id, is_active, sort_order);
 
@@ -1001,6 +1167,10 @@ create index if not exists idx_store_slip_casts_slip
 
 create index if not exists idx_store_order_lines_slip_status
     on public.store_order_lines(slip_id, status);
+
+create unique index if not exists ux_store_order_lines_active_source
+    on public.store_order_lines(source_type, source_id)
+    where source_type is not null and status = 'active';
 
 create index if not exists idx_store_order_line_cast_backs_cast_date
     on public.store_order_line_cast_backs(company_id, department_id, cast_id, business_date, status);

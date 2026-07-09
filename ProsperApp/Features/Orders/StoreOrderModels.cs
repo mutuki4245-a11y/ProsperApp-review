@@ -36,7 +36,10 @@ public class StoreOrderItemOption
     public decimal CastBackRegularUnitAmount { get; set; }
     public decimal CastBackNominationUnitAmount { get; set; }
     public string CastBackType { get; set; } = "drink";
+    public bool IsStandard => string.Equals(ItemType, "standard", StringComparison.Ordinal);
     public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
+    public bool IsNominationFee => string.Equals(ItemType, "nomination_fee", StringComparison.Ordinal);
+    public bool IsSystemItem => !IsStandard;
 }
 
 public class StoreOrderAttendanceCastOption

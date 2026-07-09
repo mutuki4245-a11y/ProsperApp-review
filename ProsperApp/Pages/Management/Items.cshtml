@@ -171,7 +171,7 @@
                                         <div class="item-admin__field item-admin__field--name">
                                             <label>商品名</label>
                                             <strong>@item.ItemName</strong>
-                                            @if (item.IsKaraoke)
+                                            @if (item.IsSystemItem)
                                             {
                                                 <span class="badge text-bg-secondary">システム商品</span>
                                             }
@@ -185,14 +185,14 @@
                                             <span>@(item.IsCastBackTarget ? "対象" : "対象外")</span>
                                         </div>
                                         <div class="item-admin__field">
-                                            <label>通常バック</label>
+                                            <label>ドリンクバック</label>
                                             <span>@item.CastBackRegularUnitAmount.ToString("N0") 円</span>
                                         </div>
                                         <div class="item-admin__field">
-                                            <label>指名バック</label>
+                                            <label>担当バック</label>
                                             <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
                                         </div>
-                                        @if (item.IsKaraoke)
+                                        @if (item.IsSystemItem)
                                         {
                                             <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
                                         }
@@ -225,11 +225,11 @@
                                         <input type="hidden" name="ItemInput.IsCastBackTarget" value="false" />
                                     </label>
                                     <div class="item-admin__field">
-                                        <label>通常バック</label>
+                                        <label>ドリンクバック</label>
                                         <input class="form-control" name="ItemInput.CastBackRegularUnitAmount" value="@regularBackInput" type="number" min="0" step="1" placeholder="0" />
                                     </div>
                                     <div class="item-admin__field">
-                                        <label>指名バック</label>
+                                        <label>担当バック</label>
                                         <input class="form-control" name="ItemInput.CastBackNominationUnitAmount" value="@nominationBackInput" type="number" min="0" step="1" placeholder="0" />
                                     </div>
                                     <button class="btn btn-primary" type="submit">追加</button>
@@ -252,7 +252,7 @@
                                         <div class="item-admin__field item-admin__field--name">
                                             <label>商品名</label>
                                             <strong>@item.ItemName</strong>
-                                            @if (item.IsKaraoke)
+                                            @if (item.IsSystemItem)
                                             {
                                                 <span class="badge text-bg-secondary">システム商品</span>
                                             }
@@ -266,14 +266,14 @@
                                             <span>@(item.IsCastBackTarget ? "対象" : "対象外")</span>
                                         </div>
                                         <div class="item-admin__field">
-                                            <label>通常バック</label>
+                                            <label>ドリンクバック</label>
                                             <span>@item.CastBackRegularUnitAmount.ToString("N0") 円</span>
                                         </div>
                                         <div class="item-admin__field">
-                                            <label>指名バック</label>
+                                            <label>担当バック</label>
                                             <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
                                         </div>
-                                        @if (item.IsKaraoke)
+                                        @if (item.IsSystemItem)
                                         {
                                             <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
                                         }

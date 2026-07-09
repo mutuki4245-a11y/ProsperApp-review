@@ -268,7 +268,7 @@ public class SupabaseStoreItemAdminRepository(
 
         if (rawError.Contains("store_item_locked", StringComparison.OrdinalIgnoreCase))
         {
-            return "カラオケ商品は削除できません。";
+            return "システム商品は削除できません。";
         }
 
         if (rawError.Contains("invalid_store_item_order", StringComparison.OrdinalIgnoreCase))

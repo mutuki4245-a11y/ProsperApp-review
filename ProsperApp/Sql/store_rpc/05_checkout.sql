@@ -99,14 +99,20 @@ begin
     select coalesce(sum(ol.amount), 0)
       into v_subtotal_amount
     from public.store_order_lines ol
+    left join public.store_item_master i
+      on i.item_id = ol.item_id
     where ol.slip_id = p_slip_id
-      and ol.status = 'active';
+      and ol.status = 'active'
+      and coalesce(i.item_type, 'standard') <> 'nomination_fee';
 
-    select coalesce(sum(sc.nomination_price), 0)
+    select coalesce(sum(ol.amount), 0)
       into v_nomination_amount
-    from public.store_slip_casts sc
-    where sc.slip_id = p_slip_id
-      and sc.status = 'active';
+    from public.store_order_lines ol
+    join public.store_item_master i
+      on i.item_id = ol.item_id
+    where ol.slip_id = p_slip_id
+      and ol.status = 'active'
+      and i.item_type = 'nomination_fee';
 
     select coalesce(sum(cl.amount), 0)
       into v_charge_amount
@@ -400,6 +406,8 @@ declare
     v_companion_time time;
     v_started_at timestamp with time zone;
     v_slip_cast_id bigint;
+    v_nomination_fee_item public.store_item_master%rowtype;
+    v_order_line_no integer;
     v_customer_count integer;
     v_slip_no text;
 begin
@@ -604,6 +612,54 @@ begin
               and m.back_type = 'nomination'
               and m.is_active = true
               and m.back_unit_amount > 0;
+
+            if v_nomination_fee_item.item_id is null then
+                select *
+                  into v_nomination_fee_item
+                from public.store_item_master i
+                where i.company_id = v_company_id
+                  and i.department_id = p_department_id
+                  and i.item_type = 'nomination_fee'
+                  and i.is_active = true
+                order by i.sort_order asc, i.item_id asc
+                limit 1;
+
+                if v_nomination_fee_item.item_id is null then
+                    raise exception 'store_nomination_fee_item_not_found';
+                end if;
+            end if;
+
+            select coalesce(max(ol.line_no), 0) + 1
+              into v_order_line_no
+            from public.store_order_lines ol
+            where ol.slip_id = v_slip_id;
+
+            insert into public.store_order_lines (
+                slip_id,
+                line_no,
+                item_id,
+                item_name_snapshot,
+                quantity,
+                unit_price,
+                amount,
+                ordered_at,
+                status,
+                source_type,
+                source_id
+            )
+            values (
+                v_slip_id,
+                v_order_line_no,
+                v_nomination_fee_item.item_id,
+                v_nomination_fee_item.item_name,
+                1,
+                v_nomination_price,
+                v_nomination_price,
+                v_started_at,
+                'active',
+                'nomination_fee',
+                v_slip_cast_id
+            );
         else
             raise exception 'store_cast_not_found';
         end if;

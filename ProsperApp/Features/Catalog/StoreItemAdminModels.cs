@@ -50,7 +50,13 @@ public class StoreItemAdminItem
 
     public string CastBackType { get; set; } = "drink";
 
+    public bool IsStandard => string.Equals(ItemType, "standard", StringComparison.Ordinal);
+
     public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
+
+    public bool IsNominationFee => string.Equals(ItemType, "nomination_fee", StringComparison.Ordinal);
+
+    public bool IsSystemItem => !IsStandard;
 }
 
 public class StoreItemOrderInputModel
@@ -107,12 +113,12 @@ public class StoreItemInputModel
     [Display(Name = "バック対象")]
     public bool IsCastBackTarget { get; set; }
 
-    [Display(Name = "通常バック単価")]
-    [Range(0, 9999999, ErrorMessage = "通常バック単価は0以上で入力してください。")]
+    [Display(Name = "ドリンクバック単価")]
+    [Range(0, 9999999, ErrorMessage = "ドリンクバック単価は0以上で入力してください。")]
     public decimal CastBackRegularUnitAmount { get; set; }
 
-    [Display(Name = "指名バック単価")]
-    [Range(0, 9999999, ErrorMessage = "指名バック単価は0以上で入力してください。")]
+    [Display(Name = "担当バック単価")]
+    [Range(0, 9999999, ErrorMessage = "担当バック単価は0以上で入力してください。")]
     public decimal CastBackNominationUnitAmount { get; set; }
 }
 

@@ -461,7 +461,7 @@ public class IndexModel(
 
             if (!IsValidNominationPrice(nomination.NominationPrice))
             {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationPrice", "指名価格を選択してください。");
+                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationPrice", "指名料金を選択してください。");
             }
 
             if (nomination.CastId is null)

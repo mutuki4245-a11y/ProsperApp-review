@@ -39,7 +39,7 @@
                     <th class="slip-detail-table__time">時刻</th>
                     <th class="slip-detail-table__type">区分</th>
                     <th class="slip-detail-table__primary">キャスト</th>
-                    <th class="slip-detail-table__amount text-end">価格</th>
+                    <th class="slip-detail-table__amount text-end">指名料金</th>
                 </tr>
             </thead>
             <tbody>
@@ -118,7 +118,7 @@
                                 </select>
                             </div>
                             <div class="col-12">
-                                <label class="form-label">指名価格</label>
+                                <label class="form-label">指名料金</label>
                                 <select class="form-select form-select-lg nomination-row__price" name="AddNominationsInput.CastNominations[0].NominationPrice">
                                     @foreach (var price in nominationPriceOptions)
                                     {

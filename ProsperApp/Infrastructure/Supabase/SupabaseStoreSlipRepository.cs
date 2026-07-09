@@ -703,7 +703,12 @@ public class SupabaseStoreSlipRepository(
 
         if (rawError.Contains("invalid_nomination_price", StringComparison.OrdinalIgnoreCase))
         {
-            return "指名価格を確認してください。";
+            return "指名料金を確認してください。";
+        }
+
+        if (rawError.Contains("store_nomination_fee_item_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "指名料金の商品設定を確認してください。";
         }
 
         if (rawError.Contains("invalid_adjustment_name", StringComparison.OrdinalIgnoreCase))

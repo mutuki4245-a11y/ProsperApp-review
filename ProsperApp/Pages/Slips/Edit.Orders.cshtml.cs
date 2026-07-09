@@ -20,7 +20,9 @@ public partial class SlipEditModel
             return Page();
         }
 
-        if (Detail!.Orders.All(x => x.OrderLineId != orderLineId || !string.Equals(x.Status, "active", StringComparison.Ordinal)))
+        if (Detail!.Orders.All(x => x.OrderLineId != orderLineId ||
+                                    !string.Equals(x.Status, "active", StringComparison.Ordinal) ||
+                                    !x.IsStandard))
         {
             ModelState.AddModelError(string.Empty, "削除する注文を確認してください。");
             SetDefaultInputs();
@@ -192,7 +194,7 @@ public partial class SlipEditModel
         }
 
         var editableOrderIds = Detail.Orders
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) && !x.IsKaraoke)
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) && x.IsStandard)
             .Select(x => x.OrderLineId)
             .ToHashSet();
 
