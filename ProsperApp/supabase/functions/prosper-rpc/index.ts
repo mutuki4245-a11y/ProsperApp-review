@@ -11,6 +11,7 @@ type PgType =
   | "boolean"
   | "date"
   | "integer"
+  | "json"
   | "jsonb"
   | "numeric"
   | "text"
@@ -629,8 +630,8 @@ function addClientKey(keys: Set<string>, value: unknown) {
 }
 
 function toSqlValue(value: unknown, type: PgType): unknown {
-  if (type === "jsonb") {
-    return toJsonbValue(value);
+  if (isJsonType(type)) {
+    return toJsonText(value);
   }
 
   if (type === "text[]") {
@@ -644,7 +645,11 @@ function toSqlValue(value: unknown, type: PgType): unknown {
   return value;
 }
 
-function toJsonbValue(value: unknown): unknown {
+function isJsonType(type: PgType): boolean {
+  return type === "json" || type === "jsonb";
+}
+
+function toJsonText(value: unknown): string | null {
   if (value === undefined || value === null) {
     return null;
   }
@@ -656,13 +661,13 @@ function toJsonbValue(value: unknown): unknown {
     }
 
     try {
-      return JSON.parse(trimmed);
+      return JSON.stringify(JSON.parse(trimmed));
     } catch {
-      return value;
+      return JSON.stringify(trimmed);
     }
   }
 
-  return value;
+  return JSON.stringify(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
