@@ -1,9 +1,18 @@
+using System.Text.Json;
 using ProsperApp.Models;
 
 namespace ProsperApp.Services;
 
 public sealed class OrderQueueService : IOrderQueueService
 {
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+
+    public List<OrderQueueInputModel> ReadPostedQueue(string? orderQueueJson, IEnumerable<OrderQueueInputModel> fallbackLines)
+    {
+        var postedLines = ParsePostedQueue(orderQueueJson);
+        return Normalize(postedLines.Count > 0 ? postedLines : fallbackLines);
+    }
+
     public List<OrderQueueInputModel> Normalize(IEnumerable<OrderQueueInputModel> queueLines)
     {
         return queueLines
@@ -69,5 +78,43 @@ public sealed class OrderQueueService : IOrderQueueService
         }
 
         return errors;
+    }
+
+    private static List<OrderQueueInputModel> ParsePostedQueue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return [];
+        }
+
+        try
+        {
+            var lines = JsonSerializer.Deserialize<List<PostedOrderQueueLine>>(value, Options);
+            return lines?
+                .Where(x => x.ItemId > 0 && x.Quantity > 0)
+                .Select(x => new OrderQueueInputModel
+                {
+                    SlipId = x.SlipId,
+                    ItemId = x.ItemId,
+                    Quantity = x.Quantity,
+                    CastBackCastId = x.CastBackCastId
+                })
+                .ToList() ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private sealed class PostedOrderQueueLine
+    {
+        public long? SlipId { get; set; }
+
+        public long ItemId { get; set; }
+
+        public int Quantity { get; set; }
+
+        public long? CastBackCastId { get; set; }
     }
 }

@@ -86,13 +86,7 @@ public class IndexModel(
             return NotFound();
         }
 
-        var postedQueueLines = OrderQueueJsonSerializer.Parse(OrderQueueJson);
-        if (postedQueueLines.Count > 0)
-        {
-            QueueLines = postedQueueLines;
-        }
-
-        QueueLines = _orderQueueService.Normalize(QueueLines);
+        QueueLines = _orderQueueService.ReadPostedQueue(OrderQueueJson, QueueLines);
         await LoadOptionsAsync(cancellationToken);
         ValidateBusinessRules();
 

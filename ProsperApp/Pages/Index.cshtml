@@ -290,6 +290,7 @@
         <script>
             window.prosperSiiReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
         </script>
+        <script src="~/js/features/sii-receipt-layout.js" asp-append-version="true"></script>
         <script src="~/js/features/sii-receipt-printer.js" asp-append-version="true"></script>
     }
     <script>
@@ -320,7 +321,6 @@
             let isSaving = false;
             let savePromise = null;
             let allowPageUnload = false;
-            let draft = loadDraft();
 
             const formatYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
             const toQuantity = (value) => Math.max(0, Math.trunc(Number(value) || 0));
@@ -378,62 +378,91 @@
                 }
             }
 
-            const writeDraft = () => {
-                if (Object.keys(draft).length === 0) {
-                    localStorage.removeItem(draftKey);
-                } else {
-                    localStorage.setItem(draftKey, JSON.stringify(draft));
-                }
-            };
-
             const getSlip = (slipId) => slips.find((slip) => String(slip.id) === String(slipId));
             const getInitialQuantity = (slip) => toQuantity(slip?.karaokeQuantity);
-            const getDisplayQuantity = (slip) => {
-                const key = String(slip.id);
-                return Object.prototype.hasOwnProperty.call(draft, key)
-                    ? toQuantity(draft[key])
-                    : getInitialQuantity(slip);
-            };
-
-            const cleanupDraft = () => {
-                let changed = false;
-                Object.keys(draft).forEach((slipId) => {
-                    const slip = getSlip(slipId);
-                    if (!slip || slip.status !== 'open') {
-                        delete draft[slipId];
-                        changed = true;
-                        return;
+            const createKaraokeDraftState = () => {
+                let draft = loadDraft();
+                const write = () => {
+                    if (Object.keys(draft).length === 0) {
+                        localStorage.removeItem(draftKey);
+                    } else {
+                        localStorage.setItem(draftKey, JSON.stringify(draft));
                     }
-
-                    if (toQuantity(draft[slipId]) === getInitialQuantity(slip)) {
-                        delete draft[slipId];
-                        changed = true;
-                    }
-                });
-
-                if (changed) {
-                    writeDraft();
-                }
-            };
-
-            const collectDirtyPayload = () => {
-                cleanupDraft();
-                return Object.keys(draft)
-                    .map((slipId) => {
+                };
+                const cleanup = () => {
+                    let changed = false;
+                    Object.keys(draft).forEach((slipId) => {
                         const slip = getSlip(slipId);
                         if (!slip || slip.status !== 'open') {
-                            return null;
+                            delete draft[slipId];
+                            changed = true;
+                            return;
                         }
 
-                        return {
-                            slip,
-                            slipId,
-                            quantity: toQuantity(draft[slipId]),
-                            baseAmount: Number(slip.accountingAmount || 0) - getInitialQuantity(slip) * accountingUnit
-                        };
-                    })
-                    .filter(Boolean);
+                        if (toQuantity(draft[slipId]) === getInitialQuantity(slip)) {
+                            delete draft[slipId];
+                            changed = true;
+                        }
+                    });
+
+                    if (changed) {
+                        write();
+                    }
+                };
+
+                return {
+                    getDisplayQuantity(slip) {
+                        const key = String(slip.id);
+                        return Object.prototype.hasOwnProperty.call(draft, key)
+                            ? toQuantity(draft[key])
+                            : getInitialQuantity(slip);
+                    },
+                    collectDirtyPayload() {
+                        cleanup();
+                        return Object.keys(draft)
+                            .map((slipId) => {
+                                const slip = getSlip(slipId);
+                                if (!slip || slip.status !== 'open') {
+                                    return null;
+                                }
+
+                                return {
+                                    slip,
+                                    slipId,
+                                    quantity: toQuantity(draft[slipId]),
+                                    baseAmount: Number(slip.accountingAmount || 0) - getInitialQuantity(slip) * accountingUnit
+                                };
+                            })
+                            .filter(Boolean);
+                    },
+                    cleanup,
+                    setQuantity(slip, quantity) {
+                        const normalized = toQuantity(quantity);
+                        if (normalized === getInitialQuantity(slip)) {
+                            delete draft[String(slip.id)];
+                        } else {
+                            draft[String(slip.id)] = normalized;
+                        }
+                        write();
+                    },
+                    markSaved(payloadRows) {
+                        payloadRows.forEach((line) => {
+                            const slip = getSlip(line.slipId);
+                            if (slip && toQuantity(draft[line.slipId]) === line.quantity) {
+                                slip.karaokeQuantity = line.quantity;
+                                slip.accountingAmount = line.baseAmount + line.quantity * accountingUnit;
+                                delete draft[line.slipId];
+                            }
+                        });
+                        write();
+                    },
+                    write
+                };
             };
+            const karaokeDraft = createKaraokeDraftState();
+            const getDisplayQuantity = (slip) => karaokeDraft.getDisplayQuantity(slip);
+            const cleanupDraft = () => karaokeDraft.cleanup();
+            const collectDirtyPayload = () => karaokeDraft.collectDirtyPayload();
 
             const getRequestVerificationToken = () =>
                 form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
@@ -750,22 +779,14 @@
             };
 
             const markSaved = (payloadRows) => {
-                payloadRows.forEach((line) => {
-                    const slip = getSlip(line.slipId);
-                    if (slip && toQuantity(draft[line.slipId]) === line.quantity) {
-                        slip.karaokeQuantity = line.quantity;
-                        slip.accountingAmount = line.baseAmount + line.quantity * accountingUnit;
-                        delete draft[line.slipId];
-                    }
-                });
-                writeDraft();
+                karaokeDraft.markSaved(payloadRows);
                 renderSlips();
             };
 
             const submitDraftInternal = async () => {
                 const payloadRows = collectDirtyPayload();
                 if (payloadRows.length === 0) {
-                    writeDraft();
+                    karaokeDraft.write();
                     setStatus('');
                     return true;
                 }
@@ -789,7 +810,7 @@
                     setStatus(collectDirtyPayload().length === 0 ? '保存済み' : '未保存');
                     return true;
                 } catch {
-                    writeDraft();
+                    karaokeDraft.write();
                     setStatus('保存失敗');
                     return false;
                 } finally {
@@ -853,14 +874,7 @@
                     }
 
                     const nextQuantity = toQuantity(row.dataset.quantity) + (increment ? 1 : -1);
-                    const normalized = toQuantity(nextQuantity);
-                    const initialQuantity = getInitialQuantity(slip);
-                    if (normalized === initialQuantity) {
-                        delete draft[String(slip.id)];
-                    } else {
-                        draft[String(slip.id)] = normalized;
-                    }
-                    writeDraft();
+                    karaokeDraft.setQuantity(slip, nextQuantity);
                     renderSlips();
                     markDirtyStatus();
                     return;

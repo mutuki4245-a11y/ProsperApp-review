@@ -9,6 +9,7 @@
 ## 重要方針
 
 - DB操作は原則 Supabase RPC 経由で行います。
+- 設計改善の現在方針は `Docs/設計改善計画.md` を入口にします。営業中から会計完了までの整理では、PageModelからアプリ内変換を切り出し、JSONB/JSON配列の正規化手順を呼び出し側へ散らさない方針を優先します。
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
 - Supabase RPCのHTTP送信、Edge Functionキー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。アプリからのRPCは必ず `prosper-rpc` Edge Function経由で呼び出し、REST RPC fallbackは持ちません。
 - アプリ用RPCは `store` schemaに集約し、Repositoryと `prosper-rpc` allowlistでは `store.get_casts` のようなschema-qualified名を使います。

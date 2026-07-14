@@ -258,24 +258,7 @@ public partial class SlipEditModel
 
     private CheckoutTotals CalculateCheckoutTotals()
     {
-        var activeOrders = Detail?.Orders
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .ToList() ?? [];
-        var subtotal = activeOrders.Sum(x => x.Amount);
-        var serviceTax = Math.Round(subtotal * 0.20m, 0, MidpointRounding.AwayFromZero);
-        var adjustmentAmount = Detail?.ChargeLines
-            .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal) &&
-                        string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .Sum(x => x.Amount) ?? 0;
-        var total = subtotal + serviceTax + adjustmentAmount;
-
-        return new CheckoutTotals
-        {
-            SubtotalAmount = subtotal,
-            ServiceTaxAmount = serviceTax,
-            AdjustmentAmount = adjustmentAmount,
-            TotalAmount = Math.Max(total, 0)
-        };
+        return CheckoutDocumentBuilder.CalculateTotals(Detail);
     }
 
     public string BuildCheckoutSnapshotJson()
@@ -285,55 +268,7 @@ public partial class SlipEditModel
             return "{}";
         }
 
-        var activeOrders = Detail.Orders
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .OrderBy(x => x.LineNo)
-            .ThenBy(x => x.OrderLineId)
-            .Select(x => new
-            {
-                order_line_id = x.OrderLineId,
-                line_no = x.LineNo,
-                item_name_snapshot = x.ItemNameSnapshot,
-                item_type = x.ItemType,
-                quantity = x.Quantity,
-                unit_price = x.UnitPrice,
-                amount = x.Amount,
-                status = x.Status
-            })
-            .ToList();
-
-        var activeCharges = Detail.ChargeLines
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) &&
-                        string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
-            .OrderBy(x => x.LineNo)
-            .ThenBy(x => x.ChargeLineId)
-            .Select(x => new
-            {
-                charge_line_id = x.ChargeLineId,
-                line_no = x.LineNo,
-                charge_type = x.ChargeType,
-                line_name = x.LineName,
-                quantity = x.Quantity,
-                unit_price = x.UnitPrice,
-                amount = x.Amount,
-                status = x.Status
-            })
-            .ToList();
-
-        return JsonSerializer.Serialize(new
-        {
-            slip_id = Detail.SlipId,
-            business_date = Detail.BusinessDate.ToString("yyyy-MM-dd"),
-            table_id = Detail.TableId,
-            status = Detail.Status,
-            customer_count = Detail.CustomerCount,
-            subtotal_amount = CheckoutTotals.SubtotalAmount,
-            service_tax_amount = CheckoutTotals.ServiceTaxAmount,
-            adjustment_amount = CheckoutTotals.AdjustmentAmount,
-            total_amount = CheckoutTotals.TotalAmount,
-            orders = activeOrders,
-            charges = activeCharges
-        }, ReceiptPrintJsonOptions);
+        return CheckoutDocumentBuilder.BuildConfirmedSnapshotJson(Detail, CheckoutTotals);
     }
 
     private void QueueReceiptPrint(ConfirmCheckoutResult result)
@@ -343,66 +278,18 @@ public partial class SlipEditModel
             return;
         }
 
-        var request = BuildReceiptPrintRequest(result);
+        var settings = _localSettingsProvider.GetCurrent();
+        var request = CheckoutDocumentBuilder.BuildReceiptPrintRequest(
+            Detail,
+            CheckoutTotals,
+            CheckoutInput,
+            result,
+            settings.StoreName,
+            _storeClock);
         if (_receiptPrinterOptions.Enabled)
         {
             TempData[ReceiptPrintTempDataKeys.PendingCheckoutReceipt] =
                 JsonSerializer.Serialize(request, ReceiptPrintJsonOptions);
         }
-    }
-
-    private ReceiptPrintRequest BuildReceiptPrintRequest(ConfirmCheckoutResult result)
-    {
-        var settings = _localSettingsProvider.GetCurrent();
-        var request = new ReceiptPrintRequest
-        {
-            CheckoutId = result.CheckoutId!.Value,
-            SlipId = Detail!.SlipId,
-            SlipNo = Detail.SlipNo,
-            StoreName = settings.StoreName,
-            TableDisplayName = Detail.TableDisplayName,
-            ClosedAt = _storeClock.ToStoreDateTimeOffset(CheckoutInput.ClosedAt!.Value),
-            SubtotalAmount = CheckoutTotals.SubtotalAmount,
-            ServiceTaxAmount = CheckoutTotals.ServiceTaxAmount,
-            AdjustmentAmount = CheckoutTotals.AdjustmentAmount,
-            TotalAmount = CheckoutTotals.TotalAmount,
-            ReceivedAmount = CheckoutInput.ReceivedAmount,
-            ChangeAmount = result.ChangeAmount
-        };
-
-        request.Lines.AddRange(Detail.Orders
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .OrderBy(x => x.LineNo)
-            .Select(x => new ReceiptPrintLine
-            {
-                LineType = "order",
-                Name = x.ItemNameSnapshot,
-                Quantity = x.Quantity,
-                UnitPrice = x.UnitPrice,
-                Amount = x.Amount
-            }));
-
-        request.Lines.AddRange(Detail.ChargeLines
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .OrderBy(x => x.LineNo)
-            .Select(x => new ReceiptPrintLine
-            {
-                LineType = x.ChargeType,
-                Name = x.LineName,
-                Quantity = x.Quantity,
-                UnitPrice = x.UnitPrice,
-                Amount = x.Amount
-            }));
-
-        request.Payments.AddRange(CheckoutInput.Payments
-            .Where(x => x.IsSelected && x.Amount > 0)
-            .Select(x => new ReceiptPrintPayment
-            {
-                MethodCode = x.MethodCode,
-                MethodName = x.MethodName,
-                Amount = x.Amount
-            }));
-
-        return request;
     }
 }

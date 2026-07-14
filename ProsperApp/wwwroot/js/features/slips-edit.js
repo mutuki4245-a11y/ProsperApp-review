@@ -69,9 +69,9 @@
             parseValidation(section);
             const hasValidationError = section.querySelector('.validation-summary-errors, .field-validation-error');
             setPartialStatus(sectionId, hasValidationError ? '保存失敗' : '保存済み');
-        } catch {
+        } catch (error) {
             setPartialStatus(sectionId, '保存失敗');
-            throw;
+            throw error;
         } finally {
             window.AppLoading?.hide(form);
         }
