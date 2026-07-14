@@ -13,7 +13,6 @@ public partial class SlipEditModel
             return NotFound();
         }
 
-        NormalizeNominationInput();
         ClearCrossFormValidationState();
         await LoadAsync(cancellationToken);
 
@@ -42,7 +41,7 @@ public partial class SlipEditModel
             return Page();
         }
 
-        ValidateNominations();
+        PrepareNominationInput();
         if (!ModelState.IsValid)
         {
             ShowAddNominationModal = true;
@@ -89,103 +88,24 @@ public partial class SlipEditModel
     {
         if (AddNominationsInput.CastNominations.Count == 0)
         {
-            AddNominationsInput.CastNominations.Add(new CastNominationInputModel { NominationKind = GetDefaultNominationKind() });
+            AddNominationsInput.CastNominations.Add(new CastNominationInputModel
+            {
+                NominationKind = SlipNominationEditor.GetDefaultNominationKind(NominationOptions)
+            });
         }
     }
 
 
-    private void NormalizeNominationInput()
+    private void PrepareNominationInput()
     {
-        AddNominationsInput.CastNominations = AddNominationsInput.CastNominations
-            .Select(x => new CastNominationInputModel
-            {
-                NominationKind = ResolveNominationKind(x),
-                NominationPrice = x.NominationPrice,
-                CastId = x.CastId,
-                CastName = string.IsNullOrWhiteSpace(x.CastName) ? null : x.CastName.Trim()
-            })
-            .Where(HasNominationCast)
-            .ToList();
-    }
-
-    private static bool HasNominationCast(CastNominationInputModel nomination)
-    {
-        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName);
-    }
-
-    private static string? ResolveNominationKind(CastNominationInputModel nomination)
-    {
-        if (!string.IsNullOrWhiteSpace(nomination.NominationKind))
+        var edit = SlipNominationEditor.PrepareAdd(
+            AddNominationsInput.CastNominations,
+            NominationOptions,
+            AttendanceCasts);
+        AddNominationsInput.CastNominations = edit.Nominations;
+        foreach (var error in edit.Errors)
         {
-            return nomination.NominationKind.Trim();
+            ModelState.AddModelError(error.Key, error.Message);
         }
-
-        return null;
-    }
-
-    private void ValidateNominations()
-    {
-        if (AddNominationsInput.CastNominations.Count == 0)
-        {
-            ModelState.AddModelError("AddNominationsInput.CastNominations", "追加する指名を入力してください。");
-            return;
-        }
-
-        if (AddNominationsInput.CastNominations.Count > 20)
-        {
-            ModelState.AddModelError("AddNominationsInput.CastNominations", "指名情報は20件まで追加できます。");
-        }
-
-        var allowedCastIds = AttendanceCasts.Select(x => x.CastId).ToHashSet();
-        var allowedNominationKinds = NominationOptions
-            .Select(x => x.NominationKind)
-            .ToHashSet(StringComparer.Ordinal);
-        for (var i = 0; i < AddNominationsInput.CastNominations.Count; i++)
-        {
-            var nomination = AddNominationsInput.CastNominations[i];
-            if (nomination.CastId is not null && string.IsNullOrWhiteSpace(nomination.CastName))
-            {
-                nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.SearchDisplayName;
-            }
-
-            if (allowedNominationKinds.Count == 0)
-            {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationKind", "指名種別マスタを登録してください。");
-            }
-            else if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !allowedNominationKinds.Contains(nomination.NominationKind))
-            {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationKind", "指名区分を選択してください。");
-            }
-
-            if (!IsValidNominationPrice(nomination.NominationPrice))
-            {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].NominationPrice", "指名料金を選択してください。");
-            }
-
-            if (nomination.CastId is null)
-            {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].CastName", "候補からキャストを選択してください。");
-            }
-            else if (!allowedCastIds.Contains(nomination.CastId.Value))
-            {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].CastName", "出勤キャストから選択してください。");
-            }
-
-            if (nomination.CastName is not null && nomination.CastName.Length > 160)
-            {
-                ModelState.AddModelError($"AddNominationsInput.CastNominations[{i}].CastName", "キャスト名は160文字以内で入力してください。");
-            }
-        }
-    }
-
-    private static bool IsValidNominationPrice(decimal price)
-    {
-        return price is >= 1000 and <= 20000 && price % 1000 == 0;
-    }
-
-    private string? GetDefaultNominationKind()
-    {
-        return NominationOptions.FirstOrDefault(x => string.Equals(x.NominationType, "nomination", StringComparison.Ordinal))?.NominationKind
-            ?? NominationOptions.FirstOrDefault()?.NominationKind;
     }
 }
