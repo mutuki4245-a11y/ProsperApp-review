@@ -40,6 +40,11 @@ public partial class SlipEditModel
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "会計を確定できませんでした。");
+            if (result.RequiresReload)
+            {
+                await LoadAsync(cancellationToken);
+            }
+
             ShowCheckoutModal = true;
             SetDefaultInputs();
             return Page();
@@ -75,6 +80,11 @@ public partial class SlipEditModel
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "会計を確定できませんでした。");
+            if (result.RequiresReload)
+            {
+                await LoadAsync(cancellationToken);
+            }
+
             ShowCheckoutModal = true;
             ShowCashReceivedStep = true;
             SetDefaultInputs();

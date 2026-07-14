@@ -1,11 +1,10 @@
 (() => {
     const requestElement = document.getElementById('pendingCheckoutReceiptPrintRequest');
-    if (!requestElement) {
-        return;
-    }
-
     const statusElement = document.querySelector('[data-receipt-print-status]');
+    const reprintPanel = document.querySelector('[data-receipt-reprint-panel]');
+    const reprintList = document.querySelector('[data-receipt-reprint-list]');
     const config = window.prosperEpsonReceiptPrinter ?? {};
+    const pendingStorageKey = 'prosper:receipt-reprints:v1';
 
     const setStatus = (message, state) => {
         if (!statusElement) {
@@ -120,9 +119,9 @@
         return `${lines.join('\n')}\n`;
     };
 
-    const parseRequest = () => {
+    const parseRequestElement = () => {
         try {
-            return JSON.parse(requestElement.textContent || '{}');
+            return JSON.parse(requestElement?.textContent || '{}');
         } catch (error) {
             const parseError = new Error('領収書印刷データを読み込めませんでした。');
             parseError.cause = error;
@@ -264,19 +263,139 @@
         }
     };
 
-    const printReceipt = async () => {
+    const receiptKey = (request) => compact(request.checkoutId, `${request.slipId}:${request.closedAt}`);
+
+    const readPendingReceipts = () => {
+        try {
+            const stored = JSON.parse(localStorage.getItem(pendingStorageKey) || '[]');
+            return Array.isArray(stored) ? stored.filter((item) => item?.key && item?.request) : [];
+        } catch {
+            return [];
+        }
+    };
+
+    const writePendingReceipts = (items) => {
+        try {
+            localStorage.setItem(pendingStorageKey, JSON.stringify(items));
+        } catch {
+        }
+    };
+
+    const removePendingReceipt = (key) => {
+        writePendingReceipts(readPendingReceipts().filter((item) => item.key !== key));
+        renderPendingReceipts();
+    };
+
+    const upsertPendingReceipt = (request, message) => {
+        const key = receiptKey(request);
+        const items = readPendingReceipts().filter((item) => item.key !== key);
+        items.unshift({
+            key,
+            request,
+            message: compact(message, '印刷できませんでした。'),
+            failedAt: new Date().toISOString()
+        });
+        writePendingReceipts(items.slice(0, 20));
+        renderPendingReceipts();
+    };
+
+    const describeReceipt = (request) => {
+        const table = compact(request.tableDisplayName, '-');
+        const slipNo = compact(request.slipNo, request.slipId);
+        return `${table} / 伝票 ${slipNo} / ${formatYen(request.totalAmount)}`;
+    };
+
+    const renderPendingReceipts = () => {
+        if (!reprintPanel || !reprintList) {
+            return;
+        }
+
+        const items = readPendingReceipts();
+        reprintPanel.hidden = items.length === 0;
+        reprintList.replaceChildren();
+
+        items.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'receipt-reprint-panel__item';
+
+            const summary = document.createElement('div');
+            const title = document.createElement('strong');
+            title.textContent = describeReceipt(item.request);
+            const message = document.createElement('span');
+            message.textContent = item.message;
+            summary.append(title, message);
+
+            const actions = document.createElement('div');
+            actions.className = 'receipt-reprint-panel__actions';
+
+            const retryButton = document.createElement('button');
+            retryButton.type = 'button';
+            retryButton.className = 'btn btn-sm btn-primary';
+            retryButton.dataset.receiptReprintRetry = item.key;
+            retryButton.textContent = '再印刷';
+
+            const doneButton = document.createElement('button');
+            doneButton.type = 'button';
+            doneButton.className = 'btn btn-sm btn-outline-secondary';
+            doneButton.dataset.receiptReprintDone = item.key;
+            doneButton.textContent = '完了にする';
+
+            actions.append(retryButton, doneButton);
+            row.append(summary, actions);
+            reprintList.append(row);
+        });
+    };
+
+    const printRequest = async (request) => {
         setStatus('EPSON TM-T88VIIへ領収書を送信しています。', 'info');
 
-        const request = parseRequest();
         const endpoint = buildEndpoint();
         const xml = buildEposPrintXml(request);
 
         await postEposPrintXml(endpoint, xml);
+        removePendingReceipt(receiptKey(request));
         setStatus('領収書を印刷しました。', 'success');
     };
 
-    void printReceipt().catch((error) => {
+    reprintList?.addEventListener('click', (event) => {
+        const retryButton = event.target.closest('[data-receipt-reprint-retry]');
+        const doneButton = event.target.closest('[data-receipt-reprint-done]');
+
+        if (doneButton) {
+            removePendingReceipt(doneButton.dataset.receiptReprintDone);
+            return;
+        }
+
+        if (!retryButton) {
+            return;
+        }
+
+        const item = readPendingReceipts().find((pending) => pending.key === retryButton.dataset.receiptReprintRetry);
+        if (!item) {
+            renderPendingReceipts();
+            return;
+        }
+
+        retryButton.disabled = true;
+        void printRequest(item.request).catch((error) => {
+            console.warn('EPSON ePOS receipt reprint failed.', error);
+            upsertPendingReceipt(item.request, error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。');
+            setStatus(`領収書を再印刷できませんでした。${error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。'}`, 'warning');
+        }).finally(() => {
+            retryButton.disabled = false;
+        });
+    });
+
+    renderPendingReceipts();
+
+    if (!requestElement) {
+        return;
+    }
+
+    const initialRequest = parseRequestElement();
+    void printRequest(initialRequest).catch((error) => {
         console.warn('EPSON ePOS receipt printing failed.', error);
+        upsertPendingReceipt(initialRequest, error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。');
         setStatus(`領収書を印刷できませんでした。${error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。'}`, 'warning');
     });
 })();

@@ -17,9 +17,20 @@
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
     }
 
-    @if (Model.ShouldRunBrowserReceiptPrint)
+    @if (Model.IsReceiptPrinterEnabled)
     {
-        <div class="alert alert-info" role="status" data-receipt-print-status>領収書を印刷しています。</div>
+        <div class="alert alert-info" role="status" data-receipt-print-status hidden="@(!Model.ShouldRunBrowserReceiptPrint)">
+            領収書を印刷しています。
+        </div>
+        <div class="alert alert-warning receipt-reprint-panel" role="alert" data-receipt-reprint-panel hidden>
+            <div class="receipt-reprint-panel__header">
+                <div>
+                    <strong>再印刷待ちの領収書があります</strong>
+                    <span>印刷失敗した会計済み伝票です。会計は取り消されていません。</span>
+                </div>
+            </div>
+            <div class="receipt-reprint-panel__list" data-receipt-reprint-list></div>
+        </div>
     }
 
     @if (Model.IsPreviousBusinessDayOpen)
@@ -269,6 +280,9 @@
     @if (Model.ShouldRunBrowserReceiptPrint)
     {
         <script type="application/json" id="pendingCheckoutReceiptPrintRequest">@Html.Raw(Model.PendingReceiptPrintRequestJson)</script>
+    }
+    @if (Model.IsReceiptPrinterEnabled)
+    {
         <script>
             window.prosperEpsonReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
         </script>

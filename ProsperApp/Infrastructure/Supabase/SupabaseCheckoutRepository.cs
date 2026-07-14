@@ -52,7 +52,9 @@ public class SupabaseCheckoutRepository(
 
         if (!result.Succeeded)
         {
-            return ConfirmCheckoutResult.Failed(ToFriendlyError(result.ErrorMessage));
+            return ConfirmCheckoutResult.Failed(
+                ToFriendlyError(result.ErrorMessage),
+                RequiresCheckoutReload(result.ErrorMessage));
         }
 
         var checkoutId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "checkout_id") : null;
@@ -176,6 +178,18 @@ public class SupabaseCheckoutRepository(
         }
 
         return $"会計処理を実行できません。{rawError}";
+    }
+
+    private static bool RequiresCheckoutReload(string? rawError)
+    {
+        if (string.IsNullOrWhiteSpace(rawError))
+        {
+            return false;
+        }
+
+        return rawError.Contains("checkout_snapshot_mismatch", StringComparison.OrdinalIgnoreCase) ||
+               rawError.Contains("checkout_already_exists", StringComparison.OrdinalIgnoreCase) ||
+               rawError.Contains("store_checkout_slip_not_found", StringComparison.OrdinalIgnoreCase);
     }
 
 }

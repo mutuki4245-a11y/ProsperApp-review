@@ -60,6 +60,8 @@ public class IndexModel(
     public bool ShouldRunBrowserReceiptPrint => _receiptPrinterOptions.Enabled &&
         !string.IsNullOrWhiteSpace(PendingReceiptPrintRequestJson);
 
+    public bool IsReceiptPrinterEnabled => _receiptPrinterOptions.Enabled;
+
     public object ReceiptPrinterBrowserOptions => new
     {
         provider = string.IsNullOrWhiteSpace(_receiptPrinterOptions.Provider)

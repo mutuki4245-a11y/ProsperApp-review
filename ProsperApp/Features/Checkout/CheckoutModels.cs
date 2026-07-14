@@ -46,15 +46,16 @@ public class ConfirmCheckoutResult
     public string? ErrorMessage { get; init; }
     public long? CheckoutId { get; init; }
     public decimal ChangeAmount { get; init; }
+    public bool RequiresReload { get; init; }
 
     public static ConfirmCheckoutResult Success(long checkoutId, decimal changeAmount)
     {
         return new ConfirmCheckoutResult { Succeeded = true, CheckoutId = checkoutId, ChangeAmount = changeAmount };
     }
 
-    public static ConfirmCheckoutResult Failed(string message)
+    public static ConfirmCheckoutResult Failed(string message, bool requiresReload = false)
     {
-        return new ConfirmCheckoutResult { Succeeded = false, ErrorMessage = message };
+        return new ConfirmCheckoutResult { Succeeded = false, ErrorMessage = message, RequiresReload = requiresReload };
     }
 }
 

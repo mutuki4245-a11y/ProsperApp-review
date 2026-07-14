@@ -3,6 +3,59 @@
   gap: 0.7rem;
 }
 
+.receipt-reprint-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.receipt-reprint-panel[hidden] {
+  display: none;
+}
+
+.receipt-reprint-panel__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.receipt-reprint-panel__header span {
+  display: block;
+  font-size: 0.88rem;
+  margin-top: 0.15rem;
+}
+
+.receipt-reprint-panel__list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.receipt-reprint-panel__item {
+  align-items: center;
+  background: rgb(255 255 255 / 0.65);
+  border: 1px solid rgb(146 64 14 / 0.25);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.6rem 0.7rem;
+}
+
+.receipt-reprint-panel__item strong,
+.receipt-reprint-panel__item span {
+  display: block;
+}
+
+.receipt-reprint-panel__item span {
+  font-size: 0.86rem;
+}
+
+.receipt-reprint-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
 .slip-list-section__actions {
   align-items: center;
   display: flex;
