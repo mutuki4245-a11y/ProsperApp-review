@@ -70,6 +70,20 @@ public partial class SlipEditModel
             return Page();
         }
 
+        if (result.AffectedCount <= 0)
+        {
+            ModelState.AddModelError(string.Empty, "指名を追加できませんでした。キャストを選択してください。");
+            ShowAddNominationModal = true;
+            EnsureAddNominationRows();
+            SetDefaultLeaveInput();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipNominations", this);
+            }
+
+            return Page();
+        }
+
         SuccessMessage = $"{result.AffectedCount}件の指名を追加しました。";
         ModelState.Clear();
         AddNominationsInput = new AddSlipNominationsInputModel();

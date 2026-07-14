@@ -135,11 +135,24 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label">キャスト</label>
-                                <input type="hidden" name="AddNominationsInput.CastNominations[0].CastId" value="@addNomination.CastId" data-cast-id />
-                                <input type="hidden" name="AddNominationsInput.CastNominations[0].CastName" value="@addNomination.CastName" data-cast-name-hidden />
-                                <button class="selected-cast selected-cast--button selected-cast--large" type="button" data-open-cast-modal>
-                                    <span data-selected-cast>@(addNomination.CastName ?? "キャストを選択")</span>
-                                </button>
+                                <select class="form-select form-select-lg nomination-row__cast" name="AddNominationsInput.CastNominations[0].CastId">
+                                    <option value="">キャストを選択</option>
+                                    @foreach (var cast in Model.AttendanceCasts)
+                                    {
+                                        var label = string.IsNullOrWhiteSpace(cast.DepartmentName)
+                                            ? cast.DisplayName
+                                            : $"{cast.DisplayName} / {cast.DepartmentName}";
+                                        if (addNomination.CastId == cast.CastId)
+                                        {
+                                            <option value="@cast.CastId" selected>@label</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@cast.CastId">@label</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="AddNominationsInput.CastNominations[0].CastId" class="text-danger"></span>
                             </div>
                         </div>
                     </div>

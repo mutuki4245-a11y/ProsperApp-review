@@ -22,7 +22,7 @@ public interface IStoreSlipRepository
 
     Task<SlipMutationResult> AddSlipNominationsAsync(long slipId, IReadOnlyList<CastNominationInputModel> nominations, CancellationToken ct);
 
-    Task<SlipMutationResult> SaveSlipAdjustmentsAsync(long slipId, IReadOnlyList<SlipAdjustmentInputModel> adjustments, CancellationToken ct);
+    Task<SlipMutationResult> AddSlipAdjustmentAsync(long slipId, SlipAdjustmentInputModel adjustment, CancellationToken ct);
 
     Task<SlipMutationResult> SaveKaraokeLinesAsync(long businessDayId, IReadOnlyList<KaraokeQuantityInputModel> karaokeLines, CancellationToken ct);
 

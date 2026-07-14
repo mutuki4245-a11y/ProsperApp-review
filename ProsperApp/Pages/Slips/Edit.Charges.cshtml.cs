@@ -6,7 +6,7 @@ namespace ProsperApp.Pages;
 
 public partial class SlipEditModel
 {
-    public async Task<IActionResult> OnPostSaveAdjustmentsAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAddAdjustmentAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Slips))
         {
@@ -15,7 +15,6 @@ public partial class SlipEditModel
 
         ClearCrossFormValidationState();
         PrepareAdjustmentInput();
-        var hasSubmittedAdjustmentLines = AdjustmentsInput.Lines.Count > 0;
         await LoadAsync(cancellationToken);
 
         if (!EnsureSlipLoaded())
@@ -32,29 +31,29 @@ public partial class SlipEditModel
             return Page();
         }
 
-        var result = await _slipRepository.SaveSlipAdjustmentsAsync(
+        var result = await _slipRepository.AddSlipAdjustmentAsync(
             SlipId!.Value,
-            AdjustmentsInput.Lines,
+            AdjustmentInput,
             cancellationToken);
         if (!result.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "調整明細を保存できませんでした。");
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "自由入力明細を追加できませんでした。");
             ShowAdjustmentModal = true;
             SetDefaultInputs();
             return Page();
         }
 
-        if (hasSubmittedAdjustmentLines && result.AffectedCount <= 0)
+        if (result.AffectedCount <= 0)
         {
-            ModelState.AddModelError(string.Empty, "調整明細を保存できませんでした。入力内容を確認してください。");
+            ModelState.AddModelError(string.Empty, "自由入力明細を追加できませんでした。入力内容を確認してください。");
             ShowAdjustmentModal = true;
             SetDefaultInputs();
             return Page();
         }
 
-        SuccessMessage = "調整明細を保存しました。";
+        SuccessMessage = "自由入力明細を追加しました。";
         ModelState.Clear();
-        AdjustmentsInput = new SaveSlipAdjustmentsInputModel();
+        AdjustmentInput = new SlipAdjustmentInputModel();
         await LoadAsync(cancellationToken);
         SetDefaultInputs();
         return Page();
@@ -62,8 +61,8 @@ public partial class SlipEditModel
 
     private void PrepareAdjustmentInput()
     {
-        var edit = SlipAdjustmentEditor.PrepareSave(AdjustmentLinesJson, AdjustmentsInput.Lines);
-        AdjustmentsInput.Lines = edit.Lines;
+        var edit = SlipAdjustmentEditor.PrepareAdd(AdjustmentInput);
+        AdjustmentInput = edit.Line;
         foreach (var error in edit.Errors)
         {
             ModelState.AddModelError(error.Key, error.Message);

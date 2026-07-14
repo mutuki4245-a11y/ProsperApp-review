@@ -134,19 +134,21 @@ public static class SlipNominationEditor
         int index,
         List<SlipNominationValidationError> errors)
     {
-        var key = $"{NominationLinesKey}[{index}].{nameof(CastNominationInputModel.CastName)}";
+        var castIdKey = $"{NominationLinesKey}[{index}].{nameof(CastNominationInputModel.CastId)}";
         if (nomination.CastId is null)
         {
-            errors.Add(new SlipNominationValidationError(key, "候補からキャストを選択してください。"));
+            errors.Add(new SlipNominationValidationError(castIdKey, "キャストを選択してください。"));
         }
         else if (!allowedCastIds.Contains(nomination.CastId.Value))
         {
-            errors.Add(new SlipNominationValidationError(key, "出勤キャストから選択してください。"));
+            errors.Add(new SlipNominationValidationError(castIdKey, "出勤キャストから選択してください。"));
         }
 
         if (nomination.CastName is not null && nomination.CastName.Length > 160)
         {
-            errors.Add(new SlipNominationValidationError(key, "キャスト名は160文字以内で入力してください。"));
+            errors.Add(new SlipNominationValidationError(
+                $"{NominationLinesKey}[{index}].{nameof(CastNominationInputModel.CastName)}",
+                "キャスト名は160文字以内で入力してください。"));
         }
     }
 }

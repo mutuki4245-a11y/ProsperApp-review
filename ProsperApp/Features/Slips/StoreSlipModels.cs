@@ -344,16 +344,13 @@ public class SlipDetailChargeLine
 
 public class SlipAdjustmentInputModel
 {
+    public bool HasContent => !string.IsNullOrWhiteSpace(LineName) || Amount != 0;
+
     [StringLength(160, ErrorMessage = "明細名は160文字以内で入力してください。")]
     public string? LineName { get; set; }
 
     [Range(-99999999, 99999999, ErrorMessage = "価格を確認してください。")]
     public decimal Amount { get; set; }
-}
-
-public class SaveSlipAdjustmentsInputModel
-{
-    public List<SlipAdjustmentInputModel> Lines { get; set; } = [];
 }
 
 public class KaraokeQuantityInputModel

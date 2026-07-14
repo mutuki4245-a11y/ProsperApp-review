@@ -148,7 +148,8 @@ DB反映時の基本順序は以下。
 | `store.add_slip_customers` | 既存伝票へ客行を追加する。 |
 | `store.add_slip_nominations` | 既存伝票へ指名を追加する。指名料金のシステム注文行と、指名バック設定が有効かつ0円より大きい場合は `store_slip_cast_backs` を作成する。 |
 | `store.leave_slip_customer` | 客行を退店扱いにする。 |
-| `store.save_slip_adjustments` | 自由入力の会計調整行を保存する。 |
+| `store.save_slip_adjustments` | 自由入力の会計調整行を一括保存する互換用RPC。 |
+| `store.add_slip_adjustment` | 伝票詳細の自由入力明細モーダルから調整行を1件追加する。 |
 | `store.save_karaoke_lines` | 営業中トップの遷移時保存で、営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
 | `store.save_order_line_quantities` | 伝票詳細の訂正モードから通常注文行の数量を保存する。数量0は対象注文行と紐づくバック実績を取消扱いにする。 |
 | `store.update_slip_customer_label` | 客行の表示名を更新する。 |
@@ -259,7 +260,8 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.add_slip_nominations` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。指名種別はキャッシュ済みマスタを検証に使い、実績はRPC側で現在DBマスタからスナップショット保存する。 |
 | `store.add_order_lines` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。注文対象伝票や伝票詳細は次回取得で反映する。 |
 | `store.void_order_line` | 保存結果のみ。 | 戻り値は成功判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
-| `store.save_slip_adjustments` | 保存結果のみ。 | 戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
+| `store.save_slip_adjustments` | 保存結果のみ。 | 互換用の一括保存RPC。戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。 |
+| `store.add_slip_adjustment` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
 | `store.save_karaoke_lines` | 保存結果のみ。 | 戻り値の `saved_count` をAjax結果判定に使い、キャッシュしない。営業中一覧や伝票詳細は次回取得で反映する。 |
 | `store.save_order_line_quantities` | 保存結果のみ。 | 戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。通常注文数量、バック実績、伝票詳細、営業中一覧は次回取得で反映する。 |
 | `store.confirm_checkout` | 保存結果のみ。 | 戻り値の `checkout_id` と `change_amount` を会計結果判定に使い、キャッシュしない。会計後の営業中一覧、注文対象伝票、締め可否は次回取得で反映する。 |
@@ -275,7 +277,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | カラオケ商品化 | 実装済み | `store_item_master.item_type = 'karaoke'` のシステム商品を使い、`store_order_lines` に1伝票1行で集約する。旧 `store_slip_charge_lines.charge_type = 'karaoke'` のアクティブ行は注文行へ移行してvoid化する。 |
 | システム商品の注文端末除外 | 実装済み | `store.get_order_items` は標準商品だけを返し、`store.add_order_lines` も標準商品以外を拒否する。カラオケなどのシステム商品は専用RPCで保存する。 |
 | カラオケ/指名料金のサービス料対象化 | 実装済み | `store.get_business_day_slips` と `store.confirm_checkout` は、カラオケや指名料金を含む全注文行の小計に20%サービス料を掛ける。システム商品も自由入力調整ではなく注文小計に含める。 |
-| 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。会計額へ直接加減し、商品マスタには登録しない。 |
+| 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。伝票詳細では `store.add_slip_adjustment` で1件ずつ追加し、会計額へ直接加減する。商品マスタには登録しない。 |
 | 指名料金のシステム商品化 | 実装済み | 指名登録時に `store_item_master.item_type = 'nomination_fee'` のシステム商品を使って `store_order_lines` へ1指名1行を作成する。`store_slip_casts.nomination_price` は入力値の保持と表示に使い、会計集計は指名料金の注文行を商品小計として参照する。 |
 | 指名種別別キャストバック | 実装済み | `store_nomination_back_master` で店舗別の指名種別候補と単価を管理し、`store.create_slip` / `store.add_slip_nominations` が `nomination_kind` から基本種別と同伴時刻を解決して `store_slip_cast_backs` へ営業実績を作成する。 |
 | 店舗別運用設定 | 実装済み | `department_master.attendance_minute_step`, `cast_sales_amount_basis`, `cast_sales_split_mode` を `store.get_context` で返し、勤怠時刻選択とキャスト売上額調整の初期配分に使う。 |

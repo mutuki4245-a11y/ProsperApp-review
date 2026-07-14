@@ -797,6 +797,86 @@ begin
 end;
 $$;
 
+create or replace function store.add_slip_adjustment(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_line_name text,
+    p_amount numeric
+)
+returns table (
+    inserted_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_line_name text;
+    v_amount numeric(12, 0);
+    v_line_no integer;
+begin
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    v_line_name := nullif(trim(coalesce(p_line_name, '')), '');
+    v_amount := p_amount;
+
+    if v_line_name is null or length(v_line_name) > 160 then
+        raise exception 'invalid_adjustment_name';
+    end if;
+
+    if v_amount is null or v_amount <> trunc(v_amount) or abs(v_amount) > 99999999 then
+        raise exception 'invalid_adjustment_amount';
+    end if;
+
+    select coalesce(max(cl.line_no), 0) + 1
+      into v_line_no
+    from public.store_slip_charge_lines cl
+    where cl.slip_id = p_slip_id;
+
+    insert into public.store_slip_charge_lines (
+        slip_id,
+        business_day_id,
+        business_date,
+        company_id,
+        department_id,
+        line_no,
+        charge_type,
+        line_name,
+        quantity,
+        unit_price,
+        amount,
+        status
+    )
+    values (
+        p_slip_id,
+        v_slip.business_day_id,
+        v_slip.business_date,
+        v_slip.company_id,
+        v_slip.department_id,
+        v_line_no,
+        'adjustment',
+        v_line_name,
+        1,
+        v_amount,
+        v_amount,
+        'active'
+    );
+
+    return query select 1;
+end;
+$$;
+
 create or replace function store.save_karaoke_lines(
     p_department_id bigint,
     p_business_day_id bigint,

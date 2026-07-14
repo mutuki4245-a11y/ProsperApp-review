@@ -368,6 +368,18 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.add_slip_adjustment",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+        { name: "p_line_name", type: "text" },
+        { name: "p_amount", type: "numeric" },
+      ],
+    },
+  ],
+  [
     "store.save_karaoke_lines",
     {
       result: "rows",

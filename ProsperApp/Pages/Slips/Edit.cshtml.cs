@@ -52,13 +52,10 @@ public partial class SlipEditModel(
     public string OrderQueueJson { get; set; } = string.Empty;
 
     [BindProperty]
-    public string AdjustmentLinesJson { get; set; } = "[]";
-
-    [BindProperty]
     public CheckoutInputModel CheckoutInput { get; set; } = new();
 
     [BindProperty]
-    public SaveSlipAdjustmentsInputModel AdjustmentsInput { get; set; } = new();
+    public SlipAdjustmentInputModel AdjustmentInput { get; set; } = new();
 
     [BindProperty]
     public List<OrderLineQuantityInputModel> OrderQuantityLines { get; set; } = [];

@@ -537,7 +537,7 @@ public class SupabaseStoreSlipRepository(
         return SlipMutationResult.Success(savedCount);
     }
 
-    public async Task<SlipMutationResult> SaveSlipAdjustmentsAsync(long slipId, IReadOnlyList<SlipAdjustmentInputModel> adjustments, CancellationToken ct)
+    public async Task<SlipMutationResult> AddSlipAdjustmentAsync(long slipId, SlipAdjustmentInputModel adjustment, CancellationToken ct)
     {
         if (!HasMutationSettings())
         {
@@ -549,18 +549,19 @@ public class SupabaseStoreSlipRepository(
             return SlipMutationResult.Failed("調整明細を保存する伝票を確認してください。");
         }
 
-        var payload = adjustments
-            .Where(x => !string.IsNullOrWhiteSpace(x.LineName))
-            .Select(x => new AdjustmentLinePayload(x.LineName!.Trim(), x.Amount))
-            .ToArray();
+        if (string.IsNullOrWhiteSpace(adjustment.LineName))
+        {
+            return SlipMutationResult.Failed("追加する調整明細を入力してください。");
+        }
 
         var result = await RpcClient.PostArrayAsync(
-            "store.save_slip_adjustments",
+            "store.add_slip_adjustment",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_slip_id = slipId,
-                p_adjustment_lines = payload
+                p_line_name = adjustment.LineName.Trim(),
+                p_amount = adjustment.Amount
             },
             ct);
 
@@ -569,8 +570,8 @@ public class SupabaseStoreSlipRepository(
             return SlipMutationResult.Failed(ToFriendlyError(result.ErrorMessage));
         }
 
-        var savedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "saved_count") ?? 0) : 0;
-        return SlipMutationResult.Success(savedCount);
+        var insertedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "inserted_count") ?? 0) : 0;
+        return SlipMutationResult.Success(insertedCount);
     }
 
     public async Task<SlipMutationResult> SaveKaraokeLinesAsync(long businessDayId, IReadOnlyList<KaraokeQuantityInputModel> karaokeLines, CancellationToken ct)
@@ -618,10 +619,6 @@ public class SupabaseStoreSlipRepository(
         [property: JsonPropertyName("cast_id")] long CastId,
         [property: JsonPropertyName("nomination_kind")] string NominationKind,
         [property: JsonPropertyName("nomination_price")] decimal NominationPrice);
-
-    private sealed record AdjustmentLinePayload(
-        [property: JsonPropertyName("line_name")] string LineName,
-        [property: JsonPropertyName("amount")] decimal Amount);
 
     private sealed record KaraokeLinePayload(
         [property: JsonPropertyName("slip_id")] long SlipId,

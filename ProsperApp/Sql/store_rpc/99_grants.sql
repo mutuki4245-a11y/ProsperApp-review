@@ -42,6 +42,7 @@ declare
         'store.add_slip_customers',
         'store.add_slip_nominations',
         'store.save_slip_adjustments',
+        'store.add_slip_adjustment',
         'store.save_karaoke_lines',
         'store.save_order_line_quantities',
         'store.leave_slip_customer',

@@ -673,6 +673,9 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     nomination_price is selected each time as 指名料金 and creates one nomination_fee system order line.
 --     active store_nomination_back_master rows with back_unit_amount > 0 create store_slip_cast_backs snapshots.
 --   store.save_slip_adjustments(p_department_id bigint, p_slip_id bigint, p_adjustment_lines jsonb)
+--     is a compatibility bulk-save RPC for adjustment rows.
+--   store.add_slip_adjustment(p_department_id bigint, p_slip_id bigint, p_line_name text, p_amount numeric)
+--     adds one free-input adjustment row from the slip detail modal.
 --     replaces active adjustment charge lines on an open slip.
 --     p_adjustment_lines uses { line_name, amount }; negative amount is allowed.
 --   store.save_karaoke_lines(p_department_id bigint, p_business_day_id bigint, p_karaoke_lines jsonb)
