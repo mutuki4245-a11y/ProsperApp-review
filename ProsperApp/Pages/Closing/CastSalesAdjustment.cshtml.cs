@@ -180,11 +180,6 @@ public class CastSalesAdjustmentModel(
         return CastSalesAdjustmentDetails.FirstOrDefault(x => x.SlipId == slipId);
     }
 
-    public static string FormatAmountValue(decimal amount)
-    {
-        return amount.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
-    }
-
     private async Task<IReadOnlyList<CastSalesAdjustmentDetail>> LoadCastSalesAdjustmentDetailsAsync(
         IReadOnlyList<CastSalesAdjustmentSlip> slips,
         CancellationToken cancellationToken)

@@ -65,7 +65,7 @@
                             {
                                 <span class="cast-sales-adjustment-list__cast">
                                     <strong>@castRow.CastDisplayName</strong>
-                                    <small>@($"{castRow.NominationDisplayName} / {castRow.EffectiveSalesAmount:N0} 円")</small>
+                                    <small>@castRow.NominationDisplayName / @castRow.EffectiveSalesAmountText</small>
                                 </span>
                             }
                         }
@@ -74,7 +74,7 @@
                             <small>確認不可</small>
                         }
                     </span>
-                    <strong class="slip-list__amount">@slip.TotalAmount.ToString("N0") 円</strong>
+                    <strong class="slip-list__amount">@slip.TotalAmountText</strong>
                     <span class="cast-sales-adjustment-list__action">
                         @if (detail is not null)
                         {
@@ -110,7 +110,7 @@
                         <form method="post" asp-page-handler="SaveCastSalesAdjustment">
                             <div class="modal-header">
                                 <div>
-                                    <p class="store-home__eyebrow mb-1">配分基準 @baseAmount.ToString("N0") 円</p>
+                                    <p class="store-home__eyebrow mb-1">配分基準 @StoreUiText.Yen(baseAmount)</p>
                                     <h2 class="modal-title fs-4" id="castSalesAdjustmentModalLabel-@detail.SlipId">売上額調整</h2>
                                 </div>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
@@ -135,7 +135,7 @@
                                             <strong>@castRow.CastDisplayName</strong>
                                             <span>@castRow.NominationDisplayName</span>
                                             <label class="cast-sales-adjustment-casts__amount">
-                                                <input class="form-control" name="CastSalesAdjustmentInput.Casts[@i].SalesAmount" value="@CastSalesAdjustmentModel.FormatAmountValue(castRow.EffectiveSalesAmount)" type="number" min="0" step="1" inputmode="numeric" />
+                                                <input class="form-control" name="CastSalesAdjustmentInput.Casts[@i].SalesAmount" value="@castRow.EffectiveSalesAmountInputValue" type="number" min="0" step="1" inputmode="numeric" />
                                                 <span>円</span>
                                             </label>
                                         </div>

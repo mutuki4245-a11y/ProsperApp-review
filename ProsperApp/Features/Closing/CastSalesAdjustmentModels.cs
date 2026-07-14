@@ -46,6 +46,8 @@ public class CastSalesAdjustmentSlip
 
     public bool IsAdjusted => RequiredCastCount > 0 && SavedCastCount >= RequiredCastCount;
 
+    public string TotalAmountText => StoreUiText.Yen(TotalAmount);
+
     public string TableDisplayName
     {
         get
@@ -131,6 +133,10 @@ public class CastSalesAdjustmentCastRow
     public string? SplitMode { get; init; }
 
     public decimal EffectiveSalesAmount => SalesAmount ?? InitialSalesAmount;
+
+    public string EffectiveSalesAmountText => StoreUiText.Yen(EffectiveSalesAmount);
+
+    public string EffectiveSalesAmountInputValue => StoreUiText.NumberInputValue(EffectiveSalesAmount);
 
     public string CastDisplayName => DisplayName;
 

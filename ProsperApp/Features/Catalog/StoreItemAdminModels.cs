@@ -50,6 +50,12 @@ public class StoreItemAdminItem
 
     public string CastBackType { get; set; } = "drink";
 
+    public string DefaultPriceText => StoreUiText.Yen(DefaultPrice);
+
+    public string CastBackRegularUnitAmountText => StoreUiText.Yen(CastBackRegularUnitAmount);
+
+    public string CastBackNominationUnitAmountText => StoreUiText.Yen(CastBackNominationUnitAmount);
+
     public bool IsStandard => string.Equals(ItemType, "standard", StringComparison.Ordinal);
 
     public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);

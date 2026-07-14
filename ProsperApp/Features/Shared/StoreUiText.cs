@@ -25,4 +25,9 @@ public static class StoreUiText
     {
         return $"{Amount(unitPrice)} x {Quantity(quantity)}";
     }
+
+    public static string NumberInputValue(decimal value)
+    {
+        return value.ToString("0", CultureInfo.InvariantCulture);
+    }
 }

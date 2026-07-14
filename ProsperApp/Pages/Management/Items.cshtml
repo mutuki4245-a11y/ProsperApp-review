@@ -155,10 +155,10 @@
                         var group = itemGroups[groupIndex];
                         var isInputCategory = Model.ItemInput.ItemCategoryId == group.Category.ItemCategoryId;
                         var itemNameInput = isInputCategory ? Model.ItemInput.ItemName : string.Empty;
-                        var defaultPriceInput = isInputCategory && Model.ItemInput.DefaultPrice > 0 ? Model.ItemInput.DefaultPrice.ToString("0") : string.Empty;
+                        var defaultPriceInput = isInputCategory && Model.ItemInput.DefaultPrice > 0 ? StoreUiText.NumberInputValue(Model.ItemInput.DefaultPrice) : string.Empty;
                         var isCastBackTargetInput = isInputCategory && Model.ItemInput.IsCastBackTarget;
-                        var regularBackInput = isInputCategory && Model.ItemInput.CastBackRegularUnitAmount > 0 ? Model.ItemInput.CastBackRegularUnitAmount.ToString("0") : string.Empty;
-                        var nominationBackInput = isInputCategory && Model.ItemInput.CastBackNominationUnitAmount > 0 ? Model.ItemInput.CastBackNominationUnitAmount.ToString("0") : string.Empty;
+                        var regularBackInput = isInputCategory && Model.ItemInput.CastBackRegularUnitAmount > 0 ? StoreUiText.NumberInputValue(Model.ItemInput.CastBackRegularUnitAmount) : string.Empty;
+                        var nominationBackInput = isInputCategory && Model.ItemInput.CastBackNominationUnitAmount > 0 ? StoreUiText.NumberInputValue(Model.ItemInput.CastBackNominationUnitAmount) : string.Empty;
                         <details class="item-admin__group" @(groupIndex == 0 || isInputCategory ? "open" : null)>
                             <summary>
                                 <span>@group.Category.CategoryName</span>
@@ -178,7 +178,7 @@
                                         </div>
                                         <div class="item-admin__field">
                                             <label>価格</label>
-                                            <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                            <span>@item.DefaultPriceText</span>
                                         </div>
                                         <div class="item-admin__field">
                                             <label>バック対象</label>
@@ -186,11 +186,11 @@
                                         </div>
                                         <div class="item-admin__field">
                                             <label>ドリンクバック</label>
-                                            <span>@item.CastBackRegularUnitAmount.ToString("N0") 円</span>
+                                            <span>@item.CastBackRegularUnitAmountText</span>
                                         </div>
                                         <div class="item-admin__field">
                                             <label>担当バック</label>
-                                            <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
+                                            <span>@item.CastBackNominationUnitAmountText</span>
                                         </div>
                                         @if (item.IsSystemItem)
                                         {
@@ -259,7 +259,7 @@
                                         </div>
                                         <div class="item-admin__field">
                                             <label>価格</label>
-                                            <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                            <span>@item.DefaultPriceText</span>
                                         </div>
                                         <div class="item-admin__field">
                                             <label>バック対象</label>
@@ -267,11 +267,11 @@
                                         </div>
                                         <div class="item-admin__field">
                                             <label>ドリンクバック</label>
-                                            <span>@item.CastBackRegularUnitAmount.ToString("N0") 円</span>
+                                            <span>@item.CastBackRegularUnitAmountText</span>
                                         </div>
                                         <div class="item-admin__field">
                                             <label>担当バック</label>
-                                            <span>@item.CastBackNominationUnitAmount.ToString("N0") 円</span>
+                                            <span>@item.CastBackNominationUnitAmountText</span>
                                         </div>
                                         @if (item.IsSystemItem)
                                         {

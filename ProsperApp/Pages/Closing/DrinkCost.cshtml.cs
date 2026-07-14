@@ -85,7 +85,7 @@ public class ClosingDrinkCostModel(
             return Page();
         }
 
-        TempData["SuccessMessage"] = $"納品額 {result.Amount:N0} 円を保存しました。";
+        TempData["SuccessMessage"] = $"納品額 {StoreUiText.Yen(result.Amount)}を保存しました。";
         return RedirectToPage("/Closing/Index");
     }
 
