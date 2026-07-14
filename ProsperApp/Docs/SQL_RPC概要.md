@@ -190,6 +190,8 @@ DB反映時の基本順序は以下。
 
 Razor PageのPageModelはRepositoryを呼び、Repositoryが `ISupabaseRpcClient` を通じてRPC名とpayloadを `prosper-rpc` Edge Functionへ渡す。Edge Function側で許可済みRPCだけを実行し、Repositoryは戻り値のJSON配列またはスカラーをDTOへ変換する。
 
+`prosper-rpc` は `json` / `jsonb` 引数を、JSの配列/オブジェクトのまま `postgres.js` へ渡す。Edge Function側で事前に `JSON.stringify` した文字列を渡すと、`postgres.js` 側のJSONシリアライズで二重エンコードされ、PostgresではJSON配列ではなくJSON文字列として扱われる。`jsonb_array_elements` を使う指名追加、注文追加、勤怠保存などのRPCでは0件登録や検証漏れにつながるため、文字列payloadはJSONとしてparseできる場合だけJS値へ戻してからSQLへ渡す。
+
 設定キーやsecretの値はリポジトリに置かない。Azure環境変数とSupabase Edge Function Secretsの名称・値は運用環境で一致させる。
 
 ## 7. RPC更新時の注意

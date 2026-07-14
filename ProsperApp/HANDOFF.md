@@ -13,6 +13,7 @@
 - アプリ側から直接テーブルRESTを叩く実装は避けます。
 - Supabase RPCのHTTP送信、Edge Functionキー、レスポンスJSON配列/スカラー処理は `ISupabaseRpcClient` / `SupabaseRpcClient` に集約します。アプリからのRPCは必ず `prosper-rpc` Edge Function経由で呼び出し、REST RPC fallbackは持ちません。
 - アプリ用RPCは `store` schemaに集約し、Repositoryと `prosper-rpc` allowlistでは `store.get_casts` のようなschema-qualified名を使います。
+- `prosper-rpc` で `json` / `jsonb` 引数をSQLへ渡すときは、JSの配列/オブジェクトをそのまま `postgres.js` に渡します。Edge Function側で先に `JSON.stringify` すると二重エンコードされ、Postgres側ではJSON配列ではなくJSON文字列になり、指名追加や注文追加が0件登録になるため避けます。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
 - 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。指名バック設定は店舗別マスタDBですが当日の指名入力に使うため現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
 - 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。localStorageや画面内ドラフトは端末内の復旧用状態として扱い、端末間では直接同期しません。端末間の共有状態はDB/RPC保存後のデータを基準にします。
