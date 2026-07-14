@@ -28,12 +28,38 @@ public sealed class OrderQueueService : IOrderQueueService
             .ToList();
     }
 
-    public IReadOnlyList<string> Validate(
+    public IReadOnlyList<string> ValidateOrderEntryQueue(
+        IReadOnlyList<OrderQueueInputModel> queueLines,
+        IReadOnlyList<StoreOrderItemOption> items,
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts)
+    {
+        return Validate(
+            queueLines,
+            items,
+            attendanceCasts,
+            requireAttendingCastForBackTarget: false,
+            missingItemsMessage: "注文可能な商品が未登録です。商品マスタを確認してください。");
+    }
+
+    public IReadOnlyList<string> ValidateSlipOrderQueue(
+        IReadOnlyList<OrderQueueInputModel> queueLines,
+        IReadOnlyList<StoreOrderItemOption> items,
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts)
+    {
+        return Validate(
+            queueLines,
+            items,
+            attendanceCasts,
+            requireAttendingCastForBackTarget: true,
+            missingItemsMessage: "注文可能な商品が未登録です。");
+    }
+
+    private static IReadOnlyList<string> Validate(
         IReadOnlyList<OrderQueueInputModel> queueLines,
         IReadOnlyList<StoreOrderItemOption> items,
         IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts,
         bool requireAttendingCastForBackTarget,
-        string missingItemsMessage = "注文可能な商品が未登録です。")
+        string missingItemsMessage)
     {
         List<string> errors = [];
 

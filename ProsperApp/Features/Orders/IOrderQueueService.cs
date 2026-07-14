@@ -6,10 +6,13 @@ public interface IOrderQueueService
 {
     List<OrderQueueInputModel> ReadPostedQueue(string? orderQueueJson, IEnumerable<OrderQueueInputModel> fallbackLines);
 
-    IReadOnlyList<string> Validate(
+    IReadOnlyList<string> ValidateOrderEntryQueue(
         IReadOnlyList<OrderQueueInputModel> queueLines,
         IReadOnlyList<StoreOrderItemOption> items,
-        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts,
-        bool requireAttendingCastForBackTarget,
-        string missingItemsMessage = "商品マスタが未登録です。");
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts);
+
+    IReadOnlyList<string> ValidateSlipOrderQueue(
+        IReadOnlyList<OrderQueueInputModel> queueLines,
+        IReadOnlyList<StoreOrderItemOption> items,
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts);
 }

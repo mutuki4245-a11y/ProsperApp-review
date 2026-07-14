@@ -164,11 +164,7 @@ public partial class SlipEditModel
             ModelState.AddModelError(string.Empty, "営業中の伝票のみオーダーを追加できます。");
         }
 
-        foreach (var error in _orderQueueService.Validate(
-                     QueueLines,
-                     OrderItems,
-                     AttendanceCasts,
-                     requireAttendingCastForBackTarget: true))
+        foreach (var error in _orderQueueService.ValidateSlipOrderQueue(QueueLines, OrderItems, AttendanceCasts))
         {
             ModelState.AddModelError(nameof(QueueLines), error);
         }
