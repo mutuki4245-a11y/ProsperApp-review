@@ -413,47 +413,20 @@
     });
 
     const renderAttendingCastModal = () => {
-        if (!attendingCastModalList) {
-            return;
-        }
-
-        attendingCastModalList.innerHTML = '';
-        const matches = castOptions.slice(0, 80);
-
-        const noBack = document.createElement('button');
-        noBack.type = 'button';
-        noBack.className = 'cast-select-modal__item';
-        const noBackName = document.createElement('strong');
-        noBackName.textContent = '指定なし';
-        const noBackHelp = document.createElement('span');
-        noBackHelp.textContent = 'バックの摘要を付けずに登録';
-        noBack.append(noBackName, noBackHelp);
-        noBack.addEventListener('click', () => {
-            if (pendingBackItemId) {
-                addToQueue(pendingBackItemId, null);
-            }
-            closeBackPicker();
-        });
-        attendingCastModalList.appendChild(noBack);
-
-        if (matches.length === 0) {
-            return;
-        }
-
-        matches.forEach((cast) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'cast-select-modal__item';
-            const name = document.createElement('strong');
-            name.textContent = cast.name;
-            button.append(name);
-            button.addEventListener('click', () => {
+        window.CastSelectModal.renderOptionalBackTarget(attendingCastModalList, castOptions, {
+            getLabel: (cast) => cast.name,
+            onNone: () => {
+                if (pendingBackItemId) {
+                    addToQueue(pendingBackItemId, null);
+                }
+                closeBackPicker();
+            },
+            onSelect: (cast) => {
                 if (pendingBackItemId) {
                     addToQueue(pendingBackItemId, cast.id);
                 }
                 closeBackPicker();
-            });
-            attendingCastModalList.appendChild(button);
+            }
         });
     };
 

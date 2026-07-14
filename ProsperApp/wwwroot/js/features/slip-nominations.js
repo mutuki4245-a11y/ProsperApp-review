@@ -62,34 +62,14 @@
     };
 
     const renderAttendingCastModal = () => {
-        if (!attendingCastModalList) {
-            return;
-        }
-
-        attendingCastModalList.innerHTML = '';
-        const matches = castOptions.slice(0, 80);
-        if (matches.length === 0) {
-            const empty = document.createElement('p');
-            empty.className = 'text-muted mb-0';
-            empty.textContent = '出勤キャストが登録されていません。';
-            attendingCastModalList.appendChild(empty);
-            return;
-        }
-
-        matches.forEach((cast) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'cast-select-modal__item';
-            const name = document.createElement('strong');
-            name.textContent = cast.nominationDisplay ?? cast.display;
-            button.append(name);
-            button.addEventListener('click', () => {
+        window.CastSelectModal.renderRequired(attendingCastModalList, castOptions, {
+            getLabel: (cast) => cast.nominationDisplay ?? cast.display,
+            onSelect: (cast) => {
                 if (castModalTargetRow) {
                     setSelectedCast(castModalTargetRow, cast);
                 }
                 attendingCastModal?.hide();
-            });
-            attendingCastModalList.appendChild(button);
+            }
         });
     };
 
