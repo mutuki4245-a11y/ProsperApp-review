@@ -223,7 +223,7 @@
             if (cast) {
                 const back = document.createElement('small');
                 back.className = 'order-queue__back';
-                back.textContent = `${cast.display} / ドリンク ${formatYen(Number(item.castBackRegularUnitAmount) * quantity)} / 担当 ${formatYen(Number(item.castBackNominationUnitAmount) * quantity)}`;
+                back.textContent = window.OrderBackText.summary(cast, item, quantity);
                 row.appendChild(back);
             }
             detailOrderQueueList?.appendChild(row);
