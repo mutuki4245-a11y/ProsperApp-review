@@ -220,7 +220,7 @@
                                 <form method="post" asp-page-handler="StartCheckout" id="detailCheckoutForm">
                                     <input type="hidden" asp-for="SlipId" />
                                     <input type="hidden" asp-for="CheckoutInput.ClosedTime" data-detail-checkout-closed-time-field />
-                                    <input type="hidden" asp-for="CheckoutInput.ConfirmedSnapshotJson" value="@Model.BuildCheckoutSnapshotJson()" />
+                                    <input type="hidden" asp-for="CheckoutInput.ConfirmedSnapshotJson" value="@Model.CheckoutDocument.ConfirmedSnapshotJson" />
                                     <span asp-validation-for="CheckoutInput.Payments" class="text-danger"></span>
                                     <div class="checkout-payments" data-detail-total-amount="@Model.CheckoutTotals.TotalAmount">
                                         @for (var i = 0; i < Model.CheckoutInput.Payments.Count; i++)
@@ -271,7 +271,7 @@
                                 <form method="post" asp-page-handler="ConfirmCash" id="detailCashConfirmForm">
                                     <input type="hidden" asp-for="SlipId" />
                                     <input type="hidden" asp-for="CheckoutInput.ClosedTime" data-detail-checkout-closed-time-field />
-                                    <input type="hidden" asp-for="CheckoutInput.ConfirmedSnapshotJson" value="@Model.BuildCheckoutSnapshotJson()" />
+                                    <input type="hidden" asp-for="CheckoutInput.ConfirmedSnapshotJson" value="@Model.CheckoutDocument.ConfirmedSnapshotJson" />
                                     <div id="detailCashPaymentFields">
                                         @for (var i = 0; i < Model.CheckoutInput.Payments.Count; i++)
                                         {

@@ -89,7 +89,9 @@ public partial class SlipEditModel(
 
     public bool ShowCashReceivedStep { get; private set; }
 
-    public CheckoutTotals CheckoutTotals { get; private set; } = new();
+    public CheckoutDocument CheckoutDocument { get; private set; } = CheckoutDocumentBuilder.Build(null);
+
+    public CheckoutTotals CheckoutTotals => CheckoutDocument.Totals;
 
     public bool CanCheckout => _featureGate.IsEnabled(FeatureNames.Checkout)
         && Detail is not null

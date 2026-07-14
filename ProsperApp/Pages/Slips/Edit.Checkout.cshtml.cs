@@ -166,21 +166,6 @@ public partial class SlipEditModel
         return edit;
     }
 
-    private CheckoutTotals CalculateCheckoutTotals()
-    {
-        return CheckoutDocumentBuilder.CalculateTotals(Detail);
-    }
-
-    public string BuildCheckoutSnapshotJson()
-    {
-        if (Detail is null)
-        {
-            return "{}";
-        }
-
-        return CheckoutDocumentBuilder.BuildConfirmedSnapshotJson(Detail, CheckoutTotals);
-    }
-
     private void QueueReceiptPrint(ConfirmCheckoutResult result)
     {
         if (Detail is null || result.CheckoutId is null || CheckoutInput.ClosedAt is null)
@@ -190,9 +175,7 @@ public partial class SlipEditModel
 
         var settings = _localSettingsProvider.GetCurrent();
         var closedAt = _storeClock.ToStoreDateTimeOffset(CheckoutInput.ClosedAt.Value);
-        var request = CheckoutDocumentBuilder.BuildReceiptPrintRequest(
-            Detail,
-            CheckoutTotals,
+        var request = CheckoutDocument.BuildReceiptPrintRequest(
             CheckoutInput,
             result,
             settings.StoreName,

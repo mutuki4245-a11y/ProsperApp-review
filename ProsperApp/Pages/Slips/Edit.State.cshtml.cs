@@ -32,7 +32,7 @@ public partial class SlipEditModel
             .ThenBy(x => x.DisplayName)
             .ToList();
         TimeOptions = _storeClock.BuildTimeOptions(5);
-        CheckoutTotals = CalculateCheckoutTotals();
+        CheckoutDocument = CheckoutDocumentBuilder.Build(Detail);
     }
 
     private async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsForCurrentBusinessDayAsync(
