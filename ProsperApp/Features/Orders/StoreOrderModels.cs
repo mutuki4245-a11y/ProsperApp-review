@@ -40,6 +40,7 @@ public class StoreOrderItemOption
     public bool IsKaraoke => string.Equals(ItemType, "karaoke", StringComparison.Ordinal);
     public bool IsNominationFee => string.Equals(ItemType, "nomination_fee", StringComparison.Ordinal);
     public bool IsSystemItem => !IsStandard;
+    public string CastBackSummaryText => $"ドリンク {CastBackRegularUnitAmount:N0} 円 / 担当 {CastBackNominationUnitAmount:N0} 円";
 }
 
 public class StoreOrderAttendanceCastOption

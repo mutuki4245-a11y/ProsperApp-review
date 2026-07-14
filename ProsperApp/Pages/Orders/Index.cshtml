@@ -100,7 +100,7 @@
                                                     <span>@item.DefaultPrice.ToString("N0") 円</span>
                                                     @if (item.IsCastBackTarget)
                                                     {
-                                                        <small>ドリンク @item.CastBackRegularUnitAmount.ToString("N0") 円 / 担当 @item.CastBackNominationUnitAmount.ToString("N0") 円</small>
+                                                        <small>@item.CastBackSummaryText</small>
                                                     }
                                                 </button>
                                             }
