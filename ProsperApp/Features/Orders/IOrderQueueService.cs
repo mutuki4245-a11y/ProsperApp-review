@@ -6,8 +6,6 @@ public interface IOrderQueueService
 {
     List<OrderQueueInputModel> ReadPostedQueue(string? orderQueueJson, IEnumerable<OrderQueueInputModel> fallbackLines);
 
-    List<OrderQueueInputModel> Normalize(IEnumerable<OrderQueueInputModel> queueLines);
-
     IReadOnlyList<string> Validate(
         IReadOnlyList<OrderQueueInputModel> queueLines,
         IReadOnlyList<StoreOrderItemOption> items,

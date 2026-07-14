@@ -13,7 +13,7 @@ public sealed class OrderQueueService : IOrderQueueService
         return Normalize(postedLines.Count > 0 ? postedLines : fallbackLines);
     }
 
-    public List<OrderQueueInputModel> Normalize(IEnumerable<OrderQueueInputModel> queueLines)
+    private static List<OrderQueueInputModel> Normalize(IEnumerable<OrderQueueInputModel> queueLines)
     {
         return queueLines
             .Where(x => x.ItemId > 0 && x.Quantity > 0)
