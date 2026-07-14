@@ -88,16 +88,11 @@ public static class CheckoutDocumentBuilder
         CheckoutInputModel input,
         ConfirmCheckoutResult result,
         string storeName,
-        IStoreClock storeClock)
+        DateTimeOffset closedAt)
     {
         if (result.CheckoutId is null)
         {
             throw new ArgumentException("CheckoutId is required for receipt printing.", nameof(result));
-        }
-
-        if (input.ClosedAt is null)
-        {
-            throw new ArgumentException("ClosedAt is required for receipt printing.", nameof(input));
         }
 
         var request = new ReceiptPrintRequest
@@ -107,7 +102,7 @@ public static class CheckoutDocumentBuilder
             SlipNo = detail.SlipNo,
             StoreName = storeName,
             TableDisplayName = detail.TableDisplayName,
-            ClosedAt = storeClock.ToStoreDateTimeOffset(input.ClosedAt.Value),
+            ClosedAt = closedAt,
             SubtotalAmount = totals.SubtotalAmount,
             ServiceTaxAmount = totals.ServiceTaxAmount,
             AdjustmentAmount = totals.AdjustmentAmount,

@@ -279,13 +279,14 @@ public partial class SlipEditModel
         }
 
         var settings = _localSettingsProvider.GetCurrent();
+        var closedAt = _storeClock.ToStoreDateTimeOffset(CheckoutInput.ClosedAt.Value);
         var request = CheckoutDocumentBuilder.BuildReceiptPrintRequest(
             Detail,
             CheckoutTotals,
             CheckoutInput,
             result,
             settings.StoreName,
-            _storeClock);
+            closedAt);
         if (_receiptPrinterOptions.Enabled)
         {
             TempData[ReceiptPrintTempDataKeys.PendingCheckoutReceipt] =
