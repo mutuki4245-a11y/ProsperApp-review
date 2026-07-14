@@ -195,25 +195,19 @@ public partial class SlipEditModel
 
     private void EnsureAddCustomerRows()
     {
-        if (AddCustomersInput.CustomerLabels.Count == 0)
-        {
-            AddCustomersInput.CustomerLabels.Add(null);
-        }
-
-        AddCustomersInput.EnteredTime ??= _storeClock.FloorToMinuteStep(_storeClock.GetStoreNow(), 5).ToString("HH:mm");
+        AddCustomersInput = SlipCustomerEditor.ApplyAddDefaults(AddCustomersInput, _storeClock);
     }
 
 
     private void SetDefaultLeaveInput()
     {
-        LeaveCustomerInput.LeftTime ??= _storeClock.FloorToMinuteStep(_storeClock.GetStoreNow(), 5).ToString("HH:mm");
+        LeaveCustomerInput = SlipCustomerEditor.ApplyLeaveDefaults(LeaveCustomerInput, _storeClock);
     }
 
 
     private void PrepareAddCustomerInput()
     {
-        var defaultEnteredTime = _storeClock.FloorToMinuteStep(_storeClock.GetStoreNow(), 5).ToString("HH:mm");
-        var edit = SlipCustomerEditor.PrepareAdd(AddCustomersInput, Detail!, TimeOptions, _storeClock, defaultEnteredTime);
+        var edit = SlipCustomerEditor.PrepareAdd(AddCustomersInput, Detail!, TimeOptions, _storeClock);
         AddCustomersInput = edit.Input;
         foreach (var error in edit.Errors)
         {

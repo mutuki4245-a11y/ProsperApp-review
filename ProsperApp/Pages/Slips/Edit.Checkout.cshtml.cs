@@ -143,8 +143,7 @@ public partial class SlipEditModel
 
     private void SetDefaultCheckoutInput()
     {
-        var defaultClosedTime = _storeClock.FloorToMinuteStep(_storeClock.GetStoreNow(), 5).ToString("HH:mm");
-        CheckoutInput = CheckoutInputEditor.ApplyDefaults(CheckoutInput, defaultClosedTime);
+        CheckoutInput = CheckoutInputEditor.ApplyDefaults(CheckoutInput, _storeClock);
     }
 
 

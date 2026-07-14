@@ -4,6 +4,7 @@ namespace ProsperApp.Services;
 
 public static class SlipCustomerEditor
 {
+    private const int CustomerTimeMinuteStep = 5;
     private const string AddCustomerLabelsKey = "AddCustomersInput.CustomerLabels";
     private const string AddEnteredTimeKey = "AddCustomersInput.EnteredTime";
     private const string LeaveCustomerIdKey = "LeaveCustomerInput.SlipCustomerId";
@@ -11,22 +12,50 @@ public static class SlipCustomerEditor
     private const string UpdateCustomerIdKey = "UpdateCustomerInput.SlipCustomerId";
     private const string UpdateCustomerLabelKey = "UpdateCustomerInput.CustomerLabel";
 
+    public static AddSlipCustomersInputModel ApplyAddDefaults(
+        AddSlipCustomersInputModel input,
+        IStoreClock storeClock)
+    {
+        var labels = input.CustomerLabels.Count > 0
+            ? input.CustomerLabels.ToList()
+            : [null];
+
+        return new AddSlipCustomersInputModel
+        {
+            CustomerLabels = labels,
+            EnteredTime = input.EnteredTime ?? GetDefaultCustomerTime(storeClock),
+            EnteredAt = input.EnteredAt
+        };
+    }
+
+    public static LeaveSlipCustomerInputModel ApplyLeaveDefaults(
+        LeaveSlipCustomerInputModel input,
+        IStoreClock storeClock)
+    {
+        return new LeaveSlipCustomerInputModel
+        {
+            SlipCustomerId = input.SlipCustomerId,
+            LeftTime = input.LeftTime ?? GetDefaultCustomerTime(storeClock),
+            LeftAt = input.LeftAt
+        };
+    }
+
     public static SlipCustomerAddEdit PrepareAdd(
         AddSlipCustomersInputModel input,
         SlipDetail detail,
         IReadOnlyCollection<string> timeOptions,
-        IStoreClock storeClock,
-        string defaultEnteredTime)
+        IStoreClock storeClock)
     {
-        var labels = NormalizeLabels(input.CustomerLabels);
+        var defaulted = ApplyAddDefaults(input, storeClock);
+        var labels = NormalizeLabels(defaulted.CustomerLabels);
         if (labels.Count == 0)
         {
             labels.Add(null);
         }
 
-        var enteredTime = string.IsNullOrWhiteSpace(input.EnteredTime)
-            ? defaultEnteredTime
-            : input.EnteredTime.Trim();
+        var enteredTime = string.IsNullOrWhiteSpace(defaulted.EnteredTime)
+            ? GetDefaultCustomerTime(storeClock)
+            : defaulted.EnteredTime.Trim();
         var enteredAt = ComposeCustomerTime(detail.BusinessDate, enteredTime, storeClock);
 
         var prepared = new AddSlipCustomersInputModel
@@ -79,6 +108,11 @@ public static class SlipCustomerEditor
         return TimeOnly.TryParse(timeText, out var time)
             ? storeClock.ComposeBusinessDateTime(businessDate, time)
             : null;
+    }
+
+    private static string GetDefaultCustomerTime(IStoreClock storeClock)
+    {
+        return storeClock.FloorToMinuteStep(storeClock.GetStoreNow(), CustomerTimeMinuteStep).ToString("HH:mm");
     }
 
     private static IReadOnlyList<SlipCustomerValidationError> ValidateAdd(

@@ -4,17 +4,18 @@ namespace ProsperApp.Services;
 
 public static class CheckoutInputEditor
 {
+    private const int CheckoutTimeMinuteStep = 5;
     private const string ClosedTimeKey = "CheckoutInput.ClosedTime";
     private const string PaymentsKey = "CheckoutInput.Payments";
     private const string ReceivedAmountKey = "CheckoutInput.ReceivedAmount";
 
     public static CheckoutInputModel ApplyDefaults(
         CheckoutInputModel input,
-        string defaultClosedTime)
+        IStoreClock storeClock)
     {
         return new CheckoutInputModel
         {
-            ClosedTime = input.ClosedTime ?? defaultClosedTime,
+            ClosedTime = input.ClosedTime ?? GetDefaultClosedTime(storeClock),
             ClosedAt = input.ClosedAt,
             Payments = PreparePaymentRows(input.Payments),
             ConfirmedSnapshotJson = input.ConfirmedSnapshotJson,
@@ -89,6 +90,11 @@ public static class CheckoutInputEditor
         return TimeOnly.TryParse(closedTime, out var time)
             ? storeClock.ComposeBusinessDateTime(businessDate, time)
             : null;
+    }
+
+    private static string GetDefaultClosedTime(IStoreClock storeClock)
+    {
+        return storeClock.FloorToMinuteStep(storeClock.GetStoreNow(), CheckoutTimeMinuteStep).ToString("HH:mm");
     }
 
     private static IReadOnlyList<CheckoutInputValidationError> Validate(
