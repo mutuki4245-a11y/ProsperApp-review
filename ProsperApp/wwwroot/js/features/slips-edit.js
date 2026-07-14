@@ -5,14 +5,9 @@
     const orderItems = pageData.orderItems ?? [];
     const initialOrderQueue = pageData.initialOrderQueue ?? [];
     const showOrderModal = pageData.showOrderModal === true;
-    const showAdjustmentModal = pageData.showAdjustmentModal === true;
     const showCheckoutModal = pageData.showCheckoutModal === true;
     const showAddCustomerModal = pageData.showAddCustomerModal === true;
     const showAddNominationModal = pageData.showAddNominationModal === true;
-    const slipId = pageData.slipId ? String(pageData.slipId) : '';
-    const businessDayId = pageData.businessDayId ? String(pageData.businessDayId) : '';
-    const draftPrefix = `prosper:slip:${businessDayId}:${slipId}`;
-
     const setSaveStatus = (target, message) => {
         if (!target) {
             return;
@@ -159,13 +154,6 @@
     const orderQuantityForm = document.querySelector('[data-order-quantity-form]');
     const orderQuantitySave = document.querySelector('[data-order-quantity-save]');
     const orderQuantityStatus = document.querySelector('[data-order-quantity-status]');
-    const adjustmentModalElement = document.getElementById('adjustmentModal');
-    const adjustmentModal = adjustmentModalElement ? new bootstrap.Modal(adjustmentModalElement) : null;
-    const adjustmentForm = document.querySelector('[data-adjustment-form]');
-    const adjustmentList = document.querySelector('[data-adjustment-list]');
-    const adjustmentLinesJson = document.getElementById('adjustmentLinesJson');
-    const addAdjustmentButton = document.querySelector('[data-add-adjustment-row]');
-    const adjustmentStatus = document.querySelector('[data-adjustment-status]');
     let detailCashAmount = Number(detailCashDisplay?.dataset.cashAmount ?? 0);
     const orderQueue = new Map();
     const submitOrderBaseDisabled = detailSubmitOrderButton?.disabled ?? false;
@@ -188,8 +176,6 @@
 
     const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
     let isOrderCorrectionMode = false;
-    let savedAdjustmentSnapshot = '[]';
-    let isSubmittingAdjustment = false;
 
     const orderLineRows = () => Array.from(document.querySelectorAll('[data-order-line-row]'));
 
@@ -259,112 +245,6 @@
         }
         recalculateOrderTotal();
         updateOrderQuantityState();
-    };
-
-    const readAdjustmentRows = () => Array.from(adjustmentList?.querySelectorAll('[data-adjustment-row]') ?? [])
-        .map((row) => ({
-            lineName: row.querySelector('[data-adjustment-name]')?.value ?? '',
-            amount: row.querySelector('[data-adjustment-amount]')?.value ?? ''
-        }));
-
-    const normalizeAdjustmentRows = (rows) => rows
-        .map((row) => {
-            const amount = Number(row.amount || 0);
-            return {
-                lineName: (row.lineName ?? '').trim(),
-                amount: Number.isFinite(amount) ? amount : row.amount
-            };
-        })
-        .filter((row) => row.lineName || Number(row.amount || 0) !== 0);
-
-    const getAdjustmentSnapshot = () => JSON.stringify(normalizeAdjustmentRows(readAdjustmentRows()));
-
-    const readSavedAdjustmentRows = () => {
-        if (!adjustmentList?.dataset.adjustmentSavedLines) {
-            return [];
-        }
-
-        try {
-            const rows = JSON.parse(adjustmentList.dataset.adjustmentSavedLines);
-            return Array.isArray(rows) ? normalizeAdjustmentRows(rows) : [];
-        } catch {
-            return [];
-        }
-    };
-
-    const syncAdjustmentLinesJson = () => {
-        if (!adjustmentLinesJson) {
-            return;
-        }
-
-        adjustmentLinesJson.value = JSON.stringify(normalizeAdjustmentRows(readAdjustmentRows()));
-    };
-
-    const isAdjustmentDirty = () => getAdjustmentSnapshot() !== savedAdjustmentSnapshot;
-
-    const markAdjustmentDirty = () => {
-        syncAdjustmentLinesJson();
-        setSaveStatus(adjustmentStatus, isAdjustmentDirty() ? '未保存' : '保存済み');
-    };
-
-    const renumberAdjustmentRows = () => {
-        adjustmentList?.querySelectorAll('[data-adjustment-row]').forEach((row, index) => {
-            const name = row.querySelector('[data-adjustment-name]');
-            const amount = row.querySelector('[data-adjustment-amount]');
-            if (name) {
-                name.name = `AdjustmentsInput.Lines[${index}].LineName`;
-            }
-            if (amount) {
-                amount.name = `AdjustmentsInput.Lines[${index}].Amount`;
-            }
-        });
-    };
-
-    const appendAdjustmentRow = (lineName = '', amount = '') => {
-        if (!adjustmentList) {
-            return;
-        }
-
-        const row = document.createElement('div');
-        row.className = 'adjustment-row';
-        row.dataset.adjustmentRow = '';
-        row.innerHTML = `
-            <input class="form-control" maxlength="160" placeholder="明細名" data-adjustment-name />
-            <input class="form-control" type="number" step="1" placeholder="価格" data-adjustment-amount />
-            <button class="btn btn-outline-danger" type="button" data-remove-adjustment-row>削除</button>
-        `;
-        row.querySelector('[data-adjustment-name]').value = lineName;
-        row.querySelector('[data-adjustment-amount]').value = amount;
-        adjustmentList.appendChild(row);
-        renumberAdjustmentRows();
-        syncAdjustmentLinesJson();
-    };
-
-    const resetAdjustmentFormToSaved = () => {
-        if (!adjustmentList) {
-            return;
-        }
-
-        const rows = JSON.parse(savedAdjustmentSnapshot);
-        adjustmentList.innerHTML = '';
-        rows.forEach((row) => appendAdjustmentRow(row.lineName ?? '', String(row.amount ?? '')));
-        if (rows.length === 0) {
-            appendAdjustmentRow();
-        }
-        renumberAdjustmentRows();
-        syncAdjustmentLinesJson();
-        setSaveStatus(adjustmentStatus, '保存済み');
-    };
-
-    const initializeAdjustmentForm = () => {
-        savedAdjustmentSnapshot = JSON.stringify(readSavedAdjustmentRows());
-        if (showAdjustmentModal) {
-            syncAdjustmentLinesJson();
-            setSaveStatus(adjustmentStatus, '未保存');
-            return;
-        }
-
-        resetAdjustmentFormToSaved();
     };
 
     const syncCheckoutClosedTimeFields = () => {
@@ -812,62 +692,10 @@
             return;
         }
 
-        if (event.target.closest('[data-add-adjustment-row]')) {
-            appendAdjustmentRow();
-            markAdjustmentDirty();
-            return;
-        }
-
-        const removeAdjustmentButton = event.target.closest('[data-remove-adjustment-row]');
-        if (removeAdjustmentButton) {
-            const rows = adjustmentList?.querySelectorAll('[data-adjustment-row]') ?? [];
-            if (rows.length <= 1) {
-                const row = removeAdjustmentButton.closest('[data-adjustment-row]');
-                const name = row?.querySelector('[data-adjustment-name]');
-                const amount = row?.querySelector('[data-adjustment-amount]');
-                if (name) {
-                    name.value = '';
-                }
-                if (amount) {
-                    amount.value = '0';
-                }
-            } else {
-                removeAdjustmentButton.closest('[data-adjustment-row]')?.remove();
-            }
-            renumberAdjustmentRows();
-            markAdjustmentDirty();
-        }
     });
-
-    adjustmentList?.addEventListener('input', markAdjustmentDirty);
 
     orderQuantityForm?.addEventListener('submit', () => {
         setSaveStatus(orderQuantityStatus, '保存中');
-    });
-
-    adjustmentForm?.addEventListener('submit', () => {
-        isSubmittingAdjustment = true;
-        setSaveStatus(adjustmentStatus, '保存中');
-        renumberAdjustmentRows();
-        syncAdjustmentLinesJson();
-    });
-
-    adjustmentModalElement?.addEventListener('hide.bs.modal', (event) => {
-        if (isSubmittingAdjustment || !isAdjustmentDirty()) {
-            return;
-        }
-
-        const confirmed = window.confirm('自由入力明細を保存せず閉じますか？');
-        if (!confirmed) {
-            event.preventDefault();
-            return;
-        }
-
-        resetAdjustmentFormToSaved();
-    });
-
-    adjustmentModalElement?.addEventListener('hidden.bs.modal', () => {
-        isSubmittingAdjustment = false;
     });
 
     detailClearQueueButton?.addEventListener('click', () => {
@@ -943,10 +771,6 @@
         slipOrderModal?.show();
     }
 
-    if (showAdjustmentModal) {
-        adjustmentModal?.show();
-    }
-
     if (showCheckoutModal) {
         slipCheckoutModal?.show();
     }
@@ -959,7 +783,6 @@
         addNominationModal?.show();
     }
 
-    initializeAdjustmentForm();
     recalculateOrderTotal();
     setOrderCorrectionMode(false);
     renderOrderQueue();
