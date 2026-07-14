@@ -268,6 +268,64 @@ public partial class SlipEditModel
         };
     }
 
+    public string BuildCheckoutSnapshotJson()
+    {
+        if (Detail is null)
+        {
+            return "{}";
+        }
+
+        var activeOrders = Detail.Orders
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
+            .OrderBy(x => x.LineNo)
+            .ThenBy(x => x.OrderLineId)
+            .Select(x => new
+            {
+                order_line_id = x.OrderLineId,
+                line_no = x.LineNo,
+                item_name_snapshot = x.ItemNameSnapshot,
+                item_type = x.ItemType,
+                quantity = x.Quantity,
+                unit_price = x.UnitPrice,
+                amount = x.Amount,
+                status = x.Status
+            })
+            .ToList();
+
+        var activeCharges = Detail.ChargeLines
+            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) &&
+                        string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
+            .OrderBy(x => x.LineNo)
+            .ThenBy(x => x.ChargeLineId)
+            .Select(x => new
+            {
+                charge_line_id = x.ChargeLineId,
+                line_no = x.LineNo,
+                charge_type = x.ChargeType,
+                line_name = x.LineName,
+                quantity = x.Quantity,
+                unit_price = x.UnitPrice,
+                amount = x.Amount,
+                status = x.Status
+            })
+            .ToList();
+
+        return JsonSerializer.Serialize(new
+        {
+            slip_id = Detail.SlipId,
+            business_date = Detail.BusinessDate.ToString("yyyy-MM-dd"),
+            table_id = Detail.TableId,
+            status = Detail.Status,
+            customer_count = Detail.CustomerCount,
+            subtotal_amount = CheckoutTotals.SubtotalAmount,
+            service_tax_amount = CheckoutTotals.ServiceTaxAmount,
+            adjustment_amount = CheckoutTotals.AdjustmentAmount,
+            total_amount = CheckoutTotals.TotalAmount,
+            orders = activeOrders,
+            charges = activeCharges
+        }, ReceiptPrintJsonOptions);
+    }
+
     private void QueueReceiptPrint(ConfirmCheckoutResult result)
     {
         if (Detail is null || result.CheckoutId is null || CheckoutInput.ClosedAt is null)

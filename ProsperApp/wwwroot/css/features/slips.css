@@ -459,6 +459,38 @@
   min-height: 3rem;
 }
 
+.checkout-final-summary {
+  background: #f8fafc;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-top: 0.85rem;
+  padding: 0.75rem;
+}
+
+.checkout-final-summary div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.checkout-final-summary span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.checkout-final-summary strong {
+  color: #102a43;
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.checkout-final-summary__wide {
+  grid-column: 1 / -1;
+}
+
 .checkout-review {
   display: grid;
   gap: 0.85rem;

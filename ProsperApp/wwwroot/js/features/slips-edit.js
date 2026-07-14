@@ -51,19 +51,30 @@
         }
 
         setPartialStatus(sectionId, '保存中');
-        const response = await fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+        window.AppLoading?.show(form);
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Partial form save failed.');
             }
-        });
 
-        const html = await response.text();
-        section.innerHTML = html;
-        parseValidation(section);
-        setPartialStatus(sectionId, '保存済み');
-        window.AppLoading?.hide(form);
+            const html = await response.text();
+            section.innerHTML = html;
+            parseValidation(section);
+            const hasValidationError = section.querySelector('.validation-summary-errors, .field-validation-error');
+            setPartialStatus(sectionId, hasValidationError ? '保存失敗' : '保存済み');
+        } catch {
+            setPartialStatus(sectionId, '保存失敗');
+            throw;
+        } finally {
+            window.AppLoading?.hide(form);
+        }
     };
 
     const getCustomerList = () => document.getElementById('customerList');
@@ -138,6 +149,10 @@
     const detailBackToPaymentsButton = document.getElementById('detailBackToPaymentsButton');
     const detailCashDisplay = document.getElementById('detailCashAmountDisplay');
     const detailChangeDisplay = document.getElementById('detailChangeAmountDisplay');
+    const detailFinalClosedTimeDisplays = Array.from(document.querySelectorAll('[data-detail-final-closed-time]'));
+    const detailPaymentSummaryDisplays = Array.from(document.querySelectorAll('[data-detail-payment-summary]'));
+    const detailCashSummaryDisplays = Array.from(document.querySelectorAll('[data-detail-cash-summary]'));
+    const detailChangeSummaryDisplays = Array.from(document.querySelectorAll('[data-detail-change-summary]'));
     const detailOrderTotal = document.querySelector('[data-detail-order-total]');
     const orderCorrectionPanel = document.querySelector('[data-order-correction-panel]');
     const orderCorrectionToggle = document.querySelector('[data-order-correction-toggle]');
@@ -172,8 +187,9 @@
     }
 
     const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
-    const adjustmentDraftKey = `${draftPrefix}:adjustments`;
     let isOrderCorrectionMode = false;
+    let savedAdjustmentSnapshot = '[]';
+    let isSubmittingAdjustment = false;
 
     const orderLineRows = () => Array.from(document.querySelectorAll('[data-order-line-row]'));
 
@@ -251,27 +267,44 @@
             amount: row.querySelector('[data-adjustment-amount]')?.value ?? ''
         }));
 
+    const normalizeAdjustmentRows = (rows) => rows
+        .map((row) => {
+            const amount = Number(row.amount || 0);
+            return {
+                lineName: (row.lineName ?? '').trim(),
+                amount: Number.isFinite(amount) ? amount : row.amount
+            };
+        })
+        .filter((row) => row.lineName || Number(row.amount || 0) !== 0);
+
+    const getAdjustmentSnapshot = () => JSON.stringify(normalizeAdjustmentRows(readAdjustmentRows()));
+
+    const readSavedAdjustmentRows = () => {
+        if (!adjustmentList?.dataset.adjustmentSavedLines) {
+            return [];
+        }
+
+        try {
+            const rows = JSON.parse(adjustmentList.dataset.adjustmentSavedLines);
+            return Array.isArray(rows) ? normalizeAdjustmentRows(rows) : [];
+        } catch {
+            return [];
+        }
+    };
+
     const syncAdjustmentLinesJson = () => {
         if (!adjustmentLinesJson) {
             return;
         }
 
-        adjustmentLinesJson.value = JSON.stringify(readAdjustmentRows()
-            .map((row) => ({
-                lineName: row.lineName.trim(),
-                amount: row.amount === '' ? '0' : row.amount
-            }))
-            .filter((row) => row.lineName || Number(row.amount || 0) !== 0));
+        adjustmentLinesJson.value = JSON.stringify(normalizeAdjustmentRows(readAdjustmentRows()));
     };
 
-    const saveAdjustmentDraft = () => {
-        syncAdjustmentLinesJson();
-        if (!slipId || !adjustmentList) {
-            return;
-        }
+    const isAdjustmentDirty = () => getAdjustmentSnapshot() !== savedAdjustmentSnapshot;
 
-        localStorage.setItem(adjustmentDraftKey, JSON.stringify(readAdjustmentRows()));
-        setSaveStatus(adjustmentStatus, '未保存');
+    const markAdjustmentDirty = () => {
+        syncAdjustmentLinesJson();
+        setSaveStatus(adjustmentStatus, isAdjustmentDirty() ? '未保存' : '保存済み');
     };
 
     const renumberAdjustmentRows = () => {
@@ -307,32 +340,39 @@
         syncAdjustmentLinesJson();
     };
 
-    const restoreDetailDrafts = () => {
-        if (adjustmentList && slipId) {
-            const draft = localStorage.getItem(adjustmentDraftKey);
-            if (draft) {
-                try {
-                    const rows = JSON.parse(draft);
-                    if (Array.isArray(rows)) {
-                        adjustmentList.innerHTML = '';
-                        rows.forEach((row) => appendAdjustmentRow(row.lineName ?? '', row.amount ?? ''));
-                        if (rows.length === 0) {
-                            appendAdjustmentRow();
-                        }
-                        setSaveStatus(adjustmentStatus, '未保存');
-                    }
-                } catch {
-                    localStorage.removeItem(adjustmentDraftKey);
-                }
-            }
+    const resetAdjustmentFormToSaved = () => {
+        if (!adjustmentList) {
+            return;
+        }
+
+        const rows = JSON.parse(savedAdjustmentSnapshot);
+        adjustmentList.innerHTML = '';
+        rows.forEach((row) => appendAdjustmentRow(row.lineName ?? '', String(row.amount ?? '')));
+        if (rows.length === 0) {
+            appendAdjustmentRow();
         }
         renumberAdjustmentRows();
         syncAdjustmentLinesJson();
+        setSaveStatus(adjustmentStatus, '保存済み');
+    };
+
+    const initializeAdjustmentForm = () => {
+        savedAdjustmentSnapshot = JSON.stringify(readSavedAdjustmentRows());
+        if (showAdjustmentModal) {
+            syncAdjustmentLinesJson();
+            setSaveStatus(adjustmentStatus, '未保存');
+            return;
+        }
+
+        resetAdjustmentFormToSaved();
     };
 
     const syncCheckoutClosedTimeFields = () => {
         document.querySelectorAll('[data-detail-checkout-closed-time-field]').forEach((field) => {
             field.value = detailCheckoutClosedTime?.value ?? field.value;
+        });
+        detailFinalClosedTimeDisplays.forEach((display) => {
+            display.textContent = detailCheckoutClosedTime?.value || '-';
         });
     };
 
@@ -361,6 +401,27 @@
                 amount.value = String(detailTotalAmount);
             }
         }
+
+        const summary = selectedCheckoutPayments()
+            .filter((payment) => Number(payment.amount || 0) > 0)
+            .map((payment) => `${payment.methodName} ${Number(payment.amount || 0).toLocaleString('ja-JP')} 円`)
+            .join(' / ');
+        detailPaymentSummaryDisplays.forEach((display) => {
+            display.textContent = summary || '-';
+        });
+
+        const cashAmount = selectedCheckoutPayments()
+            .filter((payment) => payment.methodCode === 'cash')
+            .reduce((total, payment) => total + Number(payment.amount || 0), 0);
+        detailCashAmount = cashAmount;
+        detailCashSummaryDisplays.forEach((display) => {
+            display.textContent = `${cashAmount.toLocaleString('ja-JP')} 円`;
+        });
+        if (detailCashDisplay) {
+            detailCashDisplay.dataset.cashAmount = String(cashAmount);
+            detailCashDisplay.textContent = `${cashAmount.toLocaleString('ja-JP')} 円`;
+        }
+        refreshDetailChange();
     };
 
     const refreshDetailChange = () => {
@@ -371,10 +432,17 @@
         const received = Number(detailReceivedInput.value || 0);
         if (received <= 0) {
             detailChangeDisplay.textContent = '-';
+            detailChangeSummaryDisplays.forEach((display) => {
+                display.textContent = '-';
+            });
             return;
         }
 
-        detailChangeDisplay.textContent = `${Math.max(received - detailCashAmount, 0).toLocaleString('ja-JP')} 円`;
+        const change = `${Math.max(received - detailCashAmount, 0).toLocaleString('ja-JP')} 円`;
+        detailChangeDisplay.textContent = change;
+        detailChangeSummaryDisplays.forEach((display) => {
+            display.textContent = change;
+        });
     };
 
     const selectedCheckoutPayments = () => selectedDetailPaymentRows().map((row) => {
@@ -410,6 +478,9 @@
             detailCashDisplay.dataset.cashAmount = String(detailCashAmount);
             detailCashDisplay.textContent = formatYen(detailCashAmount);
         }
+        detailCashSummaryDisplays.forEach((display) => {
+            display.textContent = formatYen(detailCashAmount);
+        });
         if (detailPaymentSection) {
             detailPaymentSection.hidden = true;
         }
@@ -743,7 +814,7 @@
 
         if (event.target.closest('[data-add-adjustment-row]')) {
             appendAdjustmentRow();
-            saveAdjustmentDraft();
+            markAdjustmentDirty();
             return;
         }
 
@@ -764,21 +835,39 @@
                 removeAdjustmentButton.closest('[data-adjustment-row]')?.remove();
             }
             renumberAdjustmentRows();
-            saveAdjustmentDraft();
+            markAdjustmentDirty();
         }
     });
 
-    adjustmentList?.addEventListener('input', saveAdjustmentDraft);
+    adjustmentList?.addEventListener('input', markAdjustmentDirty);
 
     orderQuantityForm?.addEventListener('submit', () => {
         setSaveStatus(orderQuantityStatus, '保存中');
     });
 
     adjustmentForm?.addEventListener('submit', () => {
+        isSubmittingAdjustment = true;
         setSaveStatus(adjustmentStatus, '保存中');
         renumberAdjustmentRows();
         syncAdjustmentLinesJson();
-        localStorage.removeItem(adjustmentDraftKey);
+    });
+
+    adjustmentModalElement?.addEventListener('hide.bs.modal', (event) => {
+        if (isSubmittingAdjustment || !isAdjustmentDirty()) {
+            return;
+        }
+
+        const confirmed = window.confirm('自由入力明細を保存せず閉じますか？');
+        if (!confirmed) {
+            event.preventDefault();
+            return;
+        }
+
+        resetAdjustmentFormToSaved();
+    });
+
+    adjustmentModalElement?.addEventListener('hidden.bs.modal', () => {
+        isSubmittingAdjustment = false;
     });
 
     detailClearQueueButton?.addEventListener('click', () => {
@@ -802,6 +891,7 @@
             }
             refreshDetailPaymentRows();
         });
+        row.querySelector('[data-detail-payment-amount]')?.addEventListener('input', refreshDetailPaymentRows);
     });
     refreshDetailPaymentRows();
 
@@ -838,7 +928,7 @@
         const sectionId = form.dataset.partialForm === 'customers'
             ? 'slipCustomersSection'
             : 'slipNominationsSection';
-        replacePartial(form, sectionId).catch(() => form.submit());
+        replacePartial(form, sectionId).catch(() => {});
     });
 
     attendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
@@ -869,7 +959,7 @@
         addNominationModal?.show();
     }
 
-    restoreDetailDrafts();
+    initializeAdjustmentForm();
     recalculateOrderTotal();
     setOrderCorrectionMode(false);
     renderOrderQueue();

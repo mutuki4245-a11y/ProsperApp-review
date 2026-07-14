@@ -24,6 +24,11 @@
         .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
         .ToList();
     var chargeTotal = activeAdjustments.Sum(x => x.Amount);
+    var savedAdjustmentLinesJson = System.Text.Json.JsonSerializer.Serialize(activeAdjustments.Select(x => new
+    {
+        lineName = x.LineName,
+        amount = x.Amount
+    }));
     var orderItemGroups = orderableItems
         .GroupBy(x => x.CategoryName)
         .ToList();
@@ -232,7 +237,7 @@
                                     </div>
                                     <button class="btn btn-outline-primary" type="button" data-add-adjustment-row>明細を追加</button>
                                 </div>
-                                <div class="adjustment-list" data-adjustment-list>
+                                <div class="adjustment-list" data-adjustment-list data-adjustment-saved-lines="@savedAdjustmentLinesJson">
                                     @for (var i = 0; i < Model.AdjustmentsInput.Lines.Count; i++)
                                     {
                                         <div class="adjustment-row" data-adjustment-row>

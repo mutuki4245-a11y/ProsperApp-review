@@ -295,14 +295,13 @@
             const canCreateSalesInput = @Json.Serialize(Model.CanCreateSalesInput);
             const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
             const refreshIntervalMs = 10000;
-            const autoSaveDelay = 500;
             const accountingUnit = 240;
             let slips = [];
             let hasLoaded = false;
             let refreshInFlight = false;
-            let saveTimer = 0;
             let isSaving = false;
-            let resaveAfterCurrent = false;
+            let savePromise = null;
+            let allowPageUnload = false;
             let draft = loadDraft();
 
             const formatYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
@@ -321,6 +320,8 @@
                         status.dataset.saveState = 'saving';
                     } else if (text.includes('未保存')) {
                         status.dataset.saveState = 'dirty';
+                    } else if (text.includes('失敗') || text.includes('できません')) {
+                        status.dataset.saveState = 'error';
                     } else {
                         status.dataset.saveState = 'saved';
                     }
@@ -438,6 +439,59 @@
                     headers.RequestVerificationToken = token;
                 }
                 return headers;
+            };
+
+            const markDirtyStatus = () => {
+                setStatus(collectDirtyPayload().length === 0 ? '' : '未保存');
+            };
+
+            const allowNextPageUnload = () => {
+                allowPageUnload = true;
+                window.setTimeout(() => {
+                    allowPageUnload = false;
+                }, 1500);
+            };
+
+            const shouldFlushForAnchor = (anchor, event) => {
+                if (
+                    event.defaultPrevented ||
+                    event.button !== 0 ||
+                    event.altKey ||
+                    event.ctrlKey ||
+                    event.metaKey ||
+                    event.shiftKey ||
+                    anchor.hasAttribute('download')
+                ) {
+                    return false;
+                }
+
+                const target = anchor.getAttribute('target');
+                if (target && target.toLowerCase() !== '_self') {
+                    return false;
+                }
+
+                const rawHref = anchor.getAttribute('href')?.trim();
+                if (!rawHref || rawHref === '#') {
+                    return false;
+                }
+
+                const lowerHref = rawHref.toLowerCase();
+                if (
+                    lowerHref.startsWith('javascript:') ||
+                    lowerHref.startsWith('mailto:') ||
+                    lowerHref.startsWith('tel:')
+                ) {
+                    return false;
+                }
+
+                const url = new URL(anchor.href, window.location.href);
+                const isSamePageHash =
+                    url.origin === window.location.origin &&
+                    url.pathname === window.location.pathname &&
+                    url.search === window.location.search &&
+                    url.hash;
+
+                return !isSamePageHash;
             };
 
             const updateSummary = (result) => {
@@ -665,8 +719,8 @@
                     hasLoaded = true;
                     updateSummary(result);
                     renderSlips();
-                    if (!isSaving && collectDirtyPayload().length > 0) {
-                        scheduleAutoSave();
+                    if (!isSaving) {
+                        markDirtyStatus();
                     }
                 } catch {
                     if (!hasLoaded) {
@@ -690,9 +744,7 @@
                 renderSlips();
             };
 
-            const submitDraft = async (options = {}) => {
-                window.clearTimeout(saveTimer);
-
+            const submitDraftInternal = async () => {
                 const payloadRows = collectDirtyPayload();
                 if (payloadRows.length === 0) {
                     writeDraft();
@@ -700,22 +752,14 @@
                     return true;
                 }
 
-                if (isSaving) {
-                    resaveAfterCurrent = true;
-                    return false;
-                }
-
                 isSaving = true;
-                resaveAfterCurrent = false;
-                let succeeded = false;
                 setStatus('保存中');
 
                 try {
                     const response = await fetch(form.action, {
                         method: 'POST',
                         body: JSON.stringify(buildSavePayload(payloadRows)),
-                        headers: buildSaveHeaders(),
-                        keepalive: Boolean(options.keepalive)
+                        headers: buildSaveHeaders()
                     });
 
                     const result = await response.json().catch(() => null);
@@ -725,57 +769,55 @@
 
                     markSaved(payloadRows);
                     setStatus(collectDirtyPayload().length === 0 ? '保存済み' : '未保存');
-                    succeeded = true;
                     return true;
                 } catch {
                     writeDraft();
-                    setStatus('未保存');
+                    setStatus('保存失敗');
                     return false;
                 } finally {
                     isSaving = false;
-                    if (succeeded && (resaveAfterCurrent || collectDirtyPayload().length > 0)) {
-                        resaveAfterCurrent = false;
-                        scheduleAutoSave();
-                    }
                 }
             };
 
-            const scheduleAutoSave = () => {
-                window.clearTimeout(saveTimer);
-                if (collectDirtyPayload().length === 0) {
-                    setStatus('');
-                    return;
+            const submitDraft = () => {
+                if (savePromise) {
+                    return savePromise;
                 }
 
-                setStatus('未保存');
-                saveTimer = window.setTimeout(() => {
-                    void submitDraft();
-                }, autoSaveDelay);
-            };
-
-            const sendKeepAliveDraft = () => {
-                const payloadRows = collectDirtyPayload();
-                if (payloadRows.length === 0) {
-                    return;
-                }
-
-                fetch(form.action, {
-                    method: 'POST',
-                    body: JSON.stringify(buildSavePayload(payloadRows)),
-                    headers: buildSaveHeaders(),
-                    keepalive: true
-                }).catch(() => {
-                    writeDraft();
+                savePromise = submitDraftInternal().finally(() => {
+                    savePromise = null;
                 });
+                return savePromise;
             };
 
             const navigateAfterFlush = async (link) => {
                 window.AppLoading?.show();
-                const timeout = new Promise((resolve) => {
-                    window.setTimeout(() => resolve(false), 1200);
-                });
-                await Promise.race([submitDraft(), timeout]);
+                const saved = await submitDraft();
+                if (!saved) {
+                    window.AppLoading?.hide();
+                    return;
+                }
+
+                allowNextPageUnload();
                 window.location.href = link.href;
+            };
+
+            const submitAfterFlush = async (targetForm, submitter) => {
+                window.AppLoading?.show(targetForm);
+                const saved = await submitDraft();
+                if (!saved) {
+                    window.AppLoading?.hide(targetForm);
+                    return;
+                }
+
+                window.AppLoading?.hide(targetForm);
+                allowNextPageUnload();
+                targetForm.dataset.karaokeFlushBypass = 'true';
+                if (typeof targetForm.requestSubmit === 'function') {
+                    targetForm.requestSubmit(submitter || undefined);
+                } else {
+                    targetForm.submit();
+                }
             };
 
             form.addEventListener('click', (event) => {
@@ -802,26 +844,70 @@
                     }
                     writeDraft();
                     renderSlips();
-                    scheduleAutoSave();
+                    markDirtyStatus();
                     return;
-                }
-
-                const link = event.target.closest('a[href]');
-                const isPlainPrimaryClick = event.button === 0 &&
-                    !event.altKey &&
-                    !event.ctrlKey &&
-                    !event.metaKey &&
-                    !event.shiftKey;
-                if (link && form.contains(link) && isPlainPrimaryClick && collectDirtyPayload().length > 0) {
-                    event.preventDefault();
-                    void navigateAfterFlush(link);
                 }
             });
 
+            document.addEventListener('click', (event) => {
+                const link = event.target.closest('a[href]');
+                if (!link || !shouldFlushForAnchor(link, event)) {
+                    return;
+                }
+
+                if (collectDirtyPayload().length === 0) {
+                    allowNextPageUnload();
+                    return;
+                }
+
+                if (link.origin === window.location.origin) {
+                    event.preventDefault();
+                    void navigateAfterFlush(link);
+                }
+            }, true);
+
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
-                window.AppLoading?.hide(form);
-                void submitDraft();
+                window.AppLoading?.show(form);
+                void submitDraft().finally(() => window.AppLoading?.hide(form));
+            });
+
+            document.addEventListener('submit', (event) => {
+                const targetForm = event.target;
+                if (!(targetForm instanceof HTMLFormElement) || targetForm === form) {
+                    return;
+                }
+
+                if (targetForm.dataset.karaokeFlushBypass === 'true') {
+                    delete targetForm.dataset.karaokeFlushBypass;
+                    allowNextPageUnload();
+                    return;
+                }
+
+                if (event.defaultPrevented || !targetForm.checkValidity() || collectDirtyPayload().length === 0) {
+                    return;
+                }
+
+                event.preventDefault();
+                void submitAfterFlush(targetForm, event.submitter);
+            }, true);
+
+            window.addEventListener('keydown', (event) => {
+                if (event.key !== 'F5' && !(event.key.toLowerCase() === 'r' && (event.ctrlKey || event.metaKey))) {
+                    return;
+                }
+
+                event.preventDefault();
+                markDirtyStatus();
+            });
+
+            window.addEventListener('beforeunload', (event) => {
+                if (allowPageUnload || collectDirtyPayload().length === 0) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.returnValue = '';
             });
 
             revealButton?.addEventListener('pointerdown', () => setAmountVisible(true));
@@ -842,15 +928,10 @@
             });
 
             window.addEventListener('online', () => {
-                if (collectDirtyPayload().length > 0) {
-                    scheduleAutoSave();
-                }
+                markDirtyStatus();
                 void loadSlips();
             });
             window.addEventListener('focus', () => {
-                if (!isSaving && collectDirtyPayload().length > 0) {
-                    scheduleAutoSave();
-                }
                 if (document.visibilityState === 'visible') {
                     void loadSlips();
                 }
@@ -859,10 +940,6 @@
                 if (document.visibilityState === 'visible') {
                     void loadSlips();
                 }
-            });
-            window.addEventListener('pagehide', () => {
-                window.clearTimeout(saveTimer);
-                sendKeepAliveDraft();
             });
             window.setInterval(() => {
                 if (document.visibilityState === 'visible') {

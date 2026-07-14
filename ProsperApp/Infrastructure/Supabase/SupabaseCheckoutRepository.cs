@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
@@ -31,6 +32,11 @@ public class SupabaseCheckoutRepository(
             return ConfirmCheckoutResult.Failed("決済方法を選択してください。");
         }
 
+        if (!TryReadConfirmedSnapshot(input.ConfirmedSnapshotJson, out var confirmedSnapshot))
+        {
+            return ConfirmCheckoutResult.Failed("会計確認情報が不足しています。会計画面を開き直してください。");
+        }
+
         var result = await RpcClient.PostArrayAsync(
             "store.confirm_checkout",
             new
@@ -39,7 +45,8 @@ public class SupabaseCheckoutRepository(
                 p_slip_id = slipId,
                 p_closed_at = storeClock.ToStoreDateTimeOffset(input.ClosedAt.Value),
                 p_payments = payments,
-                p_received_amount = input.ReceivedAmount
+                p_received_amount = input.ReceivedAmount,
+                p_confirmed_snapshot = confirmedSnapshot
             },
             ct);
 
@@ -91,6 +98,25 @@ public class SupabaseCheckoutRepository(
         [property: JsonPropertyName("method_code")] string MethodCode,
         [property: JsonPropertyName("amount")] decimal Amount);
 
+    private static bool TryReadConfirmedSnapshot(string? value, out JsonElement snapshot)
+    {
+        snapshot = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            snapshot = JsonSerializer.Deserialize<JsonElement>(value);
+            return snapshot.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private static string ToFriendlyError(string? rawError)
     {
         if (string.IsNullOrWhiteSpace(rawError))
@@ -127,6 +153,16 @@ public class SupabaseCheckoutRepository(
         if (rawError.Contains("invalid_checkout_total", StringComparison.OrdinalIgnoreCase))
         {
             return "決済金額の合計が会計額と一致しません。";
+        }
+
+        if (rawError.Contains("checkout_snapshot_mismatch", StringComparison.OrdinalIgnoreCase))
+        {
+            return "伝票内容が更新されました。内容を再確認してから会計してください。";
+        }
+
+        if (rawError.Contains("checkout_snapshot_required", StringComparison.OrdinalIgnoreCase))
+        {
+            return "会計確認情報が不足しています。会計画面を開き直してください。";
         }
 
         if (rawError.Contains("invalid_received_amount", StringComparison.OrdinalIgnoreCase))

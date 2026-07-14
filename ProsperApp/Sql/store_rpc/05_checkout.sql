@@ -5,12 +5,15 @@ create unique index if not exists ux_store_checkouts_active_slip
     on public.store_checkouts(slip_id)
     where status <> 'cancelled';
 
+drop function if exists store.confirm_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric);
+
 create or replace function store.confirm_checkout(
     p_department_id bigint,
     p_slip_id bigint,
     p_closed_at timestamp with time zone,
     p_payments jsonb default '[]'::jsonb,
-    p_received_amount numeric default null
+    p_received_amount numeric default null,
+    p_confirmed_snapshot jsonb default null
 )
 returns table (
     checkout_id bigint,
@@ -37,6 +40,7 @@ declare
     v_checkout_id bigint;
     v_single_payment_method_id bigint := null;
     v_change_amount numeric(12, 0) := 0;
+    v_actual_snapshot jsonb;
 begin
     select d.company_id
       into v_company_id
@@ -74,6 +78,85 @@ begin
         raise exception 'checkout_already_exists';
     end if;
 
+    select coalesce(sum(ol.amount), 0)
+      into v_subtotal_amount
+    from public.store_order_lines ol
+    where ol.slip_id = p_slip_id
+      and ol.status = 'active';
+
+    select coalesce(sum(cl.amount), 0)
+      into v_charge_amount
+    from public.store_slip_charge_lines cl
+    where cl.slip_id = p_slip_id
+      and cl.charge_type = 'adjustment'
+      and cl.status = 'active';
+
+    v_service_tax_amount := round(v_subtotal_amount * 0.20, 0);
+    v_total_amount := v_subtotal_amount + v_service_tax_amount + v_charge_amount;
+
+    if v_total_amount < 0 then
+        raise exception 'invalid_checkout_total';
+    end if;
+
+    if p_confirmed_snapshot is null or jsonb_typeof(p_confirmed_snapshot) <> 'object' then
+        raise exception 'checkout_snapshot_required';
+    end if;
+
+    select jsonb_build_object(
+        'slip_id', v_slip.slip_id,
+        'business_date', v_slip.business_date::text,
+        'table_id', v_slip.table_id,
+        'status', v_slip.status,
+        'customer_count', (
+            select count(*)::integer
+            from public.store_slip_customers c
+            where c.slip_id = p_slip_id
+              and c.status <> 'cancelled'
+        ),
+        'subtotal_amount', v_subtotal_amount,
+        'service_tax_amount', v_service_tax_amount,
+        'adjustment_amount', v_charge_amount,
+        'total_amount', v_total_amount,
+        'orders', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'order_line_id', ol.order_line_id,
+                'line_no', ol.line_no,
+                'item_name_snapshot', ol.item_name_snapshot,
+                'item_type', coalesce(i.item_type, 'standard'),
+                'quantity', ol.quantity,
+                'unit_price', ol.unit_price,
+                'amount', ol.amount,
+                'status', ol.status
+            ) order by ol.line_no, ol.order_line_id)
+            from public.store_order_lines ol
+            left join public.store_item_master i
+              on i.item_id = ol.item_id
+            where ol.slip_id = p_slip_id
+              and ol.status = 'active'
+        ), '[]'::jsonb),
+        'charges', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'charge_line_id', cl.charge_line_id,
+                'line_no', cl.line_no,
+                'charge_type', cl.charge_type,
+                'line_name', cl.line_name,
+                'quantity', cl.quantity,
+                'unit_price', cl.unit_price,
+                'amount', cl.amount,
+                'status', cl.status
+            ) order by cl.line_no, cl.charge_line_id)
+            from public.store_slip_charge_lines cl
+            where cl.slip_id = p_slip_id
+              and cl.charge_type = 'adjustment'
+              and cl.status = 'active'
+        ), '[]'::jsonb)
+    )
+      into v_actual_snapshot;
+
+    if p_confirmed_snapshot <> v_actual_snapshot then
+        raise exception 'checkout_snapshot_mismatch';
+    end if;
+
     insert into public.payment_method_master (
         company_id,
         department_id,
@@ -94,26 +177,6 @@ begin
         sort_order = excluded.sort_order,
         is_active = true,
         updated_at = now();
-
-    select coalesce(sum(ol.amount), 0)
-      into v_subtotal_amount
-    from public.store_order_lines ol
-    where ol.slip_id = p_slip_id
-      and ol.status = 'active';
-
-    select coalesce(sum(cl.amount), 0)
-      into v_charge_amount
-    from public.store_slip_charge_lines cl
-    where cl.slip_id = p_slip_id
-      and cl.charge_type = 'adjustment'
-      and cl.status = 'active';
-
-    v_service_tax_amount := round(v_subtotal_amount * 0.20, 0);
-    v_total_amount := v_subtotal_amount + v_service_tax_amount + v_charge_amount;
-
-    if v_total_amount < 0 then
-        raise exception 'invalid_checkout_total';
-    end if;
 
     for v_payment in
         select value

@@ -24,6 +24,8 @@ public class CheckoutInputModel
 
     public List<CheckoutPaymentInputModel> Payments { get; set; } = [];
 
+    public string ConfirmedSnapshotJson { get; set; } = "{}";
+
     [Display(Name = "受取額")]
     [Range(0, 99999999, ErrorMessage = "受取額を確認してください。")]
     public decimal? ReceivedAmount { get; set; }

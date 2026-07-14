@@ -442,6 +442,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_closed_at", type: "timestamp with time zone" },
         { name: "p_payments", type: "jsonb" },
         { name: "p_received_amount", type: "numeric" },
+        { name: "p_confirmed_snapshot", type: "jsonb" },
       ],
     },
   ],
