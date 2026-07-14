@@ -219,11 +219,11 @@
                                                 {
                                                     if (nomination.NominationPrice == price)
                                                     {
-                                                        <option value="@price" selected>@price.ToString("N0") 円</option>
+                                                        <option value="@price" selected>@StoreUiText.Yen(price)</option>
                                                     }
                                                     else
                                                     {
-                                                        <option value="@price">@price.ToString("N0") 円</option>
+                                                        <option value="@price">@StoreUiText.Yen(price)</option>
                                                     }
                                                 }
                                             </select>
@@ -322,7 +322,7 @@
             nominationPriceOptions = nominationPriceOptions.Select(price => new
             {
                 value = price,
-                label = $"{price:N0} 円"
+                label = StoreUiText.Yen(price)
             })
         });
     </script>

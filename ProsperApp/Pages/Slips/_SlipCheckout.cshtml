@@ -76,7 +76,7 @@
                                     </div>
                                     <div>
                                         <span>合計</span>
-                                        <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                                        <strong>@StoreUiText.Yen(Model.CheckoutTotals.TotalAmount)</strong>
                                     </div>
                                 </div>
 
@@ -120,7 +120,7 @@
                                                 {
                                                     <div class="checkout-review__row">
                                                         <strong>@nomination.CastDisplayName</strong>
-                                                        <span>@Model.FormatStoreTime(nomination.StartedAt) / @nomination.NominationDisplayName / @nomination.NominationPrice.ToString("N0") 円</span>
+                                                        <span>@Model.FormatStoreTime(nomination.StartedAt) / @nomination.NominationDisplayName / @StoreUiText.Yen(nomination.NominationPrice)</span>
                                                     </div>
                                                 }
                                             </div>
@@ -145,8 +145,8 @@
                                                 <div class="checkout-review__order">
                                                     <span>@Model.FormatStoreTime(order.OrderedAt)</span>
                                                     <strong>@order.ItemNameSnapshot</strong>
-                                                    <span class="text-end">@order.UnitPrice.ToString("N0") x @order.Quantity.ToString("0.##")</span>
-                                                    <strong class="text-end">@order.Amount.ToString("N0") 円</strong>
+                                                    <span class="text-end">@StoreUiText.UnitPriceQuantity(order.UnitPrice, order.Quantity)</span>
+                                                    <strong class="text-end">@StoreUiText.Yen(order.Amount)</strong>
                                                 </div>
                                             }
                                         </div>
@@ -154,19 +154,19 @@
                                     <div class="checkout-review__totals">
                                         <div>
                                             <span>商品小計</span>
-                                            <strong>@Model.CheckoutTotals.SubtotalAmount.ToString("N0") 円</strong>
+                                            <strong>@StoreUiText.Yen(Model.CheckoutTotals.SubtotalAmount)</strong>
                                         </div>
                                         <div>
                                             <span>ServiceTax20%</span>
-                                            <strong>@Model.CheckoutTotals.ServiceTaxAmount.ToString("N0") 円</strong>
+                                            <strong>@StoreUiText.Yen(Model.CheckoutTotals.ServiceTaxAmount)</strong>
                                         </div>
                                         <div>
                                             <span>調整</span>
-                                            <strong>@Model.CheckoutTotals.AdjustmentAmount.ToString("N0") 円</strong>
+                                            <strong>@StoreUiText.Yen(Model.CheckoutTotals.AdjustmentAmount)</strong>
                                         </div>
                                         <div class="checkout-review__total">
                                             <span>合計</span>
-                                            <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                                            <strong>@StoreUiText.Yen(Model.CheckoutTotals.TotalAmount)</strong>
                                         </div>
                                     </div>
                                 </section>
@@ -188,8 +188,8 @@
                                                 <div class="checkout-review__order">
                                                     <span>@charge.ChargeTypeDisplayName</span>
                                                     <strong>@charge.LineName</strong>
-                                                    <span class="text-end">@charge.UnitPrice.ToString("N0") x @charge.Quantity.ToString("0.##")</span>
-                                                    <strong class="text-end">@charge.Amount.ToString("N0") 円</strong>
+                                                    <span class="text-end">@StoreUiText.UnitPriceQuantity(charge.UnitPrice, charge.Quantity)</span>
+                                                    <strong class="text-end">@StoreUiText.Yen(charge.Amount)</strong>
                                                 </div>
                                             }
                                         </div>
@@ -253,7 +253,7 @@
                                         </div>
                                         <div>
                                             <span>合計</span>
-                                            <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                                            <strong>@StoreUiText.Yen(Model.CheckoutTotals.TotalAmount)</strong>
                                         </div>
                                         <div class="checkout-final-summary__wide">
                                             <span>支払内訳</span>
@@ -284,7 +284,7 @@
                                     <div class="row g-3 align-items-end">
                                         <div class="col-md-4">
                                             <label class="form-label">現金決済額</label>
-                                            <div class="business-date-display" id="detailCashAmountDisplay" data-cash-amount="@checkoutCashAmount">@checkoutCashAmount.ToString("N0") 円</div>
+                                            <div class="business-date-display" id="detailCashAmountDisplay" data-cash-amount="@checkoutCashAmount">@StoreUiText.Yen(checkoutCashAmount)</div>
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label" asp-for="CheckoutInput.ReceivedAmount"></label>
@@ -311,11 +311,11 @@
                                         </div>
                                         <div>
                                             <span>合計</span>
-                                            <strong>@Model.CheckoutTotals.TotalAmount.ToString("N0") 円</strong>
+                                            <strong>@StoreUiText.Yen(Model.CheckoutTotals.TotalAmount)</strong>
                                         </div>
                                         <div>
                                             <span>現金</span>
-                                            <strong data-detail-cash-summary>@checkoutCashAmount.ToString("N0") 円</strong>
+                                            <strong data-detail-cash-summary>@StoreUiText.Yen(checkoutCashAmount)</strong>
                                         </div>
                                         <div>
                                             <span>釣銭</span>

@@ -38,7 +38,7 @@
             <div class="slip-create__panel-title">
                 <div class="slip-create__panel-heading">
                     <h2>オーダー一覧</h2>
-                    <small>@activeOrders.Count 件 / @activeOrderTotal.ToString("N0") 円</small>
+                    <small>@activeOrders.Count 件 / @StoreUiText.Yen(activeOrderTotal)</small>
                 </div>
                 <div class="slip-create__panel-title-actions">
                     @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
@@ -95,7 +95,7 @@
                             @foreach (var order in activeStandardOrders)
                             {
                                 var quantityIndex = editableOrderIndex++;
-                                <tr data-order-line-row data-order-line-id="@order.OrderLineId" data-order-unit-price="@order.UnitPrice" data-order-initial-quantity="@order.Quantity.ToString("0.##")">
+                                <tr data-order-line-row data-order-line-id="@order.OrderLineId" data-order-unit-price="@order.UnitPrice" data-order-initial-quantity="@StoreUiText.Quantity(order.Quantity)">
                                     <td class="slip-detail-table__time">@Model.FormatStoreTime(order.OrderedAt)</td>
                                     <td class="slip-detail-table__primary">
                                         <span>@order.ItemNameSnapshot</span>
@@ -104,21 +104,21 @@
                                             <small class="slip-order-back-cast">バック: @order.BackCastDisplayName</small>
                                         }
                                     </td>
-                                    <td class="slip-detail-table__amount text-end">@order.UnitPrice.ToString("N0")</td>
+                                    <td class="slip-detail-table__amount text-end">@StoreUiText.Amount(order.UnitPrice)</td>
                                     <td class="slip-detail-table__quantity text-end">
-                                        <span data-order-quantity-text>@order.Quantity.ToString("0.##")</span>
+                                        <span data-order-quantity-text>@StoreUiText.Quantity(order.Quantity)</span>
                                         @if (Model.IsOpenSlip)
                                         {
                                             <input form="orderQuantityForm" type="hidden" name="OrderQuantityLines[@quantityIndex].OrderLineId" value="@order.OrderLineId" />
-                                            <input form="orderQuantityForm" type="hidden" name="OrderQuantityLines[@quantityIndex].Quantity" value="@order.Quantity.ToString("0.##")" data-order-quantity-input />
+                                            <input form="orderQuantityForm" type="hidden" name="OrderQuantityLines[@quantityIndex].Quantity" value="@StoreUiText.Quantity(order.Quantity)" data-order-quantity-input />
                                             <div class="quantity-stepper quantity-stepper--compact order-correction-control" data-order-quantity-control hidden>
                                                 <button class="btn btn-outline-secondary btn-sm" type="button" data-order-quantity-decrement>-</button>
-                                                <strong data-order-quantity-display>@order.Quantity.ToString("0.##")</strong>
+                                                <strong data-order-quantity-display>@StoreUiText.Quantity(order.Quantity)</strong>
                                                 <button class="btn btn-outline-primary btn-sm" type="button" data-order-quantity-increment>+</button>
                                             </div>
                                         }
                                     </td>
-                                    <td class="slip-detail-table__amount text-end" data-order-line-amount>@order.Amount.ToString("N0")</td>
+                                    <td class="slip-detail-table__amount text-end" data-order-line-amount>@StoreUiText.Amount(order.Amount)</td>
                                     <td class="slip-detail-table__action text-end">
                                         <form method="post" asp-page-handler="VoidOrder" class="d-inline">
                                             <input type="hidden" asp-for="SlipId" />
@@ -141,9 +141,9 @@
                                             <small class="slip-order-back-cast">バック: @order.BackCastDisplayName</small>
                                         }
                                     </td>
-                                    <td class="slip-detail-table__amount text-end">@order.UnitPrice.ToString("N0")</td>
-                                    <td class="slip-detail-table__quantity text-end">@order.Quantity.ToString("0.##")</td>
-                                    <td class="slip-detail-table__amount text-end">@order.Amount.ToString("N0")</td>
+                                    <td class="slip-detail-table__amount text-end">@StoreUiText.Amount(order.UnitPrice)</td>
+                                    <td class="slip-detail-table__quantity text-end">@StoreUiText.Quantity(order.Quantity)</td>
+                                    <td class="slip-detail-table__amount text-end">@StoreUiText.Amount(order.Amount)</td>
                                     <td class="slip-detail-table__action text-end">
                                         <span class="text-muted">削除不可</span>
                                     </td>
@@ -154,7 +154,7 @@
                     <tfoot>
                         <tr>
                             <th colspan="4">商品小計</th>
-                            <th class="slip-detail-table__amount text-end" data-detail-order-total data-detail-order-base-total="@fixedSystemOrderTotal">@activeOrderTotal.ToString("N0")</th>
+                            <th class="slip-detail-table__amount text-end" data-detail-order-total data-detail-order-base-total="@fixedSystemOrderTotal">@StoreUiText.Amount(activeOrderTotal)</th>
                             <th class="slip-detail-table__action">円</th>
                         </tr>
                     </tfoot>
@@ -166,7 +166,7 @@
             <div class="slip-create__panel-title">
                 <div class="slip-create__panel-heading">
                     <h2>自由入力明細</h2>
-                    <small>@activeAdjustments.Count 件 / @chargeTotal.ToString("N0") 円</small>
+                    <small>@activeAdjustments.Count 件 / @StoreUiText.Yen(chargeTotal)</small>
                 </div>
                 <div class="slip-create__panel-title-actions">
                     <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
@@ -174,7 +174,7 @@
                     {
                         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#adjustmentModal">自由入力明細を入力</button>
                     }
-                    <span class="terminal-count-badge">@chargeTotal.ToString("N0") 円</span>
+                    <span class="terminal-count-badge">@StoreUiText.Yen(chargeTotal)</span>
                 </div>
             </div>
 
@@ -203,7 +203,7 @@
                             {
                                 <tr>
                                     <td>@charge.LineName</td>
-                                    <td class="text-end">@charge.Amount.ToString("N0")</td>
+                                    <td class="text-end">@StoreUiText.Amount(charge.Amount)</td>
                                 </tr>
                             }
                         }
@@ -312,7 +312,7 @@
                                                                     type="button"
                                                                     data-detail-item-id="@item.ItemId">
                                                                     <strong>@item.ItemName</strong>
-                                                                    <span>@item.DefaultPrice.ToString("N0") 円</span>
+                                                                    <span>@item.DefaultPriceText</span>
                                                                     @if (item.IsCastBackTarget)
                                                                     {
                                                                         <small>@item.CastBackSummaryText</small>

@@ -15,7 +15,7 @@
     <div class="slip-create__panel-title">
         <div class="slip-create__panel-heading">
             <h2>指名一覧</h2>
-            <small>@nominationCount 件 / @nominationTotal.ToString("N0") 円</small>
+            <small>@nominationCount 件 / @StoreUiText.Yen(nominationTotal)</small>
         </div>
         <div class="slip-create__panel-title-actions">
             <output class="terminal-save-status" data-partial-status="nominations" data-save-state="saved" aria-live="polite">保存済み</output>
@@ -57,7 +57,7 @@
                             <td class="slip-detail-table__time">@Model.FormatStoreTime(nomination.StartedAt)</td>
                             <td class="slip-detail-table__type">@nomination.NominationDisplayName</td>
                             <td class="slip-detail-table__primary">@nomination.CastDisplayName</td>
-                            <td class="slip-detail-table__amount text-end">@nomination.NominationPrice.ToString("N0")</td>
+                            <td class="slip-detail-table__amount text-end">@StoreUiText.Amount(nomination.NominationPrice)</td>
                         </tr>
                     }
                 }
@@ -124,11 +124,11 @@
                                     {
                                         if (addNomination.NominationPrice == price)
                                         {
-                                            <option value="@price" selected>@price.ToString("N0") 円</option>
+                                            <option value="@price" selected>@StoreUiText.Yen(price)</option>
                                         }
                                         else
                                         {
-                                            <option value="@price">@price.ToString("N0") 円</option>
+                                            <option value="@price">@StoreUiText.Yen(price)</option>
                                         }
                                     }
                                 </select>
