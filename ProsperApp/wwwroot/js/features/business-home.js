@@ -28,7 +28,7 @@
     let savePromise = null;
     let allowPageUnload = false;
 
-    const formatYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
+    const formatYen = window.MoneyText.yen;
     const toQuantity = (value) => Math.max(0, Math.trunc(Number(value) || 0));
     const setText = (element, text) => {
         if (element && element.textContent !== String(text)) {

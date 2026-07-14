@@ -23,7 +23,7 @@
     const detailChangeSummaryDisplays = Array.from(document.querySelectorAll('[data-detail-change-summary]'));
     let detailCashAmount = Number(detailCashDisplay?.dataset.cashAmount ?? 0);
 
-    const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
+    const formatYen = window.MoneyText.yen;
 
     const syncClosedTimeFields = () => {
         document.querySelectorAll('[data-detail-checkout-closed-time-field]').forEach((field) => {

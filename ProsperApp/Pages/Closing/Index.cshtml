@@ -129,7 +129,7 @@
             };
             let refreshInFlight = false;
 
-            const toYen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')} 円`;
+            const toYen = window.MoneyText.yen;
 
             const setStateClass = (element, nextClass) => {
                 if (!element) {

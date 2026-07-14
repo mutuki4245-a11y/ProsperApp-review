@@ -48,7 +48,7 @@
         return `${slipId}:${itemId}:${castBackCastId ?? ''}`;
     }
 
-    const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
+    const formatYen = window.MoneyText.yen;
     const hasSlip = (slipId) => slips.some((slip) => String(slip.id) === String(slipId));
     const setText = (element, text) => {
         const value = String(text);

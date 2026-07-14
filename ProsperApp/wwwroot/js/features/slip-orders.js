@@ -46,7 +46,8 @@
         return `${itemId}:${castBackCastId ?? ''}`;
     }
 
-    const formatYen = (value) => `${Math.round(value).toLocaleString('ja-JP')} 円`;
+    const moneyText = window.MoneyText;
+    const formatYen = moneyText.yen;
     let isOrderCorrectionMode = false;
 
     const orderLineRows = () => Array.from(document.querySelectorAll('[data-order-line-row]'));
@@ -63,7 +64,7 @@
             const unitPrice = Number(row.dataset.orderUnitPrice ?? 0);
             return total + unitPrice * quantity;
         }, fixedOrderTotal);
-        detailOrderTotal.textContent = formatYen(orderTotal).replace(' 円', '');
+        detailOrderTotal.textContent = moneyText.amount(orderTotal);
     };
 
     const updateOrderQuantityState = () => {
@@ -117,7 +118,7 @@
             text.textContent = String(normalized);
         }
         if (amount) {
-            amount.textContent = Math.round(unitPrice * normalized).toLocaleString('ja-JP');
+            amount.textContent = moneyText.amount(unitPrice * normalized);
         }
         recalculateOrderTotal();
         updateOrderQuantityState();

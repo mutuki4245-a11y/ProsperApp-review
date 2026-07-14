@@ -182,7 +182,14 @@
         target.dataset.saveState = normalizedState;
     };
 
+    const formatMoneyAmount = (value) => Math.round(Number(value) || 0).toLocaleString('ja-JP');
+    const formatMoneyYen = (value) => `${formatMoneyAmount(value)} 円`;
+
     window.AppLoading = { show, hide };
+    window.MoneyText = {
+        amount: formatMoneyAmount,
+        yen: formatMoneyYen
+    };
     window.TerminalSaveStatus = {
         set: setTerminalSaveStatus,
         saved: (target, message) => setTerminalSaveStatus(target, 'saved', message),
