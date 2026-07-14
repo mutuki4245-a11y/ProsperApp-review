@@ -92,6 +92,8 @@ DB反映時の基本順序は以下。
 
 会計確定時は `store.confirm_checkout` が注文、指名、自由入力調整を再集計し、支払合計と照合したうえで `store_checkouts.subtotal_amount`、`store_checkouts.service_tax_amount`、`store_checkouts.total_amount` と `store_checkout_payments` を保存する。営業中一覧の表示額を確定額として信用しない。
 
+会計確定前に追加の事前確認RPCは増やさない。アプリは会計モーダルで利用者が確認した保存済み伝票スナップショットを `p_confirmed_snapshot` として `store.confirm_checkout` へ渡し、RPC内でDB最新状態と厳密比較する。不一致の場合は会計を確定せず `checkout_snapshot_mismatch` として返し、アプリ側は伝票詳細を再取得して同じ会計モーダル内の再確認へ戻す。
+
 ## 5. RPC概要
 
 ### 店舗設定
@@ -147,7 +149,7 @@ DB反映時の基本順序は以下。
 | `store.add_slip_nominations` | 既存伝票へ指名を追加する。指名料金のシステム注文行と、指名バック設定が有効かつ0円より大きい場合は `store_slip_cast_backs` を作成する。 |
 | `store.leave_slip_customer` | 客行を退店扱いにする。 |
 | `store.save_slip_adjustments` | 自由入力の会計調整行を保存する。 |
-| `store.save_karaoke_lines` | 営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
+| `store.save_karaoke_lines` | 営業中トップの遷移時保存で、営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
 | `store.save_order_line_quantities` | 伝票詳細の訂正モードから通常注文行の数量を保存する。数量0は対象注文行と紐づくバック実績を取消扱いにする。 |
 | `store.update_slip_customer_label` | 客行の表示名を更新する。 |
 | `store.void_order_line` | 注文行を取消する。 |
@@ -157,13 +159,13 @@ DB反映時の基本順序は以下。
 | RPC | 主な用途 |
 | --- | --- |
 | `store.get_order_attending_casts` | 当日出勤キャストを返す。退勤済みも候補に残す。 |
-| `store.add_order_lines` | 注文行とバック対象キャストを登録する。`p_order_lines` に伝票IDを含められるため、`/Orders` では複数卓のキューをまとめて登録できる。登録できる商品は標準商品だけで、システム商品は拒否する。 |
+| `store.add_order_lines` | 注文行とバック対象キャストを登録する。`p_order_lines` に伝票IDを含められるため、`/Orders` では複数卓のキューをまとめて登録できる。登録時に対象伝票が選択店舗のopen伝票であることを確認し、登録できる商品は標準商品だけに限定する。システム商品は拒否する。 |
 
 ### 会計
 
 | RPC | 主な用途 |
 | --- | --- |
-| `store.confirm_checkout` | 会計額を再計算し、画面で確認した伝票スナップショットとDB最新状態を比較し、支払合計を検証して会計確定する。 |
+| `store.confirm_checkout` | 会計額を再計算し、画面で確認した `p_confirmed_snapshot` とDB最新状態を比較し、支払合計を検証して会計確定する。不一致は `checkout_snapshot_mismatch` として返し、会計確定は行わない。 |
 | `store.cancel_checkout` | 開いている営業日の会計済み伝票を営業中へ戻す。会計と支払明細は `cancelled` にし、客行の退店状態と退店時刻は変更しない。会計に紐づくキャスト売上額調整は削除してリセットする。 |
 
 ### 領収書入力
@@ -207,6 +209,8 @@ RPCを追加/変更するときは、以下を同じタスク内で揃える。
 `store.get_order_attending_casts` は店舗別・営業日別にアプリ側でキャッシュする。RPC定義変更は不要で、勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄する。
 
 `store.get_business_day_slips` と `store.get_order_entry_slips` はキャッシュ対象にしない。アプリ側ではRazor初期表示をブロックせず、ページ用JSON handlerから初回Ajax、フォーカス復帰、30秒ごとの表示中自動更新で取得する。保存成功POST直後の同期再取得は行わない。
+
+注文端末キューと伝票詳細のオーダー追加モーダル内キューは、DB保存前の端末内または画面内状態である。RPC概要では保存後のDB状態だけを共有状態として扱い、会計前の未保存ブロック対象には、会計端末がDBまたは自画面状態から直接確認できるものだけを含める。
 
 ## 8. RPC結果ライフサイクル
 
