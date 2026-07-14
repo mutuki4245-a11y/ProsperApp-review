@@ -13,7 +13,6 @@ public partial class SlipEditModel
             return NotFound();
         }
 
-        NormalizeCustomerInput();
         ClearCrossFormValidationState();
         await LoadAsync(cancellationToken);
 
@@ -41,30 +40,7 @@ public partial class SlipEditModel
             return Page();
         }
 
-        ComposeCustomerEnteredAt();
-        ValidateAddCustomers();
-
-        if (!ModelState.IsValid)
-        {
-            ShowAddCustomerModal = true;
-            SetDefaultLeaveInput();
-            if (IsPartialRequest())
-            {
-                return Partial("_SlipCustomers", this);
-            }
-
-            return Page();
-        }
-
-        if (AddCustomersInput.CustomerLabels.Count is < 1 or > 20)
-        {
-            ModelState.AddModelError("AddCustomersInput.CustomerLabels", "客情報は1人から20人まで登録できます。");
-        }
-
-        if (AddCustomersInput.CustomerLabels.Any(x => x is not null && x.Length > 100))
-        {
-            ModelState.AddModelError("AddCustomersInput.CustomerLabels", "客名は1人100文字以内で入力してください。");
-        }
+        PrepareAddCustomerInput();
 
         if (!ModelState.IsValid)
         {
@@ -131,8 +107,7 @@ public partial class SlipEditModel
             return Page();
         }
 
-        ComposeLeftAt();
-        ValidateLeaveCustomer();
+        PrepareLeaveCustomerInput();
         if (!ModelState.IsValid)
         {
             EnsureAddCustomerRows();
@@ -167,17 +142,16 @@ public partial class SlipEditModel
         }
 
         ClearCrossFormValidationState();
-        UpdateCustomerInput.CustomerLabel = string.IsNullOrWhiteSpace(UpdateCustomerInput.CustomerLabel)
-            ? null
-            : UpdateCustomerInput.CustomerLabel.Trim();
         await LoadAsync(cancellationToken);
 
-        if (!CanEditCustomerNames)
+        if (!CanEditCustomerNames || Detail is null)
         {
             ModelState.AddModelError(string.Empty, "この伝票の客名は変更できません。");
         }
-
-        ValidateUpdateCustomer();
+        else
+        {
+            PrepareUpdateCustomerInput();
+        }
         if (!ModelState.IsValid)
         {
             SetDefaultInputs();
@@ -236,126 +210,34 @@ public partial class SlipEditModel
     }
 
 
-    private void NormalizeCustomerInput()
+    private void PrepareAddCustomerInput()
     {
-        AddCustomersInput.CustomerLabels = AddCustomersInput.CustomerLabels
-            .Select(x => string.IsNullOrWhiteSpace(x) ? null : x.Trim())
-            .ToList();
-
-        AddCustomersInput.EnteredTime = string.IsNullOrWhiteSpace(AddCustomersInput.EnteredTime)
-            ? null
-            : AddCustomersInput.EnteredTime.Trim();
-
-        EnsureAddCustomerRows();
-    }
-
-    private void ComposeCustomerEnteredAt()
-    {
-        if (Detail is null ||
-            string.IsNullOrWhiteSpace(AddCustomersInput.EnteredTime) ||
-            !TimeOnly.TryParse(AddCustomersInput.EnteredTime, out var enteredTime))
+        var defaultEnteredTime = _storeClock.FloorToMinuteStep(_storeClock.GetStoreNow(), 5).ToString("HH:mm");
+        var edit = SlipCustomerEditor.PrepareAdd(AddCustomersInput, Detail!, TimeOptions, _storeClock, defaultEnteredTime);
+        AddCustomersInput = edit.Input;
+        foreach (var error in edit.Errors)
         {
-            AddCustomersInput.EnteredAt = null;
-            return;
-        }
-
-        AddCustomersInput.EnteredAt = _storeClock.ComposeBusinessDateTime(Detail.BusinessDate, enteredTime);
-    }
-
-    private void ValidateAddCustomers()
-    {
-        if (Detail is null)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(AddCustomersInput.EnteredTime) || !TimeOptions.Contains(AddCustomersInput.EnteredTime))
-        {
-            ModelState.AddModelError("AddCustomersInput.EnteredTime", "入店時刻は5分単位で選択してください。");
-        }
-
-        if (AddCustomersInput.EnteredAt is not null)
-        {
-            var openedAt = _storeClock.ToStoreDateTime(Detail.OpenedAt);
-            if (AddCustomersInput.EnteredAt.Value < openedAt)
-            {
-                ModelState.AddModelError("AddCustomersInput.EnteredTime", "入店時刻は伝票の入店時刻以降で入力してください。");
-            }
-
-            if (AddCustomersInput.EnteredAt.Value > _storeClock.GetStoreNow().AddMinutes(5))
-            {
-                ModelState.AddModelError("AddCustomersInput.EnteredTime", "入店時刻に未来時刻は指定できません。");
-            }
+            ModelState.AddModelError(error.Key, error.Message);
         }
     }
 
-
-    private void ValidateLeaveCustomer()
+    private void PrepareLeaveCustomerInput()
     {
-        if (Detail is null)
+        var edit = SlipCustomerEditor.PrepareLeave(LeaveCustomerInput, Detail!, TimeOptions, _storeClock);
+        LeaveCustomerInput = edit.Input;
+        foreach (var error in edit.Errors)
         {
-            return;
-        }
-
-        var activeCustomerIds = Detail.Customers
-            .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
-            .Select(x => x.SlipCustomerId)
-            .ToHashSet();
-
-        if (LeaveCustomerInput.SlipCustomerId is null || !activeCustomerIds.Contains(LeaveCustomerInput.SlipCustomerId.Value))
-        {
-            ModelState.AddModelError("LeaveCustomerInput.SlipCustomerId", "退店する客を選択してください。");
-        }
-
-        if (string.IsNullOrWhiteSpace(LeaveCustomerInput.LeftTime) || !TimeOptions.Contains(LeaveCustomerInput.LeftTime))
-        {
-            ModelState.AddModelError("LeaveCustomerInput.LeftTime", "退店時刻は5分単位で選択してください。");
-        }
-
-        if (LeaveCustomerInput.LeftAt is not null)
-        {
-            var customer = Detail.Customers.FirstOrDefault(x => x.SlipCustomerId == LeaveCustomerInput.SlipCustomerId);
-            if (customer is not null && LeaveCustomerInput.LeftAt.Value < _storeClock.ToStoreDateTime(customer.EnteredAt))
-            {
-                ModelState.AddModelError("LeaveCustomerInput.LeftTime", "退店時刻は入店時刻以降で入力してください。");
-            }
+            ModelState.AddModelError(error.Key, error.Message);
         }
     }
 
-    private void ValidateUpdateCustomer()
+    private void PrepareUpdateCustomerInput()
     {
-        if (Detail is null)
+        var edit = SlipCustomerEditor.PrepareUpdate(UpdateCustomerInput, Detail!);
+        UpdateCustomerInput = edit.Input;
+        foreach (var error in edit.Errors)
         {
-            return;
+            ModelState.AddModelError(error.Key, error.Message);
         }
-
-        var editableCustomerIds = Detail.Customers
-            .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.Ordinal))
-            .Select(x => x.SlipCustomerId)
-            .ToHashSet();
-
-        if (UpdateCustomerInput.SlipCustomerId is null || !editableCustomerIds.Contains(UpdateCustomerInput.SlipCustomerId.Value))
-        {
-            ModelState.AddModelError("UpdateCustomerInput.SlipCustomerId", "変更する客を確認してください。");
-        }
-
-        if (UpdateCustomerInput.CustomerLabel is not null && UpdateCustomerInput.CustomerLabel.Length > 100)
-        {
-            ModelState.AddModelError("UpdateCustomerInput.CustomerLabel", "客名は100文字以内で入力してください。");
-        }
-    }
-
-
-    private void ComposeLeftAt()
-    {
-        if (Detail is null ||
-            string.IsNullOrWhiteSpace(LeaveCustomerInput.LeftTime) ||
-            !TimeOnly.TryParse(LeaveCustomerInput.LeftTime, out var leftTime))
-        {
-            LeaveCustomerInput.LeftAt = null;
-            return;
-        }
-
-        LeaveCustomerInput.LeftAt = _storeClock.ComposeBusinessDateTime(Detail.BusinessDate, leftTime);
     }
 }
