@@ -10,14 +10,13 @@ public static class CheckoutInputEditor
 
     public static CheckoutInputModel ApplyDefaults(
         CheckoutInputModel input,
-        IReadOnlyList<CheckoutPaymentInputModel> paymentTemplates,
         string defaultClosedTime)
     {
         return new CheckoutInputModel
         {
             ClosedTime = input.ClosedTime ?? defaultClosedTime,
             ClosedAt = input.ClosedAt,
-            Payments = PreparePaymentRows(input.Payments, paymentTemplates),
+            Payments = PreparePaymentRows(input.Payments),
             ConfirmedSnapshotJson = input.ConfirmedSnapshotJson,
             ReceivedAmount = input.ReceivedAmount
         };
@@ -27,7 +26,6 @@ public static class CheckoutInputEditor
         CheckoutInputModel input,
         SlipDetail detail,
         CheckoutTotals totals,
-        IReadOnlyList<CheckoutPaymentInputModel> paymentTemplates,
         IReadOnlyCollection<string> timeOptions,
         IStoreClock storeClock,
         bool requireReceivedAmount)
@@ -36,7 +34,7 @@ public static class CheckoutInputEditor
         {
             ClosedTime = input.ClosedTime,
             ClosedAt = ComposeClosedAt(detail.BusinessDate, input.ClosedTime, storeClock),
-            Payments = PreparePaymentRows(input.Payments, paymentTemplates),
+            Payments = PreparePaymentRows(input.Payments),
             ConfirmedSnapshotJson = input.ConfirmedSnapshotJson,
             ReceivedAmount = input.ReceivedAmount
         };
@@ -50,15 +48,14 @@ public static class CheckoutInputEditor
     }
 
     private static List<CheckoutPaymentInputModel> PreparePaymentRows(
-        IEnumerable<CheckoutPaymentInputModel> inputPayments,
-        IReadOnlyList<CheckoutPaymentInputModel> paymentTemplates)
+        IEnumerable<CheckoutPaymentInputModel> inputPayments)
     {
         var current = inputPayments
             .Where(x => !string.IsNullOrWhiteSpace(x.MethodCode))
             .GroupBy(x => x.MethodCode.Trim().ToLowerInvariant())
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.Ordinal);
 
-        return paymentTemplates
+        return PaymentTemplates
             .Select(template =>
             {
                 var methodCode = template.MethodCode.Trim().ToLowerInvariant();
@@ -79,6 +76,13 @@ public static class CheckoutInputEditor
             })
             .ToList();
     }
+
+    private static readonly IReadOnlyList<CheckoutPaymentInputModel> PaymentTemplates =
+    [
+        new() { MethodCode = "cash", MethodName = "現金" },
+        new() { MethodCode = "cat", MethodName = "CAT" },
+        new() { MethodCode = "paypay", MethodName = "PAYPAY" }
+    ];
 
     private static DateTime? ComposeClosedAt(DateOnly businessDate, string? closedTime, IStoreClock storeClock)
     {

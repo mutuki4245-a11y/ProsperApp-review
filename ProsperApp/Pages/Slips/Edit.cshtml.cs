@@ -30,13 +30,6 @@ public partial class SlipEditModel(
     private readonly ReceiptPrinterOptions _receiptPrinterOptions = receiptPrinterOptions.Value;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
 
-    private static readonly IReadOnlyList<CheckoutPaymentInputModel> PaymentTemplates =
-    [
-        new() { MethodCode = "cash", MethodName = "現金" },
-        new() { MethodCode = "cat", MethodName = "CAT" },
-        new() { MethodCode = "paypay", MethodName = "PAYPAY" }
-    ];
-
     [BindProperty(SupportsGet = true)]
     public long? SlipId { get; set; }
 
