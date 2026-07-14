@@ -505,10 +505,7 @@
                 if (queueEmpty) {
                     queueEmpty.hidden = hasQueue;
                 }
-                if (queueStatus) {
-                    queueStatus.textContent = hasQueue ? '未送信' : '空';
-                    queueStatus.dataset.saveState = hasQueue ? 'dirty' : 'saved';
-                }
+                window.TerminalSaveStatus.set(queueStatus, hasQueue ? 'dirty' : 'saved', hasQueue ? '未送信' : '空');
                 if (queueTotal) {
                     queueTotal.textContent = formatYen(total);
                 }
@@ -568,10 +565,7 @@
 
             orderForm?.addEventListener('submit', () => {
                 render();
-                if (queueStatus) {
-                    queueStatus.textContent = '保存中';
-                    queueStatus.dataset.saveState = 'saving';
-                }
+                window.TerminalSaveStatus.saving(queueStatus);
             });
 
             document.querySelectorAll('[data-category-tab]').forEach((button) => {

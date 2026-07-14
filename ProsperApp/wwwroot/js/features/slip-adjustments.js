@@ -15,23 +15,7 @@
         return;
     }
 
-    const setSaveStatus = (target, message) => {
-        if (!target) {
-            return;
-        }
-
-        const text = message || '保存済み';
-        target.textContent = text;
-        if (text.includes('保存中')) {
-            target.dataset.saveState = 'saving';
-        } else if (text.includes('未保存')) {
-            target.dataset.saveState = 'dirty';
-        } else if (text.includes('失敗')) {
-            target.dataset.saveState = 'error';
-        } else {
-            target.dataset.saveState = 'saved';
-        }
-    };
+    const saveStatus = window.TerminalSaveStatus;
 
     const readRows = () => Array.from(adjustmentList.querySelectorAll('[data-adjustment-row]'))
         .map((row) => ({
@@ -77,7 +61,11 @@
 
     const markDirty = () => {
         syncLinesJson();
-        setSaveStatus(adjustmentStatus, isDirty() ? '未保存' : '保存済み');
+        if (isDirty()) {
+            saveStatus.dirty(adjustmentStatus);
+        } else {
+            saveStatus.saved(adjustmentStatus);
+        }
     };
 
     const renumberRows = () => {
@@ -118,7 +106,7 @@
         }
         renumberRows();
         syncLinesJson();
-        setSaveStatus(adjustmentStatus, '保存済み');
+        saveStatus.saved(adjustmentStatus);
     };
 
     addAdjustmentButton?.addEventListener('click', () => {
@@ -155,7 +143,7 @@
 
     adjustmentForm.addEventListener('submit', () => {
         isSubmitting = true;
-        setSaveStatus(adjustmentStatus, '保存中');
+        saveStatus.saving(adjustmentStatus);
         renumberRows();
         syncLinesJson();
     });
@@ -180,7 +168,7 @@
 
     if (showAdjustmentModal) {
         syncLinesJson();
-        setSaveStatus(adjustmentStatus, '未保存');
+        saveStatus.dirty(adjustmentStatus);
         adjustmentModal?.show();
         return;
     }

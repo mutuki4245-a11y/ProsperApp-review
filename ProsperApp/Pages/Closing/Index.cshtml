@@ -204,16 +204,12 @@
                         submit.disabled = disabled;
                         submit.textContent = buttonText;
                     }
-                    if (status) {
-                        status.textContent = statusText;
-                        if (nextClass === 'is-ready') {
-                            status.dataset.saveState = 'saved';
-                        } else if (nextClass === 'has-warning') {
-                            status.dataset.saveState = 'dirty';
-                        } else {
-                            status.dataset.saveState = 'saving';
-                        }
-                    }
+                    const statusState = nextClass === 'is-ready'
+                        ? 'saved'
+                        : nextClass === 'has-warning'
+                            ? 'dirty'
+                            : 'saving';
+                    window.TerminalSaveStatus.set(status, statusState, statusText);
                 };
 
                 if (state.businessDayChanged) {

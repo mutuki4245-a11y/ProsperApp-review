@@ -3,28 +3,12 @@
     const pageData = dataElement ? JSON.parse(dataElement.textContent || '{}') : {};
     const showAddCustomerModal = pageData.showAddCustomerModal === true;
 
-    const setSaveStatus = (target, message) => {
-        if (!target) {
-            return;
-        }
+    const saveStatus = window.TerminalSaveStatus;
 
-        const text = message || '保存済み';
-        target.textContent = text;
-        if (text.includes('保存中')) {
-            target.dataset.saveState = 'saving';
-        } else if (text.includes('未保存')) {
-            target.dataset.saveState = 'dirty';
-        } else if (text.includes('失敗')) {
-            target.dataset.saveState = 'error';
-        } else {
-            target.dataset.saveState = 'saved';
-        }
-    };
-
-    const setCustomerStatus = (message) => {
+    const setCustomerStatus = (state, message) => {
         const section = document.getElementById('slipCustomersSection');
         const status = section?.querySelector('[data-partial-status]');
-        setSaveStatus(status, message);
+        saveStatus.set(status, state, message);
     };
 
     const parseValidation = (root) => {
@@ -40,7 +24,7 @@
             return;
         }
 
-        setCustomerStatus('保存中');
+        setCustomerStatus('saving');
         window.AppLoading?.show(form);
         try {
             const response = await fetch(form.action, {
@@ -58,9 +42,9 @@
             section.innerHTML = html;
             parseValidation(section);
             const hasValidationError = section.querySelector('.validation-summary-errors, .field-validation-error');
-            setCustomerStatus(hasValidationError ? '保存失敗' : '保存済み');
+            setCustomerStatus(hasValidationError ? 'error' : 'saved');
         } catch (error) {
-            setCustomerStatus('保存失敗');
+            setCustomerStatus('error');
             throw error;
         } finally {
             window.AppLoading?.hide(form);

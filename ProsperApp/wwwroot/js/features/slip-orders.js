@@ -5,23 +5,7 @@
     const orderItems = pageData.orderItems ?? [];
     const initialOrderQueue = pageData.initialOrderQueue ?? [];
     const showOrderModal = pageData.showOrderModal === true;
-    const setSaveStatus = (target, message) => {
-        if (!target) {
-            return;
-        }
-
-        const text = message || '保存済み';
-        target.textContent = text;
-        if (text.includes('保存中')) {
-            target.dataset.saveState = 'saving';
-        } else if (text.includes('未保存')) {
-            target.dataset.saveState = 'dirty';
-        } else if (text.includes('失敗')) {
-            target.dataset.saveState = 'error';
-        } else {
-            target.dataset.saveState = 'saved';
-        }
-    };
+    const saveStatus = window.TerminalSaveStatus;
 
     const slipOrderModalElement = document.getElementById('slipOrderModal');
     const slipOrderModal = slipOrderModalElement ? new bootstrap.Modal(slipOrderModalElement) : null;
@@ -90,7 +74,11 @@
         if (orderQuantitySave) {
             orderQuantitySave.disabled = !dirty;
         }
-        setSaveStatus(orderQuantityStatus, dirty ? '未保存' : '保存済み');
+        if (dirty) {
+            saveStatus.dirty(orderQuantityStatus);
+        } else {
+            saveStatus.saved(orderQuantityStatus);
+        }
     };
 
     const setOrderCorrectionMode = (enabled) => {
@@ -272,10 +260,7 @@
         if (detailOrderQueueEmpty) {
             detailOrderQueueEmpty.hidden = hasQueue;
         }
-        if (detailOrderQueueStatus) {
-            detailOrderQueueStatus.textContent = hasQueue ? '未送信' : '空';
-            detailOrderQueueStatus.dataset.saveState = hasQueue ? 'dirty' : 'saved';
-        }
+        saveStatus.set(detailOrderQueueStatus, hasQueue ? 'dirty' : 'saved', hasQueue ? '未送信' : '空');
         if (detailOrderQueueTotal) {
             detailOrderQueueTotal.textContent = formatYen(total);
         }
@@ -341,7 +326,7 @@
     });
 
     orderQuantityForm?.addEventListener('submit', () => {
-        setSaveStatus(orderQuantityStatus, '保存中');
+        saveStatus.saving(orderQuantityStatus);
     });
 
     detailClearQueueButton?.addEventListener('click', () => {
@@ -351,7 +336,7 @@
 
     slipOrderForm?.addEventListener('submit', () => {
         renderOrderQueue();
-        setSaveStatus(detailOrderQueueStatus, '保存中');
+        saveStatus.saving(detailOrderQueueStatus);
     });
 
     orderAttendingCastModalElement?.addEventListener('hidden.bs.modal', () => {

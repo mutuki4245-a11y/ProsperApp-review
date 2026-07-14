@@ -163,7 +163,33 @@
         modalPreviousBodyStyle = null;
     };
 
+    const terminalSaveStatusMessages = {
+        saved: '保存済み',
+        dirty: '未保存',
+        saving: '保存中',
+        error: '保存失敗'
+    };
+
+    const terminalSaveStatusStates = new Set(Object.keys(terminalSaveStatusMessages));
+
+    const setTerminalSaveStatus = (target, state, message) => {
+        if (!target) {
+            return;
+        }
+
+        const normalizedState = terminalSaveStatusStates.has(state) ? state : 'saved';
+        target.textContent = message || terminalSaveStatusMessages[normalizedState];
+        target.dataset.saveState = normalizedState;
+    };
+
     window.AppLoading = { show, hide };
+    window.TerminalSaveStatus = {
+        set: setTerminalSaveStatus,
+        saved: (target, message) => setTerminalSaveStatus(target, 'saved', message),
+        dirty: (target, message) => setTerminalSaveStatus(target, 'dirty', message),
+        saving: (target, message) => setTerminalSaveStatus(target, 'saving', message),
+        error: (target, message) => setTerminalSaveStatus(target, 'error', message)
+    };
 
     document.addEventListener('click', (event) => {
         const submitter = closest(event.target, 'button[type="submit"], input[type="submit"]');

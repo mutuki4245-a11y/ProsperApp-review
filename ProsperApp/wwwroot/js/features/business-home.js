@@ -6,6 +6,7 @@
         return;
     }
 
+    const saveStatus = window.TerminalSaveStatus;
     const status = form.querySelector('[data-business-karaoke-status]');
     const revealButton = document.querySelector('[data-slip-amount-reveal]');
     const businessDateDisplay = document.querySelector('[data-business-date-display]');
@@ -32,22 +33,6 @@
     const setText = (element, text) => {
         if (element && element.textContent !== String(text)) {
             element.textContent = String(text);
-        }
-    };
-
-    const setStatus = (message) => {
-        if (status) {
-            const text = message || '同期済み';
-            status.textContent = text;
-            if (text.includes('保存中')) {
-                status.dataset.saveState = 'saving';
-            } else if (text.includes('未保存')) {
-                status.dataset.saveState = 'dirty';
-            } else if (text.includes('失敗') || text.includes('できません')) {
-                status.dataset.saveState = 'error';
-            } else {
-                status.dataset.saveState = 'saved';
-            }
         }
     };
 
@@ -194,7 +179,11 @@
     };
 
     const markDirtyStatus = () => {
-        setStatus(collectDirtyPayload().length === 0 ? '' : '未保存');
+        if (collectDirtyPayload().length === 0) {
+            saveStatus.saved(status, '同期済み');
+        } else {
+            saveStatus.dirty(status);
+        }
     };
 
     const allowNextPageUnload = () => {
@@ -492,12 +481,12 @@
         const payloadRows = collectDirtyPayload();
         if (payloadRows.length === 0) {
             karaokeDraft.write();
-            setStatus('');
+            saveStatus.saved(status, '同期済み');
             return true;
         }
 
         isSaving = true;
-        setStatus('保存中');
+        saveStatus.saving(status);
 
         try {
             const response = await fetch(form.action, {
@@ -512,11 +501,15 @@
             }
 
             markSaved(payloadRows);
-            setStatus(collectDirtyPayload().length === 0 ? '保存済み' : '未保存');
+            if (collectDirtyPayload().length === 0) {
+                saveStatus.saved(status);
+            } else {
+                saveStatus.dirty(status);
+            }
             return true;
         } catch {
             karaokeDraft.write();
-            setStatus('保存失敗');
+            saveStatus.error(status);
             return false;
         } finally {
             isSaving = false;
