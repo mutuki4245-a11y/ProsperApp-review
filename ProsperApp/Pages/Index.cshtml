@@ -283,10 +283,14 @@
     }
     @if (Model.IsReceiptPrinterEnabled)
     {
+        @if (!string.IsNullOrWhiteSpace(Model.ReceiptPrinterBrowserSdkScriptUrl))
+        {
+            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"></script>
+        }
         <script>
-            window.prosperEpsonReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
+            window.prosperSiiReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
         </script>
-        <script src="~/js/features/epson-epos-receipt-printer.js" asp-append-version="true"></script>
+        <script src="~/js/features/sii-receipt-printer.js" asp-append-version="true"></script>
     }
     <script>
         (() => {

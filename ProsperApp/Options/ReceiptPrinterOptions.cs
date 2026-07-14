@@ -4,19 +4,13 @@ public class ReceiptPrinterOptions
 {
     public bool Enabled { get; set; }
 
-    public string Provider { get; set; } = "epson-epos";
+    public string BrowserSdkScriptUrl { get; set; } = "https://www.sii-ps.com/sample/websdk/siiWebSdk.js";
 
-    public string PrinterAddress { get; set; } = string.Empty;
+    public string BrowserWebSocketHost { get; set; } = "localhost";
 
-    public string DeviceId { get; set; } = "local_printer";
+    public string BrowserCodePage { get; set; } = string.Empty;
 
-    public bool UseHttps { get; set; } = true;
-
-    public string EndpointPath { get; set; } = "/cgi-bin/epos/service.cgi";
-
-    public int TimeoutMilliseconds { get; set; } = 10000;
-
-    public string TextLang { get; set; } = "mul";
+    public string BrowserInternationalCharacter { get; set; } = string.Empty;
 
     public int LineWidth { get; set; } = 48;
 }

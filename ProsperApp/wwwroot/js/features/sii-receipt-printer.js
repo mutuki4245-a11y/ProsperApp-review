@@ -3,7 +3,7 @@
     const statusElement = document.querySelector('[data-receipt-print-status]');
     const reprintPanel = document.querySelector('[data-receipt-reprint-panel]');
     const reprintList = document.querySelector('[data-receipt-reprint-list]');
-    const config = window.prosperEpsonReceiptPrinter ?? {};
+    const config = window.prosperSiiReceiptPrinter ?? {};
     const pendingStorageKey = 'prosper:receipt-reprints:v1';
 
     const setStatus = (message, state) => {
@@ -129,137 +129,27 @@
         }
     };
 
-    const escapeXml = (value) => String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&apos;');
-
-    const xmlAttributes = (attributes) => Object.entries(attributes)
-        .filter(([, value]) => value !== undefined && value !== null && value !== '')
-        .map(([name, value]) => ` ${name}="${escapeXml(value)}"`)
-        .join('');
-
-    const textElement = (text, attributes = {}) =>
-        `<text${xmlAttributes(attributes)}>${escapeXml(text)}</text>`;
-
-    const normalizeEndpointPath = (value) => {
-        const path = compact(value, '/cgi-bin/epos/service.cgi');
-        return path.startsWith('/') ? path : `/${path}`;
+    const assertSdkResult = (label, result) => {
+        if (!result || Number(result.errorCode) !== 0) {
+            const detail = result
+                ? `errorCode=${result.errorCode}, errorString=${result.errorString ?? ''}, errorExtendedString=${result.errorExtendedString ?? ''}`
+                : 'no result';
+            throw new Error(`${label} failed: ${detail}`);
+        }
     };
 
-    const toPositiveInteger = (value, fallback) => {
-        const numeric = Number(value);
-        return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : fallback;
-    };
-
-    const buildEndpoint = () => {
-        const address = compact(config.printerAddress);
-        if (!address) {
-            throw new Error('EPSON TM-T88VIIの接続先が未設定です。ReceiptPrinter__PrinterAddress を設定してください。');
-        }
-
-        const endpointPath = normalizeEndpointPath(config.endpointPath);
-        const timeout = Math.min(Math.max(toPositiveInteger(config.timeoutMilliseconds, 10000), 1000), 120000);
-        const deviceId = compact(config.deviceId, 'local_printer');
-        const url = /^https?:\/\//i.test(address)
-            ? new URL(address)
-            : new URL(`${config.useHttps === false ? 'http' : 'https'}://${address}`);
-
-        if (url.pathname === '/' || !url.pathname) {
-            url.pathname = endpointPath;
-        }
-
-        url.searchParams.set('devid', deviceId);
-        url.searchParams.set('timeout', String(timeout));
-
-        if (window.location.protocol === 'https:' && url.protocol === 'http:') {
-            throw new Error('HTTPSの画面からHTTPのePOS endpointへはブラウザが送信をブロックします。TM-T88VII側のHTTPSを有効にし、ReceiptPrinter__UseHttps=true を設定してください。');
-        }
-
-        return { url, timeout };
-    };
-
-    const buildEposPrintXml = (request) => {
-        const textLang = compact(config.textLang, 'mul');
-        const printBody = [
-            '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">',
-            textElement(buildReceiptText(request), { lang: textLang, align: 'left' }),
-            '<feed line="2" />',
-            '<cut type="feed" />',
-            '</epos-print>'
-        ].join('');
-
-        return [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">',
-            '<s:Body>',
-            printBody,
-            '</s:Body>',
-            '</s:Envelope>'
-        ].join('');
-    };
-
-    const findResponseElement = (document) =>
-        Array.from(document.getElementsByTagName('*')).find((element) => element.localName === 'response');
-
-    const assertEposResponse = (responseXml) => {
-        const document = new DOMParser().parseFromString(responseXml, 'application/xml');
-        const parserError = document.getElementsByTagName('parsererror')[0];
-        if (parserError) {
-            throw new Error('EPSON ePOSの応答XMLを読み取れませんでした。');
-        }
-
-        const responseElement = findResponseElement(document);
-        if (!responseElement) {
-            throw new Error('EPSON ePOSの印刷結果が応答に含まれていません。');
-        }
-
-        const success = responseElement.getAttribute('success');
-        if (success === 'true' || success === '1') {
-            return;
-        }
-
-        const code = compact(responseElement.getAttribute('code'), 'unknown');
-        const status = compact(responseElement.getAttribute('status'), 'unknown');
-        throw new Error(`EPSON ePOS印刷に失敗しました。code=${code}, status=${status}`);
-    };
-
-    const postEposPrintXml = async (endpoint, xml) => {
-        const controller = new AbortController();
-        const abortTimer = window.setTimeout(() => controller.abort(), endpoint.timeout + 5000);
-
+    const trySdkCall = async (label, call, fatal = true) => {
         try {
-            const response = await fetch(endpoint.url.toString(), {
-                method: 'POST',
-                mode: 'cors',
-                cache: 'no-store',
-                headers: {
-                    'Content-Type': 'text/xml; charset=UTF-8',
-                    'SOAPAction': '""'
-                },
-                body: xml,
-                signal: controller.signal
-            });
-
-            if (!response.ok) {
-                throw new Error(`EPSON ePOS endpointがHTTP ${response.status}を返しました。`);
-            }
-
-            assertEposResponse(await response.text());
+            const result = await call();
+            assertSdkResult(label, result);
+            return result;
         } catch (error) {
-            if (error?.name === 'AbortError') {
-                throw new Error('EPSON ePOS印刷がタイムアウトしました。');
+            if (fatal) {
+                throw error;
             }
 
-            if (error instanceof TypeError) {
-                throw new Error('EPSON TM-T88VIIへ接続できませんでした。同一ネットワーク、ePOS-Print有効化、HTTPS証明書、CORSを確認してください。');
-            }
-
-            throw error;
-        } finally {
-            window.clearTimeout(abortTimer);
+            console.warn(`SII receipt printer optional step failed: ${label}`, error);
+            return null;
         }
     };
 
@@ -347,14 +237,41 @@
     };
 
     const printRequest = async (request) => {
-        setStatus('EPSON TM-T88VIIへ領収書を送信しています。', 'info');
+        if (typeof window.PrinterManager !== 'function') {
+            throw new Error('SII Web SDKを読み込めませんでした。ReceiptPrinter__BrowserSdkScriptUrl とネットワーク接続を確認してください。');
+        }
 
-        const endpoint = buildEndpoint();
-        const xml = buildEposPrintXml(request);
+        setStatus('SII Web SDK Serverへ領収書を送信しています。', 'info');
 
-        await postEposPrintXml(endpoint, xml);
-        removePendingReceipt(receiptKey(request));
-        setStatus('領収書を印刷しました。', 'success');
+        const manager = new window.PrinterManager({ host: compact(config.host, 'localhost') });
+        let started = false;
+
+        try {
+            await trySdkCall('start', () => manager.start({}));
+            started = true;
+
+            if (compact(config.codePage)) {
+                await trySdkCall('setCodePage', () => manager.setCodePage({ codePage: config.codePage }), false);
+            }
+
+            if (compact(config.internationalCharacter)) {
+                await trySdkCall(
+                    'setInternationalCharacter',
+                    () => manager.setInternationalCharacter({ internationalCharacter: config.internationalCharacter }),
+                    false);
+            }
+
+            await trySdkCall('appendText', () => manager.appendText({ text: buildReceiptText(request) }));
+            await trySdkCall('appendFeed', () => manager.appendFeed({ value: 2 }), false);
+            await trySdkCall('appendCut', () => manager.appendCut({ cuttingMethod: 'partial' }), false);
+            await trySdkCall('doPrint', () => manager.doPrint({}));
+            removePendingReceipt(receiptKey(request));
+            setStatus('領収書を印刷しました。', 'success');
+        } finally {
+            if (started) {
+                await trySdkCall('stop', () => manager.stop({}), false);
+            }
+        }
     };
 
     reprintList?.addEventListener('click', (event) => {
@@ -378,9 +295,9 @@
 
         retryButton.disabled = true;
         void printRequest(item.request).catch((error) => {
-            console.warn('EPSON ePOS receipt reprint failed.', error);
-            upsertPendingReceipt(item.request, error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。');
-            setStatus(`領収書を再印刷できませんでした。${error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。'}`, 'warning');
+            console.warn('SII receipt reprint failed.', error);
+            upsertPendingReceipt(item.request, error.message ?? 'SII Web SDK Serverとプリンターを確認してください。');
+            setStatus(`領収書を再印刷できませんでした。${error.message ?? 'SII Web SDK Serverとプリンターを確認してください。'}`, 'warning');
         }).finally(() => {
             retryButton.disabled = false;
         });
@@ -394,8 +311,8 @@
 
     const initialRequest = parseRequestElement();
     void printRequest(initialRequest).catch((error) => {
-        console.warn('EPSON ePOS receipt printing failed.', error);
-        upsertPendingReceipt(initialRequest, error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。');
-        setStatus(`領収書を印刷できませんでした。${error.message ?? 'EPSON TM-T88VIIとePOS設定を確認してください。'}`, 'warning');
+        console.warn('SII receipt printing failed.', error);
+        upsertPendingReceipt(initialRequest, error.message ?? 'SII Web SDK Serverとプリンターを確認してください。');
+        setStatus(`領収書を印刷できませんでした。${error.message ?? 'SII Web SDK Serverとプリンターを確認してください。'}`, 'warning');
     });
 })();

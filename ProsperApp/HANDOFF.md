@@ -108,7 +108,7 @@
 
 ### 後続仕様・検討候補
 
-- レシートプリンターは会計時の印刷要求データ作成と、EPSON TM-T88VIIのePOS-Print XMLへのブラウザ直接印刷まで実装済みです。`ReceiptPrinter:Enabled = true` の場合、会計確定後に営業中トップへ戻り、同じブラウザから `ReceiptPrinter:PrinterAddress` の `/cgi-bin/epos/service.cgi` へSOAP形式のePOS-Print XMLをPOSTします。AzureなどHTTPS画面から使う場合は、TM-T88VII側のHTTPS/ePOSを有効にし、`ReceiptPrinter:UseHttps = true` で使います。印字は80mm幅の紙を前提に、店舗名、現在時刻、伝票番号、「飲食代として」、会計額、支払い方法、内消費税額を出します。会計額が50,001円以上の場合だけ収入印紙欄を追加します。印刷失敗で会計確定は取り消しません。失敗した印刷要求は同じブラウザのlocalStorageに再印刷待ちとして残し、営業中トップから再印刷または完了扱いにできます。
+- レシートプリンターは会計時の印刷要求データ作成と、SII Web SDK Serverへのブラウザ直接印刷まで実装済みです。`ReceiptPrinter:Enabled = true` の場合、会計確定後に営業中トップへ戻り、同じブラウザから `siiWebSdk.js` の `PrinterManager` 経由で端末ローカルのSII Web SDK Serverへ接続します。印字は80mm幅の紙を前提に、店舗名、現在時刻、伝票番号、「飲食代として」、会計額、支払い方法、内消費税額を出します。会計額が50,001円以上の場合だけ収入印紙欄を追加します。印刷失敗で会計確定は取り消しません。失敗した印刷要求は同じブラウザのlocalStorageに再印刷待ちとして残し、営業中トップから再印刷または完了扱いにできます。
 
 ## SQL参照とDB反映
 
@@ -276,7 +276,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - カラオケは商品としてオーダー一覧に表示し、時刻列は入店時刻に固定します。異なるタイミングで追加したカラオケも同一伝票内では1行に集約します。伝票詳細では自動システム商品として表示するだけにし、数量変更や保存操作は営業中トップに集約します。
   - 指名料金は指名登録時にシステム商品としてオーダー一覧へ自動表示します。通常注文行は訂正モードで数量のみ変更できます。数量0は注文取消扱いです。カラオケや指名料金などのシステム商品は通常注文の訂正・削除対象に含めません。
   - 会計後の会計処理ボタンは会計取消ボタンとして扱います。押下時は売上、残金、印刷済み領収書などへの影響を確認し、実行後は伝票を営業中へ戻して再会計できる状態にします。
-  - 会計確定後は `ReceiptPrinter:Enabled = true` の場合だけ、領収書印刷要求を作成します。会計確定後に営業中トップへ戻ったブラウザが、EPSON TM-T88VIIのePOS-Print endpointへ直接印刷します。80mm幅の紙に、店舗名、現在時刻、伝票番号、「飲食代として」、会計額、支払い方法、内消費税額を印字し、会計額50,001円以上では収入印紙欄を追加します。印刷失敗で会計確定は取り消さず、同じブラウザの営業中トップに再印刷待ちとして残します。
+  - 会計確定後は `ReceiptPrinter:Enabled = true` の場合だけ、領収書印刷要求を作成します。会計確定後に営業中トップへ戻ったブラウザが、SII Web SDK Serverへ直接印刷します。80mm幅の紙に、店舗名、現在時刻、伝票番号、「飲食代として」、会計額、支払い方法、内消費税額を印字し、会計額50,001円以上では収入印紙欄を追加します。印刷失敗で会計確定は取り消さず、同じブラウザの営業中トップに再印刷待ちとして残します。
 
 - `/Orders`
   - オーダー入力。営業中端末の上部タブや業務フローナビには含めない注文端末専用画面です。
@@ -355,18 +355,16 @@ Google Drive OAuth/プレビューを使う場合は以下も必要です。
 - `GoogleDrive__Scopes__0` など
 - `GoogleAuth__AllowedEmails__0` または `GoogleAuth__AllowedDomains__0` など
 
-EPSON TM-T88VIIの会計時領収書印刷を使う場合は以下も設定します。
+SII Web SDK Server経由の会計時領収書印刷を使う場合は以下も設定します。
 
 - `ReceiptPrinter__Enabled=true`
-- `ReceiptPrinter__Provider=epson-epos`
-- `ReceiptPrinter__PrinterAddress`
-  - TM-T88VIIのIPアドレスまたはホスト名です。`https://` から始まるURLを入れた場合はそのURLを優先します。
-- `ReceiptPrinter__DeviceId=local_printer`
-- `ReceiptPrinter__UseHttps=true`
-  - Azure App ServiceのHTTPS画面からHTTPのプリンターendpointへ送るとブラウザにブロックされるため、本番はHTTPSを前提にします。
-- `ReceiptPrinter__EndpointPath=/cgi-bin/epos/service.cgi`
-- `ReceiptPrinter__TimeoutMilliseconds=10000`
-- `ReceiptPrinter__TextLang=mul`
+- `ReceiptPrinter__BrowserSdkScriptUrl=https://www.sii-ps.com/sample/websdk/siiWebSdk.js`
+- `ReceiptPrinter__BrowserWebSocketHost=localhost`
+  - Android営業中端末上でSII Web SDK Serverを起動して使う前提です。別hostで動かす場合だけ変更します。
+- `ReceiptPrinter__BrowserCodePage`
+  - 通常は空でよいです。実機で日本語印字に調整が必要な場合だけSII側の指定値を入れます。
+- `ReceiptPrinter__BrowserInternationalCharacter`
+  - 通常は空でよいです。実機で国際文字設定が必要な場合だけSII側の指定値を入れます。
 - `ReceiptPrinter__LineWidth=48`
 
 ## GitHub Actions / Azure自動デプロイ
