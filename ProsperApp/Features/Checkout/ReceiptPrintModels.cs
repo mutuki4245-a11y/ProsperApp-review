@@ -4,7 +4,7 @@ public class ReceiptPrintRequest
 {
     public string SchemaVersion { get; set; } = "checkout-receipt-v1";
 
-    public string Provider { get; set; } = "sii";
+    public string Provider { get; set; } = "epson-epos";
 
     public long CheckoutId { get; set; }
 

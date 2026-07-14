@@ -268,19 +268,11 @@
     <partial name="_ValidationScriptsPartial" />
     @if (Model.ShouldRunBrowserReceiptPrint)
     {
-        @if (!string.IsNullOrWhiteSpace(Model.ReceiptPrinterBrowserSdkScriptUrl))
-        {
-            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"></script>
-        }
         <script type="application/json" id="pendingCheckoutReceiptPrintRequest">@Html.Raw(Model.PendingReceiptPrintRequestJson)</script>
         <script>
-            window.prosperSiiReceiptPrinter = {
-                host: @Json.Serialize(Model.ReceiptPrinterBrowserWebSocketHost),
-                codePage: @Json.Serialize(Model.ReceiptPrinterBrowserCodePage),
-                internationalCharacter: @Json.Serialize(Model.ReceiptPrinterBrowserInternationalCharacter)
-            };
+            window.prosperEpsonReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
         </script>
-        <script src="~/js/features/sii-receipt-printer.js" asp-append-version="true"></script>
+        <script src="~/js/features/epson-epos-receipt-printer.js" asp-append-version="true"></script>
     }
     <script>
         (() => {

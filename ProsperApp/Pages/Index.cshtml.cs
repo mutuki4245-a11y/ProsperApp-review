@@ -60,15 +60,29 @@ public class IndexModel(
     public bool ShouldRunBrowserReceiptPrint => _receiptPrinterOptions.Enabled &&
         !string.IsNullOrWhiteSpace(PendingReceiptPrintRequestJson);
 
-    public string ReceiptPrinterBrowserSdkScriptUrl => _receiptPrinterOptions.BrowserSdkScriptUrl;
-
-    public string ReceiptPrinterBrowserWebSocketHost => string.IsNullOrWhiteSpace(_receiptPrinterOptions.BrowserWebSocketHost)
-        ? "localhost"
-        : _receiptPrinterOptions.BrowserWebSocketHost;
-
-    public string ReceiptPrinterBrowserCodePage => _receiptPrinterOptions.BrowserCodePage;
-
-    public string ReceiptPrinterBrowserInternationalCharacter => _receiptPrinterOptions.BrowserInternationalCharacter;
+    public object ReceiptPrinterBrowserOptions => new
+    {
+        provider = string.IsNullOrWhiteSpace(_receiptPrinterOptions.Provider)
+            ? "epson-epos"
+            : _receiptPrinterOptions.Provider,
+        printerAddress = _receiptPrinterOptions.PrinterAddress,
+        deviceId = string.IsNullOrWhiteSpace(_receiptPrinterOptions.DeviceId)
+            ? "local_printer"
+            : _receiptPrinterOptions.DeviceId,
+        useHttps = _receiptPrinterOptions.UseHttps,
+        endpointPath = string.IsNullOrWhiteSpace(_receiptPrinterOptions.EndpointPath)
+            ? "/cgi-bin/epos/service.cgi"
+            : _receiptPrinterOptions.EndpointPath,
+        timeoutMilliseconds = _receiptPrinterOptions.TimeoutMilliseconds is >= 1000 and <= 120000
+            ? _receiptPrinterOptions.TimeoutMilliseconds
+            : 10000,
+        textLang = string.IsNullOrWhiteSpace(_receiptPrinterOptions.TextLang)
+            ? "mul"
+            : _receiptPrinterOptions.TextLang,
+        lineWidth = _receiptPrinterOptions.LineWidth is >= 24 and <= 64
+            ? _receiptPrinterOptions.LineWidth
+            : 48
+    };
 
     public bool SlipsEnabled => _featureGate.IsEnabled(FeatureNames.Slips);
 
