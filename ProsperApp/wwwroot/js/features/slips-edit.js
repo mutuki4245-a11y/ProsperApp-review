@@ -5,7 +5,6 @@
     const orderItems = pageData.orderItems ?? [];
     const initialOrderQueue = pageData.initialOrderQueue ?? [];
     const showOrderModal = pageData.showOrderModal === true;
-    const showAddCustomerModal = pageData.showAddCustomerModal === true;
     const setSaveStatus = (target, message) => {
         if (!target) {
             return;
@@ -24,90 +23,6 @@
         }
     };
 
-    const setPartialStatus = (sectionId, message) => {
-        const section = document.getElementById(sectionId);
-        const status = section?.querySelector('[data-partial-status]');
-        setSaveStatus(status, message);
-    };
-
-    const parseValidation = (root) => {
-        if (window.jQuery?.validator?.unobtrusive) {
-            window.jQuery.validator.unobtrusive.parse(root);
-        }
-    };
-
-    const replacePartial = async (form, sectionId) => {
-        const section = document.getElementById(sectionId);
-        if (!section) {
-            form.submit();
-            return;
-        }
-
-        setPartialStatus(sectionId, '保存中');
-        window.AppLoading?.show(form);
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form),
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Partial form save failed.');
-            }
-
-            const html = await response.text();
-            section.innerHTML = html;
-            parseValidation(section);
-            const hasValidationError = section.querySelector('.validation-summary-errors, .field-validation-error');
-            setPartialStatus(sectionId, hasValidationError ? '保存失敗' : '保存済み');
-        } catch (error) {
-            setPartialStatus(sectionId, '保存失敗');
-            throw error;
-        } finally {
-            window.AppLoading?.hide(form);
-        }
-    };
-
-    const getCustomerList = () => document.getElementById('customerList');
-
-    const renumberRows = () => {
-        const list = getCustomerList();
-        if (!list) {
-            return;
-        }
-
-        const customerNumberStart = Number.parseInt(list.dataset.customerNumberStart ?? '1', 10) || 1;
-        list.querySelectorAll('[data-customer-row]').forEach((row, index) => {
-            const label = row.querySelector('.customer-row__index');
-            if (label) {
-                label.textContent = String(customerNumberStart + index);
-            }
-            const removeButton = row.querySelector('[data-remove-customer]');
-            if (removeButton) {
-                removeButton.hidden = index === 0;
-            }
-        });
-    };
-
-    const removeCustomerRow = (button) => {
-        const list = getCustomerList();
-        if (!list) {
-            return;
-        }
-
-        const rows = list.querySelectorAll('[data-customer-row]');
-        if (rows.length <= 1) {
-            return;
-        }
-
-        button.closest('[data-customer-row]')?.remove();
-        renumberRows();
-    };
-
-    const addCustomerModalElement = document.getElementById('addCustomerModal');
-    const addCustomerModal = addCustomerModalElement ? new bootstrap.Modal(addCustomerModalElement) : null;
     const slipOrderModalElement = document.getElementById('slipOrderModal');
     const slipOrderModal = slipOrderModalElement ? new bootstrap.Modal(slipOrderModalElement) : null;
     const slipOrderForm = document.getElementById('slipOrderForm');
@@ -370,12 +285,6 @@
     };
 
     document.addEventListener('click', (event) => {
-        const removeCustomerButton = event.target.closest('[data-remove-customer]');
-        if (removeCustomerButton) {
-            removeCustomerRow(removeCustomerButton);
-            return;
-        }
-
         const orderItemButton = event.target.closest('[data-detail-item-id]');
         if (orderItemButton) {
             const itemId = orderItemButton.dataset.detailItemId ?? '';
@@ -445,29 +354,12 @@
         setSaveStatus(detailOrderQueueStatus, '保存中');
     });
 
-    document.addEventListener('submit', (event) => {
-        const form = event.target.closest('[data-partial-form]');
-        if (!form) {
-            return;
-        }
-
-        event.preventDefault();
-        const sectionId = form.dataset.partialForm === 'customers'
-            ? 'slipCustomersSection'
-            : 'slipNominationsSection';
-        replacePartial(form, sectionId).catch(() => {});
-    });
-
     orderAttendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
         pendingBackItemId = null;
     });
 
     if (showOrderModal) {
         slipOrderModal?.show();
-    }
-
-    if (showAddCustomerModal) {
-        addCustomerModal?.show();
     }
 
     recalculateOrderTotal();
