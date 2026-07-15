@@ -4,8 +4,8 @@
     const reprintPanel = document.querySelector('[data-receipt-reprint-panel]');
     const reprintList = document.querySelector('[data-receipt-reprint-list]');
     const config = window.prosperSiiReceiptPrinter ?? {};
-    const receiptLayout = window.ProsperSiiReceiptLayout.create(config);
     const pendingStorageKey = 'prosper:receipt-reprints:v1';
+    const compact = (value, fallback = '') => String(value ?? fallback).trim();
 
     const setStatus = (message, state) => {
         if (!statusElement) {
@@ -18,7 +18,40 @@
         statusElement.classList.add(state === 'success' ? 'alert-success' : state === 'warning' ? 'alert-warning' : 'alert-info');
     };
 
-    const compact = (value, fallback = '') => String(value ?? fallback).trim();
+    const formatErrorMessage = (error, fallback = 'SII Web SDK Serverとプリンターを確認してください。') => {
+        const message = compact(error?.message, fallback);
+        const code = compact(error?.code);
+        return code ? `${message} code=${code}` : message;
+    };
+
+    const createFallbackLayout = () => ({
+        buildReceiptText: () => {
+            throw new Error('領収書レイアウト処理を読み込めませんでした。ページを再読み込みしてください。');
+        },
+        describeReceipt: (request) => {
+            const table = compact(request?.tableDisplayName, '-');
+            const slipNo = compact(request?.slipNo, request?.slipId);
+            const amount = Number(request?.totalAmount || 0).toLocaleString('ja-JP');
+            return `${table} / 伝票 ${slipNo} / ${amount}円`;
+        },
+        receiptKey: (request) => compact(request?.checkoutId, `${request?.slipId ?? 'unknown'}:${request?.closedAt ?? Date.now()}`)
+    });
+
+    const createReceiptLayout = () => {
+        if (typeof window.ProsperSiiReceiptLayout?.create !== 'function') {
+            throw new Error('領収書レイアウトJSを読み込めませんでした。');
+        }
+
+        return window.ProsperSiiReceiptLayout.create(config);
+    };
+
+    let receiptLayout = createFallbackLayout();
+    try {
+        receiptLayout = createReceiptLayout();
+    } catch (error) {
+        console.warn('SII receipt layout initialization failed.', error);
+        setStatus(`領収書印刷を開始できませんでした。${formatErrorMessage(error)}`, 'warning');
+    }
 
     const parseRequestElement = () => {
         try {
@@ -30,12 +63,23 @@
         }
     };
 
+    const sdkStepLabel = (label) => ({
+        start: 'SII Web SDK Server接続',
+        setCodePage: 'コードページ設定',
+        setInternationalCharacter: '国際文字設定',
+        appendText: '印字データ送信',
+        appendFeed: '紙送り',
+        appendCut: 'カット指定',
+        doPrint: '印刷実行',
+        stop: 'SII Web SDK Server切断'
+    }[label] ?? label);
+
     const assertSdkResult = (label, result) => {
         if (!result || Number(result.errorCode) !== 0) {
             const detail = result
                 ? `errorCode=${result.errorCode}, errorString=${result.errorString ?? ''}, errorExtendedString=${result.errorExtendedString ?? ''}`
                 : 'no result';
-            throw new Error(`${label} failed: ${detail}`);
+            throw new Error(`${sdkStepLabel(label)}に失敗しました。${detail}`);
         }
     };
 
@@ -195,8 +239,9 @@
         retryButton.disabled = true;
         void printRequest(item.request).catch((error) => {
             console.warn('SII receipt reprint failed.', error);
-            upsertPendingReceipt(item.request, error.message ?? 'SII Web SDK Serverとプリンターを確認してください。');
-            setStatus(`領収書を再印刷できませんでした。${error.message ?? 'SII Web SDK Serverとプリンターを確認してください。'}`, 'warning');
+            const message = formatErrorMessage(error);
+            upsertPendingReceipt(item.request, message);
+            setStatus(`領収書を再印刷できませんでした。${message}`, 'warning');
         }).finally(() => {
             retryButton.disabled = false;
         });
@@ -208,10 +253,19 @@
         return;
     }
 
-    const initialRequest = parseRequestElement();
+    let initialRequest;
+    try {
+        initialRequest = parseRequestElement();
+    } catch (error) {
+        console.warn('SII receipt print request parsing failed.', error);
+        setStatus(`領収書を印刷できませんでした。${formatErrorMessage(error)}`, 'warning');
+        return;
+    }
+
     void printRequest(initialRequest).catch((error) => {
         console.warn('SII receipt printing failed.', error);
-        upsertPendingReceipt(initialRequest, error.message ?? 'SII Web SDK Serverとプリンターを確認してください。');
-        setStatus(`領収書を印刷できませんでした。${error.message ?? 'SII Web SDK Serverとプリンターを確認してください。'}`, 'warning');
+        const message = formatErrorMessage(error);
+        upsertPendingReceipt(initialRequest, message);
+        setStatus(`領収書を印刷できませんでした。${message}`, 'warning');
     });
 })();
