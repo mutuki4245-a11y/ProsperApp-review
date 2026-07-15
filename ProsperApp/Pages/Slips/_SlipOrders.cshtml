@@ -293,7 +293,7 @@
                                                 {
                                                     var group = orderItemGroups[groupIndex];
                                                     <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-detail-category-panel="@groupIndex">
-                                                        <h3>@group.Key</h3>
+                                                        <h3 class="visually-hidden">@group.Key</h3>
                                                         <div class="order-item-grid">
                                                             @foreach (var item in group)
                                                             {

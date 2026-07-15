@@ -73,18 +73,18 @@
   display: grid;
   font-size: 0.78rem;
   font-weight: 800;
-  gap: 0.5rem;
-  grid-template-columns: minmax(6rem, 0.6fr) 4.75rem 5.25rem minmax(8rem, 1.2fr) minmax(7rem, 0.85fr) minmax(6rem, 0.75fr) 7.5rem minmax(12rem, auto);
-  padding: 0 0.75rem;
+  gap: 0.45rem;
+  grid-template-columns: minmax(5rem, 0.55fr) 4.5rem 4.75rem minmax(7rem, 1.15fr) minmax(6rem, 0.85fr) minmax(5rem, 0.62fr) minmax(6.5rem, 0.72fr) minmax(10rem, auto);
+  padding: 0 0.65rem;
 }
 
 .slip-list__row {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.55rem;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 0.9rem;
+  padding: 0.75rem;
 }
 
 .slip-list__row:has(.text-bg-success) {
@@ -94,7 +94,7 @@
 .slip-list__row--link {
   align-items: center;
   color: #102a43;
-  grid-template-columns: minmax(5rem, 0.6fr) auto 5.5rem minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.7fr) 7rem;
+  grid-template-columns: minmax(4.75rem, 0.55fr) auto 5rem minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 0.62fr) 6.75rem;
   text-decoration: none;
 }
 
@@ -102,8 +102,8 @@
   align-items: center;
   gap: 0.55rem;
   grid-template-columns: minmax(0, 1fr) minmax(12rem, auto);
-  min-height: 4.75rem;
-  padding: 0.65rem 0.75rem;
+  min-height: 4.25rem;
+  padding: 0.55rem 0.65rem;
 }
 
 .slip-list__row--link:hover,
@@ -120,16 +120,16 @@
   border-radius: 8px;
   color: #102a43;
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: minmax(6rem, 0.6fr) 4.75rem 5.25rem minmax(8rem, 1.2fr) minmax(7rem, 0.85fr) minmax(6rem, 0.75fr) 7.5rem;
+  gap: 0.45rem;
+  grid-template-columns: minmax(5rem, 0.55fr) 4.5rem 4.75rem minmax(7rem, 1.15fr) minmax(6rem, 0.85fr) minmax(5rem, 0.62fr) minmax(6.5rem, 0.72fr);
   min-width: 0;
-  padding: 0.25rem;
+  padding: 0.2rem;
   text-decoration: none;
 }
 
 .slip-list__table,
 .slip-list__amount {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 800;
 }
 
@@ -177,8 +177,8 @@
   gap: 0.4rem;
   grid-template-columns: auto 2.75rem minmax(2.4rem, auto) 2.75rem;
   justify-self: end;
-  min-height: 3.2rem;
-  padding: 0.35rem 0.45rem;
+  min-height: 3rem;
+  padding: 0.3rem 0.4rem;
   white-space: nowrap;
 }
 
@@ -264,6 +264,10 @@
 .slip-list__row--add {
   background: #f8fafc;
   border-style: dashed;
+}
+
+.slip-list__row--add .slip-list__main {
+  grid-column: 1 / -1;
 }
 
 .slip-list__row--add .btn {
@@ -1070,6 +1074,10 @@
   margin: 0;
 }
 
+.terminal-page--slip-detail {
+  --terminal-content-width: 1040px;
+}
+
 .slip-modal-form {
   display: grid;
   gap: 0.85rem;
@@ -1142,6 +1150,11 @@
   max-width: min(1080px, calc(100vw - 1rem));
 }
 
+#slipOrderModal .modal-dialog,
+#slipCheckoutModal .modal-dialog {
+  max-width: min(1040px, calc(100vw - 1rem));
+}
+
 #createSlipModal .modal-content,
 #slipOrderModal .modal-content,
 #slipCheckoutModal .modal-content {
@@ -1184,6 +1197,24 @@
 #slipOrderModal .order-entry__queue {
   bottom: auto;
   position: static;
+}
+
+#slipOrderModal .order-entry__grid--modal {
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+}
+
+#slipOrderModal .slip-create__panel,
+#slipCheckoutModal .slip-create__panel,
+#slipCheckoutModal .checkout-review__panel {
+  border-color: #cbd5e1;
+}
+
+#slipCheckoutModal .slip-modal-form {
+  gap: 1rem;
+  margin: 0 auto;
+  max-width: 940px;
+  width: 100%;
 }
 
 .slip-modal-form .slip-create__panel {

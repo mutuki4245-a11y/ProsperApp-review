@@ -261,6 +261,7 @@
         let index = 0;
         let total = 0;
         const serializedLines = [];
+        const renderedLines = [];
         queue.forEach((line, key) => {
             const item = items.find((candidate) => String(candidate.id) === String(line.itemId));
             const lineSlip = slips.find((candidate) => String(candidate.id) === String(line.slipId));
@@ -294,39 +295,79 @@
                 `);
             }
 
+            renderedLines.push({ key, item, lineSlip, quantity, cast, subtotal });
+            index += 1;
+        });
+
+        const queueGroups = new Map();
+        renderedLines.forEach((line) => {
+            const slipId = String(line.lineSlip.id);
+            let group = queueGroups.get(slipId);
+            if (!group) {
+                group = {
+                    slip: line.lineSlip,
+                    lines: [],
+                    quantity: 0,
+                    total: 0
+                };
+                queueGroups.set(slipId, group);
+            }
+
+            group.lines.push(line);
+            group.quantity += line.quantity;
+            group.total += line.subtotal;
+        });
+
+        const buildQueueRow = (line) => {
             const row = document.createElement('div');
             row.className = 'order-queue__row';
             const main = document.createElement('div');
             main.className = 'order-queue__row-main';
             const name = document.createElement('strong');
-            name.textContent = item.name;
-            const slip = document.createElement('small');
-            slip.className = 'order-queue__back';
-            slip.textContent = lineSlip.display;
-            main.append(name, slip);
-            if (cast) {
+            name.textContent = line.item.name;
+            main.appendChild(name);
+            if (line.cast) {
                 const back = document.createElement('small');
                 back.className = 'order-queue__back';
-                back.textContent = window.OrderBackText.summary(cast, item, quantity);
+                back.textContent = window.OrderBackText.summary(line.cast, line.item, line.quantity);
                 main.appendChild(back);
             }
 
             const amount = document.createElement('div');
             amount.className = 'order-queue__row-amount';
             const price = document.createElement('span');
-            price.textContent = `${formatYen(Number(item.price))} x ${quantity}`;
+            price.textContent = `${formatYen(Number(line.item.price))} x ${line.quantity}`;
             const subtotalText = document.createElement('strong');
-            subtotalText.textContent = formatYen(subtotal);
+            subtotalText.textContent = formatYen(line.subtotal);
             amount.append(price, subtotalText);
 
             const remove = document.createElement('button');
             remove.className = 'btn btn-outline-danger btn-sm';
             remove.type = 'button';
-            remove.dataset.removeItem = key;
+            remove.dataset.removeItem = line.key;
             remove.textContent = '削除';
             row.append(main, amount, remove);
-            queueList?.appendChild(row);
-            index += 1;
+            return row;
+        };
+
+        queueGroups.forEach((group) => {
+            const groupElement = document.createElement('section');
+            groupElement.className = 'order-queue__group';
+
+            const header = document.createElement('div');
+            header.className = 'order-queue__group-header';
+            const title = document.createElement('strong');
+            title.textContent = group.slip.display;
+            const summary = document.createElement('span');
+            summary.textContent = `${group.quantity} 点 / ${formatYen(group.total)}`;
+            header.append(title, summary);
+            groupElement.appendChild(header);
+
+            group.lines.forEach((line) => {
+                groupElement.appendChild(buildQueueRow(line));
+            });
+
+            queueList?.appendChild(groupElement);
         });
 
         if (orderQueueJson) {

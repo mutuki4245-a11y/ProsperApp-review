@@ -152,9 +152,9 @@ body.order-terminal .order-entry__queue {
   border: 1px solid #cbd5e1;
   border-radius: 10px;
   color: #102a43;
-  display: flex;
+  display: grid;
   gap: 0.5rem;
-  justify-content: space-between;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
   min-height: 3.25rem;
   padding: 0.6rem 0.7rem;
   text-align: left;
@@ -266,7 +266,7 @@ body.order-terminal .order-entry__queue {
   align-items: center;
   background: #fff;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: 8px;
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(0, 1fr) minmax(5.75rem, auto) auto;
@@ -275,6 +275,43 @@ body.order-terminal .order-entry__queue {
   min-width: 0;
   overflow: hidden;
   padding: 0.6rem;
+}
+
+.order-queue__group {
+  background: #f8fafc;
+  border: 1px solid #d9e2ec;
+  border-radius: 10px;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.5rem;
+}
+
+.order-queue__group-header {
+  align-items: center;
+  color: #334155;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.order-queue__group-header strong,
+.order-queue__group-header span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.order-queue__group-header strong {
+  color: #102a43;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.order-queue__group-header span {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .order-queue__row-main {
@@ -370,6 +407,19 @@ body.order-terminal .order-entry__queue .slip-create__actions .btn {
   body.order-terminal .order-entry__grid {
     grid-template-columns: minmax(0, 1fr);
     overflow: visible;
+  }
+
+  .order-slip-picker__button,
+  .order-queue__group-header {
+    align-items: start;
+  }
+
+  .order-slip-picker__button {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .order-queue__group-header {
+    flex-direction: column;
   }
 
   body.order-terminal .order-entry__panel {

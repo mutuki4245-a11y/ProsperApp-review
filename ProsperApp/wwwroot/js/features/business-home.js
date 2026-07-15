@@ -17,7 +17,6 @@
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
     const slipEditUrl = config.slipEditUrl || '';
-    const canCreateSalesInput = Boolean(config.canCreateSalesInput);
     const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
@@ -277,16 +276,6 @@
             messageElement.dataset.businessEmptyMessage = '';
             main.append(titleElement, messageElement);
             row.appendChild(main);
-
-            if (canCreateSalesInput) {
-                const actions = buildElement('div', 'slip-list__actions');
-                const button = buildElement('button', 'btn btn-primary btn-lg', '伝票を追加');
-                button.type = 'button';
-                button.dataset.bsToggle = 'modal';
-                button.dataset.bsTarget = '#createSlipModal';
-                actions.appendChild(button);
-                row.appendChild(actions);
-            }
 
             list.appendChild(row);
         }

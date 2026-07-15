@@ -46,7 +46,15 @@
             }
 
             return payments
-                .map((payment) => compact(payment.methodName, payment.methodCode))
+                .map((payment) => {
+                    const methodCode = compact(payment.methodCode).toLowerCase();
+                    const methodName = compact(payment.methodName, payment.methodCode);
+                    if (methodCode === 'cat' || methodName.toUpperCase() === 'CAT') {
+                        return 'クレジット';
+                    }
+
+                    return methodName;
+                })
                 .filter((methodName) => methodName.length > 0)
                 .join(' / ') || '-';
         };
@@ -86,7 +94,7 @@
             lines.push(twoColumnLine('現在時刻', formatDateTime(new Date())));
             lines.push(twoColumnLine('伝票番号', compact(request.slipNo, request.slipId)));
             lines.push('');
-            lines.push(centerLine('飲食代として'));
+            lines.push(centerLine('ご飲食代として'));
             lines.push('');
             lines.push(twoColumnLine('会計額', formatYen(totalAmount)));
             appendPaymentLine(lines, paymentText(request));
