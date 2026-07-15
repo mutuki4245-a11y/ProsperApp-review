@@ -71,6 +71,16 @@ begin
 
     if exists (
         select 1
+        from public.store_slip_customers c
+        where c.slip_id = p_slip_id
+          and c.status <> 'cancelled'
+          and p_closed_at < c.entered_at
+    ) then
+        raise exception 'invalid_closed_at';
+    end if;
+
+    if exists (
+        select 1
         from public.store_checkouts c
         where c.slip_id = p_slip_id
           and c.status <> 'cancelled'

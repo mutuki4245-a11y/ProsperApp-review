@@ -147,9 +147,10 @@ public class SupabaseCheckoutRepository(
             return "締め済みの営業日は会計取消できません。";
         }
 
-        if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase))
+        if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase) ||
+            rawError.Contains("chk_store_slip_customers_left_at", StringComparison.OrdinalIgnoreCase))
         {
-            return "退店時刻は入店時刻以降で入力してください。";
+            return "退店時刻はすべての客の入店時刻以降で入力してください。";
         }
 
         if (rawError.Contains("invalid_checkout_total", StringComparison.OrdinalIgnoreCase))

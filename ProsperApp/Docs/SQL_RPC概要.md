@@ -90,7 +90,7 @@ DB反映時の基本順序は以下。
 
 用語は、会計額へ加算する料金を `指名料金`、指名時にキャストへ支払うバックを `指名バック`、商品注文時にキャストへ支払う通常バックを `ドリンクバック`、商品注文バック対象が当該伝票の指名キャストだった場合のバックを `担当バック` と呼び分ける。
 
-会計確定時は `store.confirm_checkout` が注文、指名、自由入力調整を再集計し、支払合計と照合したうえで `store_checkouts.subtotal_amount`、`store_checkouts.service_tax_amount`、`store_checkouts.total_amount` と `store_checkout_payments` を保存する。営業中一覧の表示額を確定額として信用しない。
+会計確定時は `store.confirm_checkout` が注文、指名、自由入力調整を再集計し、支払合計と照合したうえで `store_checkouts.subtotal_amount`、`store_checkouts.service_tax_amount`、`store_checkouts.total_amount` と `store_checkout_payments` を保存する。営業中一覧の表示額を確定額として信用しない。退店時刻は伝票開始時刻とキャンセルされていない全客の入店時刻以降であることを検証し、不正な場合は `invalid_closed_at` として返す。
 
 会計確定前に追加の事前確認RPCは増やさない。アプリは会計モーダルで利用者が確認した保存済み伝票スナップショットを `p_confirmed_snapshot` として `store.confirm_checkout` へ渡し、RPC内でDB最新状態と厳密比較する。不一致の場合は会計を確定せず `checkout_snapshot_mismatch` として返し、アプリ側は伝票詳細を再取得して同じ会計モーダル内の再確認へ戻す。
 

@@ -113,9 +113,9 @@ public static class CheckoutInputEditor
             errors.Add(new CheckoutInputValidationError(ClosedTimeKey, "退店時刻は5分単位で選択してください。"));
         }
 
-        if (input.ClosedAt is null || input.ClosedAt.Value < storeClock.ToStoreDateTime(detail.OpenedAt))
+        if (input.ClosedAt is null || input.ClosedAt.Value < GetMinimumClosedAt(detail, storeClock))
         {
-            errors.Add(new CheckoutInputValidationError(ClosedTimeKey, "退店時刻は入店時刻以降で入力してください。"));
+            errors.Add(new CheckoutInputValidationError(ClosedTimeKey, "退店時刻はすべての客の入店時刻以降で入力してください。"));
         }
 
         if (selectedPayments.Count == 0)
@@ -141,6 +141,21 @@ public static class CheckoutInputEditor
         }
 
         return errors;
+    }
+
+    private static DateTime GetMinimumClosedAt(SlipDetail detail, IStoreClock storeClock)
+    {
+        var minimumClosedAt = storeClock.ToStoreDateTime(detail.OpenedAt);
+        foreach (var customer in detail.Customers.Where(x => !string.Equals(x.Status, "cancelled", StringComparison.Ordinal)))
+        {
+            var enteredAt = storeClock.ToStoreDateTime(customer.EnteredAt);
+            if (enteredAt > minimumClosedAt)
+            {
+                minimumClosedAt = enteredAt;
+            }
+        }
+
+        return minimumClosedAt;
     }
 
     private static void ValidateReceivedAmount(
