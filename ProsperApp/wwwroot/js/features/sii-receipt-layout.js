@@ -75,6 +75,11 @@
         const consumptionTaxAmount = (amount) =>
             Math.round(toAmount(amount) * consumptionTaxRate / (1 + consumptionTaxRate));
 
+        const addresseeText = (request) => {
+            const value = compact(request.addressee) || '上様';
+            return value.endsWith('様') ? value : `${value} 様`;
+        };
+
         const appendRevenueStampBox = (lines) => {
             lines.push('');
             lines.push('収入印紙欄');
@@ -91,6 +96,7 @@
             lines.push(compact(request.storeName, '店舗'));
             lines.push(centerLine('領収書'));
             lines.push(separator());
+            lines.push(twoColumnLine('宛名', addresseeText(request)));
             lines.push(twoColumnLine('現在時刻', formatDateTime(new Date())));
             lines.push(twoColumnLine('伝票番号', compact(request.slipNo, request.slipId)));
             lines.push('');

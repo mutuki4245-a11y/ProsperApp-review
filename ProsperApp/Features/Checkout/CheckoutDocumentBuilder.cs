@@ -133,6 +133,7 @@ public sealed class CheckoutDocument
             SlipId = _detail.SlipId,
             SlipNo = _detail.SlipNo,
             StoreName = storeName,
+            Addressee = BuildReceiptAddressee(_detail),
             TableDisplayName = _detail.TableDisplayName,
             ClosedAt = closedAt,
             SubtotalAmount = Totals.SubtotalAmount,
@@ -177,5 +178,21 @@ public sealed class CheckoutDocument
             }));
 
         return request;
+    }
+
+    private static string BuildReceiptAddressee(SlipDetail detail)
+    {
+        var customerNames = detail.Customers
+            .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.Ordinal))
+            .OrderBy(x => x.LineNo)
+            .Select(x => x.CustomerLabel?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return customerNames.Length == 0
+            ? "上様"
+            : string.Join("、", customerNames);
     }
 }

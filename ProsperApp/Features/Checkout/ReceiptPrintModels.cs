@@ -14,6 +14,8 @@ public class ReceiptPrintRequest
 
     public string StoreName { get; set; } = string.Empty;
 
+    public string Addressee { get; set; } = "上様";
+
     public string TableDisplayName { get; set; } = string.Empty;
 
     public DateTimeOffset ClosedAt { get; set; }
