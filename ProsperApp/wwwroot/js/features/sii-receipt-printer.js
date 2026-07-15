@@ -4,6 +4,7 @@
     const reprintPanel = document.querySelector('[data-receipt-reprint-panel]');
     const reprintList = document.querySelector('[data-receipt-reprint-list]');
     const config = window.prosperSiiReceiptPrinter ?? {};
+    const sdkScript = window.prosperSiiReceiptSdkScript ?? {};
     const pendingStorageKey = 'prosper:receipt-reprints:v1';
     const compact = (value, fallback = '') => String(value ?? fallback).trim();
 
@@ -52,6 +53,33 @@
         console.warn('SII receipt layout initialization failed.', error);
         setStatus(`領収書印刷を開始できませんでした。${formatErrorMessage(error)}`, 'warning');
     }
+
+    const resolvePrinterManager = () => {
+        if (typeof window.PrinterManager === 'function') {
+            return window.PrinterManager;
+        }
+
+        try {
+            if (typeof PrinterManager === 'function') {
+                return PrinterManager;
+            }
+        } catch {
+        }
+
+        return null;
+    };
+
+    const describeSdkUnavailable = () => {
+        if (sdkScript.failed === true) {
+            return `SII Web SDKのscript取得に失敗しました。url=${compact(sdkScript.url, '(未設定)')}`;
+        }
+
+        if (compact(sdkScript.url).length === 0) {
+            return 'SII Web SDKのscript URLが未設定です。ReceiptPrinter__BrowserSdkScriptUrl を確認してください。';
+        }
+
+        return `SII Web SDKを利用できませんでした。script URL、ネットワーク接続、SDKの読み込み状態を確認してください。url=${compact(sdkScript.url)}`;
+    };
 
     const parseRequestElement = () => {
         try {
@@ -180,13 +208,14 @@
     };
 
     const printRequest = async (request) => {
-        if (typeof window.PrinterManager !== 'function') {
-            throw new Error('SII Web SDKを読み込めませんでした。ReceiptPrinter__BrowserSdkScriptUrl とネットワーク接続を確認してください。');
+        const PrinterManagerClass = resolvePrinterManager();
+        if (PrinterManagerClass === null) {
+            throw new Error(describeSdkUnavailable());
         }
 
         setStatus('SII Web SDK Serverへ領収書を送信しています。', 'info');
 
-        const manager = new window.PrinterManager({ host: compact(config.host, 'localhost') });
+        const manager = new PrinterManagerClass({ host: compact(config.host, 'localhost') });
         let started = false;
 
         try {

@@ -285,7 +285,16 @@
     {
         @if (!string.IsNullOrWhiteSpace(Model.ReceiptPrinterBrowserSdkScriptUrl))
         {
-            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"></script>
+            <script>
+                window.prosperSiiReceiptSdkScript = {
+                    url: @Json.Serialize(Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)),
+                    loaded: false,
+                    failed: false
+                };
+            </script>
+            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"
+                    onload="window.prosperSiiReceiptSdkScript.loaded = true"
+                    onerror="window.prosperSiiReceiptSdkScript.failed = true"></script>
         }
         <script>
             window.prosperSiiReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
