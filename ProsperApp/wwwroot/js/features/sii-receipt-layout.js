@@ -76,7 +76,12 @@
             Math.round(toAmount(amount) * consumptionTaxRate / (1 + consumptionTaxRate));
 
         const addresseeText = (request) => {
-            return compact(request.addressee);
+            const value = compact(request.addressee);
+            if (value.length === 0) {
+                return '様';
+            }
+
+            return value.endsWith('様') ? value : `${value} 様`;
         };
 
         const appendRevenueStampBox = (lines) => {
