@@ -11,11 +11,12 @@ public static class CheckoutInputEditor
 
     public static CheckoutInputModel ApplyDefaults(
         CheckoutInputModel input,
-        IStoreClock storeClock)
+        IStoreClock storeClock,
+        SlipDetail? detail = null)
     {
         return new CheckoutInputModel
         {
-            ClosedTime = input.ClosedTime ?? GetDefaultClosedTime(storeClock),
+            ClosedTime = input.ClosedTime ?? GetDefaultClosedTime(storeClock, detail),
             ClosedAt = input.ClosedAt,
             Payments = PreparePaymentRows(input.Payments),
             ConfirmedSnapshotJson = input.ConfirmedSnapshotJson,
@@ -92,9 +93,19 @@ public static class CheckoutInputEditor
             : null;
     }
 
-    private static string GetDefaultClosedTime(IStoreClock storeClock)
+    private static string GetDefaultClosedTime(IStoreClock storeClock, SlipDetail? detail)
     {
-        return storeClock.FloorToMinuteStep(storeClock.GetStoreNow(), CheckoutTimeMinuteStep).ToString("HH:mm");
+        var defaultTime = storeClock.FloorToMinuteStep(storeClock.GetStoreNow(), CheckoutTimeMinuteStep).ToString("HH:mm");
+        if (detail is null || !TimeOnly.TryParse(defaultTime, out var parsedDefaultTime))
+        {
+            return defaultTime;
+        }
+
+        var defaultClosedAt = storeClock.ComposeBusinessDateTime(detail.BusinessDate, parsedDefaultTime);
+        var minimumClosedAt = GetMinimumClosedAt(detail, storeClock);
+        return defaultClosedAt < minimumClosedAt
+            ? CeilToMinuteStep(minimumClosedAt, CheckoutTimeMinuteStep).ToString("HH:mm")
+            : defaultTime;
     }
 
     private static IReadOnlyList<CheckoutInputValidationError> Validate(
@@ -156,6 +167,20 @@ public static class CheckoutInputEditor
         }
 
         return minimumClosedAt;
+    }
+
+    private static DateTime CeilToMinuteStep(DateTime value, int minuteStep)
+    {
+        if (minuteStep <= 0)
+        {
+            minuteStep = CheckoutTimeMinuteStep;
+        }
+
+        var floored = new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0);
+        var remainder = value.Minute % minuteStep;
+        return remainder == 0 && value == floored
+            ? floored
+            : floored.AddMinutes(remainder == 0 ? minuteStep : minuteStep - remainder);
     }
 
     private static void ValidateReceivedAmount(

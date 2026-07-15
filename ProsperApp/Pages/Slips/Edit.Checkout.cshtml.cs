@@ -143,7 +143,7 @@ public partial class SlipEditModel
 
     private void SetDefaultCheckoutInput()
     {
-        CheckoutInput = CheckoutInputEditor.ApplyDefaults(CheckoutInput, _storeClock);
+        CheckoutInput = CheckoutInputEditor.ApplyDefaults(CheckoutInput, _storeClock, Detail);
     }
 
 
