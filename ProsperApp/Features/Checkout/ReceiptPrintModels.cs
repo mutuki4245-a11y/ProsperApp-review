@@ -14,7 +14,7 @@ public class ReceiptPrintRequest
 
     public string StoreName { get; set; } = string.Empty;
 
-    public string Addressee { get; set; } = "上様";
+    public string Addressee { get; set; } = string.Empty;
 
     public string TableDisplayName { get; set; } = string.Empty;
 

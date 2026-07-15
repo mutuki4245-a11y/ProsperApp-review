@@ -221,6 +221,13 @@
                                     <input type="hidden" asp-for="SlipId" />
                                     <input type="hidden" asp-for="CheckoutInput.ClosedTime" data-detail-checkout-closed-time-field />
                                     <input type="hidden" asp-for="CheckoutInput.ConfirmedSnapshotJson" value="@Model.CheckoutDocument.ConfirmedSnapshotJson" />
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label" asp-for="CheckoutInput.ReceiptAddressee"></label>
+                                            <input class="form-control form-control-lg" asp-for="CheckoutInput.ReceiptAddressee" id="detailReceiptAddresseeInput" autocomplete="off" data-detail-receipt-addressee-input />
+                                            <span asp-validation-for="CheckoutInput.ReceiptAddressee" class="text-danger"></span>
+                                        </div>
+                                    </div>
                                     <span asp-validation-for="CheckoutInput.Payments" class="text-danger"></span>
                                     <div class="checkout-payments" data-detail-total-amount="@Model.CheckoutTotals.TotalAmount">
                                         @for (var i = 0; i < Model.CheckoutInput.Payments.Count; i++)
@@ -271,6 +278,7 @@
                                 <form method="post" asp-page-handler="ConfirmCash" id="detailCashConfirmForm">
                                     <input type="hidden" asp-for="SlipId" />
                                     <input type="hidden" asp-for="CheckoutInput.ClosedTime" data-detail-checkout-closed-time-field />
+                                    <input type="hidden" name="CheckoutInput.ReceiptAddressee" value="@Model.CheckoutInput.ReceiptAddressee" data-detail-receipt-addressee-hidden />
                                     <input type="hidden" asp-for="CheckoutInput.ConfirmedSnapshotJson" value="@Model.CheckoutDocument.ConfirmedSnapshotJson" />
                                     <div id="detailCashPaymentFields">
                                         @for (var i = 0; i < Model.CheckoutInput.Payments.Count; i++)

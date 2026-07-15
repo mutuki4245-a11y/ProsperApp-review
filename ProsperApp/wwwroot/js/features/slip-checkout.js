@@ -13,6 +13,8 @@
     const detailPaymentSection = document.getElementById('detailPaymentSection');
     const detailCashSection = document.getElementById('detailCashSection');
     const detailCheckoutForm = document.getElementById('detailCheckoutForm');
+    const detailReceiptAddresseeInput = document.querySelector('[data-detail-receipt-addressee-input]');
+    const detailReceiptAddresseeHidden = document.querySelector('[data-detail-receipt-addressee-hidden]');
     const detailCashPaymentFields = document.getElementById('detailCashPaymentFields');
     const detailBackToPaymentsButton = document.getElementById('detailBackToPaymentsButton');
     const detailCashDisplay = document.getElementById('detailCashAmountDisplay');
@@ -32,6 +34,12 @@
         detailFinalClosedTimeDisplays.forEach((display) => {
             display.textContent = detailCheckoutClosedTime?.value || '-';
         });
+    };
+
+    const syncReceiptAddresseeFields = () => {
+        if (detailReceiptAddresseeHidden && detailReceiptAddresseeInput) {
+            detailReceiptAddresseeHidden.value = detailReceiptAddresseeInput.value;
+        }
     };
 
     const selectedPaymentRows = () => detailPaymentRows.filter((row) => row.querySelector('[data-detail-payment-selected]')?.checked);
@@ -128,6 +136,7 @@
 
     const showCashStep = () => {
         const payments = selectedPayments();
+        syncReceiptAddresseeFields();
         detailCashAmount = payments
             .filter((payment) => payment.methodCode === 'cash')
             .reduce((total, payment) => total + Number(payment.amount || 0), 0);
@@ -167,6 +176,8 @@
 
     detailCheckoutClosedTime?.addEventListener('change', syncClosedTimeFields);
     syncClosedTimeFields();
+    detailReceiptAddresseeInput?.addEventListener('input', syncReceiptAddresseeFields);
+    syncReceiptAddresseeFields();
 
     detailPaymentRows.forEach((row) => {
         const checkbox = row.querySelector('[data-detail-payment-selected]');
@@ -182,6 +193,7 @@
 
     detailCheckoutForm?.addEventListener('submit', (event) => {
         syncClosedTimeFields();
+        syncReceiptAddresseeFields();
         const payments = selectedPayments();
         const hasCashPayment = payments.some((payment) => payment.methodCode === 'cash' && Number(payment.amount || 0) > 0);
         if (!hasCashPayment) {

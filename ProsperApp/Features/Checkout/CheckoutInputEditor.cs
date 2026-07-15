@@ -16,6 +16,7 @@ public static class CheckoutInputEditor
     {
         return new CheckoutInputModel
         {
+            ReceiptAddressee = input.ReceiptAddressee,
             ClosedTime = input.ClosedTime ?? GetDefaultClosedTime(storeClock, detail),
             ClosedAt = input.ClosedAt,
             Payments = PreparePaymentRows(input.Payments),
@@ -34,6 +35,7 @@ public static class CheckoutInputEditor
     {
         var prepared = new CheckoutInputModel
         {
+            ReceiptAddressee = NormalizeReceiptAddressee(input.ReceiptAddressee),
             ClosedTime = input.ClosedTime,
             ClosedAt = ComposeClosedAt(detail.BusinessDate, input.ClosedTime, storeClock),
             Payments = PreparePaymentRows(input.Payments),
@@ -78,6 +80,9 @@ public static class CheckoutInputEditor
             })
             .ToList();
     }
+
+    private static string NormalizeReceiptAddressee(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
 
     private static readonly IReadOnlyList<CheckoutPaymentInputModel> PaymentTemplates =
     [

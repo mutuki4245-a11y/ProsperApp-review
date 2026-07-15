@@ -16,6 +16,10 @@ public class CheckoutPaymentInputModel
 
 public class CheckoutInputModel
 {
+    [Display(Name = "領収書宛名")]
+    [StringLength(120, ErrorMessage = "領収書宛名は120文字以内で入力してください。")]
+    public string? ReceiptAddressee { get; set; }
+
     [Display(Name = "退店時刻")]
     [Required(ErrorMessage = "退店時刻を選択してください。")]
     public string? ClosedTime { get; set; }
