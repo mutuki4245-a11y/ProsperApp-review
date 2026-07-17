@@ -119,6 +119,18 @@
         return !isSamePageHash;
     };
 
+    const configureStaticModals = () => {
+        document.querySelectorAll('.modal').forEach((modal) => {
+            if (!modal.hasAttribute('data-bs-backdrop')) {
+                modal.setAttribute('data-bs-backdrop', 'static');
+            }
+
+            if (!modal.hasAttribute('data-bs-keyboard')) {
+                modal.setAttribute('data-bs-keyboard', 'false');
+            }
+        });
+    };
+
     const lockPageScrollForModal = () => {
         modalLockCount += 1;
         if (modalLockCount > 1) {
@@ -234,6 +246,7 @@
     });
 
     window.addEventListener('pageshow', () => hide());
+    configureStaticModals();
     document.addEventListener('show.bs.modal', lockPageScrollForModal);
     document.addEventListener('hidden.bs.modal', unlockPageScrollForModal);
 })();
