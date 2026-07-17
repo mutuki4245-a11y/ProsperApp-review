@@ -27,7 +27,7 @@
     const queue = new Map();
     const submitBaseDisabled = submitOrderButton?.disabled ?? false;
     let pendingBackItemId = null;
-    let pendingBackCastSelection = new Set();
+    let pendingBackCastSelection = new Map();
     let slipOptionsLoaded = slips.length > 0;
     let slipOptionsLoading = false;
     const attendingCastModalElement = document.getElementById('attendingCastSelectModal');
@@ -238,14 +238,14 @@
 
     const openBackPicker = (itemId) => {
         pendingBackItemId = String(itemId);
-        pendingBackCastSelection = new Set();
+        pendingBackCastSelection = new Map();
         renderAttendingCastModal();
         attendingCastModal?.show();
     };
 
     const closeBackPicker = () => {
         pendingBackItemId = null;
-        pendingBackCastSelection = new Set();
+        pendingBackCastSelection = new Map();
         attendingCastModal?.hide();
     };
 
@@ -484,57 +484,113 @@
 
     const updateBackPickerConfirm = () => {
         if (attendingCastConfirmButton) {
-            attendingCastConfirmButton.disabled = !pendingBackItemId || pendingBackCastSelection.size === 0;
+            const totalCount = Array.from(pendingBackCastSelection.values())
+                .reduce((total, count) => total + count, 0);
+            attendingCastConfirmButton.disabled = !pendingBackItemId || totalCount <= 0;
         }
     };
 
-    const renderBackTargetButton = (cast, nominationCastIds) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'cast-select-modal__item';
-        button.dataset.castBackTarget = String(cast.id);
+    const changeBackSelectionCount = (castId, delta) => {
+        const key = String(castId ?? '');
+        const current = pendingBackCastSelection.get(key) ?? 0;
+        const next = Math.max(0, current + delta);
+        if (key === '' && next > 0) {
+            pendingBackCastSelection = new Map();
+        } else if (key !== '') {
+            pendingBackCastSelection.delete('');
+        }
+
+        if (next > 0) {
+            pendingBackCastSelection.set(key, next);
+        } else {
+            pendingBackCastSelection.delete(key);
+        }
+        renderAttendingCastModal();
+    };
+
+    const renderBackTargetRow = (cast, nominationCastIds) => {
+        const row = document.createElement('div');
+        row.className = 'cast-select-modal__item cast-select-modal__item--stepper';
+        row.dataset.castBackTarget = String(cast.id);
         const isNominated = nominationCastIds.has(String(cast.id));
-        button.classList.toggle('is-nominated', isNominated);
-        button.classList.toggle('is-selected', pendingBackCastSelection.has(String(cast.id)));
+        const count = pendingBackCastSelection.get(String(cast.id)) ?? 0;
+        row.classList.toggle('is-nominated', isNominated);
+        row.classList.toggle('is-selected', count > 0);
+
+        const label = document.createElement('div');
+        label.className = 'cast-select-modal__item-label';
 
         const name = document.createElement('strong');
         name.textContent = cast.name || cast.display || '';
-        button.appendChild(name);
+        label.appendChild(name);
 
         if (isNominated) {
             const badge = document.createElement('span');
             badge.textContent = '指名';
-            button.appendChild(badge);
+            label.appendChild(badge);
         }
 
-        button.addEventListener('click', () => {
-            const castId = String(cast.id);
-            pendingBackCastSelection.delete('');
-            if (pendingBackCastSelection.has(castId)) {
-                pendingBackCastSelection.delete(castId);
-            } else {
-                pendingBackCastSelection.add(castId);
-            }
-            renderAttendingCastModal();
-        });
-        return button;
+        const controls = document.createElement('div');
+        controls.className = 'cast-select-modal__stepper';
+
+        const decrement = document.createElement('button');
+        decrement.type = 'button';
+        decrement.className = 'btn btn-outline-secondary btn-sm';
+        decrement.textContent = '-';
+        decrement.disabled = count <= 0;
+        decrement.addEventListener('click', () => changeBackSelectionCount(cast.id, -1));
+
+        const countDisplay = document.createElement('strong');
+        countDisplay.textContent = String(count);
+        countDisplay.setAttribute('aria-label', `${name.textContent} ${count}件`);
+
+        const increment = document.createElement('button');
+        increment.type = 'button';
+        increment.className = 'btn btn-outline-primary btn-sm';
+        increment.textContent = '+';
+        increment.addEventListener('click', () => changeBackSelectionCount(cast.id, 1));
+
+        controls.append(decrement, countDisplay, increment);
+        row.append(label, controls);
+        return row;
     };
 
-    const renderNoneBackTargetButton = () => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'cast-select-modal__item cast-select-modal__item--none';
-        button.classList.toggle('is-selected', pendingBackCastSelection.has(''));
+    const renderNoneBackTargetRow = () => {
+        const row = document.createElement('div');
+        row.className = 'cast-select-modal__item cast-select-modal__item--none cast-select-modal__item--stepper';
+        const count = pendingBackCastSelection.get('') ?? 0;
+        row.classList.toggle('is-selected', count > 0);
+
+        const label = document.createElement('div');
+        label.className = 'cast-select-modal__item-label';
 
         const name = document.createElement('strong');
         name.textContent = '指定なし';
-        button.appendChild(name);
+        label.appendChild(name);
 
-        button.addEventListener('click', () => {
-            pendingBackCastSelection = new Set(['']);
-            renderAttendingCastModal();
-        });
-        return button;
+        const controls = document.createElement('div');
+        controls.className = 'cast-select-modal__stepper';
+
+        const decrement = document.createElement('button');
+        decrement.type = 'button';
+        decrement.className = 'btn btn-outline-secondary btn-sm';
+        decrement.textContent = '-';
+        decrement.disabled = count <= 0;
+        decrement.addEventListener('click', () => changeBackSelectionCount('', -1));
+
+        const countDisplay = document.createElement('strong');
+        countDisplay.textContent = String(count);
+        countDisplay.setAttribute('aria-label', `指定なし ${count}件`);
+
+        const increment = document.createElement('button');
+        increment.type = 'button';
+        increment.className = 'btn btn-outline-primary btn-sm';
+        increment.textContent = '+';
+        increment.addEventListener('click', () => changeBackSelectionCount('', 1));
+
+        controls.append(decrement, countDisplay, increment);
+        row.append(label, controls);
+        return row;
     };
 
     const renderAttendingCastModal = () => {
@@ -544,7 +600,7 @@
 
         const nominationCastIds = selectedNominationCastIds();
         attendingCastModalList.innerHTML = '';
-        attendingCastModalList.appendChild(renderNoneBackTargetButton());
+        attendingCastModalList.appendChild(renderNoneBackTargetRow());
 
         const casts = getBackTargetCasts();
         if (casts.length === 0) {
@@ -557,7 +613,7 @@
         }
 
         casts.forEach((cast) => {
-            attendingCastModalList.appendChild(renderBackTargetButton(cast, nominationCastIds));
+            attendingCastModalList.appendChild(renderBackTargetRow(cast, nominationCastIds));
         });
         updateBackPickerConfirm();
     };
@@ -567,15 +623,17 @@
             return;
         }
 
-        pendingBackCastSelection.forEach((castId) => {
-            addToQueue(pendingBackItemId, castId ? castId : null);
+        pendingBackCastSelection.forEach((count, castId) => {
+            for (let i = 0; i < count; i += 1) {
+                addToQueue(pendingBackItemId, castId ? castId : null);
+            }
         });
         closeBackPicker();
     });
 
     attendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
         pendingBackItemId = null;
-        pendingBackCastSelection = new Set();
+        pendingBackCastSelection = new Map();
         updateBackPickerConfirm();
     });
 
