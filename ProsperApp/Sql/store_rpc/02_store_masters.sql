@@ -310,6 +310,8 @@ as $$
     order by ts.opened_at asc;
 $$;
 
+drop function if exists store.get_order_entry_slips(bigint, bigint);
+
 create or replace function store.get_order_entry_slips(
     p_department_id bigint,
     p_business_day_id bigint
@@ -321,27 +323,57 @@ returns table (
     table_name text,
     opened_at timestamp with time zone,
     customer_count integer,
+    customer_names text,
     memo text
 )
 language sql
 security definer
 set search_path = public
 as $$
+    with target_slips as (
+        select
+            s.slip_id,
+            s.table_id,
+            t.table_code,
+            t.table_name,
+            s.opened_at,
+            s.customer_count,
+            s.memo,
+            t.sort_order
+        from public.store_slips s
+        left join public.store_table_master t
+          on t.table_id = s.table_id
+        where s.department_id = p_department_id
+          and s.business_day_id = p_business_day_id
+          and s.status = 'open'
+    ),
+    customer_summary as (
+        select
+            c.slip_id,
+            count(*) filter (where c.status <> 'cancelled')::integer as customer_count,
+            string_agg(
+                coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                '、'
+                order by c.line_no
+            ) filter (where c.status <> 'cancelled') as customer_names
+        from target_slips s
+        join public.store_slip_customers c
+          on c.slip_id = s.slip_id
+        group by c.slip_id
+    )
     select
-        s.slip_id,
-        s.table_id,
-        t.table_code,
-        t.table_name,
-        s.opened_at,
-        s.customer_count,
-        s.memo
-    from public.store_slips s
-    left join public.store_table_master t
-      on t.table_id = s.table_id
-    where s.department_id = p_department_id
-      and s.business_day_id = p_business_day_id
-      and s.status = 'open'
-    order by t.sort_order asc nulls last, t.table_code asc nulls last, s.opened_at asc;
+        ts.slip_id,
+        ts.table_id,
+        ts.table_code,
+        ts.table_name,
+        ts.opened_at,
+        coalesce(cs.customer_count, ts.customer_count) as customer_count,
+        coalesce(cs.customer_names, '') as customer_names,
+        ts.memo
+    from target_slips ts
+    left join customer_summary cs
+      on cs.slip_id = ts.slip_id
+    order by ts.sort_order asc nulls last, ts.table_code asc nulls last, ts.opened_at asc;
 $$;
 
 drop function if exists store.get_order_items(bigint);

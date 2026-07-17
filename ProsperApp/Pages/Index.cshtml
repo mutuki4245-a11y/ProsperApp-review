@@ -59,7 +59,7 @@
                     </span>
                 </div>
                 <div class="sales-summary__actions">
-                    @if (Model.CanCreateSalesInput)
+                    @if (Model.ShouldShowCreateSlipButton)
                     {
                         <button
                             class="btn btn-primary sales-summary__create"
@@ -73,17 +73,17 @@
                     }
                     <a class="btn btn-outline-primary sales-summary__attendance" asp-page="/Attendance">勤怠管理</a>
                 </div>
-                @if (Model.CanCreateSalesInput && !Model.CanCreateSlip)
+                @if (!string.IsNullOrWhiteSpace(Model.CreateSlipDisabledMessage))
                 {
                     <div class="alert alert-warning sales-summary__warning" role="alert" data-business-create-slip-warning>
-                        @IndexModel.AttendanceRequiredMessage
+                        @Model.CreateSlipDisabledMessage
                     </div>
                 }
             </div>
             <section class="slip-list-section" id="slipListPanel">
                 <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
                     <div class="slip-list-section__statusbar">
-                        <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite">同期済み</output>
+                        <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>
                     </div>
                     <div class="slip-list__header" aria-hidden="true">
                         <span>卓</span>

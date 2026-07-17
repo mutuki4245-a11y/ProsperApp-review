@@ -35,6 +35,13 @@
         }
     };
 
+    const setKaraokeStatus = (state, message) => {
+        saveStatus.set(status, state, message);
+        if (status) {
+            status.hidden = state === 'saved';
+        }
+    };
+
     const setAmountVisible = (visible) => {
         document.body.classList.toggle('slip-amounts-visible', visible);
         revealButton?.setAttribute('aria-pressed', visible ? 'true' : 'false');
@@ -179,9 +186,9 @@
 
     const markDirtyStatus = () => {
         if (collectDirtyPayload().length === 0) {
-            saveStatus.saved(status, '同期済み');
+            setKaraokeStatus('saved', '同期済み');
         } else {
-            saveStatus.dirty(status);
+            setKaraokeStatus('dirty');
         }
     };
 
@@ -470,12 +477,12 @@
         const payloadRows = collectDirtyPayload();
         if (payloadRows.length === 0) {
             karaokeDraft.write();
-            saveStatus.saved(status, '同期済み');
+            setKaraokeStatus('saved', '同期済み');
             return true;
         }
 
         isSaving = true;
-        saveStatus.saving(status);
+        setKaraokeStatus('saving');
 
         try {
             const response = await fetch(form.action, {
@@ -491,14 +498,14 @@
 
             markSaved(payloadRows);
             if (collectDirtyPayload().length === 0) {
-                saveStatus.saved(status);
+                setKaraokeStatus('saved');
             } else {
-                saveStatus.dirty(status);
+                setKaraokeStatus('dirty');
             }
             return true;
         } catch {
             karaokeDraft.write();
-            saveStatus.error(status);
+            setKaraokeStatus('error');
             return false;
         } finally {
             isSaving = false;

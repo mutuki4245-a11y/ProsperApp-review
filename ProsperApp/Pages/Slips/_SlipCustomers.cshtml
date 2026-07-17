@@ -13,7 +13,6 @@
             <small>在席 @activeCustomerCount 人 / 合計 @customerCount 人</small>
         </div>
         <div class="slip-create__panel-title-actions">
-            <output class="terminal-save-status" data-partial-status="customers" data-save-state="saved" aria-live="polite">保存済み</output>
             @if (Model.IsOpenSlip)
             {
                 <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addCustomerModal">客を追加</button>

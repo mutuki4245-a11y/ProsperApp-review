@@ -30,6 +30,7 @@
         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
         <input type="hidden" asp-for="SelectedSlipId" id="selectedSlipId" />
         <input type="hidden" asp-for="OrderQueueJson" id="orderQueueJson" value="[]" />
+        <input type="hidden" asp-for="OrderQueueSummaryJson" id="orderQueueSummaryJson" value="[]" />
         <div id="queueFields"></div>
 
         @if (Model.CurrentBusinessDay is null)
@@ -169,7 +170,7 @@
     <script type="application/json" id="orderEntryData">
         @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new
         {
-            slips = Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName }),
+            slips = Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName, customerNames = x.CustomerDisplayName }),
             items = orderableItems.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
             castOptions = Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true }),
             initialQueue = Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),

@@ -164,7 +164,6 @@
                     <small>@activeAdjustments.Count 件 / @StoreUiText.Yen(chargeTotal)</small>
                 </div>
                 <div class="slip-create__panel-title-actions">
-                    <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
                     @if (Model.IsOpenSlip)
                     {
                         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#adjustmentModal">自由入力明細を追加</button>

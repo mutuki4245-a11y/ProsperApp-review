@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -26,6 +28,9 @@ public class IndexModel(
 
     [BindProperty]
     public string OrderQueueJson { get; set; } = string.Empty;
+
+    [BindProperty]
+    public string OrderQueueSummaryJson { get; set; } = string.Empty;
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
@@ -74,6 +79,7 @@ public class IndexModel(
                 display = slip.TableDisplayName,
                 openedTime = StoreBusinessTime.FormatStoreTime(slip.OpenedAt),
                 customerCount = slip.CustomerCount,
+                customerNames = slip.CustomerDisplayName,
                 memo = slip.Memo
             })
         });
@@ -103,9 +109,11 @@ public class IndexModel(
         }
 
         ModelState.Clear();
+        var successMessage = BuildSuccessMessage(result);
         SelectedSlipId = null;
         QueueLines = [];
-        SuccessMessage = $"注文を登録しました。登録行数: {result.InsertedCount}";
+        OrderQueueSummaryJson = string.Empty;
+        SuccessMessage = successMessage;
         return Page();
     }
 
@@ -157,4 +165,49 @@ public class IndexModel(
             ModelState.AddModelError(nameof(QueueLines), "注文キューに利用できない卓番があります。");
         }
     }
+
+    private string BuildSuccessMessage(AddStoreOrderLinesResult result)
+    {
+        var summaries = ReadPostedQueueSummaries()
+            .Where(x => x.Count > 0)
+            .GroupBy(x => x.SlipId)
+            .Select(x =>
+            {
+                var first = x.First();
+                var display = string.IsNullOrWhiteSpace(first.Display) ? $"伝票 {first.SlipId}" : first.Display.Trim();
+                return $"{display}: {x.Sum(line => line.Count)}件";
+            })
+            .ToArray();
+
+        if (summaries.Length == 0)
+        {
+            return $"注文を登録しました。登録行数: {result.InsertedCount}";
+        }
+
+        return $"注文を登録しました。登録行数: {result.InsertedCount}（{string.Join(" / ", summaries)}）";
+    }
+
+    private IReadOnlyList<OrderQueueSummaryInput> ReadPostedQueueSummaries()
+    {
+        if (string.IsNullOrWhiteSpace(OrderQueueSummaryJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<OrderQueueSummaryInput>>(
+                OrderQueueSummaryJson,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private sealed record OrderQueueSummaryInput(
+        [property: JsonPropertyName("slipId")] long SlipId,
+        [property: JsonPropertyName("display")] string? Display,
+        [property: JsonPropertyName("count")] int Count);
 }

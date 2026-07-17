@@ -32,6 +32,7 @@ public class SupabaseStoreOrderRepository(
                 TableName = ReadString(row, "table_name"),
                 OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
                 CustomerCount = (int)(ReadLong(row, "customer_count") ?? 0),
+                CustomerNames = ReadString(row, "customer_names"),
                 Memo = ReadString(row, "memo")
             })
             .Where(x => x.SlipId > 0)

@@ -8,6 +8,7 @@ public class StoreOrderSlipOption
     public string? TableName { get; set; }
     public DateTimeOffset OpenedAt { get; set; }
     public int CustomerCount { get; set; }
+    public string? CustomerNames { get; set; }
     public string? Memo { get; set; }
 
     public string TableDisplayName
@@ -22,6 +23,10 @@ public class StoreOrderSlipOption
             return TableCode ?? TableName ?? "-";
         }
     }
+
+    public string CustomerDisplayName => string.IsNullOrWhiteSpace(CustomerNames)
+        ? $"{CustomerCount} 人"
+        : CustomerNames;
 }
 
 public class StoreOrderItemOption

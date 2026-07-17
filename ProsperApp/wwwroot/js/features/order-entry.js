@@ -11,6 +11,7 @@
 
     const selectedSlipInput = document.getElementById('selectedSlipId');
     const orderQueueJson = document.getElementById('orderQueueJson');
+    const orderQueueSummaryJson = document.getElementById('orderQueueSummaryJson');
     const orderForm = document.getElementById('orderForm');
     const selectedSlipBadge = document.getElementById('selectedSlipBadge');
     const selectedSlipQueueLabel = document.getElementById('selectedSlipQueueLabel');
@@ -132,7 +133,7 @@
 
             button.classList.toggle('is-selected', String(selectedSlipInput?.value ?? '') === slipId);
             setText(button.querySelector('[data-order-slip-name]'), slip.display);
-            setText(button.querySelector('[data-order-slip-meta]'), `${slip.openedTime} 入店 / ${slip.customerCount} 人`);
+            setText(button.querySelector('[data-order-slip-meta]'), slip.customerNames || `${slip.customerCount} 人`);
 
             renderedSlipIds.add(slipId);
             const current = slipPicker.children[index] ?? null;
@@ -372,6 +373,14 @@
 
         if (orderQueueJson) {
             orderQueueJson.value = JSON.stringify(serializedLines);
+        }
+
+        if (orderQueueSummaryJson) {
+            orderQueueSummaryJson.value = JSON.stringify(Array.from(queueGroups.values()).map((group) => ({
+                slipId: Number(group.slip.id),
+                display: group.slip.display,
+                count: group.lines.length
+            })));
         }
 
         const hasQueue = serializedLines.length > 0;
