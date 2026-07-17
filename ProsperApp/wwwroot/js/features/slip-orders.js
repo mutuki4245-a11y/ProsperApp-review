@@ -6,30 +6,11 @@
     const initialOrderQueue = pageData.initialOrderQueue ?? [];
     const showOrderModal = pageData.showOrderModal === true;
     const saveStatus = window.TerminalSaveStatus;
-
-    const slipOrderModalElement = document.getElementById('slipOrderModal');
-    const slipOrderModal = slipOrderModalElement ? new bootstrap.Modal(slipOrderModalElement) : null;
-    const slipOrderForm = document.getElementById('slipOrderForm');
-    const orderAttendingCastModalElement = document.getElementById('orderAttendingCastSelectModal');
-    const orderAttendingCastModalList = document.getElementById('orderAttendingCastModalList');
-    const orderAttendingCastModal = orderAttendingCastModalElement ? new bootstrap.Modal(orderAttendingCastModalElement) : null;
-    const detailOrderQueueJson = document.getElementById('detailOrderQueueJson');
-    const detailOrderQueueFields = document.getElementById('detailOrderQueueFields');
-    const detailOrderQueueList = document.getElementById('detailOrderQueueList');
-    const detailOrderQueueEmpty = document.getElementById('detailOrderQueueEmpty');
-    const detailOrderQueueTotal = document.getElementById('detailOrderQueueTotal');
-    const detailOrderQueueStatus = document.getElementById('detailOrderQueueStatus');
-    const detailSubmitOrderButton = document.getElementById('detailSubmitOrderButton');
-    const detailClearQueueButton = document.getElementById('detailClearQueueButton');
-    const detailOrderTotal = document.querySelector('[data-detail-order-total]');
-    const orderCorrectionPanel = document.querySelector('[data-order-correction-panel]');
-    const orderCorrectionToggle = document.querySelector('[data-order-correction-toggle]');
-    const orderQuantityForm = document.querySelector('[data-order-quantity-form]');
-    const orderQuantitySave = document.querySelector('[data-order-quantity-save]');
-    const orderQuantityStatus = document.querySelector('[data-order-quantity-status]');
+    const moneyText = window.MoneyText;
+    const formatYen = moneyText.yen;
     const orderQueue = new Map();
-    const submitOrderBaseDisabled = detailSubmitOrderButton?.disabled ?? false;
     let pendingBackItemId = null;
+    let isOrderCorrectionMode = false;
 
     initialOrderQueue.forEach((line) => {
         if (line.itemId > 0 && line.quantity > 0) {
@@ -42,17 +23,26 @@
         }
     });
 
+    function section() {
+        return document.getElementById('slipOrdersSection');
+    }
+
+    function find(selector) {
+        return section()?.querySelector(selector) ?? null;
+    }
+
+    function findAll(selector) {
+        return Array.from(section()?.querySelectorAll(selector) ?? []);
+    }
+
     function makeOrderQueueKey(itemId, castBackCastId) {
         return `${itemId}:${castBackCastId ?? ''}`;
     }
 
-    const moneyText = window.MoneyText;
-    const formatYen = moneyText.yen;
-    let isOrderCorrectionMode = false;
-
-    const orderLineRows = () => Array.from(document.querySelectorAll('[data-order-line-row]'));
+    const orderLineRows = () => findAll('[data-order-line-row]');
 
     const recalculateOrderTotal = () => {
+        const detailOrderTotal = find('[data-detail-order-total]');
         if (!detailOrderTotal) {
             return;
         }
@@ -68,6 +58,8 @@
     };
 
     const updateOrderQuantityState = () => {
+        const orderQuantitySave = find('[data-order-quantity-save]');
+        const orderQuantityStatus = find('[data-order-quantity-status]');
         const dirty = orderLineRows().some((row) => {
             const input = row.querySelector('[data-order-quantity-input]');
             return input && Number(input.value) !== Number(row.dataset.orderInitialQuantity ?? 0);
@@ -83,6 +75,9 @@
     };
 
     const setOrderCorrectionMode = (enabled) => {
+        const orderCorrectionPanel = find('[data-order-correction-panel]');
+        const orderCorrectionToggle = find('[data-order-correction-toggle]');
+        const orderQuantitySave = find('[data-order-quantity-save]');
         isOrderCorrectionMode = enabled;
         orderCorrectionPanel?.classList.toggle('is-order-correction', enabled);
         orderCorrectionToggle?.setAttribute('aria-pressed', enabled ? 'true' : 'false');
@@ -92,10 +87,10 @@
         if (orderQuantitySave) {
             orderQuantitySave.hidden = !enabled;
         }
-        document.querySelectorAll('[data-order-quantity-control]').forEach((control) => {
+        findAll('[data-order-quantity-control]').forEach((control) => {
             control.hidden = !enabled;
         });
-        document.querySelectorAll('[data-order-quantity-text]').forEach((text) => {
+        findAll('[data-order-quantity-text]').forEach((text) => {
             text.hidden = enabled;
         });
         updateOrderQuantityState();
@@ -138,11 +133,14 @@
 
     const closeOrderBackPicker = () => {
         pendingBackItemId = null;
-        orderAttendingCastModal?.hide();
+        const modalElement = document.getElementById('orderAttendingCastSelectModal');
+        const modal = modalElement ? bootstrap.Modal.getOrCreateInstance(modalElement) : null;
+        modal?.hide();
     };
 
     const renderOrderAttendingCastModal = () => {
-        window.CastSelectModal.renderOptionalBackTarget(orderAttendingCastModalList, castOptions, {
+        const modalList = document.getElementById('orderAttendingCastModalList');
+        window.CastSelectModal.renderOptionalBackTarget(modalList, castOptions, {
             getLabel: (cast) => cast.name,
             onNone: () => {
                 if (pendingBackItemId) {
@@ -160,12 +158,21 @@
     };
 
     const openOrderBackPicker = (itemId) => {
+        const modalElement = document.getElementById('orderAttendingCastSelectModal');
+        const modal = modalElement ? bootstrap.Modal.getOrCreateInstance(modalElement) : null;
         pendingBackItemId = String(itemId);
         renderOrderAttendingCastModal();
-        orderAttendingCastModal?.show();
+        modal?.show();
     };
 
-    const renderOrderQueue = () => {
+    function renderOrderQueue() {
+        const detailOrderQueueFields = find('#detailOrderQueueFields');
+        const detailOrderQueueList = find('#detailOrderQueueList');
+        const detailOrderQueueJson = find('#detailOrderQueueJson');
+        const detailOrderQueueEmpty = find('#detailOrderQueueEmpty');
+        const detailOrderQueueStatus = find('#detailOrderQueueStatus');
+        const detailOrderQueueTotal = find('#detailOrderQueueTotal');
+        const detailSubmitOrderButton = find('#detailSubmitOrderButton');
         if (detailOrderQueueFields) {
             detailOrderQueueFields.innerHTML = '';
         }
@@ -249,13 +256,41 @@
             detailOrderQueueTotal.textContent = formatYen(total);
         }
         if (detailSubmitOrderButton) {
-            detailSubmitOrderButton.disabled = submitOrderBaseDisabled || !hasQueue;
+            detailSubmitOrderButton.disabled = detailSubmitOrderButton.dataset.submitBaseDisabled === 'true' || !hasQueue;
         }
+    }
+
+    const handlePartialSubmit = (form) => {
+        const isOrderAdd = form.id === 'slipOrderForm';
+        const isAdjustmentAdd = form.hasAttribute('data-adjustment-form');
+        if (isOrderAdd) {
+            renderOrderQueue();
+            saveStatus.saving(find('#detailOrderQueueStatus'));
+        } else if (form.hasAttribute('data-order-quantity-form')) {
+            saveStatus.saving(find('[data-order-quantity-status]'));
+        } else if (isAdjustmentAdd) {
+            saveStatus.saving(find('[data-adjustment-status]'));
+        }
+
+        return window.PartialForms?.submit(form, {
+            section: 'slipOrdersSection',
+            modalId: isOrderAdd ? 'slipOrderModal' : isAdjustmentAdd ? 'adjustmentModal' : null,
+            status: isAdjustmentAdd ? '[data-adjustment-status]' : '[data-order-quantity-status]',
+            afterReplace: (_section, result) => {
+                if (isOrderAdd && !result.hasErrors) {
+                    orderQueue.clear();
+                }
+                window.SlipAdjustments?.init();
+                recalculateOrderTotal();
+                setOrderCorrectionMode(false);
+                renderOrderQueue();
+            }
+        });
     };
 
-    document.addEventListener('click', (event) => {
+    section()?.addEventListener('click', (event) => {
         const orderItemButton = event.target.closest('[data-detail-item-id]');
-        if (orderItemButton) {
+        if (orderItemButton && section()?.contains(orderItemButton)) {
             const itemId = orderItemButton.dataset.detailItemId ?? '';
             const item = orderItems.find((candidate) => String(candidate.id) === String(itemId));
             if (!item || item.isKaraoke) {
@@ -272,21 +307,22 @@
         }
 
         const removeOrderItemButton = event.target.closest('[data-detail-remove-order-item]');
-        if (removeOrderItemButton) {
+        if (removeOrderItemButton && section()?.contains(removeOrderItemButton)) {
             orderQueue.delete(removeOrderItemButton.dataset.detailRemoveOrderItem ?? '');
             renderOrderQueue();
             return;
         }
 
         const categoryTab = event.target.closest('[data-detail-category-tab]');
-        if (categoryTab) {
+        if (categoryTab && section()?.contains(categoryTab)) {
             const index = categoryTab.dataset.detailCategoryTab ?? '';
-            document.querySelectorAll('[data-detail-category-tab]').forEach((tab) => {
+            findAll('[data-detail-category-tab]').forEach((tab) => {
                 tab.classList.toggle('is-active', tab === categoryTab);
             });
-            document.querySelectorAll('[data-detail-category-panel]').forEach((panel) => {
+            findAll('[data-detail-category-panel]').forEach((panel) => {
                 panel.classList.toggle('is-active', panel.dataset.detailCategoryPanel === index);
             });
+            return;
         }
 
         if (event.target.closest('[data-order-correction-toggle]')) {
@@ -307,29 +343,38 @@
             return;
         }
 
+        if (event.target.closest('#detailClearQueueButton')) {
+            orderQueue.clear();
+            renderOrderQueue();
+        }
     });
 
-    orderQuantityForm?.addEventListener('submit', () => {
-        saveStatus.saving(orderQuantityStatus);
+    section()?.addEventListener('submit', (event) => {
+        const form = event.target.closest('[data-partial-form="orders"]');
+        if (!form || !section()?.contains(form)) {
+            return;
+        }
+
+        event.preventDefault();
+        handlePartialSubmit(form);
     });
 
-    detailClearQueueButton?.addEventListener('click', () => {
-        orderQueue.clear();
-        renderOrderQueue();
-    });
-
-    slipOrderForm?.addEventListener('submit', () => {
-        renderOrderQueue();
-        saveStatus.saving(detailOrderQueueStatus);
-    });
-
-    orderAttendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
-        pendingBackItemId = null;
+    document.addEventListener('hidden.bs.modal', (event) => {
+        if (event.target?.id === 'orderAttendingCastSelectModal') {
+            pendingBackItemId = null;
+        }
     });
 
     if (showOrderModal) {
-        slipOrderModal?.show();
+        const modalElement = document.getElementById('slipOrderModal');
+        const modal = modalElement ? bootstrap.Modal.getOrCreateInstance(modalElement) : null;
+        modal?.show();
     }
+
+    window.SlipOrders = {
+        renderOrderQueue,
+        resetOrderCorrection: () => setOrderCorrectionMode(false)
+    };
 
     recalculateOrderTotal();
     setOrderCorrectionMode(false);

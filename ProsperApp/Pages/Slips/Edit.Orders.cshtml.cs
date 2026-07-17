@@ -17,6 +17,11 @@ public partial class SlipEditModel
 
         if (!EnsureSlipLoaded())
         {
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -24,6 +29,11 @@ public partial class SlipEditModel
         {
             ModelState.AddModelError(string.Empty, "削除する注文を確認してください。");
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -32,6 +42,11 @@ public partial class SlipEditModel
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文を削除できませんでした。");
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -39,6 +54,11 @@ public partial class SlipEditModel
         ModelState.Clear();
         await LoadAsync(cancellationToken);
         SetDefaultInputs();
+        if (IsPartialRequest())
+        {
+            return Partial("_SlipOrders", this);
+        }
+
         return Page();
     }
 
@@ -57,6 +77,11 @@ public partial class SlipEditModel
         {
             ShowOrderModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -64,6 +89,11 @@ public partial class SlipEditModel
         {
             ModelState.AddModelError(string.Empty, "会計済みの伝票にオーダーは追加できません。");
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -72,6 +102,11 @@ public partial class SlipEditModel
         {
             ShowOrderModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -81,6 +116,11 @@ public partial class SlipEditModel
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文を登録できませんでした。");
             ShowOrderModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -89,6 +129,11 @@ public partial class SlipEditModel
         QueueLines = [];
         await LoadAsync(cancellationToken);
         SetDefaultInputs();
+        if (IsPartialRequest())
+        {
+            return Partial("_SlipOrders", this);
+        }
+
         return Page();
     }
 
@@ -105,6 +150,11 @@ public partial class SlipEditModel
         if (!EnsureSlipLoaded())
         {
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -112,6 +162,11 @@ public partial class SlipEditModel
         if (!ModelState.IsValid)
         {
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -120,6 +175,11 @@ public partial class SlipEditModel
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文数量を保存できませんでした。");
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -128,6 +188,11 @@ public partial class SlipEditModel
         OrderQuantityLines = [];
         await LoadAsync(cancellationToken);
         SetDefaultInputs();
+        if (IsPartialRequest())
+        {
+            return Partial("_SlipOrders", this);
+        }
+
         return Page();
     }
 

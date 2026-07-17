@@ -30,12 +30,29 @@
         .replaceAll("'", '&#39;');
     const nominationKindOptionsHtml = [
         '<option value="">指名区分</option>',
-        ...nominationKindOptions.map((option, index) => `<option value="${escapeHtml(option.value)}" ${index === 0 ? 'selected' : ''}>${escapeHtml(option.label)}</option>`)
+        ...nominationKindOptions.map((option, index) => `<option value="${escapeHtml(option.value)}" ${index === 0 ? 'selected' : ''} data-companion="${option.isCompanion === true ? 'true' : 'false'}">${escapeHtml(option.label)}</option>`)
     ].join('');
     const nominationPriceOptions = Array.isArray(config.nominationPriceOptions) ? config.nominationPriceOptions : [];
     const nominationPriceOptionsHtml = nominationPriceOptions
         .map((price) => `<option value="${price.value}">${price.label}</option>`)
         .join('');
+    const companionNominationPrice = '3000';
+
+    const syncNominationDefaultPrice = (kindSelect, force = false) => {
+        const selectedOption = kindSelect?.selectedOptions?.[0];
+        if (!selectedOption || selectedOption.dataset.companion !== 'true') {
+            return;
+        }
+
+        const priceSelect = kindSelect.closest('[data-business-nomination-row]')?.querySelector('.nomination-row__price');
+        if (!priceSelect || !Array.from(priceSelect.options).some((option) => option.value === companionNominationPrice)) {
+            return;
+        }
+
+        if (force || priceSelect.value === '' || priceSelect.value === '1000') {
+            priceSelect.value = companionNominationPrice;
+        }
+    };
 
     const loadCastOptions = async () => {
         if (castOptionsLoaded) {
@@ -161,6 +178,13 @@
     };
 
     const wireNominationRow = (row) => {
+        const kindSelect = row.querySelector('.nomination-row__kind');
+        kindSelect?.addEventListener('change', () => {
+            syncNominationDefaultPrice(kindSelect, true);
+        });
+        if (kindSelect) {
+            syncNominationDefaultPrice(kindSelect);
+        }
         row.querySelector('[data-business-open-cast-modal]')?.addEventListener('click', () => {
             void openCastModal(row);
         });

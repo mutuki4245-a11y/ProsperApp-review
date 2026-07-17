@@ -196,6 +196,74 @@
 
     const formatMoneyAmount = (value) => Math.round(Number(value) || 0).toLocaleString('ja-JP');
     const formatMoneyYen = (value) => `${formatMoneyAmount(value)} 円`;
+    const hasValidationErrors = (root) =>
+        root.querySelector('.validation-summary-errors, .field-validation-error, .input-validation-error') !== null;
+    const parseValidation = (root) => {
+        if (window.jQuery?.validator?.unobtrusive) {
+            window.jQuery.validator.unobtrusive.parse(root);
+        }
+    };
+    const hideModalForReplace = (modalElement) => new Promise((resolve) => {
+        if (!modalElement || !modalElement.classList.contains('show') || !window.bootstrap?.Modal) {
+            resolve();
+            return;
+        }
+
+        const instance = bootstrap.Modal.getOrCreateInstance(modalElement);
+        const timeout = window.setTimeout(resolve, 400);
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            window.clearTimeout(timeout);
+            resolve();
+        }, { once: true });
+        instance.hide();
+    });
+    const submitPartialForm = async (form, options) => {
+        const section = typeof options.section === 'string'
+            ? document.getElementById(options.section)
+            : options.section;
+        if (!section) {
+            form.submit();
+            return false;
+        }
+
+        const modalElement = options.modalId ? document.getElementById(options.modalId) : form.closest('.modal');
+        const status = options.status ? section.querySelector(options.status) : null;
+        setTerminalSaveStatus(status, 'saving');
+        show(form);
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Partial form request failed.');
+            }
+
+            const html = await response.text();
+            const preview = document.createElement('div');
+            preview.innerHTML = html;
+            const hasErrors = hasValidationErrors(preview);
+            await hideModalForReplace(modalElement);
+            section.innerHTML = html;
+            configureStaticModals();
+            parseValidation(section);
+            setTerminalSaveStatus(options.status ? section.querySelector(options.status) : status, hasErrors ? 'error' : 'saved');
+            options.afterReplace?.(section, { hasErrors });
+            if (hasErrors && options.modalId && window.bootstrap?.Modal) {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById(options.modalId))?.show();
+            }
+
+            return true;
+        } catch {
+            setTerminalSaveStatus(status, 'error');
+            return false;
+        } finally {
+            hide(form);
+        }
+    };
 
     window.AppLoading = { show, hide };
     window.MoneyText = {
@@ -208,6 +276,9 @@
         dirty: (target, message) => setTerminalSaveStatus(target, 'dirty', message),
         saving: (target, message) => setTerminalSaveStatus(target, 'saving', message),
         error: (target, message) => setTerminalSaveStatus(target, 'error', message)
+    };
+    window.PartialForms = {
+        submit: submitPartialForm
     };
 
     document.addEventListener('click', (event) => {

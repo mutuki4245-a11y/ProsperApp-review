@@ -5,6 +5,10 @@
         .Select(x => (Value: x.NominationKind, Label: x.DisplayName))
         .ToArray();
     var hasNominationOptions = nominationOptions.Length > 0;
+    bool IsCompanionNomination(string? nominationKind) =>
+        Model.NominationOptions.Any(option =>
+            string.Equals(option.NominationKind, nominationKind, StringComparison.Ordinal) &&
+            string.Equals(option.NominationType, "companion", StringComparison.Ordinal));
     var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
     var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = nominationOptions.FirstOrDefault().Value };
     var nominationCount = Model.Detail?.Nominations.Count ?? 0;
@@ -86,7 +90,7 @@
     <div class="modal fade" id="addNominationModal" tabindex="-1" aria-labelledby="addNominationModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
-                <form method="post" asp-page-handler="AddNominations" data-nomination-row>
+                <form method="post" asp-page-handler="AddNominations" data-nomination-row data-partial-form="nominations">
                     <div class="modal-header">
                         <div>
                             <p class="store-home__eyebrow mb-1">指名一覧</p>
@@ -105,14 +109,9 @@
                                     <option value="">指名区分</option>
                                     @foreach (var option in nominationOptions)
                                     {
-                                        if (addNomination.NominationKind == option.Value)
-                                        {
-                                            <option value="@option.Value" selected>@option.Label</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="@option.Value">@option.Label</option>
-                                        }
+                                        var isSelected = addNomination.NominationKind == option.Value;
+                                        var isCompanion = IsCompanionNomination(option.Value);
+                                        <option value="@option.Value" selected="@isSelected" data-companion="@isCompanion.ToString().ToLowerInvariant()">@option.Label</option>
                                     }
                                 </select>
                             </div>

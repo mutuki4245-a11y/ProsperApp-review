@@ -43,13 +43,50 @@
     };
 
     const selectedPaymentRows = () => detailPaymentRows.filter((row) => row.querySelector('[data-detail-payment-selected]')?.checked);
+    const getPaymentAmountInput = (row) => row.querySelector('[data-detail-payment-amount]');
+    const getPaymentMethodCode = (row) => row.querySelector('[data-detail-payment-method-code]')?.value ?? '';
+    const getCashPaymentRow = () => detailPaymentRows.find((row) => getPaymentMethodCode(row) === 'cash') ?? null;
 
     const selectedPayments = () => selectedPaymentRows().map((row) => {
-        const methodCode = row.querySelector('[data-detail-payment-method-code]')?.value ?? '';
+        const methodCode = getPaymentMethodCode(row);
         const methodName = row.querySelector('[data-detail-payment-method-name]')?.value ?? '';
-        const amount = row.querySelector('[data-detail-payment-amount]')?.value ?? '0';
+        const amount = getPaymentAmountInput(row)?.value ?? '0';
         return { methodCode, methodName, amount };
     });
+
+    const selectedNonCashTotal = () => selectedPaymentRows()
+        .filter((row) => getPaymentMethodCode(row) !== 'cash')
+        .reduce((total, row) => total + Number(getPaymentAmountInput(row)?.value || 0), 0);
+
+    const syncCashAmountToRemainder = () => {
+        const cashRow = getCashPaymentRow();
+        const cashSelected = cashRow?.querySelector('[data-detail-payment-selected]')?.checked === true;
+        const cashAmount = cashRow ? getPaymentAmountInput(cashRow) : null;
+        if (!cashSelected || !cashAmount) {
+            return;
+        }
+
+        const remainder = Math.max(detailTotalAmount - selectedNonCashTotal(), 0);
+        cashAmount.value = String(remainder);
+        if (detailTotalAmount > 0 && remainder === 0) {
+            const cashCheckbox = cashRow.querySelector('[data-detail-payment-selected]');
+            if (cashCheckbox) {
+                cashCheckbox.checked = false;
+            }
+        }
+    };
+
+    const applySingleSelectedDefault = (row) => {
+        const rows = selectedPaymentRows();
+        if (rows.length !== 1 || rows[0] !== row) {
+            return;
+        }
+
+        const amount = getPaymentAmountInput(row);
+        if (amount && Number(amount.value || 0) === 0) {
+            amount.value = String(detailTotalAmount);
+        }
+    };
 
     const refreshChange = () => {
         if (!detailReceivedInput || !detailChangeDisplay) {
@@ -73,11 +110,10 @@
     };
 
     const refreshPaymentRows = () => {
-        const rows = selectedPaymentRows();
         detailPaymentRows.forEach((row) => {
             const checkbox = row.querySelector('[data-detail-payment-selected]');
             const button = row.querySelector('[data-detail-payment-toggle]');
-            const amount = row.querySelector('[data-detail-payment-amount]');
+            const amount = getPaymentAmountInput(row);
             const isSelected = checkbox?.checked === true;
             button?.classList.toggle('btn-primary', isSelected);
             button?.classList.toggle('btn-outline-primary', !isSelected);
@@ -88,13 +124,6 @@
                 }
             }
         });
-
-        if (rows.length === 1) {
-            const amount = rows[0].querySelector('[data-detail-payment-amount]');
-            if (amount && Number(amount.value || 0) === 0) {
-                amount.value = String(detailTotalAmount);
-            }
-        }
 
         const summary = selectedPayments()
             .filter((payment) => Number(payment.amount || 0) > 0)
@@ -182,12 +211,22 @@
     detailPaymentRows.forEach((row) => {
         const checkbox = row.querySelector('[data-detail-payment-selected]');
         row.querySelector('[data-detail-payment-toggle]')?.addEventListener('click', () => {
+            const wasSelected = checkbox?.checked === true;
             if (checkbox) {
-                checkbox.checked = !checkbox.checked;
+                checkbox.checked = !wasSelected;
+            }
+            if (!wasSelected) {
+                applySingleSelectedDefault(row);
+            }
+            syncCashAmountToRemainder();
+            refreshPaymentRows();
+        });
+        getPaymentAmountInput(row)?.addEventListener('input', () => {
+            if (getPaymentMethodCode(row) !== 'cash') {
+                syncCashAmountToRemainder();
             }
             refreshPaymentRows();
         });
-        row.querySelector('[data-detail-payment-amount]')?.addEventListener('input', refreshPaymentRows);
     });
     refreshPaymentRows();
 

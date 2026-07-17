@@ -97,6 +97,11 @@ public partial class SlipEditModel
 
         if (!EnsureSlipLoaded())
         {
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipCustomers", this);
+            }
+
             return Page();
         }
 
@@ -104,6 +109,11 @@ public partial class SlipEditModel
         {
             ModelState.AddModelError(string.Empty, "会計済みの伝票に退店登録はできません。");
             EnsureAddCustomerRows();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipCustomers", this);
+            }
+
             return Page();
         }
 
@@ -111,6 +121,11 @@ public partial class SlipEditModel
         if (!ModelState.IsValid)
         {
             EnsureAddCustomerRows();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipCustomers", this);
+            }
+
             return Page();
         }
 
@@ -123,6 +138,11 @@ public partial class SlipEditModel
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "客退店を登録できませんでした。");
             EnsureAddCustomerRows();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipCustomers", this);
+            }
+
             return Page();
         }
 
@@ -131,6 +151,11 @@ public partial class SlipEditModel
         LeaveCustomerInput = new LeaveSlipCustomerInputModel();
         await LoadAsync(cancellationToken);
         SetDefaultInputs();
+        if (IsPartialRequest())
+        {
+            return Partial("_SlipCustomers", this);
+        }
+
         return Page();
     }
 

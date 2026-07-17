@@ -140,7 +140,8 @@ public static class CheckoutInputEditor
             return errors;
         }
 
-        if (selectedPayments.Any(x => x.Amount <= 0))
+        if (selectedPayments.Any(x => x.Amount < 0) ||
+            (totals.TotalAmount > 0 && selectedPayments.Any(x => x.Amount <= 0)))
         {
             errors.Add(new CheckoutInputValidationError(PaymentsKey, "選択した決済方法の金額を入力してください。"));
         }

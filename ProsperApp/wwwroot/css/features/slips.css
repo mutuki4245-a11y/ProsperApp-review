@@ -1147,7 +1147,7 @@
 }
 
 #createSlipModal .modal-dialog {
-  max-width: min(1080px, calc(100vw - 1rem));
+  max-width: min(1180px, calc(100vw - 1rem));
 }
 
 #slipOrderModal .modal-dialog,
@@ -1183,6 +1183,14 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+#createSlipModal .modal-body {
+  overflow: hidden;
+}
+
+#createSlipModal .validation-summary-valid {
+  display: none;
 }
 
 #createSlipModal .modal-header,
@@ -1222,30 +1230,104 @@
 }
 
 .slip-modal-form--create {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
   margin: 0 auto;
-  max-width: 980px;
+  max-width: 1120px;
+  min-height: 0;
   width: 100%;
 }
 
+.slip-create-three-column {
+  display: grid;
+  gap: 0.85rem;
+  grid-row: 2;
+  grid-template-columns: minmax(16rem, 0.9fr) minmax(15rem, 0.8fr) minmax(22rem, 1.3fr);
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.slip-create-three-column__column {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
 #createSlipModal .slip-create__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 0.85rem;
 }
 
+#createSlipModal .slip-create__panel-title,
+#createSlipModal .slip-create__panel h3 {
+  flex: 0 0 auto;
+}
+
 #createSlipModal .table-picker {
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
 }
 
 #createSlipModal .table-picker__button {
-  min-height: 60px;
+  min-height: 52px;
 }
 
-@media (max-width: 991.98px) {
-  #createSlipModal .nomination-row {
-    grid-template-columns: 2.7rem minmax(0, 1fr) minmax(7rem, 0.7fr) auto;
+#createSlipModal .table-picker,
+#businessCustomerList,
+#businessNominationList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.15rem;
+}
+
+#createSlipModal .customer-row,
+#createSlipModal .nomination-row,
+#createSlipModal .table-picker__button {
+  flex: 0 0 auto;
+}
+
+#createSlipModal .nomination-row {
+  grid-template-columns: 2.7rem minmax(0, 1fr) minmax(7rem, 0.7fr) auto;
+}
+
+#createSlipModal .nomination-row__cast {
+  grid-column: 2 / -1;
+}
+
+@media (max-width: 1099.98px) {
+  #createSlipModal .modal-body {
+    overflow-y: auto;
   }
 
-  #createSlipModal .nomination-row__cast {
-    grid-column: 2 / -1;
+  .slip-modal-form--create {
+    display: block;
+    height: auto;
+  }
+
+  .slip-create-three-column {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .slip-create-three-column__column {
+    height: auto;
+  }
+
+  #createSlipModal .slip-create__panel,
+  #createSlipModal .table-picker,
+  #businessCustomerList,
+  #businessNominationList {
+    overflow: visible;
   }
 }
 

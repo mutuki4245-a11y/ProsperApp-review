@@ -21,6 +21,11 @@ public partial class SlipEditModel
         {
             ShowAdjustmentModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -28,6 +33,11 @@ public partial class SlipEditModel
         {
             ShowAdjustmentModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -40,6 +50,11 @@ public partial class SlipEditModel
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "自由入力明細を追加できませんでした。");
             ShowAdjustmentModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -48,6 +63,11 @@ public partial class SlipEditModel
             ModelState.AddModelError(string.Empty, "自由入力明細を追加できませんでした。入力内容を確認してください。");
             ShowAdjustmentModal = true;
             SetDefaultInputs();
+            if (IsPartialRequest())
+            {
+                return Partial("_SlipOrders", this);
+            }
+
             return Page();
         }
 
@@ -56,6 +76,11 @@ public partial class SlipEditModel
         AdjustmentInput = new SlipAdjustmentInputModel();
         await LoadAsync(cancellationToken);
         SetDefaultInputs();
+        if (IsPartialRequest())
+        {
+            return Partial("_SlipOrders", this);
+        }
+
         return Page();
     }
 

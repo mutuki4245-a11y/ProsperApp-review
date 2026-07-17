@@ -82,7 +82,7 @@
                                 <td class="slip-detail-table__action">
                                     @if (isActive)
                                     {
-                                        <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action">
+                                        <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action" data-partial-form="customers">
                                             <input type="hidden" asp-for="SlipId" />
                                             <input type="hidden" name="LeaveCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
                                             <select class="form-select form-select-sm slip-time-select" name="LeaveCustomerInput.LeftTime" aria-label="退店時刻">
@@ -125,7 +125,7 @@
     <div class="modal fade" id="addCustomerModal" tabindex="-1" aria-labelledby="addCustomerModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
-                <form method="post" asp-page-handler="AddCustomers">
+                <form method="post" asp-page-handler="AddCustomers" data-partial-form="customers">
                     <div class="modal-header">
                         <div>
                             <p class="store-home__eyebrow mb-1">客一覧</p>

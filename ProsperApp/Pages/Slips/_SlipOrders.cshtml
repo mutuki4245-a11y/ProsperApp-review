@@ -52,7 +52,7 @@
 
             @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
             {
-                <form method="post" asp-page-handler="SaveOrderQuantities" id="orderQuantityForm" data-order-quantity-form>
+                <form method="post" asp-page-handler="SaveOrderQuantities" id="orderQuantityForm" data-order-quantity-form data-partial-form="orders">
                     <input type="hidden" asp-for="SlipId" />
                 </form>
             }
@@ -115,7 +115,7 @@
                                     </td>
                                     <td class="slip-detail-table__amount text-end" data-order-line-amount>@StoreUiText.Amount(order.Amount)</td>
                                     <td class="slip-detail-table__action text-end">
-                                        <form method="post" asp-page-handler="VoidOrder" class="d-inline">
+                                        <form method="post" asp-page-handler="VoidOrder" class="d-inline" data-partial-form="orders">
                                             <input type="hidden" asp-for="SlipId" />
                                             <input type="hidden" name="orderLineId" value="@order.OrderLineId" />
                                             <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
@@ -166,6 +166,7 @@
                 <div class="slip-create__panel-title-actions">
                     @if (Model.IsOpenSlip)
                     {
+                        <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
                         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#adjustmentModal">自由入力明細を追加</button>
                     }
                     <span class="terminal-count-badge">@StoreUiText.Yen(chargeTotal)</span>
@@ -211,7 +212,7 @@
             <div class="modal fade" id="adjustmentModal" tabindex="-1" aria-labelledby="adjustmentModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-scrollable">
                     <div class="modal-content">
-                        <form method="post" asp-page-handler="AddAdjustment" data-adjustment-form>
+                        <form method="post" asp-page-handler="AddAdjustment" data-adjustment-form data-partial-form="orders">
                             <div class="modal-header">
                                 <div>
                                     <p class="store-home__eyebrow mb-1">自由入力明細</p>
@@ -252,7 +253,7 @@
             <div class="modal fade" id="slipOrderModal" tabindex="-1" aria-labelledby="slipOrderModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-xl modal-dialog-scrollable">
                     <div class="modal-content">
-                        <form method="post" asp-page-handler="AddOrders" id="slipOrderForm">
+                        <form method="post" asp-page-handler="AddOrders" id="slipOrderForm" data-partial-form="orders">
                             <div class="modal-header">
                                 <div>
                                     <p class="store-home__eyebrow mb-1">@detail.TableDisplayName</p>
@@ -344,6 +345,7 @@
                                     class="btn btn-primary btn-lg"
                                     type="submit"
                                     id="detailSubmitOrderButton"
+                                    data-submit-base-disabled="@((Model.OrderItems.Count == 0).ToString().ToLowerInvariant())"
                                     @(Model.OrderItems.Count == 0 ? "disabled" : null)>
                                     オーダー保存
                                 </button>

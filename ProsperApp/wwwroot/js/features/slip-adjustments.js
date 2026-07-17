@@ -1,77 +1,81 @@
 (() => {
     const dataElement = document.getElementById('slipEditData');
     const pageData = dataElement ? JSON.parse(dataElement.textContent || '{}') : {};
-    const showAdjustmentModal = pageData.showAdjustmentModal === true;
+    let showAdjustmentModal = pageData.showAdjustmentModal === true;
 
-    const adjustmentModalElement = document.getElementById('adjustmentModal');
-    const adjustmentModal = adjustmentModalElement ? new bootstrap.Modal(adjustmentModalElement) : null;
-    const adjustmentForm = document.querySelector('[data-adjustment-form]');
-    const nameInput = document.querySelector('[data-adjustment-name]');
-    const amountInput = document.querySelector('[data-adjustment-amount]');
-    const adjustmentStatus = document.querySelector('[data-adjustment-status]');
+    const init = () => {
+        const adjustmentModalElement = document.getElementById('adjustmentModal');
+        const adjustmentForm = document.querySelector('[data-adjustment-form]');
+        const nameInput = document.querySelector('[data-adjustment-name]');
+        const amountInput = document.querySelector('[data-adjustment-amount]');
+        const adjustmentStatus = document.querySelector('[data-adjustment-status]');
 
-    if (!adjustmentModalElement || !adjustmentForm || !nameInput || !amountInput) {
-        return;
-    }
+        if (!adjustmentModalElement || !adjustmentForm || !nameInput || !amountInput || adjustmentForm.dataset.adjustmentInitialized === 'true') {
+            return;
+        }
 
-    const saveStatus = window.TerminalSaveStatus;
-    let isSubmitting = false;
+        const adjustmentModal = new bootstrap.Modal(adjustmentModalElement);
+        const saveStatus = window.TerminalSaveStatus;
+        let isSubmitting = false;
+        adjustmentForm.dataset.adjustmentInitialized = 'true';
 
-    const readInput = () => ({
-        lineName: (nameInput.value ?? '').trim(),
-        amount: Number(amountInput.value || 0)
-    });
+        const readInput = () => ({
+            lineName: (nameInput.value ?? '').trim(),
+            amount: Number(amountInput.value || 0)
+        });
 
-    const hasInput = () => {
-        const input = readInput();
-        return input.lineName.length > 0 || input.amount !== 0;
-    };
+        const hasInput = () => {
+            const input = readInput();
+            return input.lineName.length > 0 || input.amount !== 0;
+        };
 
-    const markStatus = () => {
-        if (hasInput()) {
-            saveStatus.dirty(adjustmentStatus);
-        } else {
+        const markStatus = () => {
+            if (hasInput()) {
+                saveStatus.dirty(adjustmentStatus);
+            } else {
+                saveStatus.saved(adjustmentStatus);
+            }
+        };
+
+        const resetInput = () => {
+            nameInput.value = '';
+            amountInput.value = '0';
             saveStatus.saved(adjustmentStatus);
-        }
-    };
+        };
 
-    const resetInput = () => {
-        nameInput.value = '';
-        amountInput.value = '0';
-        saveStatus.saved(adjustmentStatus);
-    };
+        nameInput.addEventListener('input', markStatus);
+        amountInput.addEventListener('input', markStatus);
 
-    nameInput.addEventListener('input', markStatus);
-    amountInput.addEventListener('input', markStatus);
+        adjustmentForm.addEventListener('submit', () => {
+            isSubmitting = true;
+            saveStatus.saving(adjustmentStatus);
+        });
 
-    adjustmentForm.addEventListener('submit', () => {
-        isSubmitting = true;
-        saveStatus.saving(adjustmentStatus);
-    });
+        adjustmentModalElement.addEventListener('hide.bs.modal', (event) => {
+            if (isSubmitting || !hasInput()) {
+                return;
+            }
 
-    adjustmentModalElement.addEventListener('hide.bs.modal', (event) => {
-        if (isSubmitting || !hasInput()) {
-            return;
-        }
+            const confirmed = window.confirm('自由入力明細を保存せず閉じますか？');
+            if (!confirmed) {
+                event.preventDefault();
+                return;
+            }
 
-        const confirmed = window.confirm('自由入力明細を保存せず閉じますか？');
-        if (!confirmed) {
-            event.preventDefault();
-            return;
-        }
+            resetInput();
+        });
 
-        resetInput();
-    });
+        adjustmentModalElement.addEventListener('hidden.bs.modal', () => {
+            isSubmitting = false;
+        });
 
-    adjustmentModalElement.addEventListener('hidden.bs.modal', () => {
-        isSubmitting = false;
-    });
-
-    if (showAdjustmentModal) {
         markStatus();
-        adjustmentModal?.show();
-        return;
-    }
+        if (showAdjustmentModal) {
+            showAdjustmentModal = false;
+            adjustmentModal.show();
+        }
+    };
 
-    markStatus();
+    window.SlipAdjustments = { init };
+    init();
 })();
