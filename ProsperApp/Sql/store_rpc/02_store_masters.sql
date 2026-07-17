@@ -324,6 +324,8 @@ returns table (
     opened_at timestamp with time zone,
     customer_count integer,
     customer_names text,
+    nomination_cast_ids text,
+    nomination_cast_names text,
     memo text
 )
 language sql
@@ -360,6 +362,26 @@ as $$
         join public.store_slip_customers c
           on c.slip_id = s.slip_id
         group by c.slip_id
+    ),
+    active_nominations as (
+        select distinct
+            sc.slip_id,
+            sc.cast_id,
+            cm.display_name
+        from target_slips s
+        join public.store_slip_casts sc
+          on sc.slip_id = s.slip_id
+         and sc.status = 'active'
+        join public.cast_master cm
+          on cm.cast_id = sc.cast_id
+    ),
+    nomination_summary as (
+        select
+            n.slip_id,
+            string_agg(n.cast_id::text, ',' order by n.display_name, n.cast_id) as nomination_cast_ids,
+            string_agg(n.display_name, '、' order by n.display_name, n.cast_id) as nomination_cast_names
+        from active_nominations n
+        group by n.slip_id
     )
     select
         ts.slip_id,
@@ -369,12 +391,18 @@ as $$
         ts.opened_at,
         coalesce(cs.customer_count, ts.customer_count) as customer_count,
         coalesce(cs.customer_names, '') as customer_names,
+        coalesce(ns.nomination_cast_ids, '') as nomination_cast_ids,
+        coalesce(ns.nomination_cast_names, '') as nomination_cast_names,
         ts.memo
     from target_slips ts
     left join customer_summary cs
       on cs.slip_id = ts.slip_id
+    left join nomination_summary ns
+      on ns.slip_id = ts.slip_id
     order by ts.sort_order asc nulls last, ts.table_code asc nulls last, ts.opened_at asc;
 $$;
+
+revoke execute on function store.get_order_entry_slips(bigint, bigint) from public, anon, authenticated;
 
 drop function if exists store.get_order_items(bigint);
 

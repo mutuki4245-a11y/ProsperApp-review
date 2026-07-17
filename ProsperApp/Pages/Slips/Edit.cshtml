@@ -85,20 +85,22 @@
             </div>
         </section>
 
-        <div id="slipCustomersSection">
-            <partial name="_SlipCustomers" model="Model" />
-        </div>
+        <div data-slip-panels-url="@Url.Page(null, "Panels", new { slipId = Model.SlipId })">
+            <div id="slipCustomersSection">
+                <div class="slip-create__panel slip-detail-panel-loading">客一覧を読み込み中です。</div>
+            </div>
 
-        <div id="slipNominationsSection">
-            <partial name="_SlipNominations" model="Model" />
-        </div>
+            <div id="slipNominationsSection">
+                <div class="slip-create__panel slip-detail-panel-loading">指名一覧を読み込み中です。</div>
+            </div>
 
-        <div id="slipOrdersSection">
-            <partial name="_SlipOrders" model="Model" />
-        </div>
+            <div id="slipOrdersSection">
+                <div class="slip-create__panel slip-detail-panel-loading">オーダー一覧を読み込み中です。</div>
+            </div>
 
-        <div id="slipCheckoutSection">
-            <partial name="_SlipCheckout" model="Model" />
+            <div id="slipCheckoutSection">
+                <div class="slip-create__panel slip-detail-panel-loading">会計情報を読み込み中です。</div>
+            </div>
         </div>
 
     }
@@ -128,4 +130,5 @@
     <script src="~/js/features/slip-customers.js" asp-append-version="true"></script>
     <script src="~/js/features/slip-nominations.js" asp-append-version="true"></script>
     <script src="~/js/features/slip-orders.js" asp-append-version="true"></script>
+    <script src="~/js/features/slip-panels.js" asp-append-version="true"></script>
 }

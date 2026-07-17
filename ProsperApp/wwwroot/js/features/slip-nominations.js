@@ -58,6 +58,7 @@
     });
 
     syncCurrentDefaults();
+    window.SlipNominations = { syncDefaults: syncCurrentDefaults };
     if (showAddNominationModal) {
         showAddNominationModal = false;
         showModal();

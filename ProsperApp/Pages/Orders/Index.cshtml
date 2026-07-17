@@ -99,10 +99,6 @@
                                                     data-item-id="@item.ItemId">
                                                     <strong>@item.ItemName</strong>
                                                     <span>@item.DefaultPriceText</span>
-                                                    @if (item.IsCastBackTarget)
-                                                    {
-                                                        <small>@item.CastBackSummaryText</small>
-                                                    }
                                                 </button>
                                             }
                                         </div>
@@ -154,7 +150,7 @@
         <div class="modal-dialog modal-dialog-scrollable modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 class="modal-title fs-5" id="attendingCastSelectModalLabel">出勤キャスト選択</h2>
+                    <h2 class="modal-title fs-5" id="attendingCastSelectModalLabel">バック対象キャスト</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
                 </div>
                 <div class="modal-body cast-select-modal">
@@ -162,6 +158,7 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    <button class="btn btn-primary" type="button" id="attendingCastConfirmButton" disabled>OK</button>
                 </div>
             </div>
         </div>
@@ -173,7 +170,7 @@
     <script type="application/json" id="orderEntryData">
         @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new
         {
-            slips = Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName, customerNames = x.CustomerDisplayName }),
+            slips = Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName, customerNames = x.CustomerDisplayName, nominationCastIds = x.NominationCastIdList, nominationCastNames = x.NominationCastDisplayName }),
             items = orderableItems.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
             castOptions = Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true }),
             initialQueue = Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),

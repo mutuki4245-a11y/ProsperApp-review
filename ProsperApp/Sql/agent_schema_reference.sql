@@ -630,7 +630,8 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     returns slip_id, slip_no, table_id, table_code, table_name, opened_at, status,
 --       customer_count, customer_names, cast_names, accounting_amount, karaoke_quantity, memo
 --   store.get_order_entry_slips(p_department_id bigint, p_business_day_id bigint)
---     returns slip_id, table_id, table_code, table_name, opened_at, customer_count, memo
+--     returns slip_id, table_id, table_code, table_name, opened_at, customer_count,
+--       customer_names, nomination_cast_ids, nomination_cast_names, memo
 --   store.get_order_items(p_department_id bigint)
 --     returns item_id, item_name, item_type, default_price, category_code, category_name,
 --       is_cast_back_target, cast_back_regular_unit_amount, cast_back_nomination_unit_amount, cast_back_type

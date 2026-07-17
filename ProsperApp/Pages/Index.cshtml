@@ -139,7 +139,6 @@
                             <div class="slip-create-three-column">
                                 <div class="slip-create-three-column__column">
                                     <section class="slip-create__panel slip-create__panel--entry">
-                                        <h3>時刻</h3>
                                         <label asp-for="CreateSlipInput.OpenedTime" class="form-label visually-hidden"></label>
                                         <select class="form-select form-select-lg slip-time-select" name="CreateSlipInput.OpenedTime" aria-label="入店時刻">
                                             @foreach (var time in Model.TimeOptions)
@@ -159,7 +158,6 @@
                                     </section>
 
                                     <section class="slip-create__panel slip-create__panel--tables">
-                                        <h3>卓番</h3>
                                         <input asp-for="CreateSlipInput.TableId" type="hidden" id="businessCreateSlipTableId" />
                                         <span asp-validation-for="CreateSlipInput.TableId" class="text-danger"></span>
                                         @if (Model.Tables.Count == 0)
@@ -180,15 +178,13 @@
                                         }
                                     </section>
                                     <section class="slip-create__panel slip-create__panel--memo">
-                                        <h3>メモ</h3>
                                         <textarea asp-for="CreateSlipInput.Memo" class="form-control form-control-lg" rows="2" placeholder="共有事項"></textarea>
                                         <span asp-validation-for="CreateSlipInput.Memo" class="text-danger"></span>
                                     </section>
                                 </div>
 
                                 <section class="slip-create__panel slip-create__panel--customers">
-                                    <div class="slip-create__panel-title">
-                                        <h3>客</h3>
+                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions">
                                         <button class="btn btn-outline-primary" type="button" id="businessAddCustomerButton">追加</button>
                                     </div>
                                     <span asp-validation-for="CreateSlipInput.CustomerLabels" class="text-danger"></span>
@@ -205,8 +201,7 @@
                                 </section>
 
                                 <section class="slip-create__panel slip-create__panel--nominations">
-                                    <div class="slip-create__panel-title">
-                                        <h3>指名</h3>
+                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions">
                                         <button class="btn btn-outline-primary" type="button" id="businessAddNominationButton" disabled="@(!hasNominationOptions)">追加</button>
                                     </div>
                                     @if (!hasNominationOptions)

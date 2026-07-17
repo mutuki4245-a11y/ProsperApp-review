@@ -9,6 +9,8 @@ public class StoreOrderSlipOption
     public DateTimeOffset OpenedAt { get; set; }
     public int CustomerCount { get; set; }
     public string? CustomerNames { get; set; }
+    public string? NominationCastIds { get; set; }
+    public string? NominationCastNames { get; set; }
     public string? Memo { get; set; }
 
     public string TableDisplayName
@@ -27,6 +29,18 @@ public class StoreOrderSlipOption
     public string CustomerDisplayName => string.IsNullOrWhiteSpace(CustomerNames)
         ? $"{CustomerCount} 人"
         : CustomerNames;
+
+    public string NominationCastDisplayName => string.IsNullOrWhiteSpace(NominationCastNames)
+        ? "指名なし"
+        : NominationCastNames;
+
+    public IReadOnlyList<long> NominationCastIdList => string.IsNullOrWhiteSpace(NominationCastIds)
+        ? []
+        : NominationCastIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => long.TryParse(x, out var castId) ? castId : 0)
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
 }
 
 public class StoreOrderItemOption

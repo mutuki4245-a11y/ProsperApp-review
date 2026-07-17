@@ -80,6 +80,8 @@ public class IndexModel(
                 openedTime = StoreBusinessTime.FormatStoreTime(slip.OpenedAt),
                 customerCount = slip.CustomerCount,
                 customerNames = slip.CustomerDisplayName,
+                nominationCastIds = slip.NominationCastIdList,
+                nominationCastNames = slip.NominationCastDisplayName,
                 memo = slip.Memo
             })
         });

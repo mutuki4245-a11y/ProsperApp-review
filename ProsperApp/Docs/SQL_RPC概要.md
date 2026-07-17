@@ -129,7 +129,7 @@ DB反映時の基本順序は以下。
 | `store.create_cast` | キャストを作成する。 |
 | `store.delete_cast` | キャストを論理削除する。`cast_master.status = 'inactive'`、`is_active = false` に更新する。 |
 | `store.get_business_day_slips` | 営業中画面向けの伝票一覧と会計表示額を返す。 |
-| `store.get_order_entry_slips` | `/Orders` 向けの注文入力対象伝票一覧を返す。卓番、客数、客名を含み、注文端末の卓番選択には入店時刻ではなく客名を表示する。 |
+| `store.get_order_entry_slips` | `/Orders` 向けの注文入力対象伝票一覧を返す。卓番、客数、客名、指名キャストを含み、注文端末の卓番選択には客名と指名キャストを表示する。 |
 | `store.get_order_items` | 注文入力用の商品一覧を返す。標準商品だけを返し、カラオケなどのシステム商品は返さない。 |
 | `store.get_item_admin_catalog` | 商品管理画面用のカテゴリ/商品一覧を返す。 |
 | `store.get_nomination_back_master` | 指名バック設定画面と指名入力用に、店舗別DBマスタの指名種別候補とバック単価を返す。 |

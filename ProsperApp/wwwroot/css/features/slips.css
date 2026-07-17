@@ -477,9 +477,24 @@
   border-color: #0891b2;
 }
 
+.cast-select-modal__item.is-nominated {
+  background: #fff7ed;
+  border-color: #f59e0b;
+}
+
+.cast-select-modal__item.is-selected {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
 .cast-select-modal__item span {
   color: #64748b;
   font-size: 0.9rem;
+}
+
+.cast-select-modal__item.is-selected span {
+  color: #d1fae5;
 }
 
 
@@ -1137,6 +1152,11 @@
   white-space: nowrap;
 }
 
+.slip-detail-panel-loading {
+  color: #64748b;
+  font-weight: 700;
+}
+
 #createSlipModal .modal-dialog,
 #slipOrderModal .modal-dialog,
 #slipCheckoutModal .modal-dialog {
@@ -1263,12 +1283,24 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 0.85rem;
+  padding: 0.7rem;
 }
 
 #createSlipModal .slip-create__panel-title,
 #createSlipModal .slip-create__panel h3 {
   flex: 0 0 auto;
+}
+
+#createSlipModal .slip-create__panel-title--create-actions {
+  justify-content: flex-end;
+  margin-bottom: 0.55rem;
+  min-height: 2.4rem;
+}
+
+#createSlipModal .slip-create__panel-title--create-actions .btn {
+  min-height: 2.35rem;
+  padding-bottom: 0.35rem;
+  padding-top: 0.35rem;
 }
 
 #createSlipModal .table-picker {

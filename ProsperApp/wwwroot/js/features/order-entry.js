@@ -27,10 +27,12 @@
     const queue = new Map();
     const submitBaseDisabled = submitOrderButton?.disabled ?? false;
     let pendingBackItemId = null;
+    let pendingBackCastSelection = new Set();
     let slipOptionsLoaded = slips.length > 0;
     let slipOptionsLoading = false;
     const attendingCastModalElement = document.getElementById('attendingCastSelectModal');
     const attendingCastModalList = document.getElementById('attendingCastModalList');
+    const attendingCastConfirmButton = document.getElementById('attendingCastConfirmButton');
     const attendingCastModal = attendingCastModalElement ? new bootstrap.Modal(attendingCastModalElement) : null;
 
     initialQueue.forEach((line) => {
@@ -51,6 +53,8 @@
 
     const formatYen = window.MoneyText.yen;
     const hasSlip = (slipId) => slips.some((slip) => String(slip.id) === String(slipId));
+    const selectedSlip = () => slips.find((slip) => String(slip.id) === String(selectedSlipInput?.value ?? '')) ?? null;
+    const selectedNominationCastIds = () => new Set((selectedSlip()?.nominationCastIds ?? []).map((id) => String(id)));
     const setText = (element, text) => {
         const value = String(text);
         if (element && element.textContent !== value) {
@@ -65,6 +69,19 @@
 
         slipOptionsWarning.textContent = message ?? '';
         slipOptionsWarning.hidden = !message;
+    };
+
+    const getBackTargetCasts = () => {
+        const nominationCastIds = selectedNominationCastIds();
+        return [...castOptions].sort((left, right) => {
+            const leftNominated = nominationCastIds.has(String(left.id));
+            const rightNominated = nominationCastIds.has(String(right.id));
+            if (leftNominated !== rightNominated) {
+                return leftNominated ? -1 : 1;
+            }
+
+            return String(left.name ?? left.display ?? '').localeCompare(String(right.name ?? right.display ?? ''), 'ja');
+        });
     };
 
     const renderSlipPicker = () => {
@@ -124,16 +141,23 @@
                 button.type = 'button';
                 button.dataset.slipId = slipId;
 
-                const name = document.createElement('strong');
-                name.dataset.orderSlipName = '';
-                const meta = document.createElement('span');
-                meta.dataset.orderSlipMeta = '';
-                button.append(name, meta);
+                const table = document.createElement('span');
+                table.className = 'order-slip-picker__table';
+                table.dataset.orderSlipTable = '';
+                const info = document.createElement('span');
+                info.className = 'order-slip-picker__info';
+                const customer = document.createElement('strong');
+                customer.dataset.orderSlipCustomer = '';
+                const nomination = document.createElement('span');
+                nomination.dataset.orderSlipNomination = '';
+                info.append(customer, nomination);
+                button.append(table, info);
             }
 
             button.classList.toggle('is-selected', String(selectedSlipInput?.value ?? '') === slipId);
-            setText(button.querySelector('[data-order-slip-name]'), slip.display);
-            setText(button.querySelector('[data-order-slip-meta]'), slip.customerNames || `${slip.customerCount} 人`);
+            setText(button.querySelector('[data-order-slip-table]'), slip.display);
+            setText(button.querySelector('[data-order-slip-customer]'), slip.customerNames || `${slip.customerCount} 人`);
+            setText(button.querySelector('[data-order-slip-nomination]'), slip.nominationCastNames || '指名なし');
 
             renderedSlipIds.add(slipId);
             const current = slipPicker.children[index] ?? null;
@@ -214,12 +238,14 @@
 
     const openBackPicker = (itemId) => {
         pendingBackItemId = String(itemId);
+        pendingBackCastSelection = new Set();
         renderAttendingCastModal();
         attendingCastModal?.show();
     };
 
     const closeBackPicker = () => {
         pendingBackItemId = null;
+        pendingBackCastSelection = new Set();
         attendingCastModal?.hide();
     };
 
@@ -242,12 +268,12 @@
     };
 
     const render = () => {
-        const selectedSlip = slips.find((slip) => String(slip.id) === String(selectedSlipInput?.value ?? ''));
+        const currentSlip = selectedSlip();
         if (selectedSlipBadge) {
-            selectedSlipBadge.textContent = selectedSlip ? selectedSlip.display : '卓番未選択';
+            selectedSlipBadge.textContent = currentSlip ? currentSlip.display : '卓番未選択';
         }
         if (selectedSlipQueueLabel) {
-            selectedSlipQueueLabel.textContent = selectedSlip ? selectedSlip.display : '卓番未選択';
+            selectedSlipQueueLabel.textContent = currentSlip ? currentSlip.display : '卓番未選択';
         }
 
         renderSlipPicker();
@@ -322,32 +348,28 @@
         const buildQueueRow = (line) => {
             const row = document.createElement('div');
             row.className = 'order-queue__row';
-            const main = document.createElement('div');
-            main.className = 'order-queue__row-main';
             const name = document.createElement('strong');
+            name.className = 'order-queue__row-name';
             name.textContent = line.item.name;
-            main.appendChild(name);
-            if (line.cast) {
-                const back = document.createElement('small');
-                back.className = 'order-queue__back';
-                back.textContent = window.OrderBackText.summary(line.cast, line.item, line.quantity);
-                main.appendChild(back);
-            }
 
-            const amount = document.createElement('div');
-            amount.className = 'order-queue__row-amount';
-            const price = document.createElement('span');
-            price.textContent = `${formatYen(Number(line.item.price))} x ${line.quantity}`;
-            const subtotalText = document.createElement('strong');
-            subtotalText.textContent = formatYen(line.subtotal);
-            amount.append(price, subtotalText);
+            const amount = document.createElement('strong');
+            amount.className = 'order-queue__row-price';
+            amount.textContent = formatYen(line.subtotal);
+
+            const cast = document.createElement('span');
+            cast.className = 'order-queue__row-cast';
+            if (line.cast) {
+                cast.textContent = line.cast.name || line.cast.display || '';
+            } else {
+                cast.textContent = '指定なし';
+            }
 
             const remove = document.createElement('button');
             remove.className = 'btn btn-outline-danger btn-sm';
             remove.type = 'button';
             remove.dataset.removeItem = line.key;
             remove.textContent = '削除';
-            row.append(main, amount, remove);
+            row.append(name, amount, cast, remove);
             return row;
         };
 
@@ -359,9 +381,7 @@
             header.className = 'order-queue__group-header';
             const title = document.createElement('strong');
             title.textContent = group.slip.display;
-            const summary = document.createElement('span');
-            summary.textContent = `${group.quantity} 点 / ${formatYen(group.total)}`;
-            header.append(title, summary);
+            header.appendChild(title);
             groupElement.appendChild(header);
 
             group.lines.forEach((line) => {
@@ -462,26 +482,101 @@
         });
     });
 
-    const renderAttendingCastModal = () => {
-        window.CastSelectModal.renderOptionalBackTarget(attendingCastModalList, castOptions, {
-            getLabel: (cast) => cast.name,
-            onNone: () => {
-                if (pendingBackItemId) {
-                    addToQueue(pendingBackItemId, null);
-                }
-                closeBackPicker();
-            },
-            onSelect: (cast) => {
-                if (pendingBackItemId) {
-                    addToQueue(pendingBackItemId, cast.id);
-                }
-                closeBackPicker();
-            }
-        });
+    const updateBackPickerConfirm = () => {
+        if (attendingCastConfirmButton) {
+            attendingCastConfirmButton.disabled = !pendingBackItemId || pendingBackCastSelection.size === 0;
+        }
     };
+
+    const renderBackTargetButton = (cast, nominationCastIds) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'cast-select-modal__item';
+        button.dataset.castBackTarget = String(cast.id);
+        const isNominated = nominationCastIds.has(String(cast.id));
+        button.classList.toggle('is-nominated', isNominated);
+        button.classList.toggle('is-selected', pendingBackCastSelection.has(String(cast.id)));
+
+        const name = document.createElement('strong');
+        name.textContent = cast.name || cast.display || '';
+        button.appendChild(name);
+
+        if (isNominated) {
+            const badge = document.createElement('span');
+            badge.textContent = '指名';
+            button.appendChild(badge);
+        }
+
+        button.addEventListener('click', () => {
+            const castId = String(cast.id);
+            pendingBackCastSelection.delete('');
+            if (pendingBackCastSelection.has(castId)) {
+                pendingBackCastSelection.delete(castId);
+            } else {
+                pendingBackCastSelection.add(castId);
+            }
+            renderAttendingCastModal();
+        });
+        return button;
+    };
+
+    const renderNoneBackTargetButton = () => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'cast-select-modal__item cast-select-modal__item--none';
+        button.classList.toggle('is-selected', pendingBackCastSelection.has(''));
+
+        const name = document.createElement('strong');
+        name.textContent = '指定なし';
+        button.appendChild(name);
+
+        button.addEventListener('click', () => {
+            pendingBackCastSelection = new Set(['']);
+            renderAttendingCastModal();
+        });
+        return button;
+    };
+
+    const renderAttendingCastModal = () => {
+        if (!attendingCastModalList) {
+            return;
+        }
+
+        const nominationCastIds = selectedNominationCastIds();
+        attendingCastModalList.innerHTML = '';
+        attendingCastModalList.appendChild(renderNoneBackTargetButton());
+
+        const casts = getBackTargetCasts();
+        if (casts.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'text-muted mb-0';
+            empty.textContent = '出勤キャストが登録されていません。';
+            attendingCastModalList.appendChild(empty);
+            updateBackPickerConfirm();
+            return;
+        }
+
+        casts.forEach((cast) => {
+            attendingCastModalList.appendChild(renderBackTargetButton(cast, nominationCastIds));
+        });
+        updateBackPickerConfirm();
+    };
+
+    attendingCastConfirmButton?.addEventListener('click', () => {
+        if (!pendingBackItemId || pendingBackCastSelection.size === 0) {
+            return;
+        }
+
+        pendingBackCastSelection.forEach((castId) => {
+            addToQueue(pendingBackItemId, castId ? castId : null);
+        });
+        closeBackPicker();
+    });
 
     attendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
         pendingBackItemId = null;
+        pendingBackCastSelection = new Set();
+        updateBackPickerConfirm();
     });
 
     if (selectedSlipInput && initialSlipId) {

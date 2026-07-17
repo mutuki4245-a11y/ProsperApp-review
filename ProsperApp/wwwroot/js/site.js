@@ -278,7 +278,11 @@
         error: (target, message) => setTerminalSaveStatus(target, 'error', message)
     };
     window.PartialForms = {
-        submit: submitPartialForm
+        submit: submitPartialForm,
+        prepareDynamicContent: (root = document) => {
+            configureStaticModals();
+            parseValidation(root);
+        }
     };
 
     document.addEventListener('click', (event) => {
