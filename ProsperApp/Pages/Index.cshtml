@@ -61,10 +61,24 @@
                 <div class="sales-summary__actions">
                     @if (Model.CanCreateSalesInput)
                     {
-                        <button class="btn btn-primary sales-summary__create" type="button" data-bs-toggle="modal" data-bs-target="#createSlipModal">伝票を追加</button>
+                        <button
+                            class="btn btn-primary sales-summary__create"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#createSlipModal"
+                            data-business-create-slip-button
+                            @(Model.CanCreateSlip ? null : "disabled")>
+                            伝票を追加
+                        </button>
                     }
                     <a class="btn btn-outline-primary sales-summary__attendance" asp-page="/Attendance">勤怠管理</a>
                 </div>
+                @if (Model.CanCreateSalesInput && !Model.CanCreateSlip)
+                {
+                    <div class="alert alert-warning sales-summary__warning" role="alert" data-business-create-slip-warning>
+                        @IndexModel.AttendanceRequiredMessage
+                    </div>
+                }
             </div>
             <section class="slip-list-section" id="slipListPanel">
                 <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
@@ -252,7 +266,7 @@
                         </div>
                         <div class="modal-footer">
                             <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
-                            <button class="btn btn-primary btn-lg" type="submit" @(Model.Tables.Count == 0 ? "disabled" : null)>伝票を作成</button>
+                            <button class="btn btn-primary btn-lg" type="submit" @((!Model.CanCreateSlip || Model.Tables.Count == 0) ? "disabled" : null)>伝票を作成</button>
                         </div>
                     </form>
                 </div>

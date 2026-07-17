@@ -304,6 +304,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: space-between;
   min-height: 3.4rem;
@@ -347,6 +348,11 @@
   font-weight: 700;
   min-height: 2.35rem;
   min-width: 6.5rem;
+}
+
+.sales-summary__warning {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .slip-list-section__statusbar {

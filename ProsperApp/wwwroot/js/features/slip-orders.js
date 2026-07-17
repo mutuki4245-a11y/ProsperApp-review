@@ -206,26 +206,32 @@
 
             const row = document.createElement('div');
             row.className = 'order-queue__row';
+            const main = document.createElement('div');
+            main.className = 'order-queue__row-main';
             const name = document.createElement('strong');
             name.textContent = item.name;
+            main.appendChild(name);
+            if (cast) {
+                const back = document.createElement('small');
+                back.className = 'order-queue__back';
+                back.textContent = window.OrderBackText.summary(cast, item, quantity);
+                main.appendChild(back);
+            }
+
+            const amount = document.createElement('div');
+            amount.className = 'order-queue__row-amount';
             const price = document.createElement('span');
-            price.textContent = formatYen(Number(item.price));
-            const quantityText = document.createElement('span');
-            quantityText.textContent = String(quantity);
-            const subtotalText = document.createElement('span');
+            price.textContent = `${formatYen(Number(item.price))} x ${quantity}`;
+            const subtotalText = document.createElement('strong');
             subtotalText.textContent = formatYen(subtotal);
+            amount.append(price, subtotalText);
+
             const remove = document.createElement('button');
             remove.className = 'btn btn-outline-danger btn-sm';
             remove.type = 'button';
             remove.dataset.detailRemoveOrderItem = key;
             remove.textContent = '削除';
-            row.append(name, price, quantityText, subtotalText, remove);
-            if (cast) {
-                const back = document.createElement('small');
-                back.className = 'order-queue__back';
-                back.textContent = window.OrderBackText.summary(cast, item, quantity);
-                row.appendChild(back);
-            }
+            row.append(main, amount, remove);
             detailOrderQueueList?.appendChild(row);
             index += 1;
         });

@@ -50,6 +50,7 @@ public class IndexModel(
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
 
     private static readonly JsonSerializerOptions KaraokeJsonOptions = new(JsonSerializerDefaults.Web);
+    public const string AttendanceRequiredMessage = "営業を開始する前に出勤キャストを選択してください。";
 
     public bool ShowCreateSlipModal { get; private set; }
 
@@ -106,6 +107,8 @@ public class IndexModel(
 
     public bool CanCreateSalesInput => SlipsEnabled && !IsPreviousBusinessDayOpen;
 
+    public bool CanCreateSlip => CanCreateSalesInput && AttendanceCasts.Count > 0;
+
     public bool CanMoveToClosing => HasCurrentBusinessDay;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -115,7 +118,7 @@ public class IndexModel(
             return RedirectToPage("/Orders/Index");
         }
 
-        await LoadAsync(cancellationToken, includeAttendanceCasts: false);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: true);
         SetDefaultCreateSlipInput();
         SuccessMessage = TempData["SuccessMessage"] as string;
         PendingReceiptPrintRequestJson = TempData[ReceiptPrintTempDataKeys.PendingCheckoutReceipt] as string;
@@ -208,7 +211,7 @@ public class IndexModel(
         }
 
         NormalizeCreateSlipInput();
-        await LoadAsync(cancellationToken, includeAttendanceCasts: CreateSlipInput.CastNominations.Count > 0);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: true);
         SetBusinessDayInput();
         ComposeOpenedAt();
         ValidateCreateSlip();
@@ -230,7 +233,7 @@ public class IndexModel(
         SuccessMessage = "伝票を作成しました。";
         ModelState.Clear();
         CreateSlipInput = new CreateSlipInputModel();
-        await LoadAsync(cancellationToken, includeAttendanceCasts: false);
+        await LoadAsync(cancellationToken, includeAttendanceCasts: true);
         SetDefaultCreateSlipInput();
         return Page();
     }
@@ -260,7 +263,7 @@ public class IndexModel(
                 return KaraokeJsonError(GetFirstModelError("営業中の営業日がありません。"));
             }
 
-            await LoadAsync(cancellationToken, includeAttendanceCasts: false);
+            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
             SetDefaultCreateSlipInput();
             return Page();
         }
@@ -274,7 +277,7 @@ public class IndexModel(
                 return KaraokeJsonError(GetFirstModelError("営業日が更新されています。画面を再読み込みしてください。"));
             }
 
-            await LoadAsync(cancellationToken, includeAttendanceCasts: false);
+            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
             SetDefaultCreateSlipInput();
             return Page();
         }
@@ -291,7 +294,7 @@ public class IndexModel(
 
             RemoveModelStateEntries(nameof(CreateSlipInput));
             ValidateKaraokeLines(KaraokeLines);
-            await LoadAsync(cancellationToken, includeAttendanceCasts: false);
+            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
             SetDefaultCreateSlipInput();
             return Page();
         }
@@ -308,7 +311,7 @@ public class IndexModel(
                 return KaraokeJsonError(GetFirstModelError("カラオケ回数を保存できませんでした。"));
             }
 
-            await LoadAsync(cancellationToken, includeAttendanceCasts: false);
+            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
             SetDefaultCreateSlipInput();
             return Page();
         }
@@ -467,6 +470,11 @@ public class IndexModel(
         if (Tables.Count == 0)
         {
             ModelState.AddModelError(string.Empty, "卓番マスタが未登録です。store_table_masterにこの店舗の卓番を登録してください。");
+        }
+
+        if (CanCreateSalesInput && AttendanceCasts.Count == 0)
+        {
+            ModelState.AddModelError(string.Empty, AttendanceRequiredMessage);
         }
 
         if (CreateSlipInput.TableId is not null && Tables.All(x => x.TableId != CreateSlipInput.TableId.Value))
