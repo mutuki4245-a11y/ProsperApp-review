@@ -105,7 +105,7 @@ public partial class SlipEditModel
         }
 
         QueueReceiptPrint(result);
-        TempData["SuccessMessage"] = $"会計を確定しました。お釣り: {result.ChangeAmount:N0}円";
+        TempData["SuccessMessage"] = $"会計を確定しました。お釣り: {StoreUiText.Yen(result.ChangeAmount)}";
         ModelState.Clear();
         return RedirectToPage("/Index");
     }

@@ -50,7 +50,7 @@ public class IndexModel(
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
 
     private static readonly JsonSerializerOptions KaraokeJsonOptions = new(JsonSerializerDefaults.Web);
-    public const string AttendanceRequiredMessage = "営業を開始する前に出勤キャストを選択してください。";
+    public const string AttendanceRequiredMessage = CreateSlipEditor.AttendanceRequiredMessage;
 
     public bool ShowCreateSlipModal { get; private set; }
 
@@ -210,11 +210,10 @@ public class IndexModel(
             return NotFound();
         }
 
-        NormalizeCreateSlipInput();
         await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-        SetBusinessDayInput();
-        ComposeOpenedAt();
-        ValidateCreateSlip();
+        var edit = CreateSlipEditor.Prepare(CreateSlipInput, BuildCreateSlipEditContext(), _storeClock);
+        CreateSlipInput = edit.Input;
+        AddCreateSlipErrors(edit.Errors);
 
         if (!ModelState.IsValid)
         {
@@ -370,23 +369,7 @@ public class IndexModel(
 
     private void SetDefaultCreateSlipInput()
     {
-        CreateSlipInput.OpenedTime ??= _storeClock.FloorToMinuteStep(_storeClock.GetStoreNow(), 5).ToString("HH:mm");
-        SetBusinessDayInput();
-
-        if (CreateSlipInput.CustomerLabels.Count == 0)
-        {
-            CreateSlipInput.CustomerLabels.Add(null);
-        }
-
-        ComposeOpenedAt();
-    }
-
-    private void SetBusinessDayInput()
-    {
-        CreateSlipInput.BusinessDate = GetSafeBusinessDate(CurrentBusinessDay);
-        CreateSlipInput.BusinessDayId = HasValidBusinessDate(CurrentBusinessDay)
-            ? CurrentBusinessDay?.BusinessDayId
-            : null;
+        CreateSlipInput = CreateSlipEditor.ApplyDefaults(CreateSlipInput, CurrentBusinessDay, CurrentBusinessDate, _storeClock);
     }
 
     private DateOnly GetSafeBusinessDate(StoreBusinessDay? businessDay)
@@ -403,153 +386,25 @@ public class IndexModel(
         return businessDay is { BusinessDayId: > 0, BusinessDate: var businessDate } && businessDate != default;
     }
 
-    private void NormalizeCreateSlipInput()
+    private CreateSlipEditContext BuildCreateSlipEditContext()
     {
-        CreateSlipInput.CustomerLabels = CreateSlipInput.CustomerLabels
-            .Select(x => string.IsNullOrWhiteSpace(x) ? null : x.Trim())
-            .ToList();
-
-        if (CreateSlipInput.CustomerLabels.Count == 0)
-        {
-            CreateSlipInput.CustomerLabels.Add(null);
-        }
-
-        CreateSlipInput.Memo = string.IsNullOrWhiteSpace(CreateSlipInput.Memo) ? null : CreateSlipInput.Memo.Trim();
-        CreateSlipInput.CastNominations = CreateSlipInput.CastNominations
-            .Select(x => new CastNominationInputModel
-            {
-                NominationKind = ResolveNominationKind(x),
-                NominationPrice = x.NominationPrice,
-                CastId = x.CastId,
-                CastName = string.IsNullOrWhiteSpace(x.CastName) ? null : x.CastName.Trim()
-            })
-            .Where(HasNominationCast)
-            .ToList();
+        return new CreateSlipEditContext(
+            CurrentBusinessDay,
+            CurrentBusinessDate,
+            StoreContext,
+            Tables,
+            NominationOptions,
+            AttendanceCasts,
+            TimeOptions,
+            IsPreviousBusinessDayOpen,
+            CanCreateSalesInput);
     }
 
-    private static bool HasNominationCast(CastNominationInputModel nomination)
+    private void AddCreateSlipErrors(IEnumerable<CreateSlipValidationError> errors)
     {
-        return nomination.CastId is not null || !string.IsNullOrWhiteSpace(nomination.CastName);
-    }
-
-    private static string? ResolveNominationKind(CastNominationInputModel nomination)
-    {
-        if (!string.IsNullOrWhiteSpace(nomination.NominationKind))
+        foreach (var error in errors)
         {
-            return nomination.NominationKind.Trim();
-        }
-
-        return null;
-    }
-
-    private void ComposeOpenedAt()
-    {
-        if (string.IsNullOrWhiteSpace(CreateSlipInput.OpenedTime) ||
-            CreateSlipInput.BusinessDate is null ||
-            !TimeOnly.TryParse(CreateSlipInput.OpenedTime, out var openedTime))
-        {
-            CreateSlipInput.OpenedAt = null;
-            return;
-        }
-
-        CreateSlipInput.OpenedAt = _storeClock.ComposeBusinessDateTime(CreateSlipInput.BusinessDate.Value, openedTime);
-    }
-
-    private void ValidateCreateSlip()
-    {
-        if (StoreContext is null)
-        {
-            ModelState.AddModelError(string.Empty, "店舗設定を取得できません。Supabase設定とStoreDepartmentIdを確認してください。");
-        }
-
-        if (IsPreviousBusinessDayOpen)
-        {
-            ModelState.AddModelError(string.Empty, $"前回営業日 {CurrentBusinessDay?.BusinessDate:yyyy-MM-dd} の締め作業が未完了です。締め作業を完了してから新しい営業入力を開始してください。");
-        }
-
-        if (Tables.Count == 0)
-        {
-            ModelState.AddModelError(string.Empty, "卓番マスタが未登録です。store_table_masterにこの店舗の卓番を登録してください。");
-        }
-
-        if (CanCreateSalesInput && AttendanceCasts.Count == 0)
-        {
-            ModelState.AddModelError(string.Empty, AttendanceRequiredMessage);
-        }
-
-        if (CreateSlipInput.TableId is not null && Tables.All(x => x.TableId != CreateSlipInput.TableId.Value))
-        {
-            ModelState.AddModelError("CreateSlipInput.TableId", "この店舗で利用できない卓番です。");
-        }
-
-        var allowedCastIds = AttendanceCasts.Select(x => x.CastId).ToHashSet();
-        var allowedNominationKinds = NominationOptions
-            .Select(x => x.NominationKind)
-            .ToHashSet(StringComparer.Ordinal);
-        for (var i = 0; i < CreateSlipInput.CastNominations.Count; i++)
-        {
-            var nomination = CreateSlipInput.CastNominations[i];
-            if (nomination.CastId is not null && string.IsNullOrWhiteSpace(nomination.CastName))
-            {
-                nomination.CastName = AttendanceCasts.FirstOrDefault(x => x.CastId == nomination.CastId.Value)?.SearchDisplayName;
-            }
-
-            if (allowedNominationKinds.Count == 0)
-            {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationKind", "指名種別マスタを登録してください。");
-            }
-            else if (string.IsNullOrWhiteSpace(nomination.NominationKind) || !allowedNominationKinds.Contains(nomination.NominationKind))
-            {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationKind", "指名区分を選択してください。");
-            }
-
-            if (!IsValidNominationPrice(nomination.NominationPrice))
-            {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].NominationPrice", "指名料金を選択してください。");
-            }
-
-            if (nomination.CastId is null)
-            {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].CastName", "候補からキャストを選択してください。");
-            }
-            else if (!allowedCastIds.Contains(nomination.CastId.Value))
-            {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].CastName", "出勤キャストから選択してください。");
-            }
-
-            if (nomination.CastName is not null && nomination.CastName.Length > 160)
-            {
-                ModelState.AddModelError($"CreateSlipInput.CastNominations[{i}].CastName", "キャスト名は160文字以内で入力してください。");
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(CreateSlipInput.OpenedTime) || !TimeOptions.Contains(CreateSlipInput.OpenedTime))
-        {
-            ModelState.AddModelError("CreateSlipInput.OpenedTime", "入店時刻は5分単位で選択してください。");
-        }
-
-        if (CreateSlipInput.CustomerLabels.Count is < 1 or > 20)
-        {
-            ModelState.AddModelError("CreateSlipInput.CustomerLabels", "客情報は1人から20人まで登録できます。");
-        }
-
-        if (CreateSlipInput.CustomerLabels.Any(x => x is not null && x.Length > 100))
-        {
-            ModelState.AddModelError("CreateSlipInput.CustomerLabels", "客名は1人100文字以内で入力してください。");
-        }
-
-        if (CreateSlipInput.OpenedAt is not null)
-        {
-            var now = _storeClock.GetStoreNow();
-            if (CreateSlipInput.OpenedAt.Value > now.AddMinutes(5))
-            {
-                ModelState.AddModelError("CreateSlipInput.OpenedAt", "入店時刻に未来時刻は指定できません。");
-            }
-
-            if (CreateSlipInput.OpenedAt.Value < now.AddDays(-2))
-            {
-                ModelState.AddModelError("CreateSlipInput.OpenedAt", "入店時刻は過去2日以内で入力してください。");
-            }
+            ModelState.AddModelError(error.Key, error.Message);
         }
     }
 
@@ -660,11 +515,6 @@ public class IndexModel(
             .SelectMany(x => x.Errors)
             .Select(x => x.ErrorMessage)
             .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? fallback;
-    }
-
-    private static bool IsValidNominationPrice(decimal price)
-    {
-        return price is >= 1000 and <= 20000 && price % 1000 == 0;
     }
 
     public static string ToSlipStatusDisplay(string status)
