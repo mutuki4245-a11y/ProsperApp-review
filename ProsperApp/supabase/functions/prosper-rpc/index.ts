@@ -451,10 +451,49 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_slip_id", type: "bigint" },
-        { name: "p_closed_at", type: "timestamp with time zone" },
         { name: "p_payments", type: "jsonb" },
         { name: "p_received_amount", type: "numeric" },
-        { name: "p_confirmed_snapshot", type: "jsonb" },
+      ],
+    },
+  ],
+  [
+    "store.issue_checkout_statement",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+        { name: "p_closed_at", type: "timestamp with time zone" },
+      ],
+    },
+  ],
+  [
+    "store.get_checkout_statement_print_data",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
+    "store.release_checkout_ready",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
+    "store.get_checkout_receipt_print_data",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
       ],
     },
   ],

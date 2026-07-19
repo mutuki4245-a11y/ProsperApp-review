@@ -1,6 +1,11 @@
 -- ProsperApp schema reference for Codex agents.
 -- Purpose:
 --   This file is a read-only reference for agents that need table/column/RPC information.
+--   Status 2026-07-20: checkout-related definitions below have been reconciled with
+--   the source implementation, but this remains a compact reference, not an
+--   executable schema. For the authoritative checkout contract, read
+--   Sql/store_order_accounting_tables.sql, Sql/store_rpc/08_checkout_ready.sql,
+--   Infrastructure/Supabase/SupabaseCheckoutRepository.cs, and the prosper-rpc allowlist.
 --   Do not execute this file as a migration. Execute the dedicated files instead:
 --     - Sql/store_order_accounting_tables.sql
 --     - Sql/store_settings_functions.sql
@@ -12,6 +17,7 @@
 --     - Sql/store_rpc/05_checkout.sql
 --     - Sql/store_rpc/06_receipts.sql
 --     - Sql/store_rpc/07_cast_sales_adjustments.sql
+--     - Sql/store_rpc/08_checkout_ready.sql
 --     - Sql/store_rpc/99_grants.sql
 --     - Sql/quick_entry_account_master_updates.sql
 --   Sql/store_rpc_functions.sql is a non-executable index for the split RPC files.
@@ -48,6 +54,7 @@
 --   is_active boolean
 --   created_at timestamp with time zone
 --   company_short_code text
+--   invoice_registration_number text
 
 -- department_master
 --   department_id bigint
@@ -58,6 +65,10 @@
 --   attendance_minute_step integer
 --   cast_sales_amount_basis text
 --   cast_sales_split_mode text
+--   receipt_display_name text
+--   receipt_address text
+--   receipt_phone text
+--   receipt_logo text
 
 -- document_file_no_sequences
 --   company_id bigint
@@ -324,12 +335,12 @@ create table if not exists public.store_slips (
     slip_no text,
     opened_at timestamp with time zone not null,
     closed_at timestamp with time zone,
-    status text not null default 'open', -- open / checked_out / cancelled
+    status text not null default 'open', -- open / checkout_ready / checked_out / cancelled
     customer_count integer not null default 0,
     memo text,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
-    constraint chk_store_slips_status check (status in ('open', 'checked_out', 'cancelled')),
+    constraint chk_store_slips_status check (status in ('open', 'checkout_ready', 'checked_out', 'cancelled')),
     constraint chk_store_slips_customer_count check (customer_count >= 0),
     constraint chk_store_slips_closed_at check (closed_at is null or closed_at >= opened_at),
     constraint uq_store_slips_slip_no unique (company_id, department_id, slip_no)
@@ -343,12 +354,17 @@ create table if not exists public.store_slip_customers (
     customer_label text,
     entered_at timestamp with time zone not null,
     left_at timestamp with time zone,
+    left_at_source text, -- null / manual / accounting_slip
     status text not null default 'active', -- active / left / cancelled
     memo text,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_slip_customers_status check (status in ('active', 'left', 'cancelled')),
     constraint chk_store_slip_customers_left_at check (left_at is null or left_at >= entered_at),
+    constraint chk_store_slip_customers_left_at_source check (
+        (left_at is null and left_at_source is null)
+        or (left_at is not null and left_at_source in ('manual', 'accounting_slip'))
+    ),
     constraint uq_store_slip_customers_line unique (slip_id, line_no)
 );
 
@@ -486,11 +502,12 @@ create table if not exists public.store_checkouts (
     department_id bigint not null references public.department_master(department_id),
     checkout_at timestamp with time zone not null,
     subtotal_amount numeric(12, 0) not null default 0,
-    service_tax_amount numeric(12, 0) not null default 0,
+    service_charge_amount numeric(12, 0) not null default 0,
     total_amount numeric(12, 0) not null default 0,
     payment_method_id bigint references public.payment_method_master(payment_method_id),
     received_amount numeric(12, 0),
     change_amount numeric(12, 0),
+    issuer_snapshot jsonb,
     status text not null default 'draft', -- draft / confirmed / cancelled
     memo text,
     created_at timestamp with time zone not null default now(),
@@ -690,11 +707,19 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     marks an active customer row left and refreshes store_slips.customer_count.
 --   store.void_order_line(p_department_id bigint, p_order_line_id bigint)
 --     marks an active standard order line and related store_order_line_cast_backs rows voided.
---   store.confirm_checkout(p_department_id bigint, p_slip_id bigint, p_closed_at timestamptz, p_payments jsonb, p_received_amount numeric, p_confirmed_snapshot jsonb)
---     confirms checkout, stores subtotal/service tax/total snapshots, split payment rows, closes active customers, and marks the slip checked_out.
---     total includes all active order lines, 20% service tax on that subtotal, and active adjustment charge lines.
---     p_closed_at must be after the slip opened_at and every non-cancelled customer entered_at.
+--   store.issue_checkout_statement(p_department_id bigint, p_slip_id bigint, p_closed_at timestamptz)
+--     changes an open slip to checkout_ready, fixes close time and non-left customer rows,
+--     and returns checkout-statement print_data plus review_data.
+--   store.get_checkout_statement_print_data(p_department_id bigint, p_slip_id bigint)
+--     recreates the checkout_ready statement print_data plus review_data without changing state.
+--   store.release_checkout_ready(p_department_id bigint, p_slip_id bigint)
+--     returns checkout_ready to open and clears only accounting_slip-derived leave times.
+--   store.confirm_checkout(p_department_id bigint, p_slip_id bigint, p_payments jsonb, p_received_amount numeric)
+--     confirms only checkout_ready, stores subtotal/service charge/total and issuer snapshot,
+--     creates split payment rows, marks the slip checked_out, and returns receipt print_data.
 --     p_payments supports { method_code, amount } with method_code in cash/cat/paypay.
+--   store.get_checkout_receipt_print_data(p_department_id bigint, p_slip_id bigint)
+--     returns checkout_id and receipt print_data for an active checked_out checkout.
 --   store.cancel_checkout(p_department_id bigint, p_slip_id bigint)
 --     cancels a confirmed checkout for an open business day, marks payments cancelled,
 --     deletes related cast-sales adjustments, reopens the slip, and does not change customer left_at/status.

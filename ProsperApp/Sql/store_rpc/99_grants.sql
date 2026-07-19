@@ -50,6 +50,10 @@ declare
         'store.void_order_line',
         'store.confirm_checkout',
         'store.cancel_checkout',
+        'store.issue_checkout_statement',
+        'store.get_checkout_statement_print_data',
+        'store.release_checkout_ready',
+        'store.get_checkout_receipt_print_data',
         'store.create_slip',
         'store.quick_enter_receipt',
         'store.mark_receipt_scan_mistake'

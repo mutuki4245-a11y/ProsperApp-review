@@ -676,6 +676,7 @@ begin
 
     update public.store_slip_customers c
        set left_at = p_left_at,
+           left_at_source = 'manual',
            status = 'left',
            updated_at = now()
      where c.slip_customer_id = p_slip_customer_id;
@@ -1191,7 +1192,7 @@ begin
      where s.slip_id = c.slip_id
        and c.slip_customer_id = p_slip_customer_id
        and s.department_id = p_department_id
-       and s.status in ('open', 'checked_out')
+       and s.status = 'open'
        and c.status <> 'cancelled'
     returning c.slip_customer_id;
 

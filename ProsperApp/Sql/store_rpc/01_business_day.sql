@@ -579,7 +579,7 @@ as $$
     from public.store_slips s
     where s.department_id = p_department_id
       and s.business_day_id = p_business_day_id
-      and s.status = 'open';
+      and s.status in ('open', 'checkout_ready');
 $$;
 
 create or replace function store.get_business_day_drink_delivery_status(

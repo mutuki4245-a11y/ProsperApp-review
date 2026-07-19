@@ -31,7 +31,7 @@ declare
     v_method_code text;
     v_amount numeric(12, 0);
     v_subtotal_amount numeric(12, 0);
-    v_service_tax_amount numeric(12, 0);
+    v_service_charge_amount numeric(12, 0);
     v_charge_amount numeric(12, 0);
     v_total_amount numeric(12, 0);
     v_payment_total numeric(12, 0) := 0;
@@ -101,8 +101,8 @@ begin
       and cl.charge_type = 'adjustment'
       and cl.status = 'active';
 
-    v_service_tax_amount := round(v_subtotal_amount * 0.20, 0);
-    v_total_amount := v_subtotal_amount + v_service_tax_amount + v_charge_amount;
+    v_service_charge_amount := round(v_subtotal_amount * 0.20, 0);
+    v_total_amount := v_subtotal_amount + v_service_charge_amount + v_charge_amount;
 
     if v_total_amount < 0 then
         raise exception 'invalid_checkout_total';
@@ -124,7 +124,7 @@ begin
               and c.status <> 'cancelled'
         ),
         'subtotal_amount', v_subtotal_amount,
-        'service_tax_amount', v_service_tax_amount,
+        'service_charge_amount', v_service_charge_amount,
         'adjustment_amount', v_charge_amount,
         'total_amount', v_total_amount,
         'orders', coalesce((
@@ -255,7 +255,7 @@ begin
         department_id,
         checkout_at,
         subtotal_amount,
-        service_tax_amount,
+        service_charge_amount,
         total_amount,
         payment_method_id,
         received_amount,
@@ -268,7 +268,7 @@ begin
         p_department_id,
         p_closed_at,
         v_subtotal_amount,
-        v_service_tax_amount,
+        v_service_charge_amount,
         v_total_amount,
         v_single_payment_method_id,
         case when v_cash_amount > 0 then p_received_amount else null end,
