@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace ProsperApp.Models;
 
@@ -14,53 +15,81 @@ public class CheckoutPaymentInputModel
     public decimal Amount { get; set; }
 }
 
-public class CheckoutInputModel
-{
-    [Display(Name = "領収書宛名")]
-    [StringLength(120, ErrorMessage = "領収書宛名は120文字以内で入力してください。")]
-    public string? ReceiptAddressee { get; set; }
-
-    [Display(Name = "退店時刻")]
-    [Required(ErrorMessage = "退店時刻を選択してください。")]
-    public string? ClosedTime { get; set; }
-
-    public DateTime? ClosedAt { get; set; }
-
-    public List<CheckoutPaymentInputModel> Payments { get; set; } = [];
-
-    public string ConfirmedSnapshotJson { get; set; } = "{}";
-
-    [Display(Name = "受取額")]
-    [Range(0, 99999999, ErrorMessage = "受取額を確認してください。")]
-    public decimal? ReceivedAmount { get; set; }
-}
-
-public class CheckoutTotals
-{
-    public decimal SubtotalAmount { get; set; }
-    public decimal ServiceTaxAmount { get; set; }
-    public decimal AdjustmentAmount { get; set; }
-    public decimal ChargeAmount => AdjustmentAmount;
-    public decimal TotalAmount { get; set; }
-}
-
 public class ConfirmCheckoutResult
 {
     public bool Succeeded { get; init; }
     public string? ErrorMessage { get; init; }
     public long? CheckoutId { get; init; }
     public decimal ChangeAmount { get; init; }
+    public JsonElement? ReceiptPrintData { get; init; }
     public bool RequiresReload { get; init; }
 
-    public static ConfirmCheckoutResult Success(long checkoutId, decimal changeAmount)
+    public static ConfirmCheckoutResult Success(long checkoutId, decimal changeAmount, JsonElement receiptPrintData)
     {
-        return new ConfirmCheckoutResult { Succeeded = true, CheckoutId = checkoutId, ChangeAmount = changeAmount };
+        return new ConfirmCheckoutResult
+        {
+            Succeeded = true,
+            CheckoutId = checkoutId,
+            ChangeAmount = changeAmount,
+            ReceiptPrintData = receiptPrintData.Clone()
+        };
     }
 
     public static ConfirmCheckoutResult Failed(string message, bool requiresReload = false)
     {
         return new ConfirmCheckoutResult { Succeeded = false, ErrorMessage = message, RequiresReload = requiresReload };
     }
+}
+
+public class CheckoutStatementResult
+{
+    public bool Succeeded { get; init; }
+    public string? ErrorMessage { get; init; }
+    public JsonElement? PrintData { get; init; }
+    public JsonElement? ReviewData { get; init; }
+
+    public static CheckoutStatementResult Success(JsonElement printData, JsonElement reviewData) => new()
+    {
+        Succeeded = true,
+        PrintData = printData.Clone(),
+        ReviewData = reviewData.Clone()
+    };
+
+    public static CheckoutStatementResult Failed(string message) => new()
+    {
+        Succeeded = false,
+        ErrorMessage = message
+    };
+}
+
+public class ReleaseCheckoutReadyResult
+{
+    public bool Succeeded { get; init; }
+    public string? ErrorMessage { get; init; }
+
+    public static ReleaseCheckoutReadyResult Success() => new() { Succeeded = true };
+    public static ReleaseCheckoutReadyResult Failed(string message) => new() { Succeeded = false, ErrorMessage = message };
+}
+
+public class ReceiptPrintDataResult
+{
+    public bool Succeeded { get; init; }
+    public string? ErrorMessage { get; init; }
+    public long? CheckoutId { get; init; }
+    public JsonElement? PrintData { get; init; }
+
+    public static ReceiptPrintDataResult Success(long checkoutId, JsonElement printData) => new()
+    {
+        Succeeded = true,
+        CheckoutId = checkoutId,
+        PrintData = printData.Clone()
+    };
+
+    public static ReceiptPrintDataResult Failed(string message) => new()
+    {
+        Succeeded = false,
+        ErrorMessage = message
+    };
 }
 
 public class CancelCheckoutResult

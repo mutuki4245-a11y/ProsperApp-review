@@ -32,7 +32,7 @@ public class CastSalesAdjustmentSlip
 
     public decimal SubtotalAmount { get; init; }
 
-    public decimal ServiceTaxAmount { get; init; }
+    public decimal ServiceChargeAmount { get; init; }
 
     public decimal TotalAmount { get; init; }
 
@@ -86,7 +86,7 @@ public class CastSalesAdjustmentDetail
 
     public decimal SubtotalAmount { get; init; }
 
-    public decimal ServiceTaxAmount { get; init; }
+    public decimal ServiceChargeAmount { get; init; }
 
     public decimal TotalAmount { get; init; }
 

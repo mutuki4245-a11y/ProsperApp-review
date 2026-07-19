@@ -14,6 +14,7 @@ public class IndexModel(
     IStoreSlipRepository slipRepository,
     IStoreOrderRepository orderRepository,
     INominationBackAdminRepository nominationBackRepository,
+    ICheckoutRepository checkoutRepository,
     ILocalSettingsProvider localSettingsProvider,
     IOptions<ReceiptPrinterOptions> receiptPrinterOptions,
     IStoreClock storeClock) : PageModel
@@ -23,6 +24,7 @@ public class IndexModel(
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
     private readonly INominationBackAdminRepository _nominationBackRepository = nominationBackRepository;
+    private readonly ICheckoutRepository _checkoutRepository = checkoutRepository;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly ReceiptPrinterOptions _receiptPrinterOptions = receiptPrinterOptions.Value;
     private readonly IStoreClock _storeClock = storeClock;
@@ -57,11 +59,6 @@ public class IndexModel(
 
     public string? SuccessMessage { get; private set; }
 
-    public string? PendingReceiptPrintRequestJson { get; private set; }
-
-    public bool ShouldRunBrowserReceiptPrint => _receiptPrinterOptions.Enabled &&
-        !string.IsNullOrWhiteSpace(PendingReceiptPrintRequestJson);
-
     public bool IsReceiptPrinterEnabled => _receiptPrinterOptions.Enabled;
 
     public object ReceiptPrinterBrowserOptions => new
@@ -84,7 +81,7 @@ public class IndexModel(
 
     public bool CheckoutEnabled => _featureGate.IsEnabled(FeatureNames.Checkout);
 
-    public int OpenSlipCount => Slips.Count(x => x.Status == "open");
+    public int OpenSlipCount => Slips.Count(x => x.Status is "open" or "checkout_ready");
 
     public int CheckedOutSlipCount => Slips.Count(x => x.Status == "checked_out");
 
@@ -132,7 +129,6 @@ public class IndexModel(
         await LoadAsync(cancellationToken, includeAttendanceCasts: true);
         SetDefaultCreateSlipInput();
         SuccessMessage = TempData["SuccessMessage"] as string;
-        PendingReceiptPrintRequestJson = TempData[ReceiptPrintTempDataKeys.PendingCheckoutReceipt] as string;
         return Page();
     }
 
@@ -195,7 +191,7 @@ public class IndexModel(
                 ? businessDate.ToString("yyyy-MM-dd")
                 : $"{businessDate:yyyy-MM-dd} / 自動作成待ち",
             hasBusinessDay = hasValidBusinessDate,
-            openSlipCount = slips.Count(x => x.Status == "open"),
+            openSlipCount = slips.Count(x => x.Status is "open" or "checkout_ready"),
             checkedOutSlipCount = slips.Count(x => x.Status == "checked_out"),
             slips = slips.Select(slip => new
             {
@@ -335,6 +331,131 @@ public class IndexModel(
         TempData["SuccessMessage"] = "カラオケ回数を保存しました。";
         ModelState.Clear();
         return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostIssueCheckoutStatementAsync(CancellationToken cancellationToken)
+    {
+        if (!CheckoutEnabled)
+        {
+            return NotFound();
+        }
+
+        var request = await ReadCheckoutRequestAsync<CheckoutStatementIssueRequest>(cancellationToken);
+        if (request is null || request.SlipId <= 0 || request.ClosedAt is null)
+        {
+            return CheckoutJsonError("会計伝票の対象と退店時刻を確認してください。");
+        }
+
+        var result = await _checkoutRepository.IssueCheckoutStatementAsync(request.SlipId, request.ClosedAt.Value, cancellationToken);
+        return result.Succeeded && result.PrintData is { } printData && result.ReviewData is { } reviewData
+            ? new JsonResult(new { succeeded = true, slipId = request.SlipId, printData, reviewData })
+            : CheckoutJsonError(result.ErrorMessage ?? "会計伝票を出力できませんでした。");
+    }
+
+    public async Task<IActionResult> OnPostGetCheckoutStatementPrintDataAsync(CancellationToken cancellationToken)
+    {
+        if (!CheckoutEnabled)
+        {
+            return NotFound();
+        }
+
+        var request = await ReadCheckoutRequestAsync<CheckoutSlipRequest>(cancellationToken);
+        if (request is null || request.SlipId <= 0)
+        {
+            return CheckoutJsonError("会計伝票の対象を確認してください。");
+        }
+
+        var result = await _checkoutRepository.GetCheckoutStatementPrintDataAsync(request.SlipId, cancellationToken);
+        return result.Succeeded && result.PrintData is { } printData && result.ReviewData is { } reviewData
+            ? new JsonResult(new { succeeded = true, slipId = request.SlipId, printData, reviewData })
+            : CheckoutJsonError(result.ErrorMessage ?? "会計伝票を復旧できませんでした。");
+    }
+
+    public async Task<IActionResult> OnPostReleaseCheckoutReadyAsync(CancellationToken cancellationToken)
+    {
+        if (!CheckoutEnabled)
+        {
+            return NotFound();
+        }
+
+        var request = await ReadCheckoutRequestAsync<CheckoutSlipRequest>(cancellationToken);
+        if (request is null || request.SlipId <= 0)
+        {
+            return CheckoutJsonError("会計伝票の対象を確認してください。");
+        }
+
+        var result = await _checkoutRepository.ReleaseCheckoutReadyAsync(request.SlipId, cancellationToken);
+        return result.Succeeded
+            ? new JsonResult(new { succeeded = true, slipId = request.SlipId })
+            : CheckoutJsonError(result.ErrorMessage ?? "会計準備を解除できませんでした。");
+    }
+
+    public async Task<IActionResult> OnPostConfirmCheckoutAsync(CancellationToken cancellationToken)
+    {
+        if (!CheckoutEnabled)
+        {
+            return NotFound();
+        }
+
+        var request = await ReadCheckoutRequestAsync<CheckoutConfirmRequest>(cancellationToken);
+        if (request is null || request.SlipId <= 0)
+        {
+            return CheckoutJsonError("会計伝票の対象を確認してください。");
+        }
+
+        var result = await _checkoutRepository.ConfirmCheckoutAsync(
+            request.SlipId,
+            request.Payments ?? [],
+            request.ReceivedAmount,
+            cancellationToken);
+        return result.Succeeded && result.CheckoutId is { } checkoutId && result.ReceiptPrintData is { } printData
+            ? new JsonResult(new
+            {
+                succeeded = true,
+                slipId = request.SlipId,
+                checkoutId,
+                changeAmount = result.ChangeAmount,
+                printData
+            })
+            : CheckoutJsonError(result.ErrorMessage ?? "会計を確定できませんでした。");
+    }
+
+    public async Task<IActionResult> OnPostGetCheckoutReceiptPrintDataAsync(CancellationToken cancellationToken)
+    {
+        if (!CheckoutEnabled)
+        {
+            return NotFound();
+        }
+
+        var request = await ReadCheckoutRequestAsync<CheckoutSlipRequest>(cancellationToken);
+        if (request is null || request.SlipId <= 0)
+        {
+            return CheckoutJsonError("領収書の対象を確認してください。");
+        }
+
+        var result = await _checkoutRepository.GetCheckoutReceiptPrintDataAsync(request.SlipId, cancellationToken);
+        return result.Succeeded && result.CheckoutId is { } checkoutId && result.PrintData is { } printData
+            ? new JsonResult(new { succeeded = true, checkoutId, printData })
+            : CheckoutJsonError(result.ErrorMessage ?? "領収書を取得できませんでした。");
+    }
+
+    public async Task<IActionResult> OnPostCancelCheckoutAsync(CancellationToken cancellationToken)
+    {
+        if (!CheckoutEnabled)
+        {
+            return NotFound();
+        }
+
+        var request = await ReadCheckoutRequestAsync<CheckoutSlipRequest>(cancellationToken);
+        if (request is null || request.SlipId <= 0)
+        {
+            return CheckoutJsonError("会計取消の対象を確認してください。");
+        }
+
+        var result = await _checkoutRepository.CancelCheckoutAsync(request.SlipId, cancellationToken);
+        return result.Succeeded && result.CheckoutId is { } checkoutId
+            ? new JsonResult(new { succeeded = true, slipId = request.SlipId, checkoutId })
+            : CheckoutJsonError(result.ErrorMessage ?? "会計を取消できませんでした。");
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool includeAttendanceCasts)
@@ -492,6 +613,23 @@ public class IndexModel(
         }
     }
 
+    private async Task<T?> ReadCheckoutRequestAsync<T>(CancellationToken cancellationToken)
+    {
+        if (!Request.HasJsonContentType())
+        {
+            return default;
+        }
+
+        try
+        {
+            return await JsonSerializer.DeserializeAsync<T>(Request.Body, KaraokeJsonOptions, cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
+    }
+
     private void RemoveModelStateEntries(string prefix)
     {
         var keys = ModelState.Keys
@@ -516,9 +654,19 @@ public class IndexModel(
         return new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
     }
 
+    private IActionResult CheckoutJsonError(string message, int statusCode = 400) =>
+        new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
+
     private sealed record KaraokeSaveRequest(
         long? BusinessDayId,
         List<KaraokeQuantityInputModel>? KaraokeLines);
+
+    private sealed record CheckoutSlipRequest(long SlipId);
+    private sealed record CheckoutStatementIssueRequest(long SlipId, DateTimeOffset? ClosedAt);
+    private sealed record CheckoutConfirmRequest(
+        long SlipId,
+        List<CheckoutPaymentInputModel>? Payments,
+        decimal? ReceivedAmount);
 
     private string GetFirstModelError(string fallback)
     {
@@ -533,6 +681,7 @@ public class IndexModel(
         return status switch
         {
             "open" => "在席",
+            "checkout_ready" => "会計準備中",
             "checked_out" => "会計済み",
             "cancelled" => "取消",
             _ => status
@@ -544,6 +693,7 @@ public class IndexModel(
         return status switch
         {
             "open" => "text-bg-success",
+            "checkout_ready" => "text-bg-warning",
             "checked_out" => "text-bg-secondary",
             "cancelled" => "text-bg-danger",
             _ => "text-bg-secondary"

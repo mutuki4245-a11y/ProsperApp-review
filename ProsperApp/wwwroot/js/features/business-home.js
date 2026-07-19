@@ -16,7 +16,6 @@
     const openSlipCount = document.querySelector('[data-business-open-slip-count]');
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
-    const slipEditUrl = config.slipEditUrl || '';
     const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
@@ -346,10 +345,6 @@
 
     const syncSlipRow = (row, slip) => {
         row.dataset.slipId = String(slip.id);
-        const link = row.querySelector('[data-business-slip-link]');
-        if (link) {
-            link.href = `${slipEditUrl}?slipId=${encodeURIComponent(slip.id)}`;
-        }
 
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
         const statusElement = row.querySelector('[data-business-slip-status]');
@@ -361,14 +356,29 @@
         setText(row.querySelector('[data-business-slip-customers]'), slip.customerNames || '客名なし');
         setText(row.querySelector('[data-business-slip-casts]'), slip.castNames || '指名なし');
         setText(row.querySelector('[data-business-slip-memo]'), slip.memo || '-');
+        const checkoutButton = row.querySelector('[data-business-start-checkout]');
+        const receiptButton = row.querySelector('[data-business-print-receipt]');
+        const cancelButton = row.querySelector('[data-business-cancel-checkout]');
+        if (checkoutButton) {
+            checkoutButton.hidden = !['open', 'checkout_ready'].includes(slip.status);
+            checkoutButton.dataset.businessStartCheckout = String(slip.id);
+            checkoutButton.textContent = slip.status === 'checkout_ready' ? '会計を続ける' : '会計伝票';
+        }
+        if (receiptButton) {
+            receiptButton.hidden = slip.status !== 'checked_out';
+            receiptButton.dataset.businessPrintReceipt = String(slip.id);
+        }
+        if (cancelButton) {
+            cancelButton.hidden = slip.status !== 'checked_out';
+            cancelButton.dataset.businessCancelCheckout = String(slip.id);
+        }
         syncKaraokeControl(row, slip);
     };
 
     const buildSlipRow = (slip) => {
         const row = buildElement('article', 'slip-list__row slip-list__row--action');
         row.dataset.businessSlipRow = '';
-        const link = buildElement('a', 'slip-list__row-main');
-        link.dataset.businessSlipLink = '';
+        const main = buildElement('div', 'slip-list__row-main');
 
         const table = buildElement('strong', 'slip-list__table');
         table.dataset.businessSlipTable = '';
@@ -383,9 +393,20 @@
         const memo = buildElement('span', 'slip-list__memo');
         memo.dataset.businessSlipMemo = '';
 
-        link.append(table, statusElement, openedTime, customers, casts, memo);
-        link.appendChild(buildAmountElement(slip));
-        row.appendChild(link);
+        main.append(table, statusElement, openedTime, customers, casts, memo);
+        main.appendChild(buildAmountElement(slip));
+        const actions = buildElement('div', 'slip-list__actions');
+        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary');
+        checkoutButton.type = 'button';
+        checkoutButton.dataset.businessStartCheckout = '';
+        const receiptButton = buildElement('button', 'btn btn-sm btn-outline-primary', '領収書');
+        receiptButton.type = 'button';
+        receiptButton.dataset.businessPrintReceipt = '';
+        const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger', '会計取消');
+        cancelButton.type = 'button';
+        cancelButton.dataset.businessCancelCheckout = '';
+        actions.append(checkoutButton, receiptButton, cancelButton);
+        row.append(main, actions);
 
         syncSlipRow(row, slip);
 
@@ -453,6 +474,7 @@
 
             const result = await response.json();
             slips = Array.isArray(result.slips) ? result.slips : [];
+            window.prosperBusinessHomeSlips = slips;
             hasLoaded = true;
             updateSummary(result);
             renderSlips();
@@ -523,18 +545,6 @@
         return savePromise;
     };
 
-    const navigateAfterFlush = async (link) => {
-        window.AppLoading?.show();
-        const saved = await submitDraft();
-        if (!saved) {
-            window.AppLoading?.hide();
-            return;
-        }
-
-        allowNextPageUnload();
-        window.location.href = link.href;
-    };
-
     const submitAfterFlush = async (targetForm, submitter) => {
         window.AppLoading?.show(targetForm);
         const saved = await submitDraft();
@@ -574,23 +584,6 @@
             return;
         }
     });
-
-    document.addEventListener('click', (event) => {
-        const link = event.target.closest('a[href]');
-        if (!link || !shouldFlushForAnchor(link, event)) {
-            return;
-        }
-
-        if (collectDirtyPayload().length === 0) {
-            allowNextPageUnload();
-            return;
-        }
-
-        if (link.origin === window.location.origin) {
-            event.preventDefault();
-            void navigateAfterFlush(link);
-        }
-    }, true);
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -674,4 +667,6 @@
     }, refreshIntervalMs);
 
     void loadSlips();
+    window.prosperBusinessHomeReload = loadSlips;
+    window.prosperBusinessHomeFlushKaraoke = submitDraft;
 })();

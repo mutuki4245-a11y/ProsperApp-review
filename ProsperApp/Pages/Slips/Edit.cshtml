@@ -78,10 +78,6 @@
                     <span>調整</span>
                     <strong>@activeChargeCount 件</strong>
                 </div>
-                <div>
-                    <span>合計</span>
-                    <strong>@StoreUiText.Yen(Model.CheckoutTotals.TotalAmount)</strong>
-                </div>
             </div>
         </section>
 
@@ -98,9 +94,6 @@
                 <div class="slip-create__panel slip-detail-panel-loading">オーダー一覧を読み込み中です。</div>
             </div>
 
-            <div id="slipCheckoutSection">
-                <div class="slip-create__panel slip-detail-panel-loading">会計情報を読み込み中です。</div>
-            </div>
         </div>
 
     }
@@ -118,7 +111,6 @@
             initialOrderQueue = Model.QueueLines.Select(x => new { itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
             showOrderModal = Model.ShowOrderModal,
             showAdjustmentModal = Model.ShowAdjustmentModal,
-            showCheckoutModal = Model.ShowCheckoutModal,
             showAddCustomerModal = Model.ShowAddCustomerModal,
             showAddNominationModal = Model.ShowAddNominationModal
         }))
@@ -126,7 +118,6 @@
     <script src="~/js/features/cast-select-modal.js" asp-append-version="true"></script>
     <script src="~/js/features/order-back-text.js" asp-append-version="true"></script>
     <script src="~/js/features/slip-adjustments.js" asp-append-version="true"></script>
-    <script src="~/js/features/slip-checkout.js" asp-append-version="true"></script>
     <script src="~/js/features/slip-customers.js" asp-append-version="true"></script>
     <script src="~/js/features/slip-nominations.js" asp-append-version="true"></script>
     <script src="~/js/features/slip-orders.js" asp-append-version="true"></script>

@@ -67,7 +67,7 @@ public class SupabaseCastSalesAdjustmentRepository(
                 CustomerNames = ReadString(row, "customer_names"),
                 CheckoutAt = ReadDateTimeOffset(row, "checkout_at") ?? DateTimeOffset.MinValue,
                 SubtotalAmount = ReadDecimal(row, "subtotal_amount") ?? 0,
-                ServiceTaxAmount = ReadDecimal(row, "service_tax_amount") ?? 0,
+                ServiceChargeAmount = ReadDecimal(row, "service_charge_amount") ?? 0,
                 TotalAmount = ReadDecimal(row, "total_amount") ?? 0,
                 CastNames = NormalizeCastDisplayNameList(ReadString(row, "cast_names")),
                 RequiredCastCount = (int)(ReadLong(row, "required_cast_count") ?? 0),
@@ -109,7 +109,7 @@ public class SupabaseCastSalesAdjustmentRepository(
                 CheckoutId = ReadLong(row, "checkout_id") ?? 0,
                 CheckoutAt = ReadDateTimeOffset(row, "checkout_at") ?? DateTimeOffset.MinValue,
                 SubtotalAmount = ReadDecimal(row, "subtotal_amount") ?? 0,
-                ServiceTaxAmount = ReadDecimal(row, "service_tax_amount") ?? 0,
+                ServiceChargeAmount = ReadDecimal(row, "service_charge_amount") ?? 0,
                 TotalAmount = ReadDecimal(row, "total_amount") ?? 0
             };
 

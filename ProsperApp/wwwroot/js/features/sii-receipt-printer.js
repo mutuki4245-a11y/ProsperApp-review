@@ -1,11 +1,11 @@
 (() => {
-    const requestElement = document.getElementById('pendingCheckoutReceiptPrintRequest');
     const statusElement = document.querySelector('[data-receipt-print-status]');
     const reprintPanel = document.querySelector('[data-receipt-reprint-panel]');
     const reprintList = document.querySelector('[data-receipt-reprint-list]');
     const config = window.prosperSiiReceiptPrinter ?? {};
     const sdkScript = window.prosperSiiReceiptSdkScript ?? {};
     const pendingStorageKey = 'prosper:receipt-reprints:v1';
+    const successStorageKey = 'prosper:receipt-print-success:v1';
     const compact = (value, fallback = '') => String(value ?? fallback).trim();
 
     const setStatus = (message, state) => {
@@ -81,16 +81,6 @@
         return `SII Web SDKを利用できませんでした。script URL、ネットワーク接続、SDKの読み込み状態を確認してください。url=${compact(sdkScript.url)}`;
     };
 
-    const parseRequestElement = () => {
-        try {
-            return JSON.parse(requestElement?.textContent || '{}');
-        } catch (error) {
-            const parseError = new Error('領収書印刷データを読み込めませんでした。');
-            parseError.cause = error;
-            throw parseError;
-        }
-    };
-
     const sdkStepLabel = (label) => ({
         start: 'SII Web SDK Server接続',
         setCodePage: 'コードページ設定',
@@ -146,6 +136,34 @@
 
     const removePendingReceipt = (key) => {
         writePendingReceipts(readPendingReceipts().filter((item) => item.key !== key));
+        renderPendingReceipts();
+    };
+
+    const readSuccessfulReceipts = () => {
+        try {
+            const stored = JSON.parse(localStorage.getItem(successStorageKey) || '[]');
+            return Array.isArray(stored) ? stored.filter((value) => compact(value).length > 0) : [];
+        } catch {
+            return [];
+        }
+    };
+
+    const markSuccessfulReceipt = (request) => {
+        const key = receiptKey(request);
+        if (!key || key === 'unknown') return;
+        const values = [key, ...readSuccessfulReceipts().filter((value) => value !== key)].slice(0, 200);
+        try { localStorage.setItem(successStorageKey, JSON.stringify(values)); } catch { }
+    };
+
+    const hasSuccessfulReceipt = (request) => readSuccessfulReceipts().includes(receiptKey(request));
+
+    const clearReceiptTerminalState = (checkoutId) => {
+        const value = compact(checkoutId);
+        if (!value) return;
+        writePendingReceipts(readPendingReceipts().filter((item) => item.key !== value));
+        try {
+            localStorage.setItem(successStorageKey, JSON.stringify(readSuccessfulReceipts().filter((key) => key !== value)));
+        } catch { }
         renderPendingReceipts();
     };
 
@@ -237,6 +255,7 @@
             await trySdkCall('appendFeed', () => manager.appendFeed({ value: 2 }), false);
             await trySdkCall('appendCut', () => manager.appendCut({ cuttingMethod: 'partial' }), false);
             await trySdkCall('doPrint', () => manager.doPrint({}));
+            markSuccessfulReceipt(request);
             removePendingReceipt(receiptKey(request));
             setStatus('領収書を印刷しました。', 'success');
         } finally {
@@ -278,23 +297,19 @@
 
     renderPendingReceipts();
 
-    if (!requestElement) {
-        return;
-    }
+    const print = async (request, options = {}) => {
+        const explicitReprint = options.explicitReprint !== false;
+        const prepared = {
+            ...request,
+            isRetry: Boolean(request?.isRetry || (explicitReprint && hasSuccessfulReceipt(request)))
+        };
+        try {
+            await printRequest(prepared);
+        } catch (error) {
+            upsertPendingReceipt(prepared, formatErrorMessage(error));
+            throw error;
+        }
+    };
 
-    let initialRequest;
-    try {
-        initialRequest = parseRequestElement();
-    } catch (error) {
-        console.warn('SII receipt print request parsing failed.', error);
-        setStatus(`領収書を印刷できませんでした。${formatErrorMessage(error)}`, 'warning');
-        return;
-    }
-
-    void printRequest(initialRequest).catch((error) => {
-        console.warn('SII receipt printing failed.', error);
-        const message = formatErrorMessage(error);
-        upsertPendingReceipt(initialRequest, message);
-        setStatus(`領収書を印刷できませんでした。${message}`, 'warning');
-    });
+    window.ProsperSiiReceiptPrinterApi = { print, clearReceiptTerminalState };
 })();

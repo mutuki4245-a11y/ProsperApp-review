@@ -32,7 +32,6 @@ public partial class SlipEditModel
             .ThenBy(x => x.DisplayName)
             .ToList();
         TimeOptions = _storeClock.BuildTimeOptions(5);
-        CheckoutDocument = CheckoutDocumentBuilder.Build(Detail);
     }
 
     private async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsForCurrentBusinessDayAsync(
@@ -68,35 +67,11 @@ public partial class SlipEditModel
         return true;
     }
 
-    private bool EnsureCheckedOutSlipLoaded()
-    {
-        if (SlipId is null)
-        {
-            ModelState.AddModelError(string.Empty, "伝票を選択してください。");
-            return false;
-        }
-
-        if (Detail is null)
-        {
-            ModelState.AddModelError(string.Empty, "伝票を取得できません。営業中画面から対象伝票を選択してください。");
-            return false;
-        }
-
-        if (!string.Equals(Detail.Status, "checked_out", StringComparison.Ordinal))
-        {
-            ModelState.AddModelError(string.Empty, "会計済みの伝票のみ会計取消できます。");
-            return false;
-        }
-
-        return true;
-    }
-
     private void SetDefaultInputs()
     {
         EnsureAddCustomerRows();
         EnsureAddNominationRows();
         SetDefaultLeaveInput();
-        SetDefaultCheckoutInput();
     }
 
     private void ClearCrossFormValidationState()

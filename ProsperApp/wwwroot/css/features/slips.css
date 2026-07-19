@@ -561,6 +561,14 @@
   min-height: 3rem;
 }
 
+.slip-list__actions {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
 .checkout-final-summary {
   background: #f8fafc;
   border: 1px solid #d9e2ec;

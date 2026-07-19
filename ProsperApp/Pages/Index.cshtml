@@ -23,7 +23,7 @@
 
     @if (Model.IsReceiptPrinterEnabled)
     {
-        <div class="alert alert-info" role="status" data-receipt-print-status hidden="@(!Model.ShouldRunBrowserReceiptPrint)">
+        <div class="alert alert-info" role="status" data-receipt-print-status hidden>
             領収書を印刷しています。
         </div>
         <div class="alert alert-warning receipt-reprint-panel" role="alert" data-receipt-reprint-panel hidden>
@@ -280,14 +280,85 @@
             </div>
         </div>
     }
+
+    @if (Model.CheckoutEnabled)
+    {
+        <div class="modal fade" id="businessCheckoutModal" tabindex="-1" aria-labelledby="businessCheckoutModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content" data-business-checkout-modal>
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1" data-business-checkout-table>会計</p>
+                            <h2 class="modal-title fs-4" id="businessCheckoutModalLabel">会計伝票</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form">
+                        <div class="alert alert-warning" role="alert" data-business-checkout-message hidden></div>
+                        <section class="slip-create__panel" data-business-checkout-issue-panel>
+                            <h3>退店時刻</h3>
+                            <select class="form-select form-select-lg" data-business-checkout-closed-time aria-label="退店時刻">
+                                @foreach (var time in Model.TimeOptions)
+                                {
+                                    <option value="@time">@time</option>
+                                }
+                            </select>
+                            <p class="text-muted mb-0">出力すると会計準備中になり、伝票内容を変更できません。</p>
+                            <div class="slip-detail-add-actions">
+                                <button class="btn btn-primary btn-lg" type="button" data-business-issue-statement>会計伝票を出力</button>
+                            </div>
+                        </section>
+
+                        <section class="checkout-review" data-business-checkout-statement hidden>
+                            <div class="checkout-review__hero" data-business-statement-summary></div>
+                            <section class="checkout-review__panel">
+                                <div class="checkout-review__panel-title"><h3>注文</h3></div>
+                                <div class="checkout-review__orders" data-business-statement-orders></div>
+                            </section>
+                            <section class="checkout-review__panel">
+                                <div class="checkout-review__panel-title"><h3>調整</h3></div>
+                                <div class="checkout-review__orders" data-business-statement-adjustments></div>
+                            </section>
+                            <div class="checkout-review__totals" data-business-statement-totals></div>
+                        </section>
+
+                        <section class="slip-create__panel" data-business-statement-print-panel hidden>
+                            <h3>会計伝票の印刷</h3>
+                            <p data-business-statement-print-state>印刷待ちです。印刷成功または店員完了の明示後に会計を確定できます。</p>
+                            <div class="slip-detail-add-actions">
+                                <button class="btn btn-outline-primary" type="button" data-business-print-statement>印刷する</button>
+                                <button class="btn btn-outline-secondary" type="button" data-business-statement-staff-complete>印刷完了として進む</button>
+                                <button class="btn btn-outline-danger" type="button" data-business-release-checkout>会計準備を解除</button>
+                            </div>
+                        </section>
+
+                        <section class="slip-create__panel" data-business-payment-panel hidden>
+                            <h3>会計確定</h3>
+                            <div class="checkout-payments" data-business-payment-rows></div>
+                            <div class="row g-3 mt-1">
+                                <div class="col-md-6">
+                                    <label class="form-label" for="businessReceiptAddressee">領収書宛名</label>
+                                    <input class="form-control form-control-lg" id="businessReceiptAddressee" maxlength="120" autocomplete="off" data-business-receipt-addressee />
+                                </div>
+                                <div class="col-md-6" data-business-received-row hidden>
+                                    <label class="form-label" for="businessReceivedAmount">受取額</label>
+                                    <input class="form-control form-control-lg" id="businessReceivedAmount" type="number" min="0" step="1" data-business-received-amount />
+                                </div>
+                            </div>
+                            <div class="checkout-final-summary" data-business-payment-summary></div>
+                            <div class="slip-detail-add-actions">
+                                <button class="btn btn-primary btn-lg" type="button" data-business-confirm-checkout disabled>会計を確定</button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </section>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    @if (Model.ShouldRunBrowserReceiptPrint)
-    {
-        <script type="application/json" id="pendingCheckoutReceiptPrintRequest">@Html.Raw(Model.PendingReceiptPrintRequestJson)</script>
-    }
     @if (Model.IsReceiptPrinterEnabled)
     {
         @if (!string.IsNullOrWhiteSpace(Model.ReceiptPrinterBrowserSdkScriptUrl))
@@ -308,15 +379,24 @@
         </script>
         <script src="~/js/features/sii-receipt-layout.js" asp-append-version="true"></script>
         <script src="~/js/features/sii-receipt-printer.js" asp-append-version="true"></script>
+        <script src="~/js/features/sii-checkout-statement-printer.js" asp-append-version="true"></script>
     }
     <script>
         window.prosperBusinessHome = @Json.Serialize(new
         {
             businessSlipsUrl = Url.Page("/Index", "BusinessSlips"),
-            slipEditUrl = Url.Page("/Slips/Edit")
+            issueCheckoutStatementUrl = Url.Page("/Index", "IssueCheckoutStatement"),
+            getCheckoutStatementPrintDataUrl = Url.Page("/Index", "GetCheckoutStatementPrintData"),
+            releaseCheckoutReadyUrl = Url.Page("/Index", "ReleaseCheckoutReady"),
+            confirmCheckoutUrl = Url.Page("/Index", "ConfirmCheckout"),
+            getCheckoutReceiptPrintDataUrl = Url.Page("/Index", "GetCheckoutReceiptPrintData"),
+            cancelCheckoutUrl = Url.Page("/Index", "CancelCheckout"),
+            businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
+            receiptPrinterEnabled = Model.IsReceiptPrinterEnabled
         });
     </script>
     <script src="~/js/features/business-home.js" asp-append-version="true"></script>
+    <script src="~/js/features/business-checkout.js" asp-append-version="true"></script>
     <script>
         window.prosperCreateSlip = @Json.Serialize(new
         {

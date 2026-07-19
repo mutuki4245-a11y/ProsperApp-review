@@ -4,8 +4,7 @@
     const panelIds = [
         'slipCustomersSection',
         'slipNominationsSection',
-        'slipOrdersSection',
-        'slipCheckoutSection'
+        'slipOrdersSection'
     ];
 
     if (!container || !panelsUrl) {
@@ -27,7 +26,6 @@
         window.SlipNominations?.syncDefaults?.();
         window.SlipOrders?.resetOrderCorrection?.();
         window.SlipOrders?.renderOrderQueue?.();
-        window.SlipCheckout?.init?.();
     };
 
     const loadPanels = async () => {
