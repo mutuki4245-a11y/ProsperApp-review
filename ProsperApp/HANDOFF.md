@@ -6,7 +6,7 @@
 領収書簡易入力は一区切りし、現在は店舗アプリ内の `締め作業 > 領収書入力` 機能として扱います。
 今後の中心機能は、開け作業、営業中の伝票管理、会計、締め作業です。
 
-2026-07-20時点で、会計フロー第1段階はソース実装済みです。営業中トップ `/` の会計モーダルが会計伝票出力、`checkout_ready`、端末内印刷状態、支払確定、領収書初回印刷・手動再発行、会計取消を扱います。`/Slips/Edit` は会計導線・復旧導線に使いません。SQLソースと `prosper-rpc` Edge Functionのallowlistも更新済みですが、リモートDBへのSQL適用とEdge Functionデプロイはまだ行っていません。
+2026-07-20時点で、会計フロー第1段階は対象環境へ適用済みです。営業中トップ `/` の会計モーダルが会計伝票出力、`checkout_ready`、端末内印刷状態、支払確定、領収書初回印刷・手動再発行、会計取消を扱います。`/Slips/Edit` は会計導線・復旧導線に使いません。Supabaseへ会計変更セットを適用し、`prosper-rpc` Edge Functionをversion 22へ更新、Azure App Serviceへの配備（HTTP 200）まで完了しています。対象環境では0円会計、印刷失敗時の端末内復旧、会計取消RPC、管理者締めを確認済みで、決済種別・金額境界・紙面を含むP1受入確認は継続中です。
 
 ## 重要方針
 
@@ -119,8 +119,8 @@
 
 ### 会計フロー第1段階の実装状況と後続候補
 
-- 会計フロー第1段階は、営業中一覧ハブだけで、`checkout_ready` への遷移、会計伝票の端末内印刷キュー、支払確定、初回領収書印刷、確定済み伝票の手動再発行までを完結する形でソース実装済みです。`/Slips/Edit` は会計の導線・復旧導線として使いません。実施順、SQL/RPC契約、検証ケース、今回対象外の機能は `Docs/設計改善計画.md` の「会計フロー第1段階の実装計画」を正とします。
-- 2026-07-19: 上記フローのアプリ実装とSQLソースは追加済みです。`Sql/store_order_accounting_tables.sql`、`01_business_day.sql`、`03_slips.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`99_grants.sql` を同一のDB適用単位として扱います。`supabase/functions/prosper-rpc/index.ts` のallowlistも同時にデプロイ対象です。リモートDBへの適用とEdge Functionデプロイはまだ行っていません。
+- 会計フロー第1段階は、営業中一覧ハブだけで、`checkout_ready` への遷移、会計伝票の端末内印刷キュー、支払確定、初回領収書印刷、確定済み伝票の手動再発行までを完結する形で対象環境へ適用済みです。`/Slips/Edit` は会計の導線・復旧導線として使いません。実施順、SQL/RPC契約、検証ケース、今回対象外の機能は `Docs/統合実装計画.md` のP0/P1を正とします。
+- 2026-07-20: `Sql/store_order_accounting_tables.sql`、`01_business_day.sql`、`03_slips.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`99_grants.sql` の会計変更セットをSupabaseへ適用し、`supabase/functions/prosper-rpc/index.ts` のallowlistをversion 22として同時にデプロイした。Azure App Serviceにも同一アプリ変更を配備済み。対象環境のテスト伝票で `open` → `checkout_ready` → `checked_out` の0円会計、SII Server未接続時の失敗表示と端末内復旧、ロールバック付きの `store.cancel_checkout`、管理者締めを確認した。SII実機印刷は利用者完了申告として記録し、ブラウザ自動化では紙面を独立確認していない。
 
 - 2026-07-18 決定記録: 会計・領収書・伝票詳細まわり（2026-07-19にソース実装済み）
   - 領収書印刷:
@@ -543,7 +543,7 @@ Azure App Service側のアプリ設定には、上記の `Supabase__...`、`Goog
 
 ## 次に着手しやすい作業
 
-1. 対象環境を確認したうえで、会計フロー第1段階のSQLを記載順に適用し、`prosper-rpc` Edge Functionをデプロイする。
-2. 適用後に、会計伝票出力、会計準備解除、通常会計、複数決済、0円会計、領収書再発行、会計取消、締め拒否を実環境で確認する。
+1. P1の残りとして、現金・CAT・PAYPAYの複数決済、金額不足・超過、釣銭、値引き後0円、サービス料、55,000円以上の収入印紙欄、`checkout_ready` 中の編集拒否・下書き除去、会計取消後の領収書再発行拒否を実端末で確認する。
+2. SII紙面の80mm日本語、改行・幅・収入印紙欄・担当者印欄、端末再読込後の復旧を記録し、税理士確認へ渡す。
 3. `quick_entry_account_master_updates.sql` の文字化けを修正する。
 4. 締め作業をステップ式に整理する。
