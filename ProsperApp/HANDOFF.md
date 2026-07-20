@@ -122,6 +122,7 @@
 - 会計フロー第1段階は、営業中一覧ハブだけで、`checkout_ready` への遷移、会計伝票の端末内印刷キュー、支払確定、初回領収書印刷、確定済み伝票の手動再発行までを完結する形で対象環境へ適用済みです。`/Slips/Edit` は会計の導線・復旧導線として使いません。実施順、SQL/RPC契約、検証ケース、今回対象外の機能は `Docs/統合実装計画.md` のP0/P1を正とします。
 - 2026-07-20: `Sql/store_order_accounting_tables.sql`、`01_business_day.sql`、`03_slips.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`99_grants.sql` の会計変更セットをSupabaseへ適用し、`supabase/functions/prosper-rpc/index.ts` のallowlistをversion 22として同時にデプロイした。Azure App Serviceにも同一アプリ変更を配備済み。対象環境のテスト伝票で `open` → `checkout_ready` → `checked_out` の0円会計、SII Server未接続時の失敗表示と端末内復旧、ロールバック付きの `store.cancel_checkout`、管理者締めを確認した。SII実機印刷は利用者完了申告として記録し、ブラウザ自動化では紙面を独立確認していない。
 - 2026-07-20: 追加のロールバック受入試験で、現金・CAT・PAYPAYの3分割決済、500円釣銭、決済額不足と預り不足の拒否、サービス料、会計準備解除、注文・客・自由明細の編集拒否、通常締めの `checkout_ready` 拒否、値引き後0円、取消後の会計・決済 `cancelled` 化と領収書再発行拒否を確認した。55,000円以上の領収書データとレイアウト境界も確認済みであり、テスト用の営業日・伝票・会計行はロールバックされ永続化していない。
+- 2026-07-20: 対象環境の会計UIで、会計伝票の店員完了扱いから現金・CAT・PAYPAYを各400円、現金預り500円、釣銭100円として会計確定し、`checked_out` への遷移とSII Server未接続時の領収書再試行通知の完了操作を確認した。`checkout_ready` 中の `store.add_slip_nominations` と `store.save_karaoke_lines` はいずれも `store_slip_not_found` で拒否された。会計取消ボタンは確認ダイアログ表示まで確認済みだが、確定は自動化環境の制約で未確認である。検証用の営業日はすべて `closed` で、営業中のテスト営業日はない。SII実機印刷は利用者完了申告として扱う。
 
 - 2026-07-18 決定記録: 会計・領収書・伝票詳細まわり（2026-07-19にソース実装済み）
   - 領収書印刷:
