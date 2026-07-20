@@ -24,11 +24,14 @@
 
 <section class="slip-create terminal-page terminal-page--slip-detail">
     <div class="page-section-heading">
-        <h1>伝票詳細</h1>
-        @if (Model.Detail is null)
-        {
-            <p>伝票未選択</p>
-        }
+        <div>
+            <h1>伝票詳細</h1>
+            @if (Model.Detail is null)
+            {
+                <p>伝票未選択</p>
+            }
+        </div>
+        <a class="btn btn-outline-secondary" asp-page="/Index">営業中へ戻る</a>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
