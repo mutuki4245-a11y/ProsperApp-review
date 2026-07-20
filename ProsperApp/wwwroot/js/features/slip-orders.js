@@ -142,6 +142,8 @@
         const modalList = document.getElementById('orderAttendingCastModalList');
         window.CastSelectModal.renderOptionalBackTarget(modalList, castOptions, {
             getLabel: (cast) => cast.name,
+            getHelpText: (cast) => cast.drinkMemo,
+            helpClass: 'cast-select-modal__drink-memo',
             onNone: () => {
                 if (pendingBackItemId) {
                     addToOrderQueue(pendingBackItemId, null);

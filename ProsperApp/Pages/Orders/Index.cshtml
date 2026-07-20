@@ -172,7 +172,7 @@
         {
             slips = Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName, customerNames = x.CustomerDisplayName, nominationCastIds = x.NominationCastIdList, nominationCastNames = x.NominationCastDisplayName }),
             items = orderableItems.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
-            castOptions = Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true }),
+            castOptions = Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, drinkMemo = x.DrinkMemo, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true }),
             initialQueue = Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
             initialSlipId = Model.SelectedSlipId,
             slipOptionsUrl = Url.Page("/Orders/Index", "SlipOptions"),

@@ -67,6 +67,7 @@ public class StoreOrderAttendanceCastOption
 {
     public long CastId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public string? DrinkMemo { get; set; }
     public string? DepartmentName { get; set; }
     public string? ClockInTime { get; set; }
 

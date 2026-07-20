@@ -60,6 +60,7 @@ public class StoreCastAdminItem
 {
     public long CastId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public string? DrinkMemo { get; set; }
     public DateOnly JoinedOn { get; set; }
 }
 
@@ -69,6 +70,20 @@ public class StoreCastCreateInputModel
     [Required(ErrorMessage = "キャスト名を入力してください。")]
     [StringLength(120, ErrorMessage = "キャスト名は120文字以内で入力してください。")]
     public string DisplayName { get; set; } = string.Empty;
+
+    [Display(Name = "ドリンクメモ")]
+    [StringLength(300, ErrorMessage = "ドリンクメモは300文字以内で入力してください。")]
+    public string? DrinkMemo { get; set; }
+}
+
+public class StoreCastDrinkMemoInputModel
+{
+    [Range(1, long.MaxValue, ErrorMessage = "編集するキャストを選択してください。")]
+    public long CastId { get; set; }
+
+    [Display(Name = "ドリンクメモ")]
+    [StringLength(300, ErrorMessage = "ドリンクメモは300文字以内で入力してください。")]
+    public string? DrinkMemo { get; set; }
 }
 
 public class StoreCastSaveResult

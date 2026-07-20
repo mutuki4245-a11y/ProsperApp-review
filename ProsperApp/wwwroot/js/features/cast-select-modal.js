@@ -2,7 +2,7 @@
     const defaultLimit = 80;
     const defaultEmptyMessage = '出勤キャストが登録されていません。';
 
-    const createItem = (label, helpText, onSelect) => {
+    const createItem = (label, helpText, onSelect, helpClass) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'cast-select-modal__item';
@@ -13,6 +13,9 @@
 
         if (helpText) {
             const help = document.createElement('span');
+            if (helpClass) {
+                help.className = helpClass;
+            }
             help.textContent = helpText;
             button.appendChild(help);
         }
@@ -63,7 +66,8 @@
 
         matches.forEach((cast) => {
             const label = options.getLabel ? options.getLabel(cast) : cast.name;
-            list.appendChild(createItem(label || '', null, () => options.onSelect?.(cast)));
+            const helpText = options.getHelpText ? options.getHelpText(cast) : null;
+            list.appendChild(createItem(label || '', helpText, () => options.onSelect?.(cast), options.helpClass));
         });
     };
 

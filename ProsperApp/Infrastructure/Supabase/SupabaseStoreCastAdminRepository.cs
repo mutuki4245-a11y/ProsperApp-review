@@ -39,6 +39,7 @@ public class SupabaseStoreCastAdminRepository(
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                DrinkMemo = ReadString(row, "drink_memo"),
                 JoinedOn = ReadDateOnly(row, "joined_on") ?? DateOnly.MinValue
             })
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
@@ -59,7 +60,8 @@ public class SupabaseStoreCastAdminRepository(
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
-                p_display_name = input.DisplayName.Trim()
+                p_display_name = input.DisplayName.Trim(),
+                p_drink_memo = NormalizeDrinkMemo(input.DrinkMemo)
             },
             ct);
 
@@ -77,6 +79,45 @@ public class SupabaseStoreCastAdminRepository(
         return castId > 0
             ? StoreCastSaveResult.Success(castId)
             : StoreCastSaveResult.Failed("キャストを登録できませんでした。");
+    }
+
+    public async Task<StoreCastSaveResult> UpdateDrinkMemoAsync(StoreCastDrinkMemoInputModel input, long? currentBusinessDayId, CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return StoreCastSaveResult.Failed("Supabase Edge Function設定が未設定です。ドリンクメモを更新できません。");
+        }
+
+        if (input.CastId <= 0)
+        {
+            return StoreCastSaveResult.Failed("編集するキャストを選択してください。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.update_cast_drink_memo",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_cast_id = input.CastId,
+                p_drink_memo = NormalizeDrinkMemo(input.DrinkMemo)
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return StoreCastSaveResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var castId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "cast_id") ?? 0 : 0;
+        if (castId > 0)
+        {
+            StoreMasterCacheKeys.ClearCasts(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, CurrentStoreDepartmentId, currentBusinessDayId ?? 0);
+        }
+
+        return castId > 0
+            ? StoreCastSaveResult.Success(castId)
+            : StoreCastSaveResult.Failed("ドリンクメモを更新できませんでした。");
     }
 
     public async Task<StoreCastSaveResult> DeleteCastAsync(long castId, CancellationToken ct)
@@ -130,12 +171,12 @@ public class SupabaseStoreCastAdminRepository(
 
         if (rawError.Contains("invalid_store_cast", StringComparison.OrdinalIgnoreCase))
         {
-            return "キャスト名を入力してください。";
+            return "キャスト名またはドリンクメモを確認してください。";
         }
 
         if (rawError.Contains("store_cast_not_found", StringComparison.OrdinalIgnoreCase))
         {
-            return "削除対象のキャストが見つかりません。";
+            return "対象のキャストが見つかりません。";
         }
 
         if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
@@ -144,6 +185,11 @@ public class SupabaseStoreCastAdminRepository(
             return PermissionErrorMessage();
         }
 
-        return $"キャストを登録できませんでした。{rawError}";
+        return $"キャスト情報を保存できませんでした。{rawError}";
+    }
+
+    private static string? NormalizeDrinkMemo(string? drinkMemo)
+    {
+        return string.IsNullOrWhiteSpace(drinkMemo) ? null : drinkMemo.Trim();
     }
 }

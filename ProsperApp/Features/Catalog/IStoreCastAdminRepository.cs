@@ -8,5 +8,7 @@ public interface IStoreCastAdminRepository
 
     Task<StoreCastSaveResult> CreateCastAsync(StoreCastCreateInputModel input, CancellationToken ct);
 
+    Task<StoreCastSaveResult> UpdateDrinkMemoAsync(StoreCastDrinkMemoInputModel input, long? currentBusinessDayId, CancellationToken ct);
+
     Task<StoreCastSaveResult> DeleteCastAsync(long castId, CancellationToken ct);
 }

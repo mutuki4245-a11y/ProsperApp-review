@@ -24,6 +24,11 @@ public class ManagementCastsModel(
     [BindProperty]
     public long? DeleteCastId { get; set; }
 
+    [BindProperty]
+    public StoreCastDrinkMemoInputModel DrinkMemoInput { get; set; } = new();
+
+    public long? EditingDrinkMemoCastId { get; private set; }
+
     public string? SuccessMessage { get; set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -94,6 +99,42 @@ public class ManagementCastsModel(
         ModelState.Clear();
         Input = new StoreCastCreateInputModel();
         SuccessMessage = "キャストを削除しました。";
+        Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostUpdateDrinkMemoAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        ModelState.Clear();
+        if (!TryValidateModel(DrinkMemoInput, nameof(DrinkMemoInput)))
+        {
+            EditingDrinkMemoCastId = DrinkMemoInput.CastId;
+            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+            return Page();
+        }
+
+        var result = await _castAdminRepository.UpdateDrinkMemoAsync(
+            DrinkMemoInput,
+            CurrentBusinessDay?.BusinessDayId,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            EditingDrinkMemoCastId = DrinkMemoInput.CastId;
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "ドリンクメモを更新できませんでした。");
+            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+            return Page();
+        }
+
+        ModelState.Clear();
+        Input = new StoreCastCreateInputModel();
+        DrinkMemoInput = new StoreCastDrinkMemoInputModel();
+        SuccessMessage = "ドリンクメモを更新しました。";
         Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
         return Page();
     }

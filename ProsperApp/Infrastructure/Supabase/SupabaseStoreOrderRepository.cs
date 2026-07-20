@@ -116,6 +116,7 @@ public class SupabaseStoreOrderRepository(
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                DrinkMemo = ReadString(row, "drink_memo"),
                 DepartmentName = ReadString(row, "department_name"),
                 ClockInTime = ReadString(row, "clock_in_time")
             })

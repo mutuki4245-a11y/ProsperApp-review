@@ -530,6 +530,13 @@
             label.appendChild(badge);
         }
 
+        if (cast.drinkMemo) {
+            const drinkMemo = document.createElement('span');
+            drinkMemo.className = 'cast-select-modal__drink-memo';
+            drinkMemo.textContent = cast.drinkMemo;
+            label.appendChild(drinkMemo);
+        }
+
         const controls = document.createElement('div');
         controls.className = 'cast-select-modal__stepper';
 
