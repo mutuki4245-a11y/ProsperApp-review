@@ -64,6 +64,18 @@
 
     const closest = (target, selector) => target instanceof Element ? target.closest(selector) : null;
 
+    const shouldPreventModalEnterSubmit = (target, event) => {
+        if (event.key !== 'Enter' || event.isComposing || !(target instanceof HTMLInputElement)) {
+            return false;
+        }
+
+        if (['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image'].includes(target.type)) {
+            return false;
+        }
+
+        return target.form?.closest('.modal') !== null;
+    };
+
     const isLoadingDisabled = (element) => element?.closest('[data-loading-lock="false"]') !== null;
 
     const deferAfterClickHandlers = (callback) => {
@@ -301,6 +313,12 @@
                 show();
             }
         });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (shouldPreventModalEnterSubmit(event.target, event)) {
+            event.preventDefault();
+        }
     });
 
     document.addEventListener('submit', (event) => {
