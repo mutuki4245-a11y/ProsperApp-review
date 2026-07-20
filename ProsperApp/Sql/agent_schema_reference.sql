@@ -187,6 +187,7 @@ create table if not exists public.cast_master (
     department_id bigint not null references public.department_master(department_id),
     cast_code text,
     display_name text not null,
+    drink_memo text,
     joined_on date not null default ((now() at time zone 'Asia/Tokyo')::date),
     status text not null default 'active', -- active / inactive / left
     sort_order integer not null default 0,
@@ -194,6 +195,7 @@ create table if not exists public.cast_master (
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_cast_master_status check (status in ('active', 'inactive', 'left')),
+    constraint chk_cast_master_drink_memo_length check (char_length(drink_memo) <= 300),
     constraint uq_cast_master_code unique (company_id, department_id, cast_code)
 );
 
@@ -643,9 +645,11 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     returns cast_id, cast_code, display_name, department_name
 --     includes active casts from all active departments across companies, for help/temporary assignments.
 --   store.get_casts_admin(p_department_id bigint)
---     returns cast_id, display_name, joined_on for casts belonging to the current store.
---   store.create_cast(p_department_id bigint, p_display_name text)
+--     returns cast_id, display_name, drink_memo, joined_on for casts belonging to the current store.
+--   store.create_cast(p_department_id bigint, p_display_name text, p_drink_memo text)
 --     creates an active cast for the current store. joined_on is set to the current Asia/Tokyo date.
+--   store.update_cast_drink_memo(p_department_id bigint, p_cast_id bigint, p_drink_memo text)
+--     updates a current-store active cast's nullable drink memo. Empty input is stored as null.
 --   store.get_business_day_slips(p_department_id bigint, p_business_day_id bigint)
 --     returns slip_id, slip_no, table_id, table_code, table_name, opened_at, status,
 --       customer_count, customer_names, cast_names, order_count, order_subtotal_amount,
@@ -672,7 +676,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   store.delete_item(p_department_id bigint, p_item_id bigint)
 --     deletes a store item master row. Existing order rows keep item_name_snapshot/unit_price/amount and clear item_id.
 --   store.get_order_attending_casts(p_department_id bigint, p_business_day_id bigint)
---     returns cast_id, display_name, department_name
+--     returns cast_id, display_name, drink_memo, department_name
 --     display_name is the cast name; UI composes display_name:department_name when needed.
 --     includes all casts who attended the business day even if they are already checked out.
 --   store.add_order_lines(p_department_id bigint, p_slip_id bigint, p_order_lines jsonb)

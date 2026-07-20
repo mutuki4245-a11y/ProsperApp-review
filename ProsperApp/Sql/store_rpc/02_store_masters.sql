@@ -61,6 +61,7 @@ create or replace function store.get_casts_admin(p_department_id bigint)
 returns table (
     cast_id bigint,
     display_name text,
+    drink_memo text,
     joined_on date
 )
 language sql
@@ -70,6 +71,7 @@ as $$
     select
         c.cast_id,
         c.display_name,
+        c.drink_memo,
         c.joined_on
     from public.cast_master c
     join public.department_master d
@@ -82,10 +84,12 @@ as $$
 $$;
 
 drop function if exists store.create_cast(bigint, text);
+drop function if exists store.create_cast(bigint, text, text);
 
 create or replace function store.create_cast(
     p_department_id bigint,
-    p_display_name text
+    p_display_name text,
+    p_drink_memo text default null
 )
 returns table (
     cast_id bigint
@@ -97,6 +101,7 @@ as $$
 declare
     v_company_id bigint;
     v_display_name text;
+    v_drink_memo text;
     v_sort_order integer;
 begin
     select d.company_id
@@ -111,7 +116,9 @@ begin
     end if;
 
     v_display_name := nullif(trim(coalesce(p_display_name, '')), '');
-    if v_display_name is null then
+    v_drink_memo := nullif(btrim(coalesce(p_drink_memo, '')), '');
+    if v_display_name is null
+       or (v_drink_memo is not null and char_length(v_drink_memo) > 300) then
         raise exception 'invalid_store_cast';
     end if;
 
@@ -126,6 +133,7 @@ begin
         company_id,
         department_id,
         display_name,
+        drink_memo,
         joined_on,
         status,
         sort_order,
@@ -135,12 +143,68 @@ begin
         v_company_id,
         p_department_id,
         v_display_name,
+        v_drink_memo,
         (now() at time zone 'Asia/Tokyo')::date,
         'active',
         v_sort_order,
         true
     )
     returning cast_master.cast_id;
+end;
+$$;
+
+drop function if exists store.update_cast_drink_memo(bigint, bigint, text);
+
+create or replace function store.update_cast_drink_memo(
+    p_department_id bigint,
+    p_cast_id bigint,
+    p_drink_memo text default null
+)
+returns table (
+    cast_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_drink_memo text;
+    v_updated_cast_id bigint;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    v_drink_memo := nullif(btrim(coalesce(p_drink_memo, '')), '');
+    if v_drink_memo is not null and char_length(v_drink_memo) > 300 then
+        raise exception 'invalid_store_cast_drink_memo';
+    end if;
+
+    update public.cast_master c
+       set drink_memo = v_drink_memo,
+           updated_at = now()
+     where c.cast_id = p_cast_id
+       and c.company_id = v_company_id
+       and c.department_id = p_department_id
+       and c.is_active = true
+       and c.status = 'active'
+    returning c.cast_id
+      into v_updated_cast_id;
+
+    if v_updated_cast_id is null then
+        raise exception 'store_cast_not_found';
+    end if;
+
+    return query
+    select v_updated_cast_id;
 end;
 $$;
 

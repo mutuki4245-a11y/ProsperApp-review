@@ -7,6 +7,7 @@ create or replace function store.get_order_attending_casts(
 returns table (
     cast_id bigint,
     display_name text,
+    drink_memo text,
     department_name text,
     clock_in_time text
 )
@@ -17,6 +18,7 @@ as $$
     select
         c.cast_id,
         c.display_name,
+        c.drink_memo,
         d.department_name,
         case
             when a.clock_in_at is null then null

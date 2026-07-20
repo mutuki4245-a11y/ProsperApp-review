@@ -33,6 +33,7 @@ declare
         'store.save_cast_sales_adjustment',
         'store.close_business_day',
         'store.create_cast',
+        'store.update_cast_drink_memo',
         'store.delete_cast',
         'store.upsert_item_category',
         'store.upsert_item',

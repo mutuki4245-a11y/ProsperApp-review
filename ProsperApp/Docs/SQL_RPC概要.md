@@ -69,7 +69,7 @@ DB反映時の基本順序は以下。
 | --- | --- | --- |
 | 既存マスタ | `department_master` | 店舗マスタ。店舗別運用設定として勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割を持つ。 |
 | マスタ | `store_table_master` | 店舗ごとの卓番。`table_category_no`（0〜9）でカテゴリ順を持つ。 |
-| マスタ | `cast_master` | キャスト。店舗所属と表示順を持つ。 |
+| マスタ | `cast_master` | キャスト。店舗所属、表示順、任意入力の `drink_memo`（改行を含め300文字以内）を持つ。 |
 | マスタ | `store_item_category_master` | 商品カテゴリ。 |
 | マスタ | `store_item_master` | 商品マスタ。価格、商品種別、キャストバック対象、バック単価、バック種別を持つ。カラオケは `item_type = 'karaoke'`、指名料金は `item_type = 'nomination_fee'` のシステム商品。 |
 | マスタ | `store_nomination_back_master` | 店舗別の指名種別と指名バック設定。`nomination_kind`、基本種別、表示名、同伴時刻、バック単価、有効/無効を持つ。 |
@@ -174,8 +174,9 @@ DB反映時の基本順序は以下。
 | --- | --- |
 | `store.get_tables` | 卓番候補をカテゴリ番号、既存の表示順、卓番順で返す。 |
 | `store.get_casts` | キャスト候補を返す。ヘルプ対応のため会社を跨いだ全有効店舗所属キャストを含む。 |
-| `store.get_casts_admin` | キャスト管理画面用に、現在店舗所属キャストだけを返す。 |
-| `store.create_cast` | キャストを作成する。 |
+| `store.get_casts_admin` | キャスト管理画面用に、現在店舗所属キャストだけをドリンクメモとともに返す。 |
+| `store.create_cast` | キャストを作成する。任意のドリンクメモは空欄なら `null` として保存する。 |
+| `store.update_cast_drink_memo` | 現在店舗の有効キャストに限り、任意のドリンクメモを更新する。 |
 | `store.delete_cast` | キャストを論理削除する。`cast_master.status = 'inactive'`、`is_active = false` に更新する。 |
 | `store.get_business_day_slips` | 営業中画面向けの伝票一覧、客・指名、注文件数・注文合計、自由入力明細合計、会計表示額を返す。 |
 | `store.get_order_entry_slips` | `/Orders` 向けの注文入力対象伝票一覧を返す。卓番、客数、客名、指名キャストを含み、注文端末の卓番選択には客名と指名キャストを表示する。 |
@@ -208,7 +209,7 @@ DB反映時の基本順序は以下。
 
 | RPC | 主な用途 |
 | --- | --- |
-| `store.get_order_attending_casts` | 当日出勤キャストを返す。退勤済みも候補に残す。 |
+| `store.get_order_attending_casts` | 当日出勤キャストをドリンクメモとともに返す。退勤済みも候補に残す。メモはバック対象選択時の表示だけに使い、注文実績へ保存しない。 |
 | `store.add_order_lines` | 注文行とバック対象キャストを登録する。`p_order_lines` に伝票IDを含められるため、`/Orders` では複数卓のキューをまとめて登録できる。登録時に対象伝票が選択店舗のopen伝票であることを確認し、登録できる商品は標準商品だけに限定する。システム商品は拒否する。 |
 
 ### 会計
@@ -287,7 +288,7 @@ RPCを追加/変更するときは、以下を同じタスク内で揃える。
 
 アプリ側では、店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、指名バック設定、現在営業日、当日出勤キャスト候補を `IMemoryCache` の対象として扱う。RPC失敗や設定未完了の結果はキャッシュしない。指名バック設定は店舗別マスタDBだが、当日の指名入力に使うため現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄する。商品/カテゴリ保存、商品削除、商品並び順保存、キャスト登録/削除などその他の破棄契機は `HANDOFF.md` の重要方針に従う。
 
-`store.get_order_attending_casts` は店舗別・営業日別にアプリ側でキャッシュする。RPC定義変更は不要で、勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄する。
+`store.get_order_attending_casts` は店舗別・営業日別にアプリ側でキャッシュする。勤怠保存、退勤情報保存、営業日開始、営業日締め、キャストのドリンクメモ保存の成功時に対象営業日のキャッシュを破棄する。
 
 `store.get_business_day_slips` と `store.get_order_entry_slips` はキャッシュ対象にしない。アプリ側ではRazor初期表示をブロックせず、ページ用JSON handlerから初回Ajax、フォーカス復帰、10秒ごとの表示中自動更新で取得する。保存成功POST直後の同期再取得は行わない。
 
@@ -304,8 +305,9 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.get_context` | 店舗別マスタ。`department_id` 単位。 | 通常画面では初回成功時に保持する。店舗別運用設定がアプリ内で更新された場合は破棄が必要。領収書保存時の会社ID取得だけは現状キャッシュを経由せず都度取得する。 |
 | `store.get_tables` | 店舗別マスタ。`department_id` 単位。 | 初回成功時に保持する。卓マスタ更新をアプリ内で扱うまでは明示破棄しないため、SQL更新後はアプリ再起動または再配備で更新する。 |
 | `store.get_casts` | 店舗別キャスト候補。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.delete_cast` 成功時に破棄する。 |
-| `store.get_casts_admin` | 店舗別キャスト管理一覧。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.delete_cast` 成功時に `store.get_casts` と同時に破棄する。 |
+| `store.get_casts_admin` | 店舗別キャスト管理一覧。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.update_cast_drink_memo` / `store.delete_cast` 成功時に `store.get_casts` と同時に破棄する。 |
 | `store.create_cast` | 保存結果のみ。 | 戻り値の `cast_id` を画面結果判定に使い、キャッシュしない。成功時にキャスト候補/管理一覧キャッシュを破棄する。 |
+| `store.update_cast_drink_memo` | 保存結果のみ。 | 戻り値の `cast_id` を画面結果判定に使い、キャスト候補/管理一覧と、対象営業日の出勤キャスト候補キャッシュを破棄する。 |
 | `store.delete_cast` | 保存結果のみ。 | 戻り値の `cast_id` を画面結果判定に使い、キャッシュしない。成功時にキャスト候補/管理一覧キャッシュを破棄する。 |
 | `store.get_order_items` | 店舗別の注文可能商品候補。`department_id` 単位。標準商品だけを返す。 | 初回成功時に保持する。商品カテゴリ/商品保存、商品削除、商品並び順保存の成功時に破棄する。 |
 | `store.get_item_admin_catalog` | 店舗別商品管理カタログ。`department_id` 単位。 | 初回成功時に保持する。`store.get_order_items` と同じ商品関連更新の成功時に破棄する。 |
@@ -319,7 +321,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.open_business_day` | 営業日開始結果。 | 戻り値の営業日を現在営業日キャッシュへ保存する。成功時に指名バック設定キャッシュと当日出勤キャスト候補キャッシュを破棄する。 |
 | `store.open_business_day_with_attendance` | 営業日開始結果。 | `store.open_business_day` と同じ。戻り値の営業日を現在営業日キャッシュへ保存し、指名バック設定と当日出勤キャスト候補を破棄する。 |
 | `store.close_business_day` | 営業日締め結果。 | 戻り値は画面結果判定に使い、現在営業日キャッシュとしては保持しない。成功時に現在営業日、指名バック設定、当日出勤キャスト候補を破棄する。 |
-| `store.get_order_attending_casts` | 店舗別・営業日別の出勤キャスト候補。`department_id` + `business_day_id` 単位。 | 初回成功時に保持する。勤怠保存、退勤情報保存、営業日開始、営業日締めの成功時に対象営業日のキャッシュを破棄する。退勤済みかどうかだけでは破棄しない。 |
+| `store.get_order_attending_casts` | 店舗別・営業日別の出勤キャスト候補。`department_id` + `business_day_id` 単位。 | 初回成功時に保持する。勤怠保存、退勤情報保存、営業日開始、営業日締め、キャストのドリンクメモ保存の成功時に対象営業日のキャッシュを破棄する。退勤済みかどうかだけでは破棄しない。 |
 | `store.save_business_day_attendance` | 保存結果のみ。 | 戻り値の営業日を画面結果判定に使い、キャッシュしない。成功時に対象営業日の出勤キャスト候補キャッシュを破棄する。 |
 | `store.save_business_day_closing_attendance` | 保存結果のみ。 | 戻り値の保存件数を画面結果判定に使い、キャッシュしない。成功時に対象営業日の出勤キャスト候補キャッシュを破棄する。 |
 | `store.get_open_slip_count` | 締め可否用の動的件数。 | キャッシュしない。`/Closing` のパネル状態JSON handler、フォーカス復帰、30秒ごとの表示中自動更新、締めPOST検証で最新取得する。 |

@@ -254,6 +254,18 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_display_name", type: "text" },
+        { name: "p_drink_memo", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.update_cast_drink_memo",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_cast_id", type: "bigint" },
+        { name: "p_drink_memo", type: "text" },
       ],
     },
   ],
