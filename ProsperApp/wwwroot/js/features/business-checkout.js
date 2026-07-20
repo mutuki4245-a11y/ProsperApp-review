@@ -22,6 +22,7 @@
     const confirmButton = root.querySelector('[data-business-confirm-checkout]');
     const storagePrefix = 'prosper:checkout-statement:v1:';
     let current = null;
+    let isActionInFlight = false;
 
     const yen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
     const token = () => sourceForm.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
@@ -58,6 +59,20 @@
         const data = await response.json().catch(() => null);
         if (!response.ok || !data?.succeeded) throw new Error(data?.message || '会計処理に失敗しました。');
         return data;
+    };
+    const runExclusive = async (action) => {
+        if (isActionInFlight) {
+            return;
+        }
+
+        isActionInFlight = true;
+        window.AppLoading?.show();
+        try {
+            return await action();
+        } finally {
+            isActionInFlight = false;
+            window.AppLoading?.hide();
+        }
     };
     const composeClosedAt = () => {
         const time = closedTime.value;
@@ -179,77 +194,93 @@
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
     };
     const open = async (slip) => {
+        if (isActionInFlight) return;
         reset(); current = { slipId: Number(slip.id), tableDisplay: slip.tableDisplay, status: slip.status, queue: readQueue(slip.id) };
         table.textContent = slip.tableDisplay || '会計';
         modal?.show();
         if (slip.status !== 'checkout_ready') return;
-        try {
-            const data = await post(config.getCheckoutStatementPrintDataUrl, { slipId: current.slipId });
-            current.queue ??= { state: 'pending', printData: data.printData, reviewData: data.reviewData };
-            current.queue.printData = data.printData;
-            current.queue.reviewData = data.reviewData;
-            writeQueue(); showCurrent();
-        } catch (error) { setMessage(error.message); }
+        await runExclusive(async () => {
+            try {
+                const data = await post(config.getCheckoutStatementPrintDataUrl, { slipId: current.slipId });
+                current.queue ??= { state: 'pending', printData: data.printData, reviewData: data.reviewData };
+                current.queue.printData = data.printData;
+                current.queue.reviewData = data.reviewData;
+                writeQueue(); showCurrent();
+            } catch (error) { setMessage(error.message); }
+        });
     };
     const issue = async () => {
         const closedAt = composeClosedAt();
         if (!current || !closedAt) { setMessage('退店時刻を確認してください。'); return; }
-        try {
-            const saved = await window.prosperBusinessHomeFlushKaraoke?.();
-            if (saved === false) {
-                setMessage('未保存のカラオケ回数を保存できませんでした。');
-                return;
-            }
-            const data = await post(config.issueCheckoutStatementUrl, { slipId: current.slipId, closedAt });
-            current.queue = { state: 'pending', printData: data.printData, reviewData: data.reviewData }; writeQueue(); showCurrent();
-            window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-        } catch (error) { setMessage(error.message); }
+        await runExclusive(async () => {
+            try {
+                const saved = await window.prosperBusinessHomeFlushKaraoke?.();
+                if (saved === false) {
+                    setMessage('未保存のカラオケ回数を保存できませんでした。');
+                    return;
+                }
+                const data = await post(config.issueCheckoutStatementUrl, { slipId: current.slipId, closedAt });
+                current.queue = { state: 'pending', printData: data.printData, reviewData: data.reviewData }; writeQueue(); showCurrent();
+                window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
+            } catch (error) { setMessage(error.message); }
+        });
     };
     const printStatement = async () => {
         if (!current?.queue) return;
-        current.queue.state = 'printing'; writeQueue(); renderPrintState();
-        try {
-            if (!config.receiptPrinterEnabled || !window.ProsperCheckoutStatementPrinter?.print) throw new Error('会計伝票プリンターを利用できません。');
-            await window.ProsperCheckoutStatementPrinter.print(current.queue.printData);
-            current.queue.state = 'printed';
-        } catch (error) {
-            current.queue.state = 'failed'; setMessage(`会計伝票を印刷できませんでした。${error.message}`);
-        }
-        writeQueue(); renderPrintState();
+        await runExclusive(async () => {
+            current.queue.state = 'printing'; writeQueue(); renderPrintState();
+            try {
+                if (!config.receiptPrinterEnabled || !window.ProsperCheckoutStatementPrinter?.print) throw new Error('会計伝票プリンターを利用できません。');
+                await window.ProsperCheckoutStatementPrinter.print(current.queue.printData);
+                current.queue.state = 'printed';
+            } catch (error) {
+                current.queue.state = 'failed'; setMessage(`会計伝票を印刷できませんでした。${error.message}`);
+            }
+            writeQueue(); renderPrintState();
+        });
     };
     const release = async () => {
-        if (!current || !window.confirm('会計準備を解除して伝票を編集可能に戻しますか？')) return;
-        try {
-            await post(config.releaseCheckoutReadyUrl, { slipId: current.slipId });
-            removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-        } catch (error) { setMessage(error.message); }
+        if (isActionInFlight || !current || !window.confirm('会計準備を解除して伝票を編集可能に戻しますか？')) return;
+        await runExclusive(async () => {
+            try {
+                await post(config.releaseCheckoutReadyUrl, { slipId: current.slipId });
+                removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
+            } catch (error) { setMessage(error.message); }
+        });
     };
     const confirm = async () => {
         if (!current || !printable()) return;
         const payments = selectedPayments();
         const total = Math.round(Number(current.queue.printData.total_amount) || 0);
         if ((total === 0 && payments.length > 0) || (total > 0 && payments.length === 0)) { setMessage('決済方法を確認してください。'); return; }
-        try {
-            const data = await post(config.confirmCheckoutUrl, { slipId: current.slipId, payments, receivedAmount: receivedAmount.value === '' ? null : Math.round(Number(receivedAmount.value) || 0) });
-            removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-            const receipt = { ...data.printData, checkoutId: data.checkoutId, addressee: addressee.value || '' };
-            const printTask = window.ProsperSiiReceiptPrinterApi?.print(receipt);
-            printTask?.catch(() => {});
-        } catch (error) { setMessage(error.message); }
+        await runExclusive(async () => {
+            try {
+                const data = await post(config.confirmCheckoutUrl, { slipId: current.slipId, payments, receivedAmount: receivedAmount.value === '' ? null : Math.round(Number(receivedAmount.value) || 0) });
+                removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
+                const receipt = { ...data.printData, checkoutId: data.checkoutId, addressee: addressee.value || '' };
+                const printTask = window.ProsperSiiReceiptPrinterApi?.print(receipt);
+                printTask?.catch(() => {});
+            } catch (error) { setMessage(error.message); }
+        });
     };
     const printReceipt = async (slip) => {
-        try {
-            const data = await post(config.getCheckoutReceiptPrintDataUrl, { slipId: Number(slip.id) });
-            await window.ProsperSiiReceiptPrinterApi?.print({ ...data.printData, checkoutId: data.checkoutId, addressee: '' });
-        } catch (error) { window.alert(error.message); }
+        if (isActionInFlight) return;
+        await runExclusive(async () => {
+            try {
+                const data = await post(config.getCheckoutReceiptPrintDataUrl, { slipId: Number(slip.id) });
+                await window.ProsperSiiReceiptPrinterApi?.print({ ...data.printData, checkoutId: data.checkoutId, addressee: '' });
+            } catch (error) { window.alert(error.message); }
+        });
     };
     const cancelCheckout = async (slip) => {
-        if (!window.confirm(`${slip.tableDisplay || 'この伝票'} の会計を取消しますか？`)) return;
-        try {
-            const data = await post(config.cancelCheckoutUrl, { slipId: Number(slip.id) });
-            window.ProsperSiiReceiptPrinterApi?.clearReceiptTerminalState(data.checkoutId);
-            window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-        } catch (error) { window.alert(error.message); }
+        if (isActionInFlight || !window.confirm(`${slip.tableDisplay || 'この伝票'} の会計を取消しますか？`)) return;
+        await runExclusive(async () => {
+            try {
+                const data = await post(config.cancelCheckoutUrl, { slipId: Number(slip.id) });
+                window.ProsperSiiReceiptPrinterApi?.clearReceiptTerminalState(data.checkoutId);
+                window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
+            } catch (error) { window.alert(error.message); }
+        });
     };
 
     document.addEventListener('click', (event) => {
@@ -262,10 +293,11 @@
     });
     root.querySelector('[data-business-issue-statement]')?.addEventListener('click', () => void issue());
     root.querySelector('[data-business-print-statement]')?.addEventListener('click', () => void printStatement());
-    root.querySelector('[data-business-statement-staff-complete]')?.addEventListener('click', () => { if (current?.queue) { current.queue.state = 'staff_complete'; writeQueue(); renderPrintState(); } });
+    root.querySelector('[data-business-statement-staff-complete]')?.addEventListener('click', () => { if (!isActionInFlight && current?.queue) { current.queue.state = 'staff_complete'; writeQueue(); renderPrintState(); } });
     root.querySelector('[data-business-release-checkout]')?.addEventListener('click', () => void release());
     confirmButton?.addEventListener('click', () => void confirm());
     paymentRows?.addEventListener('click', (event) => {
+        if (isActionInFlight) return;
         const button = event.target.closest('[data-payment-code]'); if (!button) return;
         const selected = !button.classList.contains('btn-primary'); const input = paymentRows.querySelector(`[data-payment-amount="${button.dataset.paymentCode}"]`);
         button.classList.toggle('btn-primary', selected); button.classList.toggle('btn-outline-primary', !selected); input.disabled = !selected;
@@ -275,7 +307,8 @@
         }
         renderPaymentSummary();
     });
-    paymentRows?.addEventListener('input', renderPaymentSummary); receivedAmount?.addEventListener('input', renderPaymentSummary);
+    paymentRows?.addEventListener('input', () => { if (!isActionInFlight) renderPaymentSummary(); });
+    receivedAmount?.addEventListener('input', () => { if (!isActionInFlight) renderPaymentSummary(); });
     window.addEventListener('prosper:business-slips-refresh', () => window.prosperBusinessHomeReload?.());
     modalElement?.addEventListener('hidden.bs.modal', reset);
     window.ProsperBusinessCheckout = { open };
