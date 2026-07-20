@@ -90,6 +90,10 @@ public class CastSalesAdjustmentDetail
 
     public decimal TotalAmount { get; init; }
 
+    public bool UsesTimeBasedInitialSalesAmount { get; set; }
+
+    public string? InitialSalesAmountFallbackReason { get; set; }
+
     public List<CastSalesAdjustmentCastRow> Casts { get; } = [];
 
     public string TableDisplayName
@@ -131,6 +135,14 @@ public class CastSalesAdjustmentCastRow
     public string? SourceAmountType { get; init; }
 
     public string? SplitMode { get; init; }
+
+    public decimal? SuggestedSubtotalSalesAmount { get; init; }
+
+    public string? SubtotalSuggestionFallbackReason { get; init; }
+
+    public decimal? SuggestedTotalSalesAmount { get; init; }
+
+    public string? TotalSuggestionFallbackReason { get; init; }
 
     public decimal EffectiveSalesAmount => SalesAmount ?? InitialSalesAmount;
 

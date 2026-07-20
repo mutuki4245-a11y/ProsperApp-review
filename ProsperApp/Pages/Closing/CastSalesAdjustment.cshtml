@@ -121,6 +121,15 @@
                                 <input type="hidden" name="CastSalesAdjustmentInput.SourceAmountType" value="@Model.CastSalesAmountBasis" />
                                 <input type="hidden" name="CastSalesAdjustmentInput.SplitMode" value="@Model.CastSalesSplitMode" />
 
+                                @if (Model.CastSalesSplitMode == LocalSettings.CastSalesSplitModeSplit && detail.Casts.All(castRow => castRow.SalesAmount is null))
+                                {
+                                    <p class="text-muted small mb-0">
+                                        @(detail.UsesTimeBasedInitialSalesAmount
+                                            ? "売上発生時点で有効な指名キャストへ自動配分しています。"
+                                            : detail.InitialSalesAmountFallbackReason)
+                                    </p>
+                                }
+
                                 <div class="cast-sales-adjustment-casts">
                                     <div class="cast-sales-adjustment-casts__row cast-sales-adjustment-casts__row--header">
                                         <span>指名キャスト</span>

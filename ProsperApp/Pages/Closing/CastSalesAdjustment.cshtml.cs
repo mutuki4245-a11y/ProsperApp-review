@@ -235,6 +235,24 @@ public class CastSalesAdjustmentModel(
             return;
         }
 
+        var suggestedSalesAmounts = CastSalesAmountBasis == LocalSettings.CastSalesAmountBasisSubtotal
+            ? detail.Casts.Select(row => row.SuggestedSubtotalSalesAmount).ToArray()
+            : detail.Casts.Select(row => row.SuggestedTotalSalesAmount).ToArray();
+        var fallbackReason = CastSalesAmountBasis == LocalSettings.CastSalesAmountBasisSubtotal
+            ? detail.Casts.Select(row => row.SubtotalSuggestionFallbackReason).FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason))
+            : detail.Casts.Select(row => row.TotalSuggestionFallbackReason).FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason));
+
+        if (string.IsNullOrWhiteSpace(fallbackReason) && suggestedSalesAmounts.All(amount => amount is not null))
+        {
+            for (var i = 0; i < detail.Casts.Count; i++)
+            {
+                detail.Casts[i].InitialSalesAmount = suggestedSalesAmounts[i]!.Value;
+            }
+
+            detail.UsesTimeBasedInitialSalesAmount = true;
+            return;
+        }
+
         var castCount = detail.Casts.Count;
         var dividedAmount = baseAmountYen / castCount;
         var remainder = baseAmountYen % castCount;
@@ -242,6 +260,20 @@ public class CastSalesAdjustmentModel(
         {
             detail.Casts[i].InitialSalesAmount = dividedAmount + (i < remainder ? 1 : 0);
         }
+
+        detail.InitialSalesAmountFallbackReason = GetInitialSalesAmountFallbackMessage(fallbackReason);
+    }
+
+    private static string GetInitialSalesAmountFallbackMessage(string? fallbackReason)
+    {
+        return fallbackReason switch
+        {
+            "missing_nomination_start_time" => "指名開始時刻が不足しているため、均等配分を初期表示しています。",
+            "checkout_snapshot_mismatch" => "会計額と明細の整合性を確認できないため、均等配分を初期表示しています。",
+            "unallocated_sales_event" => "指名開始前の売上があるため、均等配分を初期表示しています。",
+            "negative_cast_sales_amount" => "値引きによりキャスト別売上額が負になるため、均等配分を初期表示しています。",
+            _ => "売上発生時点の配分を計算できないため、均等配分を初期表示しています。"
+        };
     }
 
     private void NormalizeCastSalesAdjustmentInput()

@@ -131,7 +131,11 @@ public class SupabaseCastSalesAdjustmentRepository(
                 StartedAt = ReadDateTimeOffset(row, "started_at"),
                 SalesAmount = ReadDecimal(row, "sales_amount"),
                 SourceAmountType = ReadString(row, "source_amount_type"),
-                SplitMode = ReadString(row, "split_mode")
+                SplitMode = ReadString(row, "split_mode"),
+                SuggestedSubtotalSalesAmount = ReadDecimal(row, "suggested_subtotal_sales_amount"),
+                SubtotalSuggestionFallbackReason = ReadString(row, "subtotal_suggestion_fallback_reason"),
+                SuggestedTotalSalesAmount = ReadDecimal(row, "suggested_total_sales_amount"),
+                TotalSuggestionFallbackReason = ReadString(row, "total_suggestion_fallback_reason")
             });
         }
 

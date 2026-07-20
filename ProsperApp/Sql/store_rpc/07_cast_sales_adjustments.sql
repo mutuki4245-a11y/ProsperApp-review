@@ -213,61 +213,280 @@ returns table (
     started_at timestamp with time zone,
     sales_amount numeric,
     source_amount_type text,
-    split_mode text
+    split_mode text,
+    suggested_subtotal_sales_amount numeric,
+    subtotal_suggestion_fallback_reason text,
+    suggested_total_sales_amount numeric,
+    total_suggestion_fallback_reason text
 )
 language sql
 security definer
 set search_path = public
 as $$
+    with target as (
+        select
+            s.slip_id,
+            s.slip_no,
+            s.business_day_id,
+            s.business_date,
+            s.company_id,
+            s.department_id,
+            s.table_id,
+            c.checkout_id,
+            c.checkout_at,
+            c.subtotal_amount,
+            c.service_charge_amount,
+            c.total_amount
+        from public.store_slips s
+        join public.store_checkouts c
+          on c.slip_id = s.slip_id
+         and c.status = 'confirmed'
+        where s.department_id = p_department_id
+          and s.slip_id = p_slip_id
+          and s.status = 'checked_out'
+    ),
+    required_casts as (
+        select
+            sc.slip_cast_id,
+            sc.cast_id,
+            sc.nomination_kind,
+            sc.nomination_type,
+            sc.started_at
+        from target t
+        join public.store_slip_casts sc
+          on sc.slip_id = t.slip_id
+         and sc.status = 'active'
+         and sc.nomination_type in ('nomination', 'in_store', 'companion')
+    ),
+    active_order_lines as (
+        select
+            ol.order_line_id,
+            ol.ordered_at,
+            ol.amount,
+            t.subtotal_amount,
+            t.service_charge_amount,
+            case
+                when t.subtotal_amount > 0 then floor(t.service_charge_amount * ol.amount / t.subtotal_amount)
+                else 0::numeric
+            end as service_floor_amount,
+            case
+                when t.subtotal_amount > 0 then t.service_charge_amount * ol.amount / t.subtotal_amount
+                else 0::numeric
+            end as service_exact_amount
+        from target t
+        join public.store_order_lines ol
+          on ol.slip_id = t.slip_id
+         and ol.status = 'active'
+    ),
+    service_ranked_orders as (
+        select
+            o.*,
+            row_number() over (
+                order by o.service_exact_amount - o.service_floor_amount desc, o.order_line_id asc
+            ) as service_remainder_rank,
+            coalesce(sum(o.service_floor_amount) over (), 0) as service_floor_total
+        from active_order_lines o
+    ),
+    order_events as (
+        select
+            o.order_line_id,
+            o.ordered_at,
+            o.amount as subtotal_event_amount,
+            o.amount
+                + o.service_floor_amount
+                + case
+                    when o.service_remainder_rank <= o.service_charge_amount - o.service_floor_total then 1
+                    else 0
+                  end as total_event_amount
+        from service_ranked_orders o
+    ),
+    allocation_events as (
+        select
+            'order'::text as event_kind,
+            o.order_line_id as event_id,
+            o.ordered_at as event_at,
+            o.subtotal_event_amount,
+            o.total_event_amount
+        from order_events o
+
+        union all
+
+        select
+            'adjustment'::text as event_kind,
+            cl.charge_line_id as event_id,
+            cl.created_at as event_at,
+            0::numeric as subtotal_event_amount,
+            cl.amount as total_event_amount
+        from target t
+        join public.store_slip_charge_lines cl
+          on cl.slip_id = t.slip_id
+         and cl.charge_type = 'adjustment'
+         and cl.status = 'active'
+    ),
+    event_candidate_counts as (
+        select
+            e.event_kind,
+            e.event_id,
+            e.event_at,
+            e.subtotal_event_amount,
+            e.total_event_amount,
+            count(rc.slip_cast_id)::integer as eligible_cast_count
+        from allocation_events e
+        left join required_casts rc
+          on rc.started_at <= e.event_at
+        group by
+            e.event_kind,
+            e.event_id,
+            e.event_at,
+            e.subtotal_event_amount,
+            e.total_event_amount
+    ),
+    event_candidates as (
+        select
+            e.*,
+            rc.slip_cast_id,
+            row_number() over (
+                partition by e.event_kind, e.event_id
+                order by rc.started_at asc, rc.slip_cast_id asc
+            )::integer as eligible_cast_order
+        from event_candidate_counts e
+        join required_casts rc
+          on rc.started_at <= e.event_at
+        where e.eligible_cast_count > 0
+    ),
+    subtotal_allocations as (
+        select
+            e.slip_cast_id,
+            sum(
+                case when e.subtotal_event_amount < 0 then -1 else 1 end
+                * (
+                    abs(e.subtotal_event_amount)::bigint / e.eligible_cast_count
+                    + case
+                        when e.eligible_cast_order <= mod(abs(e.subtotal_event_amount)::bigint, e.eligible_cast_count) then 1
+                        else 0
+                      end
+                )
+            )::numeric as sales_amount
+        from event_candidates e
+        where e.subtotal_event_amount <> 0
+        group by e.slip_cast_id
+    ),
+    total_allocations as (
+        select
+            e.slip_cast_id,
+            sum(
+                case when e.total_event_amount < 0 then -1 else 1 end
+                * (
+                    abs(e.total_event_amount)::bigint / e.eligible_cast_count
+                    + case
+                        when e.eligible_cast_order <= mod(abs(e.total_event_amount)::bigint, e.eligible_cast_count) then 1
+                        else 0
+                      end
+                )
+            )::numeric as sales_amount
+        from event_candidates e
+        where e.total_event_amount <> 0
+        group by e.slip_cast_id
+    ),
+    allocation_totals as (
+        select
+            rc.slip_cast_id,
+            coalesce(sa.sales_amount, 0)::numeric as suggested_subtotal_sales_amount,
+            coalesce(ta.sales_amount, 0)::numeric as suggested_total_sales_amount
+        from required_casts rc
+        left join subtotal_allocations sa
+          on sa.slip_cast_id = rc.slip_cast_id
+        left join total_allocations ta
+          on ta.slip_cast_id = rc.slip_cast_id
+    ),
+    suggestion_validation as (
+        select
+            case
+                when exists (select 1 from required_casts where started_at is null)
+                    then 'missing_nomination_start_time'
+                when coalesce((select sum(o.amount) from active_order_lines o), 0) <> t.subtotal_amount
+                    then 'checkout_snapshot_mismatch'
+                when exists (
+                    select 1
+                    from event_candidate_counts e
+                    where e.subtotal_event_amount <> 0
+                      and e.eligible_cast_count = 0
+                ) then 'unallocated_sales_event'
+                when exists (
+                    select 1
+                    from allocation_totals a
+                    where a.suggested_subtotal_sales_amount < 0
+                ) then 'negative_cast_sales_amount'
+                else null
+            end as subtotal_suggestion_fallback_reason,
+            case
+                when exists (select 1 from required_casts where started_at is null)
+                    then 'missing_nomination_start_time'
+                when coalesce((select sum(e.total_event_amount) from allocation_events e), 0) <> t.total_amount
+                    then 'checkout_snapshot_mismatch'
+                when exists (
+                    select 1
+                    from event_candidate_counts e
+                    where e.total_event_amount <> 0
+                      and e.eligible_cast_count = 0
+                ) then 'unallocated_sales_event'
+                when exists (
+                    select 1
+                    from allocation_totals a
+                    where a.suggested_total_sales_amount < 0
+                ) then 'negative_cast_sales_amount'
+                else null
+            end as total_suggestion_fallback_reason
+        from target t
+    )
     select
-        s.slip_id,
-        s.slip_no,
-        s.business_day_id,
-        s.business_date,
-        s.table_id,
-        t.table_code,
-        t.table_name,
-        c.checkout_id,
-        c.checkout_at,
-        c.subtotal_amount,
-        c.service_charge_amount,
-        c.total_amount,
-        sc.slip_cast_id,
-        sc.cast_id,
+        t.slip_id,
+        t.slip_no,
+        t.business_day_id,
+        t.business_date,
+        t.table_id,
+        tm.table_code,
+        tm.table_name,
+        t.checkout_id,
+        t.checkout_at,
+        t.subtotal_amount,
+        t.service_charge_amount,
+        t.total_amount,
+        rc.slip_cast_id,
+        rc.cast_id,
         cm.display_name as cast_display_name,
         d.department_name as cast_department_name,
-        sc.nomination_kind,
-        sc.nomination_type,
+        rc.nomination_kind,
+        rc.nomination_type,
         m.display_name as nomination_display_name,
-        sc.started_at,
+        rc.started_at,
         a.sales_amount,
         a.source_amount_type,
-        a.split_mode
-    from public.store_slips s
-    join public.store_checkouts c
-      on c.slip_id = s.slip_id
-     and c.status = 'confirmed'
-    join public.store_slip_casts sc
-      on sc.slip_id = s.slip_id
-     and sc.status = 'active'
-     and sc.nomination_type in ('nomination', 'in_store', 'companion')
+        a.split_mode,
+        at.suggested_subtotal_sales_amount,
+        sv.subtotal_suggestion_fallback_reason,
+        at.suggested_total_sales_amount,
+        sv.total_suggestion_fallback_reason
+    from target t
+    join required_casts rc
+      on true
     join public.cast_master cm
-      on cm.cast_id = sc.cast_id
+      on cm.cast_id = rc.cast_id
     left join public.department_master d
       on d.department_id = cm.department_id
     left join public.store_nomination_back_master m
-      on m.company_id = s.company_id
-     and m.department_id = s.department_id
-     and m.nomination_kind = sc.nomination_kind
-    left join public.store_table_master t
-      on t.table_id = s.table_id
+      on m.company_id = t.company_id
+     and m.department_id = t.department_id
+     and m.nomination_kind = rc.nomination_kind
+    left join public.store_table_master tm
+      on tm.table_id = t.table_id
     left join public.store_slip_cast_sales_adjustments a
-      on a.slip_cast_id = sc.slip_cast_id
+      on a.slip_cast_id = rc.slip_cast_id
      and a.status = 'confirmed'
-    where s.department_id = p_department_id
-      and s.slip_id = p_slip_id
-      and s.status = 'checked_out'
-    order by sc.started_at asc nulls last, sc.slip_cast_id asc;
+    join allocation_totals at
+      on at.slip_cast_id = rc.slip_cast_id
+    cross join suggestion_validation sv
+    order by rc.started_at asc nulls last, rc.slip_cast_id asc;
 $$;
 
 drop function if exists store.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text);
