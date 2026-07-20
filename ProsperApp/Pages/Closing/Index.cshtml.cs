@@ -61,6 +61,23 @@ public class ClosingModel(
         return Page();
     }
 
+    public async Task<IActionResult> OnGetBusinessDayShellAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadBusinessDayShellAsync(cancellationToken, forceRefresh: true);
+        return new JsonResult(new
+        {
+            succeeded = true,
+            hasBusinessDay = CurrentBusinessDay is not null,
+            businessDayId = CurrentBusinessDay?.BusinessDayId,
+            isAdminMode = IsAdminMode
+        });
+    }
+
     public async Task<IActionResult> OnGetOpenSlipPanelAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
@@ -322,10 +339,10 @@ public class ClosingModel(
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 
-    private async Task LoadBusinessDayShellAsync(CancellationToken cancellationToken)
+    private async Task LoadBusinessDayShellAsync(CancellationToken cancellationToken, bool forceRefresh = false)
     {
         IsAdminMode = _localSettingsProvider.GetCurrent().IsAdminMode;
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken, forceRefresh);
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }
 }

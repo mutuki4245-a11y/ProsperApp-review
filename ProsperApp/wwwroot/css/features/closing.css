@@ -79,6 +79,41 @@ a.closing-panel:focus {
   font-size: 1.1rem;
 }
 
+.closing-panel__title,
+.closing-final-panel .form-label {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.closing-panel__step {
+  align-items: center;
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #334e68;
+  display: inline-flex;
+  flex: 0 0 1.5rem;
+  font-size: 0.75rem;
+  height: 1.5rem;
+  justify-content: center;
+}
+
+.closing-panel.is-ready .closing-panel__step {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.closing-panel.needs-action .closing-panel__step,
+.closing-panel.is-preparing .closing-panel__step {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.closing-panel.has-warning .closing-panel__step {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .closing-panel__body small {
   color: #52606d;
 }

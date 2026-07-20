@@ -20,7 +20,7 @@ public class SupabaseBusinessDayRepository(
     private readonly IMemoryCache _memoryCache = memoryCache;
     private readonly SupabaseOptions _options = options.Value;
 
-    public async Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct)
+    public async Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false)
     {
         if (!HasRequiredSettings())
         {
@@ -29,7 +29,7 @@ public class SupabaseBusinessDayRepository(
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.CurrentBusinessDay(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
+        if (!forceRefresh && _memoryCache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
         {
             if (IsValidBusinessDay(cachedBusinessDay))
             {
@@ -46,12 +46,14 @@ public class SupabaseBusinessDayRepository(
 
         if (rows.Count == 0)
         {
+            _memoryCache.Remove(cacheKey);
             return null;
         }
 
         var businessDay = ParseBusinessDay(rows[0]);
         if (!IsValidBusinessDay(businessDay))
         {
+            _memoryCache.Remove(cacheKey);
             return null;
         }
 

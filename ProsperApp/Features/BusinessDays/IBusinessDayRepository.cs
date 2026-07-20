@@ -4,7 +4,7 @@ namespace ProsperApp.Services;
 
 public interface IBusinessDayRepository
 {
-    Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct);
+    Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false);
 
     Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct);
 
