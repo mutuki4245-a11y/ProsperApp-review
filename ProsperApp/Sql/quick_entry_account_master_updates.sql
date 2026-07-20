@@ -1,7 +1,7 @@
 begin;
 
 -- Missing or renamed account subjects used by the tablet quick-entry UI.
-insert into account_master (
+insert into accounting.account_master (
     account_code,
     account_name,
     category,
@@ -12,16 +12,16 @@ insert into account_master (
 )
 select '5290', '保険料', 'expense', 'D', true, true, 690
 where not exists (
-    select 1 from account_master where account_code = '5290'
+    select 1 from accounting.account_master where account_code = '5290'
 );
 
-update account_master
+update accounting.account_master
 set account_name = 'リース料',
     requires_subaccount = true
 where account_code = '5210'
   and account_name <> 'リース料';
 
-update account_master
+update accounting.account_master
 set account_name = '衛生費',
     requires_subaccount = true
 where account_code = '5250'
@@ -29,7 +29,7 @@ where account_code = '5250'
 
 -- Company-specific subaccounts for quick-entry choices.
 with companies as (
-    select company_id from company_master where is_active = true
+    select company_id from public.company_master where is_active = true
 ),
 subaccounts as (
     select * from (values
@@ -70,7 +70,7 @@ subaccounts as (
     ) as v(account_code, subaccount_code, subaccount_name, sort_order)
 ),
 inserted_subaccounts as (
-    insert into subaccount_master (
+    insert into accounting.subaccount_master (
         company_id,
         subaccount_code,
         subaccount_name,
@@ -89,13 +89,13 @@ inserted_subaccounts as (
     cross join subaccounts s
     where not exists (
         select 1
-        from subaccount_master existing
+        from accounting.subaccount_master existing
         where existing.company_id = c.company_id
           and existing.subaccount_code = s.subaccount_code
     )
     returning company_id, subaccount_id, subaccount_code
 )
-insert into account_subaccount_map (
+insert into accounting.account_subaccount_map (
     company_id,
     account_code,
     subaccount_id,
@@ -111,11 +111,13 @@ select
     s.sort_order,
     now()
 from subaccounts s
-join subaccount_master sm
+join accounting.subaccount_master sm
   on sm.subaccount_code = s.subaccount_code
+join companies c
+  on c.company_id = sm.company_id
 where not exists (
     select 1
-    from account_subaccount_map existing
+    from accounting.account_subaccount_map existing
     where existing.company_id = sm.company_id
       and existing.account_code = s.account_code
       and existing.subaccount_id = sm.subaccount_id

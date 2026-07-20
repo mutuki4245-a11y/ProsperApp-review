@@ -30,7 +30,7 @@
 -- Existing master / receipt / journal tables provided by Supabase schema snapshot
 -- -----------------------------------------------------------------------------
 
--- account_master
+-- accounting.account_master
 --   account_code text
 --   account_name text
 --   category text
@@ -39,7 +39,7 @@
 --   is_active boolean
 --   sort_order integer
 
--- account_subaccount_map
+-- accounting.account_subaccount_map
 --   company_id bigint
 --   account_code text
 --   subaccount_id bigint
@@ -137,7 +137,7 @@
 --   subaccount_name_snapshot text
 --   created_at timestamp with time zone
 
--- subaccount_master
+-- accounting.subaccount_master
 --   subaccount_id bigint
 --   company_id bigint
 --   subaccount_code text
@@ -767,8 +767,10 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 -- -----------------------------------------------------------------------------
 
 -- Sql/quick_entry_account_master_updates.sql adjusts account/subaccount master data
--- for receipt quick-entry UI choices. The intended active expense subjects include:
---   前渡金, 給料手当, 外注費, 水道光熱費, 通信費, リース費, 衛生費,
+-- for receipt quick-entry UI choices. The accounting masters are in the
+-- accounting schema and company_master remains in public. The intended active
+-- expense subjects include:
+--   前渡金, 給料手当, 外注費, 水道光熱費, 通信費, リース料, 衛生費,
 --   広告宣伝費, 仕入高, 消耗品費, 保険料, 旅費交通費, 地代家賃,
 --   租税公課, 福利厚生費, 会議費, 接待交際費, 雑費.
 -- The executable SQL file is currently the source of truth for account_code and

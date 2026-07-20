@@ -30,7 +30,7 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 | `Sql/store_rpc/08_checkout_ready.sql` | 会計伝票、会計準備、支払確定、領収書印刷データを扱う。 |
 | `Sql/store_rpc/99_grants.sql` | アプリRPCの直接PostgREST実行権限を剥奪する。RPC追加時はこの対象一覧も更新する。 |
 | `Sql/store_table_master_seed.sql` | mieu本店の卓番マスタ初期データ。 |
-| `Sql/quick_entry_account_master_updates.sql` | 領収書簡易入力UIで使う科目・補助科目の追加更新SQL。実行前に文字化け有無を確認する。 |
+| `Sql/quick_entry_account_master_updates.sql` | 領収書簡易入力UIで使う科目・補助科目の追加更新SQL。会計マスタは `accounting` schema、会社マスタは `public` schema を完全修飾し、有効会社だけを対象にする。会計データを変更するため、対象会社・補助科目・マップ件数を確認してから実行する。 |
 | `Sql/agent_schema_reference.sql` | エージェント向けの参照用スキーマ集約ファイル。実行対象ではない。 |
 
 DB反映時の基本順序は以下。

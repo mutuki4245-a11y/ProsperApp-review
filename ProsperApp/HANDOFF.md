@@ -91,7 +91,7 @@
 
 - `Sql/quick_entry_account_master_updates.sql`
   - 領収書簡易入力UIで使う科目・補助科目の追加更新SQLです。
-  - 文字化けが残っている可能性があるため、実行前に内容確認が必要です。
+  - 会計マスタは `accounting` schema、会社マスタは `public` schema を完全修飾し、有効会社だけを対象にします。UTF-8確認済みです。会計データを変更するため、対象会社・補助科目・マップ件数を確認してから実行してください。
 
 - `Sql/store_table_master_seed.sql`
   - mieu本店の卓番マスタ初期データです。
@@ -550,7 +550,7 @@ Azure App Service側のアプリ設定には、上記の `Supabase__...`、`Goog
 ## 注意点
 
 - `AGENTS.md` は現在PowerShell表示上で文字化けして見える場合があります。UTF-8前提で扱ってください。
-- `Sql/quick_entry_account_master_updates.sql` には実際に文字化けした日本語が残っている可能性があります。実行前に修正してください。
+- `Sql/quick_entry_account_master_updates.sql` はUTF-8で確認済みです。対象環境では有効会社7社、`SUB015`から`SUB048`の補助科目238件、対応する科目マップ0件を確認しています。適用は会計データ変更になるため、対象会社と必要なマップを確認してから行ってください。
 - サブエージェントには単純な調査・軽量レビュー・低リスク編集だけを委任します。
 - SQL/RPC設計、会計、給与、認証、RLS、Google Drive権限まわりの判断はメインCodexが行います。
 - このフォルダはGitリポジトリとして利用できる。共有作業中は最初に `git status --short` を確認し、他者の差分を戻さない。
@@ -559,5 +559,5 @@ Azure App Service側のアプリ設定には、上記の `Supabase__...`、`Goog
 
 1. P1の残りとして、実端末の複数決済フォーム・会計取消ボタン、localStorage欠落・端末再読込時の復旧、`checkout_ready` 中の指名・カラオケを含む残りの編集拒否、初回成功応答未達からの初回領収書を確認する。
 2. SII紙面の80mm日本語、改行・幅・収入印紙欄・担当者印欄を実測記録し、税理士確認へ渡す。
-3. `quick_entry_account_master_updates.sql` の文字化けを修正する。
+3. `quick_entry_account_master_updates.sql` の対象会社・補助科目・科目マップを確認し、必要なら別途適用する。
 4. 締め作業をステップ式に整理する。
