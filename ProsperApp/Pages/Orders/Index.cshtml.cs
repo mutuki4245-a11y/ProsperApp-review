@@ -77,7 +77,7 @@ public class IndexModel(
             {
                 id = slip.SlipId,
                 display = slip.TableDisplayName,
-                openedTime = StoreBusinessTime.FormatStoreTime(slip.OpenedAt),
+                openedTime = StoreBusinessTime.FormatBusinessTime(slip.OpenedAt),
                 customerCount = slip.CustomerCount,
                 customerNames = slip.CustomerDisplayName,
                 nominationCastIds = slip.NominationCastIdList,

@@ -23,4 +23,14 @@ public static class StoreBusinessTime
     {
         return Clock.FormatStoreTime(value, fallback);
     }
+
+    public static string FormatBusinessTime(DateTimeOffset value)
+    {
+        return Clock.FormatBusinessTime(value);
+    }
+
+    public static string FormatBusinessTime(DateTimeOffset? value, string fallback = "-")
+    {
+        return Clock.FormatBusinessTime(value, fallback);
+    }
 }

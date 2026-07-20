@@ -90,11 +90,11 @@
                                                 {
                                                     if (Model.LeaveCustomerInput.LeftTime == time)
                                                     {
-                                                        <option value="@time" selected>@time</option>
+                                                        <option value="@time" selected>@Model.FormatBusinessTimeOption(time)</option>
                                                     }
                                                     else
                                                     {
-                                                        <option value="@time">@time</option>
+                                                        <option value="@time">@Model.FormatBusinessTimeOption(time)</option>
                                                     }
                                                 }
                                             </select>
@@ -160,11 +160,11 @@
                                     {
                                         if (Model.AddCustomersInput.EnteredTime == time)
                                         {
-                                            <option value="@time" selected>@time</option>
+                                            <option value="@time" selected>@Model.FormatBusinessTimeOption(time)</option>
                                         }
                                         else
                                         {
-                                            <option value="@time">@time</option>
+                                            <option value="@time">@Model.FormatBusinessTimeOption(time)</option>
                                         }
                                     }
                                 </select>

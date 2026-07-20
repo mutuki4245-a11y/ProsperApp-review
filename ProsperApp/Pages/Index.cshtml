@@ -149,11 +149,11 @@
                                             {
                                                 if (Model.CreateSlipInput.OpenedTime == time)
                                                 {
-                                                    <option value="@time" selected>@time</option>
+                                                    <option value="@time" selected>@Model.FormatBusinessTimeOption(time)</option>
                                                 }
                                                 else
                                                 {
-                                                    <option value="@time">@time</option>
+                                                    <option value="@time">@Model.FormatBusinessTimeOption(time)</option>
                                                 }
                                             }
                                         </select>
@@ -304,7 +304,7 @@
                             <select class="form-select form-select-lg" data-business-checkout-closed-time aria-label="退店時刻">
                                 @foreach (var time in Model.TimeOptions)
                                 {
-                                    <option value="@time">@time</option>
+                                    <option value="@time">@Model.FormatBusinessTimeOption(time)</option>
                                 }
                             </select>
                             <p class="text-muted mb-0">出力すると会計準備中になり、伝票内容を変更できません。</p>

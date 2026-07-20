@@ -88,11 +88,18 @@ public partial class SlipEditModel
 
     public string FormatStoreTime(DateTimeOffset value)
     {
-        return _storeClock.FormatStoreTime(value);
+        return _storeClock.FormatBusinessTime(value);
     }
 
     public string FormatStoreTime(DateTimeOffset? value, string fallback = "-")
     {
-        return _storeClock.FormatStoreTime(value, fallback);
+        return _storeClock.FormatBusinessTime(value, fallback);
+    }
+
+    public string FormatBusinessTimeOption(string value)
+    {
+        return TimeOnly.TryParse(value, out var time)
+            ? _storeClock.FormatBusinessTime(time)
+            : value;
     }
 }

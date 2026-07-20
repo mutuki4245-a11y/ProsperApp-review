@@ -747,7 +747,7 @@ public class SupabaseStoreSlipRepository(
 
         if (rawError.Contains("invalid_left_at", StringComparison.OrdinalIgnoreCase))
         {
-            return "退店時刻は入店時刻以降で入力してください。";
+            return "退店時刻は入店時刻より後にしてください。";
         }
 
         if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||

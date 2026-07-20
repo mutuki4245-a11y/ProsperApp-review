@@ -19,4 +19,10 @@ public interface IStoreClock
     string FormatStoreTime(DateTimeOffset value);
 
     string FormatStoreTime(DateTimeOffset? value, string fallback = "-");
+
+    string FormatBusinessTime(TimeOnly value);
+
+    string FormatBusinessTime(DateTimeOffset value);
+
+    string FormatBusinessTime(DateTimeOffset? value, string fallback = "-");
 }

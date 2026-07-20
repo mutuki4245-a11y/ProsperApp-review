@@ -181,9 +181,9 @@ public static class SlipCustomerEditor
         if (input.LeftAt is not null)
         {
             var customer = detail.Customers.FirstOrDefault(x => x.SlipCustomerId == input.SlipCustomerId);
-            if (customer is not null && input.LeftAt.Value < storeClock.ToStoreDateTime(customer.EnteredAt))
+            if (customer is not null && input.LeftAt.Value <= storeClock.ToStoreDateTime(customer.EnteredAt))
             {
-                errors.Add(new SlipCustomerValidationError(LeaveLeftTimeKey, "退店時刻は入店時刻以降で入力してください。"));
+                errors.Add(new SlipCustomerValidationError(LeaveLeftTimeKey, "退店時刻は入店時刻より後にしてください。"));
             }
         }
 

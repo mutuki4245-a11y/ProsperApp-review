@@ -79,6 +79,24 @@ public sealed class StoreClock : IStoreClock
         return value is null ? fallback : FormatStoreTime(value.Value);
     }
 
+    public string FormatBusinessTime(TimeOnly value)
+    {
+        var displayHour = value.Hour < BusinessDaySwitchTime.Hour
+            ? value.Hour + 24
+            : value.Hour;
+        return $"{displayHour:00}:{value.Minute:00}";
+    }
+
+    public string FormatBusinessTime(DateTimeOffset value)
+    {
+        return FormatBusinessTime(TimeOnly.FromDateTime(ToStoreDateTime(value)));
+    }
+
+    public string FormatBusinessTime(DateTimeOffset? value, string fallback = "-")
+    {
+        return value is null ? fallback : FormatBusinessTime(value.Value);
+    }
+
     private static TimeZoneInfo GetStoreTimeZone()
     {
         try

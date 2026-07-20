@@ -460,15 +460,16 @@ public class AttendanceModel(
                 }
             }
 
-            if (CurrentBusinessDay is not null &&
+            var businessDate = CurrentBusinessDay?.BusinessDate ?? CurrentBusinessDate;
+            if (businessDate != default &&
                 clockInTime is { } validClockInTime &&
                 clockOutTime is { } validClockOutTime &&
-                _storeClock.ComposeBusinessDateTime(CurrentBusinessDay.BusinessDate, validClockOutTime) <
-                _storeClock.ComposeBusinessDateTime(CurrentBusinessDay.BusinessDate, validClockInTime))
+                _storeClock.ComposeBusinessDateTime(businessDate, validClockOutTime) <=
+                _storeClock.ComposeBusinessDateTime(businessDate, validClockInTime))
             {
                 ModelState.AddModelError(
                     $"Input.Entries[{i}].ClockOutTime",
-                    $"{entry.DisplayName} の退勤時刻は出勤時刻以降にしてください。");
+                    $"{entry.DisplayName} の退勤時刻は出勤時刻より後にしてください。");
             }
         }
     }

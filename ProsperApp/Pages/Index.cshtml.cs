@@ -111,6 +111,13 @@ public class IndexModel(
 
     public bool CanCreateSlip => CanCreateSalesInput && AttendanceCasts.Count > 0;
 
+    public string FormatBusinessTimeOption(string value)
+    {
+        return TimeOnly.TryParse(value, out var time)
+            ? _storeClock.FormatBusinessTime(time)
+            : value;
+    }
+
     public bool ShouldShowCreateSlipButton => SlipsEnabled;
 
     public string? CreateSlipDisabledMessage => !SlipsEnabled
@@ -205,7 +212,7 @@ public class IndexModel(
             {
                 id = slip.SlipId,
                 tableDisplay = slip.TableDisplayName,
-                openedTime = StoreBusinessTime.FormatStoreTime(slip.OpenedAt),
+                openedTime = StoreBusinessTime.FormatBusinessTime(slip.OpenedAt),
                 status = slip.Status,
                 statusDisplay = ToSlipStatusDisplay(slip.Status),
                 statusBadgeClass = ToSlipStatusBadgeClass(slip.Status),
