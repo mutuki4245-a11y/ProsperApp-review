@@ -299,6 +299,37 @@
   grid-row: 1 / span 2;
 }
 
+.slip-list__details {
+  border-top: 1px solid #e2e8f0;
+  grid-column: 1 / -1;
+  padding: 0.7rem 0.2rem 0.1rem;
+}
+
+.slip-list__details-grid {
+  display: grid;
+  gap: 0.55rem 0.85rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.slip-list__detail-item {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.slip-list__detail-item span {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.slip-list__detail-item strong {
+  color: #102a43;
+  font-size: 0.9rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .nomination-list {
   display: grid;
   gap: 0.75rem;
@@ -1422,6 +1453,10 @@
 
   .slip-list__row {
     padding: 0.65rem;
+  }
+
+  .slip-list__details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .slip-list__karaoke {

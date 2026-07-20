@@ -216,6 +216,9 @@ public class BusinessSlipListItem
     public int CustomerCount { get; set; }
     public string? CustomerNames { get; set; }
     public string? CastNames { get; set; }
+    public int OrderCount { get; set; }
+    public decimal OrderSubtotalAmount { get; set; }
+    public decimal AdjustmentAmount { get; set; }
     public decimal AccountingAmount { get; set; }
     public decimal KaraokeQuantity { get; set; }
     public string? Memo { get; set; }

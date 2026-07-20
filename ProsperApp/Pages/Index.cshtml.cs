@@ -211,6 +211,9 @@ public class IndexModel(
                 statusBadgeClass = ToSlipStatusBadgeClass(slip.Status),
                 customerNames = string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames,
                 castNames = string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames,
+                orderCount = slip.OrderCount,
+                orderSubtotalAmount = slip.OrderSubtotalAmount,
+                adjustmentAmount = slip.AdjustmentAmount,
                 memo = string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo,
                 accountingAmount = slip.AccountingAmount,
                 karaokeQuantity = slip.KaraokeQuantity

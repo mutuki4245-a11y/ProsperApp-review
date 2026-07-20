@@ -156,6 +156,9 @@ public class SupabaseStoreSlipRepository(
                 CustomerCount = (int)(ReadLong(row, "customer_count") ?? 0),
                 CustomerNames = ReadString(row, "customer_names"),
                 CastNames = NormalizeCastDisplayNameList(ReadString(row, "cast_names")),
+                OrderCount = (int)(ReadLong(row, "order_count") ?? 0),
+                OrderSubtotalAmount = ReadDecimal(row, "order_subtotal_amount") ?? 0,
+                AdjustmentAmount = ReadDecimal(row, "adjustment_amount") ?? 0,
                 AccountingAmount = ReadDecimal(row, "accounting_amount") ?? 0,
                 KaraokeQuantity = ReadDecimal(row, "karaoke_quantity") ?? 0,
                 Memo = ReadString(row, "memo")

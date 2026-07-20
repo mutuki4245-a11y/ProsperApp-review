@@ -192,6 +192,9 @@ returns table (
     customer_count integer,
     customer_names text,
     cast_names text,
+    order_count integer,
+    order_subtotal_amount numeric,
+    adjustment_amount numeric,
     accounting_amount numeric,
     karaoke_quantity numeric,
     memo text
@@ -261,6 +264,7 @@ as $$
     order_summary as (
         select
             l.slip_id,
+            count(*) filter (where l.status = 'active')::integer as order_count,
             coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount,
             coalesce(sum(l.quantity) filter (where l.status = 'active' and i.item_type = 'karaoke'), 0) as karaoke_quantity
         from target_slips s
@@ -273,7 +277,7 @@ as $$
     charge_summary as (
         select
             cl.slip_id,
-            coalesce(sum(cl.amount) filter (where cl.charge_type = 'adjustment' and cl.status = 'active'), 0) as charge_amount
+            coalesce(sum(cl.amount) filter (where cl.charge_type = 'adjustment' and cl.status = 'active'), 0) as adjustment_amount
         from target_slips s
         join public.store_slip_charge_lines cl
           on cl.slip_id = s.slip_id
@@ -290,10 +294,13 @@ as $$
         coalesce(cs.customer_count, ts.customer_count) as customer_count,
         coalesce(cs.customer_names, '') as customer_names,
         coalesce(casts.cast_names, '') as cast_names,
+        coalesce(os.order_count, 0)::integer as order_count,
+        coalesce(os.order_subtotal_amount, 0) as order_subtotal_amount,
+        coalesce(charges.adjustment_amount, 0) as adjustment_amount,
         greatest(
             coalesce(os.order_subtotal_amount, 0) +
             round(coalesce(os.order_subtotal_amount, 0) * 0.20, 0) +
-            coalesce(charges.charge_amount, 0),
+            coalesce(charges.adjustment_amount, 0),
             0
         ) as accounting_amount,
         coalesce(os.karaoke_quantity, 0) as karaoke_quantity,

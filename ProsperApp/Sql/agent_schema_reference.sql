@@ -645,7 +645,8 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     creates an active cast for the current store. joined_on is set to the current Asia/Tokyo date.
 --   store.get_business_day_slips(p_department_id bigint, p_business_day_id bigint)
 --     returns slip_id, slip_no, table_id, table_code, table_name, opened_at, status,
---       customer_count, customer_names, cast_names, accounting_amount, karaoke_quantity, memo
+--       customer_count, customer_names, cast_names, order_count, order_subtotal_amount,
+--       adjustment_amount, accounting_amount, karaoke_quantity, memo
 --   store.get_order_entry_slips(p_department_id bigint, p_business_day_id bigint)
 --     returns slip_id, table_id, table_code, table_name, opened_at, customer_count,
 --       customer_names, nomination_cast_ids, nomination_cast_names, memo

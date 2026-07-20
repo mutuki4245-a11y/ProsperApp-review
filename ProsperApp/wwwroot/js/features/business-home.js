@@ -21,6 +21,7 @@
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
     let slips = [];
+    const expandedSlipIds = new Set();
     let hasLoaded = false;
     let refreshInFlight = false;
     let isSaving = false;
@@ -28,6 +29,10 @@
     let allowPageUnload = false;
 
     const formatYen = window.MoneyText.yen;
+    const formatSignedYen = (value) => {
+        const amount = Math.round(Number(value) || 0);
+        return amount < 0 ? `-${formatYen(Math.abs(amount))}` : formatYen(amount);
+    };
     const toQuantity = (value) => Math.max(0, Math.trunc(Number(value) || 0));
     const setText = (element, text) => {
         if (element && element.textContent !== String(text)) {
@@ -347,6 +352,51 @@
         setText(amountValue, formatYen(baseAmount + displayQuantity * accountingUnit));
     };
 
+    const buildSlipDetails = () => {
+        const panel = buildElement('section', 'slip-list__details');
+        panel.dataset.businessSlipDetails = '';
+        const fields = buildElement('div', 'slip-list__details-grid');
+        [
+            ['客', 'customers'],
+            ['指名', 'casts'],
+            ['注文', 'orders'],
+            ['自由明細', 'adjustments']
+        ].forEach(([label, field]) => {
+            const item = buildElement('div', 'slip-list__detail-item');
+            item.append(buildElement('span', null, label));
+            const value = buildElement('strong');
+            value.dataset.businessSlipDetail = field;
+            item.appendChild(value);
+            fields.appendChild(item);
+        });
+        panel.appendChild(fields);
+        return panel;
+    };
+
+    const syncSlipDetails = (row, slip) => {
+        const panel = row.querySelector('[data-business-slip-details]');
+        const toggle = row.querySelector('[data-business-slip-details-toggle]');
+        if (!panel || !toggle) {
+            return;
+        }
+
+        const isExpanded = expandedSlipIds.has(String(slip.id));
+        const panelId = `business-slip-details-${slip.id}`;
+        panel.id = panelId;
+        panel.hidden = !isExpanded;
+        toggle.dataset.businessSlipDetailsToggle = String(slip.id);
+        toggle.setAttribute('aria-controls', panelId);
+        toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        toggle.textContent = isExpanded ? '閉じる' : '詳細';
+        setText(panel.querySelector('[data-business-slip-detail="customers"]'), slip.customerNames || '客名なし');
+        setText(panel.querySelector('[data-business-slip-detail="casts"]'), slip.castNames || '指名なし');
+        setText(
+            panel.querySelector('[data-business-slip-detail="orders"]'),
+            `${Number(slip.orderCount) || 0}件 / ${formatYen(slip.orderSubtotalAmount)}`
+        );
+        setText(panel.querySelector('[data-business-slip-detail="adjustments"]'), formatSignedYen(slip.adjustmentAmount));
+    };
+
     const syncSlipRow = (row, slip) => {
         row.dataset.slipId = String(slip.id);
 
@@ -377,6 +427,7 @@
             cancelButton.dataset.businessCancelCheckout = String(slip.id);
         }
         syncKaraokeControl(row, slip);
+        syncSlipDetails(row, slip);
     };
 
     const buildSlipRow = (slip) => {
@@ -400,6 +451,9 @@
         main.append(table, statusElement, openedTime, customers, casts, memo);
         main.appendChild(buildAmountElement(slip));
         const actions = buildElement('div', 'slip-list__actions');
+        const detailsToggle = buildElement('button', 'btn btn-sm btn-outline-secondary', '詳細');
+        detailsToggle.type = 'button';
+        detailsToggle.dataset.businessSlipDetailsToggle = '';
         const checkoutButton = buildElement('button', 'btn btn-sm btn-primary');
         checkoutButton.type = 'button';
         checkoutButton.dataset.businessStartCheckout = '';
@@ -409,8 +463,8 @@
         const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
-        actions.append(checkoutButton, receiptButton, cancelButton);
-        row.append(main, actions);
+        actions.append(detailsToggle, checkoutButton, receiptButton, cancelButton);
+        row.append(main, actions, buildSlipDetails());
 
         syncSlipRow(row, slip);
 
@@ -419,6 +473,11 @@
 
     const renderSlips = () => {
         cleanupDraft();
+        expandedSlipIds.forEach((slipId) => {
+            if (!getSlip(slipId)) {
+                expandedSlipIds.delete(slipId);
+            }
+        });
         if (slips.length === 0) {
             renderEmpty('当日の伝票はまだありません', '最初の伝票作成時に営業日を自動作成します。');
             return;
@@ -568,6 +627,24 @@
     };
 
     form.addEventListener('click', (event) => {
+        const detailsToggle = event.target.closest('[data-business-slip-details-toggle]');
+        if (detailsToggle) {
+            const slip = getSlip(detailsToggle.dataset.businessSlipDetailsToggle);
+            const row = detailsToggle.closest('[data-business-slip-row]');
+            if (!slip || !row) {
+                return;
+            }
+
+            const slipId = String(slip.id);
+            if (expandedSlipIds.has(slipId)) {
+                expandedSlipIds.delete(slipId);
+            } else {
+                expandedSlipIds.add(slipId);
+            }
+            syncSlipDetails(row, slip);
+            return;
+        }
+
         const decrement = event.target.closest('[data-business-karaoke-decrement]');
         const increment = event.target.closest('[data-business-karaoke-increment]');
         if (decrement || increment) {
