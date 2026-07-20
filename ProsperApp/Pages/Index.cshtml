@@ -368,6 +368,29 @@
             </div>
         </div>
     }
+
+    @if (Model.SlipsEnabled)
+    {
+        <div class="modal fade" id="businessSlipEditorModal" tabindex="-1" aria-labelledby="businessSlipEditorModalLabel" aria-hidden="true" data-business-slip-editor-modal>
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1" data-business-slip-editor-table>伝票</p>
+                            <h2 class="modal-title fs-4" id="businessSlipEditorModalLabel" data-business-slip-editor-title>編集</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form" data-business-slip-editor-content>
+                        <div class="slip-create__panel slip-detail-panel-loading">編集内容を読み込み中です。</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </section>
 
 @section Scripts {
@@ -405,11 +428,13 @@
             getCheckoutReceiptPrintDataUrl = Url.Page("/Index", "GetCheckoutReceiptPrintData"),
             cancelCheckoutUrl = Url.Page("/Index", "CancelCheckout"),
             slipEditUrl = Url.Page("/Slips/Edit"),
+            businessSlipEditorUrl = Url.Page("/Slips/Edit", "BusinessEditor"),
             businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
             receiptPrinterEnabled = Model.IsReceiptPrinterEnabled
         });
     </script>
     <script src="~/js/features/business-home.js" asp-append-version="true"></script>
+    <script src="~/js/features/business-slip-editor.js" asp-append-version="true"></script>
     <script src="~/js/features/business-checkout.js" asp-append-version="true"></script>
     <script>
         window.prosperCreateSlip = @Json.Serialize(new

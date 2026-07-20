@@ -44,6 +44,9 @@ public partial class SlipEditModel(
     public string OrderQueueJson { get; set; } = string.Empty;
 
     [BindProperty]
+    public string? EditorSurface { get; set; }
+
+    [BindProperty]
     public SlipAdjustmentInputModel AdjustmentInput { get; set; } = new();
 
     [BindProperty]
@@ -70,6 +73,8 @@ public partial class SlipEditModel(
     public bool ShowAddNominationModal { get; private set; }
 
     public bool ShowAdjustmentModal { get; private set; }
+
+    public string? BusinessEditorUnavailableMessage { get; private set; }
 
     public bool CanAddOrders => _featureGate.IsEnabled(FeatureNames.Orders)
         && Detail is not null

@@ -1,0 +1,98 @@
+@using ProsperApp.Models
+@model SlipEditModel
+@{
+    var nominationOptions = Model.NominationOptions
+        .Select(x => (Value: x.NominationKind, Label: x.DisplayName, IsCompanion: string.Equals(x.NominationType, "companion", StringComparison.Ordinal)))
+        .ToArray();
+    var nominations = Model.Detail?.Nominations.OrderBy(x => x.StartedAt).ToList() ?? [];
+    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = nominationOptions.FirstOrDefault().Value };
+    var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
+}
+
+<div data-business-slip-editor-result="nominations">
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    <section class="slip-create__panel">
+        <div class="slip-create__panel-title">
+            <div class="slip-create__panel-heading">
+                <h3>指名一覧</h3>
+                <small>@nominations.Count 件 / @StoreUiText.Yen(nominations.Sum(x => x.NominationPrice))</small>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 slip-detail-table slip-detail-table--nominations">
+                <thead><tr><th>時刻</th><th>区分</th><th>キャスト</th><th class="text-end">指名料金</th></tr></thead>
+                <tbody>
+                    @if (nominations.Count == 0)
+                    {
+                        <tr><td colspan="4" class="text-muted">指名はまだ登録されていません。</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var nomination in nominations)
+                        {
+                            <tr>
+                                <td>@Model.FormatStoreTime(nomination.StartedAt)</td>
+                                <td>@nomination.NominationDisplayName</td>
+                                <td>@nomination.CastDisplayName</td>
+                                <td class="text-end">@StoreUiText.Amount(nomination.NominationPrice)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (Model.AttendanceCasts.Count == 0)
+    {
+        <div class="alert alert-secondary mt-3 mb-0">出勤キャストが未登録です。指名を追加するには勤怠入力で出勤者を登録してください。</div>
+    }
+    else if (nominationOptions.Length == 0)
+    {
+        <div class="alert alert-secondary mt-3 mb-0">指名種別マスタが未登録です。</div>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="AddNominations" class="slip-create__panel mt-3" data-business-slip-editor-form>
+            <input type="hidden" asp-for="SlipId" />
+            <input type="hidden" name="EditorSurface" value="business-home" />
+            <div class="slip-create__panel-title"><h3>指名を追加</h3></div>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">指名区分</label>
+                    <select class="form-select form-select-lg nomination-row__kind" name="AddNominationsInput.CastNominations[0].NominationKind">
+                        <option value="">指名区分</option>
+                        @foreach (var option in nominationOptions)
+                        {
+                            <option value="@option.Value" selected="@(addNomination.NominationKind == option.Value)" data-companion="@option.IsCompanion.ToString().ToLowerInvariant()">@option.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">指名料金</label>
+                    <select class="form-select form-select-lg nomination-row__price" name="AddNominationsInput.CastNominations[0].NominationPrice">
+                        @foreach (var price in nominationPriceOptions)
+                        {
+                            <option value="@price" selected="@(addNomination.NominationPrice == price)">@StoreUiText.Yen(price)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">キャスト</label>
+                    <select class="form-select form-select-lg" name="AddNominationsInput.CastNominations[0].CastId">
+                        <option value="">キャストを選択</option>
+                        @foreach (var cast in Model.AttendanceCasts)
+                        {
+                            var label = string.IsNullOrWhiteSpace(cast.DepartmentName) ? cast.DisplayName : $"{cast.DisplayName} / {cast.DepartmentName}";
+                            <option value="@cast.CastId" selected="@(addNomination.CastId == cast.CastId)">@label</option>
+                        }
+                    </select>
+                    <span asp-validation-for="AddNominationsInput.CastNominations[0].CastId" class="text-danger"></span>
+                </div>
+                <div class="col-md-2 d-grid"><button class="btn btn-primary btn-lg" type="submit">追加</button></div>
+            </div>
+            <span asp-validation-for="AddNominationsInput.CastNominations" class="text-danger"></span>
+        </form>
+    }
+</div>

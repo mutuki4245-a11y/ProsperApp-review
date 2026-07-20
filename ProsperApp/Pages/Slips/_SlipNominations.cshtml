@@ -1,6 +1,18 @@
 @using ProsperApp.Models
 @model SlipEditModel
-@{
+@if (string.Equals(Model.EditorSurface, "business-home", StringComparison.Ordinal))
+{
+    @if (Model.IsOpenSlip)
+    {
+        <partial name="_BusinessSlipNominations" model="Model" />
+    }
+    else
+    {
+        <div class="alert alert-warning mb-0" role="alert">この伝票は会計準備中または会計済みのため編集できません。営業中一覧を再表示してください。</div>
+    }
+}
+else
+{
     var nominationOptions = Model.NominationOptions
         .Select(x => (Value: x.NominationKind, Label: x.DisplayName))
         .ToArray();
@@ -13,7 +25,6 @@
     var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = nominationOptions.FirstOrDefault().Value };
     var nominationCount = Model.Detail?.Nominations.Count ?? 0;
     var nominationTotal = Model.Detail?.Nominations.Sum(x => x.NominationPrice) ?? 0;
-}
 
 <div class="slip-create__panel" id="slipNominationsPanel">
     <div class="slip-create__panel-title">
@@ -162,4 +173,5 @@
             </div>
         </div>
     </div>
+}
 }

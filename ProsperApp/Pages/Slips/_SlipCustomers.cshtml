@@ -1,10 +1,21 @@
 @model SlipEditModel
-@{
+@if (string.Equals(Model.EditorSurface, "business-home", StringComparison.Ordinal))
+{
+    @if (Model.IsOpenSlip)
+    {
+        <partial name="_BusinessSlipCustomers" model="Model" />
+    }
+    else
+    {
+        <div class="alert alert-warning mb-0" role="alert">この伝票は会計準備中または会計済みのため編集できません。営業中一覧を再表示してください。</div>
+    }
+}
+else
+{
     var nextCustomerLineNo = (Model.Detail?.Customers.Select(x => x.LineNo).DefaultIfEmpty(0).Max() ?? 0) + 1;
     var customerColumnCount = Model.IsOpenSlip ? 5 : 4;
     var customerCount = Model.Detail?.Customers.Count ?? 0;
     var activeCustomerCount = Model.Detail?.Customers.Count(x => string.Equals(x.Status, "active", StringComparison.Ordinal)) ?? 0;
-}
 
 <div class="slip-create__panel" id="slipCustomersPanel">
     <div class="slip-create__panel-title">
@@ -179,4 +190,5 @@
             </div>
         </div>
     </div>
+}
 }

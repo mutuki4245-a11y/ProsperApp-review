@@ -378,10 +378,20 @@
             fields.appendChild(item);
         });
         const actions = buildElement('div', 'slip-list__details-actions');
-        const editLink = buildElement('a', 'btn btn-sm btn-outline-primary', '編集');
-        editLink.dataset.businessSlipEdit = '';
-        editLink.dataset.businessFlushKaraoke = '';
-        actions.appendChild(editLink);
+        [
+            ['customers', '客を編集'],
+            ['nominations', '指名を編集'],
+            ['adjustments', '自由明細を編集']
+        ].forEach(([section, label]) => {
+            const button = buildElement('button', 'btn btn-sm btn-outline-primary', label);
+            button.type = 'button';
+            button.dataset.businessSlipEditor = section;
+            actions.appendChild(button);
+        });
+        const detailLink = buildElement('a', 'btn btn-sm btn-outline-secondary', '詳細画面');
+        detailLink.dataset.businessSlipEdit = '';
+        detailLink.dataset.businessFlushKaraoke = '';
+        actions.appendChild(detailLink);
         panel.append(fields, actions);
         return panel;
     };
@@ -408,9 +418,17 @@
             `${Number(slip.orderCount) || 0}件 / ${formatYen(slip.orderSubtotalAmount)}`
         );
         setText(panel.querySelector('[data-business-slip-detail="adjustments"]'), formatSignedYen(slip.adjustmentAmount));
+        const canEdit = slip.status === 'open';
+        panel.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
+            button.hidden = !canEdit;
+            if (canEdit) {
+                button.dataset.businessSlipId = String(slip.id);
+            } else {
+                delete button.dataset.businessSlipId;
+            }
+        });
         const editLink = panel.querySelector('[data-business-slip-edit]');
         if (editLink) {
-            const canEdit = slip.status === 'open';
             editLink.hidden = !canEdit;
             if (canEdit) {
                 editLink.href = buildSlipEditUrl(slip.id);
@@ -564,6 +582,9 @@
             hasLoaded = true;
             updateSummary(result);
             renderSlips();
+            document.dispatchEvent(new CustomEvent('prosper:business-slips-updated', {
+                detail: { slips }
+            }));
             if (!isSaving) {
                 markDirtyStatus();
             }

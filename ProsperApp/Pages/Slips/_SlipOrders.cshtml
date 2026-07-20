@@ -1,5 +1,17 @@
 @model SlipEditModel
-@{
+@if (string.Equals(Model.EditorSurface, "business-home", StringComparison.Ordinal))
+{
+    @if (Model.IsOpenSlip)
+    {
+        <partial name="_BusinessSlipAdjustments" model="Model" />
+    }
+    else
+    {
+        <div class="alert alert-warning mb-0" role="alert">この伝票は会計準備中または会計済みのため編集できません。営業中一覧を再表示してください。</div>
+    }
+}
+else
+{
     var detail = Model.Detail!;
     var activeOrders = detail.Orders
         .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal))
@@ -27,7 +39,6 @@
     var orderItemGroups = orderableItems
         .GroupBy(x => x.CategoryName)
         .ToList();
-}
 
         <div class="slip-create__panel" data-order-correction-panel>
             <div class="slip-create__panel-title">
@@ -372,3 +383,4 @@
                 </div>
             </div>
         }
+}
