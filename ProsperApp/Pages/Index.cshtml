@@ -61,6 +61,10 @@
                         <strong>会計済</strong>
                         <span data-business-checked-out-slip-count>取得中</span>
                     </span>
+                    <span class="sales-summary__item sales-summary__item--estimated">
+                        <strong>見込み売上</strong>
+                        <span data-business-estimated-sales-amount>@StoreUiText.Yen(Model.EstimatedSalesAmount)</span>
+                    </span>
                 </div>
                 <div class="sales-summary__actions">
                     @if (Model.ShouldShowCreateSlipButton)

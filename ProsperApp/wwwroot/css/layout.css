@@ -335,6 +335,19 @@
   font-size: 0.9rem;
 }
 
+.sales-summary__item--estimated {
+  color: #64748b;
+}
+
+.sales-summary__item--estimated strong {
+  color: #475569;
+  font-size: 0.78rem;
+}
+
+.sales-summary__item--estimated span {
+  font-size: 0.82rem;
+}
+
 .sales-summary__actions {
   align-items: center;
   display: flex;

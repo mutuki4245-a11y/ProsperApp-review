@@ -15,6 +15,7 @@
     const createDateDisplay = document.querySelector('[data-business-create-date-display]');
     const openSlipCount = document.querySelector('[data-business-open-slip-count]');
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
+    const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
     const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
     const refreshIntervalMs = 10000;
@@ -265,6 +266,9 @@
         }
         if (checkedOutSlipCount) {
             checkedOutSlipCount.textContent = `${Number(result?.checkedOutSlipCount) || 0} 件`;
+        }
+        if (estimatedSalesAmount) {
+            estimatedSalesAmount.textContent = formatYen(Number(result?.estimatedSalesAmount) || 0);
         }
     };
 

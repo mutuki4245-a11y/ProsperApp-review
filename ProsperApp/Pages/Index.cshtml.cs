@@ -85,6 +85,10 @@ public class IndexModel(
 
     public int CheckedOutSlipCount => Slips.Count(x => x.Status == "checked_out");
 
+    public decimal EstimatedSalesAmount => Slips
+        .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+        .Sum(x => x.AccountingAmount);
+
     public bool HasAnySlip => Slips.Count > 0;
 
     public bool HasCurrentBusinessDay => HasValidBusinessDate(CurrentBusinessDay);
@@ -175,6 +179,7 @@ public class IndexModel(
                 hasBusinessDay = false,
                 openSlipCount = 0,
                 checkedOutSlipCount = 0,
+                estimatedSalesAmount = 0,
                 slips = Array.Empty<object>()
             });
         }
@@ -193,6 +198,9 @@ public class IndexModel(
             hasBusinessDay = hasValidBusinessDate,
             openSlipCount = slips.Count(x => x.Status is "open" or "checkout_ready"),
             checkedOutSlipCount = slips.Count(x => x.Status == "checked_out"),
+            estimatedSalesAmount = slips
+                .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                .Sum(x => x.AccountingAmount),
             slips = slips.Select(slip => new
             {
                 id = slip.SlipId,
