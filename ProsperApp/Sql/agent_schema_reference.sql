@@ -171,11 +171,13 @@ create table if not exists public.store_table_master (
     department_id bigint not null references public.department_master(department_id),
     table_code text not null,
     table_name text,
+    table_category_no smallint not null default 0,
     sort_order integer not null default 0,
     is_active boolean not null default true,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
-    constraint uq_store_table_master_code unique (company_id, department_id, table_code)
+    constraint uq_store_table_master_code unique (company_id, department_id, table_code),
+    constraint chk_store_table_master_category_no check (table_category_no between 0 and 9)
 );
 
 -- cast_master: cast display names and store affiliation. Do not put high-risk HR data here.
@@ -636,7 +638,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 
 -- Slip creation and listing:
 --   store.get_tables(p_department_id bigint)
---     returns table_id, table_code, table_name
+--     returns table_id, table_code, table_name, table_category_no
 --   store.get_casts(p_department_id bigint)
 --     returns cast_id, cast_code, display_name, department_name
 --     includes active casts from all active departments across companies, for help/temporary assignments.

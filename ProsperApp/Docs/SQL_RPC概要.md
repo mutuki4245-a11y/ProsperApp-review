@@ -68,7 +68,7 @@ DB反映時の基本順序は以下。
 | 分類 | テーブル | 概要 |
 | --- | --- | --- |
 | 既存マスタ | `department_master` | 店舗マスタ。店舗別運用設定として勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割を持つ。 |
-| マスタ | `store_table_master` | 店舗ごとの卓番。 |
+| マスタ | `store_table_master` | 店舗ごとの卓番。`table_category_no`（0〜9）でカテゴリ順を持つ。 |
 | マスタ | `cast_master` | キャスト。店舗所属と表示順を持つ。 |
 | マスタ | `store_item_category_master` | 商品カテゴリ。 |
 | マスタ | `store_item_master` | 商品マスタ。価格、商品種別、キャストバック対象、バック単価、バック種別を持つ。カラオケは `item_type = 'karaoke'`、指名料金は `item_type = 'nomination_fee'` のシステム商品。 |
@@ -172,7 +172,7 @@ DB反映時の基本順序は以下。
 
 | RPC | 主な用途 |
 | --- | --- |
-| `store.get_tables` | 卓番候補を返す。 |
+| `store.get_tables` | 卓番候補をカテゴリ番号、既存の表示順、卓番順で返す。 |
 | `store.get_casts` | キャスト候補を返す。ヘルプ対応のため会社を跨いだ全有効店舗所属キャストを含む。 |
 | `store.get_casts_admin` | キャスト管理画面用に、現在店舗所属キャストだけを返す。 |
 | `store.create_cast` | キャストを作成する。 |
@@ -302,7 +302,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.get_departments` | 店舗一覧マスタ。アプリプロセス単位。 | 初回成功時に保持する。アプリ内に店舗マスタ更新画面がないため明示破棄はせず、プロセス再起動または将来の店舗更新機能で更新する。 |
 | `store.delete_non_master_records` | デバッグ削除結果のみ。 | 戻り値のテーブル別削除件数を画面結果表示に使い、キャッシュしない。成功時に現在営業日と指名バック設定のruntimeキャッシュを破棄する。 |
 | `store.get_context` | 店舗別マスタ。`department_id` 単位。 | 通常画面では初回成功時に保持する。店舗別運用設定がアプリ内で更新された場合は破棄が必要。領収書保存時の会社ID取得だけは現状キャッシュを経由せず都度取得する。 |
-| `store.get_tables` | 店舗別マスタ。`department_id` 単位。 | 初回成功時に保持する。卓マスタ更新をアプリ内で扱うまでは明示破棄しない。 |
+| `store.get_tables` | 店舗別マスタ。`department_id` 単位。 | 初回成功時に保持する。卓マスタ更新をアプリ内で扱うまでは明示破棄しないため、SQL更新後はアプリ再起動または再配備で更新する。 |
 | `store.get_casts` | 店舗別キャスト候補。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.delete_cast` 成功時に破棄する。 |
 | `store.get_casts_admin` | 店舗別キャスト管理一覧。`department_id` 単位。 | 初回成功時に保持する。`store.create_cast` / `store.delete_cast` 成功時に `store.get_casts` と同時に破棄する。 |
 | `store.create_cast` | 保存結果のみ。 | 戻り値の `cast_id` を画面結果判定に使い、キャッシュしない。成功時にキャスト候補/管理一覧キャッシュを破棄する。 |

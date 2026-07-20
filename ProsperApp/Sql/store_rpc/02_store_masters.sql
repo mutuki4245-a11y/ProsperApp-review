@@ -1,8 +1,11 @@
+drop function if exists store.get_tables(bigint);
+
 create or replace function store.get_tables(p_department_id bigint)
 returns table (
     table_id bigint,
     table_code text,
-    table_name text
+    table_name text,
+    table_category_no smallint
 )
 language sql
 security definer
@@ -11,11 +14,12 @@ as $$
     select
         t.table_id,
         t.table_code,
-        t.table_name
+        t.table_name,
+        t.table_category_no
     from public.store_table_master t
     where t.department_id = p_department_id
       and t.is_active = true
-    order by t.sort_order asc, t.table_code asc;
+    order by t.table_category_no asc, t.sort_order asc, t.table_code asc;
 $$;
 
 drop function if exists store.get_casts(bigint);
