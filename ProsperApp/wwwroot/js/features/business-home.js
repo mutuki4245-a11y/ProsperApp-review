@@ -17,6 +17,7 @@
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
+    const slipEditUrl = config.slipEditUrl || '/Slips/Edit';
     const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
@@ -27,6 +28,7 @@
     let isSaving = false;
     let savePromise = null;
     let allowPageUnload = false;
+    let navigationInFlight = false;
 
     const formatYen = window.MoneyText.yen;
     const formatSignedYen = (value) => {
@@ -246,6 +248,12 @@
         return !isSamePageHash;
     };
 
+    const buildSlipEditUrl = (slipId) => {
+        const url = new URL(slipEditUrl, window.location.href);
+        url.searchParams.set('slipId', String(slipId));
+        return `${url.pathname}${url.search}${url.hash}`;
+    };
+
     const updateSummary = (result) => {
         const businessDateText = result?.businessDateDisplay || '';
         const businessDateValue = result?.businessDate || '';
@@ -369,7 +377,12 @@
             item.appendChild(value);
             fields.appendChild(item);
         });
-        panel.appendChild(fields);
+        const actions = buildElement('div', 'slip-list__details-actions');
+        const editLink = buildElement('a', 'btn btn-sm btn-outline-primary', '編集');
+        editLink.dataset.businessSlipEdit = '';
+        editLink.dataset.businessFlushKaraoke = '';
+        actions.appendChild(editLink);
+        panel.append(fields, actions);
         return panel;
     };
 
@@ -395,6 +408,16 @@
             `${Number(slip.orderCount) || 0}件 / ${formatYen(slip.orderSubtotalAmount)}`
         );
         setText(panel.querySelector('[data-business-slip-detail="adjustments"]'), formatSignedYen(slip.adjustmentAmount));
+        const editLink = panel.querySelector('[data-business-slip-edit]');
+        if (editLink) {
+            const canEdit = slip.status === 'open';
+            editLink.hidden = !canEdit;
+            if (canEdit) {
+                editLink.href = buildSlipEditUrl(slip.id);
+            } else {
+                editLink.removeAttribute('href');
+            }
+        }
     };
 
     const syncSlipRow = (row, slip) => {
@@ -691,6 +714,31 @@
         event.preventDefault();
         void submitAfterFlush(targetForm, event.submitter);
     }, true);
+
+    document.addEventListener('click', (event) => {
+        const anchor = event.target.closest('a[data-business-flush-karaoke]');
+        if (!anchor || !shouldFlushForAnchor(anchor, event)) {
+            return;
+        }
+
+        event.preventDefault();
+        if (navigationInFlight) {
+            return;
+        }
+
+        navigationInFlight = true;
+        window.AppLoading?.show(anchor);
+        void submitDraft().then((saved) => {
+            if (!saved) {
+                navigationInFlight = false;
+                window.AppLoading?.hide(anchor);
+                return;
+            }
+
+            allowNextPageUnload();
+            window.location.assign(anchor.href);
+        });
+    });
 
     window.addEventListener('keydown', (event) => {
         if (event.key !== 'F5' && !(event.key.toLowerCase() === 'r' && (event.ctrlKey || event.metaKey))) {

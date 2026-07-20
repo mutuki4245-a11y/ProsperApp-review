@@ -311,6 +311,12 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.slip-list__details-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.65rem;
+}
+
 .slip-list__detail-item {
   display: grid;
   gap: 0.15rem;
