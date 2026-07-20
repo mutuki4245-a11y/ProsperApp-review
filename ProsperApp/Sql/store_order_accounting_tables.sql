@@ -609,6 +609,7 @@ create table if not exists public.store_business_days (
     memo text,
     drink_delivery_amount numeric(12, 0) not null default 0,
     drink_delivery_amount_entered boolean not null default false,
+    business_ui_revision bigint not null default 0,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_business_days_status check (status in ('open', 'closed', 'cancelled')),
@@ -676,6 +677,11 @@ alter table public.store_business_days
 
 alter table public.store_business_days
     add column if not exists drink_delivery_amount_entered boolean not null default false;
+
+-- 営業中トップの全伝票スナップショット用の単調増加番号。
+-- 業務データの版ではなく、クライアントが到着順の古い応答を捨てるための番号です。
+alter table public.store_business_days
+    add column if not exists business_ui_revision bigint not null default 0;
 
 update public.store_business_days
    set drink_delivery_amount_entered = true
@@ -1417,6 +1423,79 @@ drop trigger if exists trg_store_business_days_set_updated_at on public.store_bu
 create trigger trg_store_business_days_set_updated_at
 before update on public.store_business_days
 for each row execute function public.set_updated_at();
+
+-- 営業中トップが古い全伝票スナップショットで新しい状態を上書きしないため、
+-- 伝票に属する更新ごとに営業日単位の単調増加番号を進めます。
+create or replace function public.bump_store_business_day_ui_revision_from_slip()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+    v_slip_id bigint;
+    v_business_day_id bigint;
+begin
+    if tg_table_name = 'store_slips' then
+        v_business_day_id := case when tg_op = 'DELETE' then old.business_day_id else new.business_day_id end;
+    elsif tg_table_name = 'store_order_line_cast_backs' then
+        select ol.slip_id
+          into v_slip_id
+        from public.store_order_lines ol
+        where ol.order_line_id = case when tg_op = 'DELETE' then old.order_line_id else new.order_line_id end;
+    else
+        v_slip_id := case when tg_op = 'DELETE' then old.slip_id else new.slip_id end;
+    end if;
+
+    if v_slip_id is not null then
+        select s.business_day_id
+          into v_business_day_id
+        from public.store_slips s
+        where s.slip_id = v_slip_id;
+    end if;
+
+    if v_business_day_id is not null then
+        update public.store_business_days b
+           set business_ui_revision = b.business_ui_revision + 1
+         where b.business_day_id = v_business_day_id;
+    end if;
+
+    if tg_op = 'DELETE' then
+        return old;
+    end if;
+
+    return new;
+end;
+$$;
+
+drop trigger if exists trg_store_slips_business_ui_revision on public.store_slips;
+create trigger trg_store_slips_business_ui_revision
+after insert or update or delete on public.store_slips
+for each row execute function public.bump_store_business_day_ui_revision_from_slip();
+
+drop trigger if exists trg_store_slip_customers_business_ui_revision on public.store_slip_customers;
+create trigger trg_store_slip_customers_business_ui_revision
+after insert or update or delete on public.store_slip_customers
+for each row execute function public.bump_store_business_day_ui_revision_from_slip();
+
+drop trigger if exists trg_store_slip_casts_business_ui_revision on public.store_slip_casts;
+create trigger trg_store_slip_casts_business_ui_revision
+after insert or update or delete on public.store_slip_casts
+for each row execute function public.bump_store_business_day_ui_revision_from_slip();
+
+drop trigger if exists trg_store_order_lines_business_ui_revision on public.store_order_lines;
+create trigger trg_store_order_lines_business_ui_revision
+after insert or update or delete on public.store_order_lines
+for each row execute function public.bump_store_business_day_ui_revision_from_slip();
+
+drop trigger if exists trg_store_order_line_cast_backs_business_ui_revision on public.store_order_line_cast_backs;
+create trigger trg_store_order_line_cast_backs_business_ui_revision
+after insert or update or delete on public.store_order_line_cast_backs
+for each row execute function public.bump_store_business_day_ui_revision_from_slip();
+
+drop trigger if exists trg_store_slip_charge_lines_business_ui_revision on public.store_slip_charge_lines;
+create trigger trg_store_slip_charge_lines_business_ui_revision
+after insert or update or delete on public.store_slip_charge_lines
+for each row execute function public.bump_store_business_day_ui_revision_from_slip();
 
 drop trigger if exists trg_store_cast_attendance_set_updated_at on public.store_cast_attendance;
 create trigger trg_store_cast_attendance_set_updated_at

@@ -28,6 +28,7 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 | `Sql/store_rpc/06_receipts.sql` | 領収書入力、簡易入力、スキャンミス除外を扱う。 |
 | `Sql/store_rpc/07_cast_sales_adjustments.sql` | 締め作業のキャスト売上額調整を扱う。 |
 | `Sql/store_rpc/08_checkout_ready.sql` | 会計伝票、会計準備、支払確定、領収書印刷データを扱う。 |
+| `Sql/store_rpc/09_business_home_snapshot.sql` | 営業中トップ向けの営業日全伝票スナップショットと、客・指名・自由明細を一操作ずつ保存して同スナップショットを返すRPCを扱う。 |
 | `Sql/store_rpc/99_grants.sql` | アプリRPCの直接PostgREST実行権限を剥奪する。RPC追加時はこの対象一覧も更新する。 |
 | `Sql/store_table_master_seed.sql` | mieu本店の卓番マスタ初期データ。 |
 | `Sql/quick_entry_account_master_updates.sql` | 領収書簡易入力UIで使う科目・補助科目の追加更新SQL。会計マスタは `accounting` schema、会社マスタは `public` schema を完全修飾し、有効会社だけを対象にする。会計データを変更するため、対象会社・補助科目・マップ件数を確認してから実行する。 |
@@ -46,9 +47,10 @@ DB反映時の基本順序は以下。
 9. `Sql/store_rpc/06_receipts.sql`
 10. `Sql/store_rpc/07_cast_sales_adjustments.sql`
 11. `Sql/store_rpc/08_checkout_ready.sql`
-12. `Sql/store_rpc/99_grants.sql`
-13. 必要に応じて `Sql/store_table_master_seed.sql`
-14. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+12. `Sql/store_rpc/09_business_home_snapshot.sql`
+13. `Sql/store_rpc/99_grants.sql`
+14. 必要に応じて `Sql/store_table_master_seed.sql`
+15. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 ## 2.1 会計フロー第1段階の実装状況（2026-07-20）
 

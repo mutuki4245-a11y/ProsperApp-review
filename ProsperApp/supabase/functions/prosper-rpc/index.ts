@@ -66,6 +66,16 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.get_business_day_snapshot",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
     "store.get_order_entry_slips",
     {
       result: "rows",
@@ -388,6 +398,20 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_slip_id", type: "bigint" },
         { name: "p_line_name", type: "text" },
         { name: "p_amount", type: "numeric" },
+      ],
+    },
+  ],
+  [
+    "store.apply_business_slip_editor_operation",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+        { name: "p_operation_type", type: "text" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_payload", type: "jsonb" },
       ],
     },
   ],

@@ -86,6 +86,9 @@
 - `Sql/store_rpc/08_checkout_ready.sql`
   - 会計伝票、会計準備、支払確定、領収書印刷データのRPCです。
 
+- `Sql/store_rpc/09_business_home_snapshot.sql`
+  - 営業中トップの全伝票詳細スナップショットと、客・指名・自由明細を一操作ずつ保存するRPCです。
+
 - `Sql/store_rpc/99_grants.sql`
   - アプリRPCの直接PostgREST実行権限を剥奪する現在定義です。
 
@@ -135,6 +138,8 @@
 - 2026-07-20: P2の未保存・操作ロック棚卸しとして、`site.js` の部分更新フォームにフォーム単位の処理中フラグを追加し、共通の送信ロック中は後続の通常送信も止めるようにした。対象環境で客追加の保存ボタンを二連打しても、初期客1人に対して追加は1人だけであることをDBで確認した。検証用営業日30は管理者締めで `closed` に戻した。
 - 2026-07-20: P2の日常画面一貫性として、伝票詳細の注文訂正・自由入力明細は保存済みの常時表示を隠し、未保存・保存中・失敗だけを表示するようにした。対象環境で自由入力明細の状態が初期は非表示、入力後は `未保存` になることを確認した。検証用営業日31は管理者締めで `closed` に戻した。
 - 2026-07-20: P7として、営業中トップの `open` 伝票の展開行から、客・指名・自由入力明細をそれぞれ共通の編集モーダルで開けるようにした。`/Slips/Edit` の既存GET/POST、Repository、RPC、検証を再利用し、モーダルPOSTの応答だけを対象別部分表示へ切り替える。保存後は `BusinessSlips` を再取得し、一覧の客名・指名・自由入力明細合計・会計額・見込み売上を更新する。カラオケ下書きがある場合は既存の遷移前保存を先に完了させ、失敗時は編集POSTを開始しない。`checkout_ready`、`checked_out`、取得不能の伝票は編集不可表示にし、注文訂正などは従来どおり `/Slips/Edit` に残す。SQL/RPC/Edge Functionの変更はない。commit `d1e8024` をAzure App ServiceへZipDeployし、公開URLが認証リダイレクトのHTTP 302を返すところまで確認した。認証済み画面での保存受入確認は未実施である。
+
+- 2026-07-21: P8として、営業中トップの客・指名・自由明細は、モーダル保存直後に一覧・見込み売上・展開詳細へ仮反映し、モーダルを閉じて次の操作を続けられる。客、指名、自由明細は伝票ごとの同種操作だけを直列化し、別種操作は並列送信する。失敗操作だけを通知付きでロールバックし、応答未達は即時の一覧再取得で確定し、再送しない。ブラウザ終了・外部再読込では未送信操作を端末内に残さない。会計前とアプリ内遷移前には操作を完了・全体再取得し、未確定の通信確認中操作があれば止める。`store.get_business_day_snapshot` と `store.apply_business_slip_editor_operation` は営業日内の全伝票詳細と単調増加リビジョンを返し、伝票関連行の更新トリガーがリビジョンを進める。`prosper-rpc` はversion 24へ更新済み。対象Supabaseへ列・トリガー・RPC・grantを適用し、読み取りスナップショット、ロールバックした客/注文更新時のリビジョン増分、閉鎖営業日の編集拒否を確認した。Azure反映と認証済み画面での連続編集確認はこの変更の後続確認とする。
 
 - 2026-07-18 決定記録: 会計・領収書・伝票詳細まわり（2026-07-19にソース実装済み）
   - 領収書印刷:
@@ -267,9 +272,10 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 9. `Sql/store_rpc/06_receipts.sql`
 10. `Sql/store_rpc/07_cast_sales_adjustments.sql`
 11. `Sql/store_rpc/08_checkout_ready.sql`
-12. `Sql/store_rpc/99_grants.sql`
-13. 必要に応じて `Sql/store_table_master_seed.sql`
-14. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+12. `Sql/store_rpc/09_business_home_snapshot.sql`
+13. `Sql/store_rpc/99_grants.sql`
+14. 必要に応じて `Sql/store_table_master_seed.sql`
+15. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 `agent_schema_reference.sql` と `store_rpc_functions.sql` は実行対象ではありません。
 

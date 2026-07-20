@@ -99,7 +99,8 @@ begin
         where s.slip_id = v_line_slip_id
           and s.department_id = p_department_id
           and s.status = 'open'
-        limit 1;
+        limit 1
+        for update;
 
         if v_slip.slip_id is null then
             raise exception 'store_order_slip_not_found';
