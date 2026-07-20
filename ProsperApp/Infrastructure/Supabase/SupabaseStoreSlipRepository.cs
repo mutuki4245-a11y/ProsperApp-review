@@ -82,7 +82,8 @@ public class SupabaseStoreSlipRepository(
             {
                 TableId = ReadLong(row, "table_id") ?? 0,
                 TableCode = ReadString(row, "table_code") ?? string.Empty,
-                TableName = ReadString(row, "table_name")
+                TableName = ReadString(row, "table_name"),
+                TableCategoryNo = (int)(ReadLong(row, "table_category_no") ?? 0)
             })
             .Where(x => x.TableId > 0 && !string.IsNullOrWhiteSpace(x.TableCode))
             .ToList();

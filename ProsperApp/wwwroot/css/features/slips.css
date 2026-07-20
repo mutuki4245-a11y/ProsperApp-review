@@ -900,6 +900,17 @@
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 }
 
+.table-picker-category-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.table-picker--category + .table-picker--category {
+  border-top: 1px solid #cbd5e1;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
 .cast-picker {
   display: grid;
   gap: 0.75rem;
@@ -1409,7 +1420,7 @@
   min-height: 52px;
 }
 
-#createSlipModal .table-picker,
+#createSlipModal .table-picker-category-list,
 #businessCustomerList,
 #businessNominationList {
   flex: 1 1 auto;
@@ -1458,7 +1469,7 @@
   }
 
   #createSlipModal .slip-create__panel,
-  #createSlipModal .table-picker,
+  #createSlipModal .table-picker-category-list,
   #businessCustomerList,
   #businessNominationList {
     overflow: visible;

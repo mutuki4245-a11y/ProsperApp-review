@@ -18,6 +18,7 @@ public class StoreTableOption
     public long TableId { get; set; }
     public string TableCode { get; set; } = string.Empty;
     public string? TableName { get; set; }
+    public int TableCategoryNo { get; set; }
 
     public string DisplayName => string.IsNullOrWhiteSpace(TableName)
         ? TableCode

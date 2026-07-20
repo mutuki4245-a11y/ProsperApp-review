@@ -170,13 +170,18 @@
                                         }
                                         else
                                         {
-                                            <div class="table-picker" role="group" aria-label="卓番選択">
-                                                @foreach (var table in Model.Tables)
+                                            <div class="table-picker-category-list" role="group" aria-label="卓番選択">
+                                                @foreach (var tableGroup in Model.Tables.GroupBy(table => table.TableCategoryNo).OrderBy(group => group.Key))
                                                 {
-                                                    var selected = Model.CreateSlipInput.TableId == table.TableId;
-                                                    <button class="table-picker__button @(selected ? "is-selected" : "")" type="button" data-business-slip-table-id="@table.TableId">
-                                                        @table.DisplayName
-                                                    </button>
+                                                    <div class="table-picker table-picker--category">
+                                                        @foreach (var table in tableGroup)
+                                                        {
+                                                            var selected = Model.CreateSlipInput.TableId == table.TableId;
+                                                            <button class="table-picker__button @(selected ? "is-selected" : "")" type="button" data-business-slip-table-id="@table.TableId">
+                                                                @table.DisplayName
+                                                            </button>
+                                                        }
+                                                    </div>
                                                 }
                                             </div>
                                         }
