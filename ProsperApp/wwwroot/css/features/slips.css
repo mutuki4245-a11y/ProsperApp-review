@@ -1372,6 +1372,29 @@
   min-height: 2.4rem;
 }
 
+#createSlipModal .slip-create__customer-count {
+  justify-content: space-between;
+}
+
+.slip-create__customer-count-label {
+  color: #475569;
+  font-weight: 800;
+}
+
+.slip-create__customer-count-controls {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.slip-create__customer-count-value {
+  color: #0f172a;
+  font-size: 1.05rem;
+  font-weight: 800;
+  min-width: 3.5rem;
+  text-align: center;
+}
+
 #createSlipModal .slip-create__panel-title--create-actions .btn {
   min-height: 2.35rem;
   padding-bottom: 0.35rem;
@@ -1401,6 +1424,10 @@
 #createSlipModal .nomination-row,
 #createSlipModal .table-picker__button {
   flex: 0 0 auto;
+}
+
+#createSlipModal .customer-row {
+  grid-template-columns: 3rem minmax(0, 1fr);
 }
 
 #createSlipModal .nomination-row {

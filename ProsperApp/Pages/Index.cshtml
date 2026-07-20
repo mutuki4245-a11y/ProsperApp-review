@@ -188,8 +188,13 @@
                                 </div>
 
                                 <section class="slip-create__panel slip-create__panel--customers">
-                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions">
-                                        <button class="btn btn-outline-primary" type="button" id="businessAddCustomerButton">追加</button>
+                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions slip-create__customer-count">
+                                        <span class="slip-create__customer-count-label">客数</span>
+                                        <div class="slip-create__customer-count-controls" role="group" aria-label="客数">
+                                            <button class="btn btn-outline-primary" type="button" id="businessDecreaseCustomerCount" aria-label="客数を減らす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count <= 1)">－</button>
+                                            <output class="slip-create__customer-count-value" id="businessCustomerCount" aria-live="polite" aria-atomic="true">@($"{Model.CreateSlipInput.CustomerLabels.Count}人")</output>
+                                            <button class="btn btn-outline-primary" type="button" id="businessIncreaseCustomerCount" aria-label="客数を増やす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count >= 20)">＋</button>
+                                        </div>
                                     </div>
                                     <span asp-validation-for="CreateSlipInput.CustomerLabels" class="text-danger"></span>
                                     <div class="customer-list" id="businessCustomerList">
@@ -198,7 +203,6 @@
                                             <div class="customer-row" data-business-customer-row>
                                                 <label class="customer-row__index">@(i + 1)</label>
                                                 <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[@i]" value="@Model.CreateSlipInput.CustomerLabels[i]" maxlength="100" placeholder="客名・特徴など" />
-                                                <button class="btn btn-outline-danger customer-row__remove" type="button" data-business-remove-customer @(i == 0 ? "hidden" : null)>削除</button>
                                             </div>
                                         }
                                     </div>

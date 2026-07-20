@@ -43,9 +43,16 @@ public static class CreateSlipEditor
         CreateSlipEditContext context,
         IStoreClock storeClock)
     {
+        var submittedCustomerCount = input.CustomerLabels.Count;
         var prepared = Normalize(ApplyDefaults(input, context.CurrentBusinessDay, context.CurrentBusinessDate, storeClock), storeClock);
         FillCastDisplayNames(prepared.CastNominations, context.AttendanceCasts);
-        return new CreateSlipEdit(prepared, Validate(prepared, context, storeClock));
+        var errors = Validate(prepared, context, storeClock).ToList();
+        if (submittedCustomerCount == 0)
+        {
+            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "客情報は1人から20人まで登録できます。"));
+        }
+
+        return new CreateSlipEdit(prepared, errors);
     }
 
     private static CreateSlipInputModel Normalize(CreateSlipInputModel input, IStoreClock storeClock)

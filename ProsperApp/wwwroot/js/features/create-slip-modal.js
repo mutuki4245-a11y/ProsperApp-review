@@ -12,7 +12,9 @@
     const showCreateSlipModal = Boolean(config.showCreateSlipModal);
     const tableIdInput = document.getElementById('businessCreateSlipTableId');
     const customerList = document.getElementById('businessCustomerList');
-    const addCustomerButton = document.getElementById('businessAddCustomerButton');
+    const customerCountDisplay = document.getElementById('businessCustomerCount');
+    const decreaseCustomerCountButton = document.getElementById('businessDecreaseCustomerCount');
+    const increaseCustomerCountButton = document.getElementById('businessIncreaseCustomerCount');
     const nominationList = document.getElementById('businessNominationList');
     const nominationEmpty = document.querySelector('[data-business-nomination-empty]');
     const addNominationButton = document.getElementById('businessAddNominationButton');
@@ -113,26 +115,38 @@
         selected.textContent = cast.display;
     };
 
+    const getCustomerRows = () => customerList?.querySelectorAll('[data-business-customer-row]') ?? [];
+
+    const syncCustomerCountControls = () => {
+        const count = getCustomerRows().length;
+        if (customerCountDisplay) {
+            customerCountDisplay.textContent = `${count}人`;
+        }
+        if (decreaseCustomerCountButton) {
+            decreaseCustomerCountButton.disabled = count <= 1;
+        }
+        if (increaseCustomerCountButton) {
+            increaseCustomerCountButton.disabled = count >= 20;
+        }
+    };
+
     const renumberCustomerRows = () => {
         if (!customerList) {
             return;
         }
 
-        const rows = customerList.querySelectorAll('[data-business-customer-row]');
+        const rows = getCustomerRows();
         rows.forEach((row, index) => {
             const label = row.querySelector('.customer-row__index');
             const input = row.querySelector('input');
-            const remove = row.querySelector('[data-business-remove-customer]');
             if (label) {
                 label.textContent = String(index + 1);
             }
             if (input) {
                 input.name = `CreateSlipInput.CustomerLabels[${index}]`;
             }
-            if (remove) {
-                remove.hidden = index === 0;
-            }
         });
+        syncCustomerCountControls();
     };
 
     const addCustomerRow = () => {
@@ -140,7 +154,7 @@
             return;
         }
 
-        const count = customerList.querySelectorAll('[data-business-customer-row]').length;
+        const count = getCustomerRows().length;
         if (count >= 20) {
             return;
         }
@@ -151,10 +165,19 @@
         row.innerHTML = `
             <label class="customer-row__index">${count + 1}</label>
             <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[${count}]" maxlength="100" placeholder="客名・特徴など" />
-            <button class="btn btn-outline-danger customer-row__remove" type="button" data-business-remove-customer>削除</button>
         `;
         customerList.appendChild(row);
         row.querySelector('input')?.focus();
+        renumberCustomerRows();
+    };
+
+    const removeLastCustomerRow = () => {
+        const rows = getCustomerRows();
+        if (rows.length <= 1) {
+            return;
+        }
+
+        rows[rows.length - 1]?.remove();
         renumberCustomerRows();
     };
 
@@ -274,16 +297,6 @@
         await openCastModal(row);
     };
 
-    customerList?.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-business-remove-customer]');
-        if (!button || !customerList.contains(button)) {
-            return;
-        }
-
-        button.closest('[data-business-customer-row]')?.remove();
-        renumberCustomerRows();
-    });
-
     nominationList?.addEventListener('click', (event) => {
         const button = event.target.closest('[data-business-remove-nomination]');
         if (!button || !nominationList.contains(button)) {
@@ -294,7 +307,8 @@
         renumberNominationRows();
     });
 
-    addCustomerButton?.addEventListener('click', addCustomerRow);
+    decreaseCustomerCountButton?.addEventListener('click', removeLastCustomerRow);
+    increaseCustomerCountButton?.addEventListener('click', addCustomerRow);
     addNominationButton?.addEventListener('click', () => {
         void addNominationRow();
     });
