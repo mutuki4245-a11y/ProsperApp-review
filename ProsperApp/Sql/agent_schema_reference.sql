@@ -616,6 +616,7 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --   store.get_business_day_closing_attendance(p_department_id bigint, p_business_day_id bigint)
 --     returns attendance_id, cast_id, cast_display_name, cast_department_name, attendance_status,
 --       clock_in_at, clock_out_at, uses_send_service for closing attendance input.
+--     clock_out_at must be strictly later than clock_in_at on the business-date timeline.
 --   store.save_business_day_closing_attendance(p_department_id bigint, p_business_day_id bigint, p_attendance_entries jsonb)
 --     updates registered attendance rows with { attendance_id, clock_in_time, clock_out_time, uses_send_service }.
 --   store.get_business_day_cast_sales_adjustment_status(p_department_id bigint, p_business_day_id bigint)

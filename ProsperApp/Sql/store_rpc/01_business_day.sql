@@ -541,7 +541,7 @@ begin
             raise exception 'attendance_not_found';
         end if;
 
-        if v_clock_out_at < v_clock_in_at then
+        if v_clock_out_at <= v_clock_in_at then
             raise exception 'invalid_attendance_clock_out_time';
         end if;
 

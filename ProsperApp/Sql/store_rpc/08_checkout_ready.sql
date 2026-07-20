@@ -164,12 +164,12 @@ begin
         raise exception 'checkout_statement_slip_not_found';
     end if;
 
-    if p_closed_at is null or p_closed_at < v_slip.opened_at or exists (
+    if p_closed_at is null or p_closed_at <= v_slip.opened_at or exists (
         select 1
         from public.store_slip_customers c
         where c.slip_id = p_slip_id
           and c.status <> 'cancelled'
-          and p_closed_at < c.entered_at
+          and p_closed_at <= c.entered_at
     ) then
         raise exception 'invalid_closed_at';
     end if;

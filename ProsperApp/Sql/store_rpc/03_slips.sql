@@ -668,7 +668,7 @@ begin
         raise exception 'store_slip_customer_not_found';
     end if;
 
-    if p_left_at < v_customer.entered_at then
+    if p_left_at is null or p_left_at <= v_customer.entered_at then
         raise exception 'invalid_left_at';
     end if;
 
