@@ -14,6 +14,10 @@ public interface IStoreSlipRepository
 
     Task<IReadOnlyList<BusinessSlipListItem>> GetBusinessDaySlipsAsync(long businessDayId, CancellationToken ct);
 
+    Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct);
+
+    Task<BusinessDaySnapshotResult> ApplyBusinessSlipEditorOperationAsync(BusinessSlipEditorOperationInput input, long businessDayId, CancellationToken ct);
+
     Task<SlipDetail?> GetSlipDetailAsync(long slipId, CancellationToken ct);
 
     Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct);

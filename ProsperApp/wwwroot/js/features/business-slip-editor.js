@@ -37,16 +37,6 @@
         content.appendChild(alert);
     };
 
-    const showNetworkError = () => {
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-warning';
-        alert.setAttribute('role', 'alert');
-        alert.dataset.businessSlipEditorNetworkError = '';
-        alert.textContent = '保存に失敗しました。通信状態を確認してから再実行してください。';
-        content.querySelector('[data-business-slip-editor-network-error]')?.remove();
-        content.prepend(alert);
-    };
-
     const buildUrl = (section, slipId) => {
         const url = new URL(editorUrl, window.location.href);
         url.searchParams.set('section', section);
@@ -57,6 +47,7 @@
     const prepareContent = () => {
         window.PartialForms?.prepareDynamicContent?.(content);
         content.querySelectorAll('.nomination-row__kind').forEach((kindSelect) => syncCompanionPrice(kindSelect));
+        applyPendingPreview();
     };
 
     const setModalHeading = (section, slip) => {
@@ -136,38 +127,126 @@
         return name.length > 0 || amount !== 0;
     };
 
-    const submitEditor = async (form) => {
+    const appendTemporaryRow = (text) => {
+        const tableBody = content.querySelector('tbody');
+        if (!tableBody) return;
+        const row = document.createElement('tr');
+        row.className = 'table-info';
+        const cell = document.createElement('td');
+        cell.colSpan = tableBody.closest('table')?.querySelectorAll('thead th').length || 1;
+        cell.textContent = `${text}（保存中）`;
+        row.appendChild(cell);
+        tableBody.appendChild(row);
+    };
+
+    const applyPendingPreview = () => {
+        if (!state.slipId || !state.section) return;
+        const pending = window.prosperBusinessHomeGetPendingForSlip?.(state.slipId) || [];
+        const sectionOperations = pending.filter((operation) => {
+            if (state.section === 'customers') return ['add_customer', 'update_customer', 'leave_customer'].includes(operation.operationType);
+            if (state.section === 'nominations') return operation.operationType === 'add_nomination';
+            return operation.operationType === 'add_adjustment';
+        });
+        if (sectionOperations.length === 0) return;
+
+        const message = document.createElement('div');
+        message.className = 'alert alert-info py-2';
+        message.setAttribute('role', 'status');
+        message.textContent = `${sectionOperations.length}件の変更を保存中です。`;
+        content.prepend(message);
+
+        sectionOperations.forEach((operation) => {
+            const payload = operation.payload || {};
+            if (operation.operationType === 'add_customer') {
+                appendTemporaryRow(`客を追加: ${payload.customer_label?.trim() || '客名なし'} / ${payload.entered_time || '-'}`);
+            } else if (operation.operationType === 'add_nomination') {
+                appendTemporaryRow(`指名を追加: ${payload.cast_display_name || 'キャスト'} / ${payload.nomination_display_name || payload.nomination_kind || '-'}`);
+            } else if (operation.operationType === 'add_adjustment') {
+                appendTemporaryRow(`自由入力明細を追加: ${payload.line_name || '-'} / ${payload.amount || 0}円`);
+            } else if (operation.operationType === 'update_customer') {
+                const input = content.querySelector(`input[name="UpdateCustomerInput.CustomerLabel"]`);
+                if (input) input.value = payload.customer_label || '';
+            }
+        });
+    };
+
+    const buildOperation = (form) => {
+        const value = (name) => form.querySelector(`[name="${name}"]`)?.value ?? '';
+        const slipId = Number(value('SlipId') || state.slipId || 0);
+        if (!slipId) return null;
+
+        if (form.querySelector('[name="AddCustomersInput.CustomerLabels[0]"]')) {
+            return {
+                slipId,
+                operationType: 'add_customer',
+                payload: {
+                    customer_label: value('AddCustomersInput.CustomerLabels[0]'),
+                    entered_time: value('AddCustomersInput.EnteredTime')
+                }
+            };
+        }
+        if (form.querySelector('[name="UpdateCustomerInput.SlipCustomerId"]')) {
+            return {
+                slipId,
+                operationType: 'update_customer',
+                payload: {
+                    slip_customer_id: Number(value('UpdateCustomerInput.SlipCustomerId')),
+                    customer_label: value('UpdateCustomerInput.CustomerLabel')
+                }
+            };
+        }
+        if (form.querySelector('[name="LeaveCustomerInput.SlipCustomerId"]')) {
+            return {
+                slipId,
+                operationType: 'leave_customer',
+                payload: {
+                    slip_customer_id: Number(value('LeaveCustomerInput.SlipCustomerId')),
+                    left_time: value('LeaveCustomerInput.LeftTime')
+                }
+            };
+        }
+        if (form.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]')) {
+            const castSelect = form.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
+            const kindSelect = form.querySelector('[name="AddNominationsInput.CastNominations[0].NominationKind"]');
+            return {
+                slipId,
+                operationType: 'add_nomination',
+                payload: {
+                    cast_id: Number(value('AddNominationsInput.CastNominations[0].CastId')),
+                    nomination_kind: value('AddNominationsInput.CastNominations[0].NominationKind'),
+                    nomination_price: Number(value('AddNominationsInput.CastNominations[0].NominationPrice')),
+                    cast_display_name: castSelect?.selectedOptions?.[0]?.textContent?.trim() || '',
+                    nomination_display_name: kindSelect?.selectedOptions?.[0]?.textContent?.trim() || ''
+                }
+            };
+        }
+        if (form.querySelector('[name="AdjustmentInput.LineName"]')) {
+            return {
+                slipId,
+                operationType: 'add_adjustment',
+                payload: {
+                    line_name: value('AdjustmentInput.LineName'),
+                    amount: Number(value('AdjustmentInput.Amount'))
+                }
+            };
+        }
+        return null;
+    };
+
+    const submitEditor = (form) => {
         if (state.isSubmitting) {
+            return;
+        }
+        const operation = buildOperation(form);
+        if (!operation || !window.prosperBusinessHomeEnqueueEditorOperation) {
+            setError('編集内容を確認してください。');
             return;
         }
 
         state.isSubmitting = true;
-        const submitters = form.querySelectorAll('button[type="submit"], input[type="submit"]');
-        submitters.forEach((submitter) => { submitter.disabled = true; });
-        window.AppLoading?.show(form);
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form),
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (!response.ok) {
-                throw new Error('Business slip editor save failed.');
-            }
-
-            const html = await response.text();
-            content.innerHTML = html;
-            prepareContent();
-            state.isSubmitting = false;
-
-            void window.prosperBusinessHomeReload?.();
-        } catch {
-            state.isSubmitting = false;
-            submitters.forEach((submitter) => { submitter.disabled = false; });
-            showNetworkError();
-        } finally {
-            window.AppLoading?.hide(form);
-        }
+        window.prosperBusinessHomeEnqueueEditorOperation(operation);
+        modal.hide();
+        state.isSubmitting = false;
     };
 
     document.addEventListener('click', (event) => {

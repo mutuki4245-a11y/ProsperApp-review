@@ -17,14 +17,20 @@
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
+    const businessSlipEditorOperationUrl = config.businessSlipEditorOperationUrl || '';
     const slipEditUrl = config.slipEditUrl || '/Slips/Edit';
     const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
     let slips = [];
+    let serverSnapshot = null;
+    let snapshotRevision = -1;
+    const pendingOperations = new Map();
+    const operationLanes = new Map();
+    const expandedOrderGroupKeys = new Set();
     const expandedSlipIds = new Set();
     let hasLoaded = false;
-    let refreshInFlight = false;
+    let refreshPromise = null;
     let isSaving = false;
     let savePromise = null;
     let allowPageUnload = false;
@@ -40,6 +46,192 @@
         if (element && element.textContent !== String(text)) {
             element.textContent = String(text);
         }
+    };
+
+    const operationTimeoutMs = 10000;
+    const operationLane = (operation) => {
+        const section = operation.operationType === 'add_nomination'
+            ? 'nominations'
+            : operation.operationType === 'add_adjustment'
+                ? 'adjustments'
+                : 'customers';
+        return `${operation.slipId}:${section}`;
+    };
+
+    const pendingForSlip = (slipId) => Array.from(pendingOperations.values())
+        .filter((operation) => String(operation.slipId) === String(slipId));
+
+    const hasPendingOperations = () => pendingOperations.size > 0;
+
+    const isUnknownOperation = (operation) => operation.state === 'unknown';
+
+    const showOperationNotice = (message) => {
+        let notice = document.querySelector('[data-business-operation-notice]');
+        if (!notice) {
+            notice = buildElement('div', 'alert alert-warning sales-operation-notice');
+            notice.dataset.businessOperationNotice = '';
+            notice.setAttribute('role', 'status');
+            list.parentElement?.insertBefore(notice, list);
+        }
+        notice.textContent = message;
+        notice.hidden = false;
+        window.setTimeout(() => {
+            if (notice?.textContent === message) {
+                notice.hidden = true;
+            }
+        }, 7000);
+    };
+
+    const cloneSnapshot = (snapshot) => {
+        if (!snapshot) return null;
+        return JSON.parse(JSON.stringify(snapshot));
+    };
+
+    const refreshSlipSummary = (slip) => {
+        const customers = Array.isArray(slip.customers) ? slip.customers.filter((item) => item.status !== 'cancelled') : [];
+        const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((item) => item.status !== 'cancelled') : [];
+        const orders = Array.isArray(slip.orders) ? slip.orders.filter((item) => item.status === 'active') : [];
+        const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
+        const names = customers.map((item) => item.displayName || `客${item.lineNo || ''}`).filter(Boolean);
+        const castNames = [];
+        nominations.forEach((item) => {
+            if (item.displayName && !castNames.includes(item.displayName)) castNames.push(item.displayName);
+        });
+        slip.customerCount = customers.filter((item) => item.status === 'active').length;
+        slip.customerNames = names.join('、') || '客名なし';
+        slip.castNames = castNames.join('、') || '指名なし';
+        slip.orderCount = orders.length;
+        slip.orderSubtotalAmount = orders.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        slip.adjustmentAmount = adjustments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        slip.karaokeQuantity = orders
+            .filter((item) => item.itemType === 'karaoke')
+            .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+        slip.accountingAmount = Math.max(0, slip.orderSubtotalAmount + Math.round(slip.orderSubtotalAmount * 0.20) + slip.adjustmentAmount);
+    };
+
+    const projectOperation = (snapshot, operation) => {
+        const slip = snapshot?.slips?.find((item) => String(item.id) === String(operation.slipId));
+        if (!slip) return;
+        const payload = operation.payload || {};
+        const temporaryId = `temporary:${operation.operationId}`;
+        const now = new Date().toISOString();
+        slip.customers ??= [];
+        slip.nominations ??= [];
+        slip.orders ??= [];
+        slip.adjustments ??= [];
+
+        if (operation.operationType === 'add_customer') {
+            const lineNo = Math.max(0, ...slip.customers.map((item) => Number(item.lineNo) || 0)) + 1;
+            const label = String(payload.customer_label || '').trim();
+            slip.customers.push({
+                id: temporaryId,
+                lineNo,
+                customerLabel: label || null,
+                displayName: label || `客${lineNo}`,
+                enteredTime: payload.entered_time || '',
+                enteredAt: now,
+                leftAt: null,
+                leftTime: null,
+                status: 'active',
+                pending: true
+            });
+        } else if (operation.operationType === 'update_customer') {
+            const customer = slip.customers.find((item) => String(item.id) === String(payload.slip_customer_id));
+            if (customer) {
+                const label = String(payload.customer_label || '').trim();
+                customer.customerLabel = label || null;
+                customer.displayName = label || `客${customer.lineNo || ''}`;
+                customer.pending = true;
+            }
+        } else if (operation.operationType === 'leave_customer') {
+            const customer = slip.customers.find((item) => String(item.id) === String(payload.slip_customer_id));
+            if (customer) {
+                customer.leftTime = payload.left_time || '';
+                customer.leftAt = now;
+                customer.status = 'left';
+                customer.pending = true;
+            }
+        } else if (operation.operationType === 'add_nomination') {
+            const displayName = payload.cast_display_name || 'キャスト';
+            const price = Number(payload.nomination_price) || 0;
+            slip.nominations.push({
+                id: temporaryId,
+                castId: payload.cast_id,
+                displayName,
+                nominationKind: payload.nomination_kind,
+                nominationDisplayName: payload.nomination_display_name || payload.nomination_kind || '指名',
+                nominationPrice: price,
+                startedAt: now,
+                startedTime: '',
+                status: 'active',
+                pending: true
+            });
+            slip.orders.push({
+                id: `${temporaryId}:fee`,
+                lineNo: Math.max(0, ...slip.orders.map((item) => Number(item.lineNo) || 0)) + 1,
+                itemName: '指名料金',
+                itemType: 'nomination_fee',
+                quantity: 1,
+                unitPrice: price,
+                amount: price,
+                orderedAt: now,
+                orderedTime: '',
+                status: 'active',
+                pending: true
+            });
+        } else if (operation.operationType === 'add_adjustment') {
+            const amount = Number(payload.amount) || 0;
+            slip.adjustments.push({
+                id: temporaryId,
+                lineNo: Math.max(0, ...slip.adjustments.map((item) => Number(item.lineNo) || 0)) + 1,
+                lineName: String(payload.line_name || '').trim(),
+                amount,
+                createdAt: now,
+                createdTime: '',
+                status: 'active',
+                pending: true
+            });
+        }
+
+        refreshSlipSummary(slip);
+    };
+
+    const projectSnapshot = () => {
+        const projected = cloneSnapshot(serverSnapshot);
+        if (!projected) return null;
+        pendingOperations.forEach((operation) => projectOperation(projected, operation));
+        const activeSlips = Array.isArray(projected.slips) ? projected.slips.filter((item) => item.status !== 'cancelled') : [];
+        projected.openSlipCount = activeSlips.filter((item) => ['open', 'checkout_ready'].includes(item.status)).length;
+        projected.checkedOutSlipCount = activeSlips.filter((item) => item.status === 'checked_out').length;
+        projected.estimatedSalesAmount = activeSlips.reduce((sum, item) => sum + (Number(item.accountingAmount) || 0), 0);
+        return projected;
+    };
+
+    const renderProjectedSnapshot = () => {
+        const projected = projectSnapshot();
+        if (!projected) return;
+        slips = Array.isArray(projected.slips) ? projected.slips : [];
+        window.prosperBusinessHomeSlips = slips;
+        window.prosperBusinessHomeSnapshot = projected;
+        updateSummary(projected);
+        renderSlips();
+        document.dispatchEvent(new CustomEvent('prosper:business-slips-updated', { detail: { slips, snapshot: projected } }));
+    };
+
+    const applySnapshot = (snapshot, allowBusinessDayChange = false) => {
+        if (!snapshot || typeof snapshot !== 'object') return false;
+        const businessDayChanged = serverSnapshot && String(snapshot.businessDayId || '') !== String(serverSnapshot.businessDayId || '');
+        if (businessDayChanged && !allowBusinessDayChange) return false;
+        if (businessDayChanged) {
+            snapshotRevision = -1;
+        }
+        const revision = Number(snapshot.businessDayRevision);
+        if (Number.isFinite(revision) && revision < snapshotRevision) return false;
+        if (Number.isFinite(revision)) snapshotRevision = revision;
+        serverSnapshot = snapshot;
+        hasLoaded = true;
+        renderProjectedSnapshot();
+        return true;
     };
 
     const setKaraokeStatus = (state, message) => {
@@ -363,20 +555,8 @@
     const buildSlipDetails = () => {
         const panel = buildElement('section', 'slip-list__details');
         panel.dataset.businessSlipDetails = '';
-        const fields = buildElement('div', 'slip-list__details-grid');
-        [
-            ['客', 'customers'],
-            ['指名', 'casts'],
-            ['注文', 'orders'],
-            ['自由明細', 'adjustments']
-        ].forEach(([label, field]) => {
-            const item = buildElement('div', 'slip-list__detail-item');
-            item.append(buildElement('span', null, label));
-            const value = buildElement('strong');
-            value.dataset.businessSlipDetail = field;
-            item.appendChild(value);
-            fields.appendChild(item);
-        });
+        const fields = buildElement('div', 'slip-list__details-content');
+        fields.dataset.businessSlipDetailsContent = '';
         const actions = buildElement('div', 'slip-list__details-actions');
         [
             ['customers', '客を編集'],
@@ -396,6 +576,129 @@
         return panel;
     };
 
+    const detailSection = (title, emptyText) => {
+        const section = buildElement('section', 'business-slip-detail-section');
+        section.append(buildElement('h4', 'business-slip-detail-section__title', title));
+        const body = buildElement('div', 'business-slip-detail-section__body');
+        body.dataset.businessSlipDetailBody = title;
+        body.dataset.emptyText = emptyText;
+        section.appendChild(body);
+        return section;
+    };
+
+    const detailLine = (primary, secondary, amount, pending = false) => {
+        const line = buildElement('div', 'business-slip-detail-line');
+        if (pending) line.classList.add('is-pending');
+        const main = buildElement('div', 'business-slip-detail-line__main');
+        main.append(buildElement('strong', null, primary));
+        if (secondary) main.append(buildElement('span', null, secondary));
+        line.append(main);
+        if (amount !== undefined && amount !== null) line.append(buildElement('strong', 'business-slip-detail-line__amount', amount));
+        return line;
+    };
+
+    const renderCustomers = (target, slip) => {
+        target.replaceChildren();
+        const customers = Array.isArray(slip.customers) ? slip.customers : [];
+        if (customers.length === 0) {
+            target.textContent = '客情報はありません。';
+            return;
+        }
+        customers.forEach((customer) => {
+            const time = `入店 ${customer.enteredTime || '-'}${customer.leftTime ? ` / 退店 ${customer.leftTime}` : ''}`;
+            const state = customer.status === 'active' ? '在席' : customer.status === 'left' ? '退店済' : '取消';
+            target.append(detailLine(`#${customer.lineNo || '-'} ${customer.displayName || '客名なし'}`, `${time} / ${state}`, null, customer.pending));
+        });
+    };
+
+    const renderNominations = (target, slip) => {
+        target.replaceChildren();
+        const nominations = Array.isArray(slip.nominations) ? slip.nominations : [];
+        if (nominations.length === 0) {
+            target.textContent = '指名はありません。';
+            return;
+        }
+        nominations.forEach((nomination) => {
+            const sub = `${nomination.startedTime || '-'} / ${nomination.nominationDisplayName || nomination.nominationKind || '指名'}${nomination.status === 'active' ? '' : ` / ${nomination.status}`}`;
+            target.append(detailLine(nomination.displayName || 'キャスト', sub, formatYen(nomination.nominationPrice), nomination.pending));
+        });
+    };
+
+    const renderOrderGroup = (target, slip, key, label, lines) => {
+        const groupKey = `${slip.id}:${key}`;
+        const expanded = expandedOrderGroupKeys.has(groupKey);
+        const totalQuantity = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
+        const totalAmount = lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+        const group = buildElement('section', 'business-slip-order-group');
+        const header = buildElement('button', 'business-slip-order-group__header');
+        header.type = 'button';
+        header.dataset.businessOrderGroupToggle = groupKey;
+        header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        const backName = lines[0]?.backCastDisplayName ? ` / バック: ${lines[0].backCastDisplayName}` : '';
+        header.append(
+            buildElement('strong', null, label),
+            buildElement('span', null, `${totalQuantity}点${backName}`),
+            buildElement('strong', null, formatYen(totalAmount))
+        );
+        group.appendChild(header);
+        if (expanded) {
+            const events = buildElement('div', 'business-slip-order-group__events');
+            lines.forEach((line) => {
+                events.append(detailLine(
+                    `${line.orderedTime || '-'} / ${line.itemName || '-'}`,
+                    `${formatYen(line.unitPrice)} × ${line.quantity || 0}${line.backCastDisplayName ? ` / バック: ${line.backCastDisplayName}` : ''}`,
+                    formatYen(line.amount),
+                    line.pending
+                ));
+            });
+            group.appendChild(events);
+        }
+        target.appendChild(group);
+    };
+
+    const renderOrders = (target, slip) => {
+        target.replaceChildren();
+        const orders = (Array.isArray(slip.orders) ? slip.orders : []).filter((line) => line.status === 'active');
+        if (orders.length === 0) {
+            target.textContent = '注文はありません。';
+            return;
+        }
+        const standard = orders.filter((line) => (line.itemType || 'standard') === 'standard');
+        const automatic = orders.filter((line) => (line.itemType || 'standard') !== 'standard');
+        const groups = new Map();
+        standard.forEach((line) => {
+            const key = `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}\u0000${line.backCastId || ''}`;
+            const group = groups.get(key) || [];
+            group.push(line);
+            groups.set(key, group);
+        });
+        groups.forEach((lines, key) => renderOrderGroup(target, slip, `order:${key}`, lines[0]?.itemName || '-', lines));
+        if (automatic.length > 0) {
+            const separator = buildElement('div', 'business-slip-auto-divider', '自動明細');
+            target.appendChild(separator);
+            const autoGroups = new Map();
+            automatic.forEach((line) => {
+                const key = `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}`;
+                const group = autoGroups.get(key) || [];
+                group.push(line);
+                autoGroups.set(key, group);
+            });
+            autoGroups.forEach((lines, key) => renderOrderGroup(target, slip, `auto:${key}`, lines[0]?.itemName || '自動明細', lines));
+        }
+    };
+
+    const renderAdjustments = (target, slip) => {
+        target.replaceChildren();
+        const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
+        if (adjustments.length === 0) {
+            target.textContent = '自由入力明細はありません。';
+            return;
+        }
+        adjustments.forEach((adjustment) => {
+            target.append(detailLine(adjustment.lineName || '-', adjustment.createdTime || '-', formatSignedYen(adjustment.amount), adjustment.pending));
+        });
+    };
+
     const syncSlipDetails = (row, slip) => {
         const panel = row.querySelector('[data-business-slip-details]');
         const toggle = row.querySelector('[data-business-slip-details-toggle]');
@@ -411,13 +714,19 @@
         toggle.setAttribute('aria-controls', panelId);
         toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
         toggle.textContent = isExpanded ? '閉じる' : '詳細';
-        setText(panel.querySelector('[data-business-slip-detail="customers"]'), slip.customerNames || '客名なし');
-        setText(panel.querySelector('[data-business-slip-detail="casts"]'), slip.castNames || '指名なし');
-        setText(
-            panel.querySelector('[data-business-slip-detail="orders"]'),
-            `${Number(slip.orderCount) || 0}件 / ${formatYen(slip.orderSubtotalAmount)}`
-        );
-        setText(panel.querySelector('[data-business-slip-detail="adjustments"]'), formatSignedYen(slip.adjustmentAmount));
+        const content = panel.querySelector('[data-business-slip-details-content]');
+        if (content) {
+            content.replaceChildren();
+            const customerSection = detailSection('客', '客情報はありません。');
+            const nominationSection = detailSection('指名', '指名はありません。');
+            const orderSection = detailSection('注文', '注文はありません。');
+            const adjustmentSection = detailSection('自由明細', '自由入力明細はありません。');
+            renderCustomers(customerSection.querySelector('[data-business-slip-detail-body]'), slip);
+            renderNominations(nominationSection.querySelector('[data-business-slip-detail-body]'), slip);
+            renderOrders(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
+            renderAdjustments(adjustmentSection.querySelector('[data-business-slip-detail-body]'), slip);
+            content.append(customerSection, nominationSection, orderSection, adjustmentSection);
+        }
         const canEdit = slip.status === 'open';
         panel.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
             button.hidden = !canEdit;
@@ -435,6 +744,16 @@
             } else {
                 editLink.removeAttribute('href');
             }
+        }
+
+        const pending = pendingForSlip(slip.id);
+        const pendingState = row.querySelector('[data-business-slip-sync-state]');
+        if (pendingState) {
+            pendingState.hidden = pending.length === 0;
+            pendingState.textContent = pending.some(isUnknownOperation)
+                ? '通信確認中'
+                : `保存中 ${pending.length}`;
+            pendingState.classList.toggle('is-unknown', pending.some(isUnknownOperation));
         }
     };
 
@@ -488,8 +807,11 @@
         casts.dataset.businessSlipCasts = '';
         const memo = buildElement('span', 'slip-list__memo');
         memo.dataset.businessSlipMemo = '';
+        const syncState = buildElement('span', 'slip-list__sync-state');
+        syncState.dataset.businessSlipSyncState = '';
+        syncState.hidden = true;
 
-        main.append(table, statusElement, openedTime, customers, casts, memo);
+        main.append(table, statusElement, openedTime, customers, casts, memo, syncState);
         main.appendChild(buildAmountElement(slip));
         const actions = buildElement('div', 'slip-list__actions');
         const detailsToggle = buildElement('button', 'btn btn-sm btn-outline-secondary', '詳細');
@@ -560,41 +882,142 @@
         }
     };
 
-    const loadSlips = async () => {
-        if (refreshInFlight) {
-            return;
+    const loadSlips = () => {
+        if (refreshPromise) {
+            return refreshPromise;
         }
 
-        refreshInFlight = true;
-        try {
-            const response = await fetch(businessSlipsUrl, {
-                headers: {
-                    'Accept': 'application/json'
+        refreshPromise = (async () => {
+            try {
+                const response = await fetch(businessSlipsUrl, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error('Business slips load failed.');
                 }
+
+                const result = await response.json();
+                const snapshot = result?.snapshot ?? result;
+                if (!result?.succeeded || !applySnapshot(snapshot, true)) {
+                    throw new Error(result?.message || 'Business snapshot load failed.');
+                }
+                if (!isSaving) {
+                    markDirtyStatus();
+                }
+                return true;
+            } catch {
+                if (!hasLoaded) {
+                    renderEmpty('伝票を取得できませんでした', '次の自動更新で再取得します。');
+                }
+                return false;
+            } finally {
+                refreshPromise = null;
+            }
+        })();
+
+        return refreshPromise;
+    };
+
+    const reconcileUnknownOperation = async (operation) => {
+        operation.state = 'unknown';
+        renderProjectedSnapshot();
+        const refreshed = await loadSlips();
+        if (refreshed) {
+            pendingOperations.delete(operation.operationId);
+            renderProjectedSnapshot();
+            return true;
+        }
+        showOperationNotice('保存結果を確認できません。通信復旧後に一覧を再取得してください。会計は同期確認後に行えます。');
+        return false;
+    };
+
+    const postEditorOperation = async (operation) => {
+        if (!businessSlipEditorOperationUrl) {
+            pendingOperations.delete(operation.operationId);
+            renderProjectedSnapshot();
+            showOperationNotice('営業中の編集保存先を取得できません。');
+            return false;
+        }
+
+        operation.state = 'saving';
+        renderProjectedSnapshot();
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), operationTimeoutMs);
+        try {
+            const token = form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            const response = await fetch(businessSlipEditorOperationUrl, {
+                method: 'POST',
+                signal: controller.signal,
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(token ? { RequestVerificationToken: token } : {})
+                },
+                body: JSON.stringify({
+                    operationId: operation.operationId,
+                    slipId: Number(operation.slipId),
+                    operationType: operation.operationType,
+                    payload: operation.payload
+                })
             });
-            if (!response.ok) {
-                throw new Error('Business slips load failed.');
+            const result = await response.json().catch(() => null);
+            if (!response.ok || !result?.succeeded || !result?.snapshot) {
+                pendingOperations.delete(operation.operationId);
+                renderProjectedSnapshot();
+                showOperationNotice(result?.message || '保存できませんでした。変更を取り消しました。');
+                return false;
             }
 
-            const result = await response.json();
-            slips = Array.isArray(result.slips) ? result.slips : [];
-            window.prosperBusinessHomeSlips = slips;
-            hasLoaded = true;
-            updateSummary(result);
-            renderSlips();
-            document.dispatchEvent(new CustomEvent('prosper:business-slips-updated', {
-                detail: { slips }
-            }));
-            if (!isSaving) {
-                markDirtyStatus();
+            pendingOperations.delete(operation.operationId);
+            applySnapshot(result.snapshot);
+            return true;
+        } catch (error) {
+            if (error?.name === 'AbortError' || !navigator.onLine) {
+                return reconcileUnknownOperation(operation);
             }
-        } catch {
-            if (!hasLoaded) {
-                renderEmpty('伝票を取得できませんでした', '次の自動更新で再取得します。');
-            }
+            pendingOperations.delete(operation.operationId);
+            renderProjectedSnapshot();
+            showOperationNotice('保存できませんでした。変更を取り消しました。');
+            return false;
         } finally {
-            refreshInFlight = false;
+            window.clearTimeout(timeout);
         }
+    };
+
+    const enqueueEditorOperation = (operation) => {
+        const normalized = {
+            ...operation,
+            operationId: operation.operationId || window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+            state: 'queued'
+        };
+        pendingOperations.set(normalized.operationId, normalized);
+        renderProjectedSnapshot();
+        const lane = operationLane(normalized);
+        const previous = operationLanes.get(lane) || Promise.resolve();
+        const running = previous
+            .catch(() => false)
+            .then(() => postEditorOperation(normalized));
+        const tracked = running.finally(() => {
+            if (operationLanes.get(lane) === tracked) {
+                operationLanes.delete(lane);
+            }
+        });
+        operationLanes.set(lane, tracked);
+        return normalized.operationId;
+    };
+
+    const waitForBusinessOperations = async () => {
+        const running = Array.from(operationLanes.values());
+        if (running.length > 0) {
+            await Promise.all(running);
+        }
+        if (Array.from(pendingOperations.values()).some(isUnknownOperation)) {
+            return false;
+        }
+        return loadSlips();
     };
 
     const markSaved = (payloadRows) => {
@@ -660,6 +1083,12 @@
             return;
         }
 
+        if (!await waitForBusinessOperations()) {
+            window.AppLoading?.hide(targetForm);
+            showOperationNotice('保存結果を確認できない操作があります。同期後に移動してください。');
+            return;
+        }
+
         window.AppLoading?.hide(targetForm);
         allowNextPageUnload();
         targetForm.dataset.karaokeFlushBypass = 'true';
@@ -671,6 +1100,20 @@
     };
 
     form.addEventListener('click', (event) => {
+        const orderGroupToggle = event.target.closest('[data-business-order-group-toggle]');
+        if (orderGroupToggle) {
+            const key = orderGroupToggle.dataset.businessOrderGroupToggle;
+            if (expandedOrderGroupKeys.has(key)) {
+                expandedOrderGroupKeys.delete(key);
+            } else {
+                expandedOrderGroupKeys.add(key);
+            }
+            const row = orderGroupToggle.closest('[data-business-slip-row]');
+            const slip = row ? getSlip(row.dataset.slipId) : null;
+            if (row && slip) syncSlipDetails(row, slip);
+            return;
+        }
+
         const detailsToggle = event.target.closest('[data-business-slip-details-toggle]');
         if (detailsToggle) {
             const slip = getSlip(detailsToggle.dataset.businessSlipDetailsToggle);
@@ -755,14 +1198,28 @@
                 window.AppLoading?.hide(anchor);
                 return;
             }
+            void waitForBusinessOperations().then((synchronized) => {
+                if (!synchronized) {
+                    navigationInFlight = false;
+                    window.AppLoading?.hide(anchor);
+                    showOperationNotice('保存結果を確認できない操作があります。同期後に移動してください。');
+                    return;
+                }
 
-            allowNextPageUnload();
-            window.location.assign(anchor.href);
+                allowNextPageUnload();
+                window.location.assign(anchor.href);
+            });
         });
     });
 
     window.addEventListener('keydown', (event) => {
         if (event.key !== 'F5' && !(event.key.toLowerCase() === 'r' && (event.ctrlKey || event.metaKey))) {
+            return;
+        }
+
+        if (hasPendingOperations()) {
+            event.preventDefault();
+            showOperationNotice('保存中の変更があります。同期完了後に再読み込みできます。');
             return;
         }
 
@@ -819,4 +1276,7 @@
     void loadSlips();
     window.prosperBusinessHomeReload = loadSlips;
     window.prosperBusinessHomeFlushKaraoke = submitDraft;
+    window.prosperBusinessHomeEnqueueEditorOperation = enqueueEditorOperation;
+    window.prosperBusinessHomeGetPendingForSlip = pendingForSlip;
+    window.prosperBusinessHomeWaitForOperations = waitForBusinessOperations;
 })();

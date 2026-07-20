@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using ProsperApp.Services;
 
 namespace ProsperApp.Models;
@@ -178,6 +179,40 @@ public class SlipMutationResult
     public static SlipMutationResult Failed(string message)
     {
         return new SlipMutationResult { Succeeded = false, ErrorMessage = message };
+    }
+}
+
+/// <summary>
+/// 営業中トップから送る、1操作だけの非同期編集要求です。
+/// 入力の確定と全体スナップショットの作成は同一RPCで行います。
+/// </summary>
+public class BusinessSlipEditorOperationInput
+{
+    public string OperationId { get; set; } = string.Empty;
+
+    public long SlipId { get; set; }
+
+    public string OperationType { get; set; } = string.Empty;
+
+    public JsonElement Payload { get; set; }
+}
+
+public class BusinessDaySnapshotResult
+{
+    public bool Succeeded { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public JsonElement Snapshot { get; init; }
+
+    public static BusinessDaySnapshotResult Success(JsonElement snapshot)
+    {
+        return new BusinessDaySnapshotResult { Succeeded = true, Snapshot = snapshot };
+    }
+
+    public static BusinessDaySnapshotResult Failed(string message)
+    {
+        return new BusinessDaySnapshotResult { Succeeded = false, ErrorMessage = message };
     }
 }
 

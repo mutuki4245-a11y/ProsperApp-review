@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
@@ -166,6 +167,70 @@ public class SupabaseStoreSlipRepository(
             })
             .Where(x => x.SlipId > 0)
             .ToList();
+    }
+
+    public async Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct)
+    {
+        if (!HasRequiredSettings() || businessDayId <= 0)
+        {
+            return BusinessDaySnapshotResult.Failed("営業日を取得できません。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.get_business_day_snapshot",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId
+            },
+            ct);
+
+        if (!result.Succeeded || result.Rows.Count == 0 ||
+            !result.Rows[0].TryGetProperty("snapshot", out var snapshot) ||
+            snapshot.ValueKind is not JsonValueKind.Object)
+        {
+            return BusinessDaySnapshotResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        return BusinessDaySnapshotResult.Success(snapshot.Clone());
+    }
+
+    public async Task<BusinessDaySnapshotResult> ApplyBusinessSlipEditorOperationAsync(
+        BusinessSlipEditorOperationInput input,
+        long businessDayId,
+        CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return BusinessDaySnapshotResult.Failed("Supabase Edge Function設定が未設定です。営業中の編集を保存できません。");
+        }
+
+        if (input.SlipId <= 0 || businessDayId <= 0 || string.IsNullOrWhiteSpace(input.OperationType))
+        {
+            return BusinessDaySnapshotResult.Failed("編集する伝票を確認してください。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.apply_business_slip_editor_operation",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId,
+                p_slip_id = input.SlipId,
+                p_operation_type = input.OperationType,
+                p_operation_id = input.OperationId,
+                p_payload = input.Payload
+            },
+            ct);
+
+        if (!result.Succeeded || result.Rows.Count == 0 ||
+            !result.Rows[0].TryGetProperty("snapshot", out var snapshot) ||
+            snapshot.ValueKind is not JsonValueKind.Object)
+        {
+            return BusinessDaySnapshotResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        return BusinessDaySnapshotResult.Success(snapshot.Clone());
     }
 
     public async Task<SlipDetail?> GetSlipDetailAsync(long slipId, CancellationToken ct)
@@ -744,6 +809,16 @@ public class SupabaseStoreSlipRepository(
         if (rawError.Contains("invalid_customer_count", StringComparison.OrdinalIgnoreCase))
         {
             return "追加する客情報を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_customer_label", StringComparison.OrdinalIgnoreCase))
+        {
+            return "客名は100文字以内で入力してください。";
+        }
+
+        if (rawError.Contains("invalid_customer_time", StringComparison.OrdinalIgnoreCase))
+        {
+            return "入退店時刻は5分単位で、伝票の入店時刻以降かつ現在時刻までで入力してください。";
         }
 
         if (rawError.Contains("invalid_left_at", StringComparison.OrdinalIgnoreCase))

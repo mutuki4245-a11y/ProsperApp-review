@@ -191,41 +191,49 @@ public class IndexModel(
             });
         }
 
-        var slips = await _slipRepository.GetBusinessDaySlipsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
-        var businessDate = GetSafeBusinessDate(currentBusinessDay);
-        var hasValidBusinessDate = HasValidBusinessDate(currentBusinessDay);
-        return new JsonResult(new
+        var snapshot = await _slipRepository.GetBusinessDaySnapshotAsync(currentBusinessDay.BusinessDayId, cancellationToken);
+        if (!snapshot.Succeeded)
         {
-            succeeded = true,
-            businessDayId = hasValidBusinessDate ? (long?)currentBusinessDay.BusinessDayId : null,
-            businessDate = businessDate.ToString("yyyy-MM-dd"),
-            businessDateDisplay = hasValidBusinessDate
-                ? businessDate.ToString("yyyy-MM-dd")
-                : $"{businessDate:yyyy-MM-dd} / 自動作成待ち",
-            hasBusinessDay = hasValidBusinessDate,
-            openSlipCount = slips.Count(x => x.Status is "open" or "checkout_ready"),
-            checkedOutSlipCount = slips.Count(x => x.Status == "checked_out"),
-            estimatedSalesAmount = slips
-                .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
-                .Sum(x => x.AccountingAmount),
-            slips = slips.Select(slip => new
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
             {
-                id = slip.SlipId,
-                tableDisplay = slip.TableDisplayName,
-                openedTime = StoreBusinessTime.FormatBusinessTime(slip.OpenedAt),
-                status = slip.Status,
-                statusDisplay = ToSlipStatusDisplay(slip.Status),
-                statusBadgeClass = ToSlipStatusBadgeClass(slip.Status),
-                customerNames = string.IsNullOrWhiteSpace(slip.CustomerNames) ? "客名なし" : slip.CustomerNames,
-                castNames = string.IsNullOrWhiteSpace(slip.CastNames) ? "指名なし" : slip.CastNames,
-                orderCount = slip.OrderCount,
-                orderSubtotalAmount = slip.OrderSubtotalAmount,
-                adjustmentAmount = slip.AdjustmentAmount,
-                memo = string.IsNullOrWhiteSpace(slip.Memo) ? "-" : slip.Memo,
-                accountingAmount = slip.AccountingAmount,
-                karaokeQuantity = slip.KaraokeQuantity
-            })
-        });
+                succeeded = false,
+                message = snapshot.ErrorMessage ?? "営業中の伝票を取得できませんでした。"
+            });
+        }
+
+        return new JsonResult(new { succeeded = true, snapshot = snapshot.Snapshot });
+    }
+
+    public async Task<IActionResult> OnPostBusinessSlipEditorOperationAsync(CancellationToken cancellationToken)
+    {
+        if (!SlipsEnabled)
+        {
+            return NotFound();
+        }
+
+        var input = await ReadCheckoutRequestAsync<BusinessSlipEditorOperationInput>(cancellationToken);
+        if (input is null || input.SlipId <= 0 || string.IsNullOrWhiteSpace(input.OperationId) ||
+            input.OperationType is not ("add_customer" or "update_customer" or "leave_customer" or "add_nomination" or "add_adjustment"))
+        {
+            return BadRequest(new { succeeded = false, message = "編集内容を確認してください。" });
+        }
+
+        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (currentBusinessDay is null)
+        {
+            return BadRequest(new { succeeded = false, message = "営業中の営業日がありません。" });
+        }
+
+        var result = await _slipRepository.ApplyBusinessSlipEditorOperationAsync(
+            input,
+            currentBusinessDay.BusinessDayId,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { succeeded = false, operationId = input.OperationId, message = result.ErrorMessage });
+        }
+
+        return new JsonResult(new { succeeded = true, operationId = input.OperationId, snapshot = result.Snapshot });
     }
 
     public async Task<IActionResult> OnPostCreateSlipAsync(CancellationToken cancellationToken)

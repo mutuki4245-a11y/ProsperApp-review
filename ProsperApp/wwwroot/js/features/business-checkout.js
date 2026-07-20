@@ -195,10 +195,21 @@
     };
     const open = async (slip) => {
         if (isActionInFlight) return;
-        reset(); current = { slipId: Number(slip.id), tableDisplay: slip.tableDisplay, status: slip.status, queue: readQueue(slip.id) };
-        table.textContent = slip.tableDisplay || '会計';
+        const synchronized = await window.prosperBusinessHomeWaitForOperations?.();
+        if (synchronized === false) {
+            window.alert('保存結果を確認できない変更があります。営業中一覧の同期後に会計してください。');
+            return;
+        }
+        const latestSlip = (window.prosperBusinessHomeSlips || []).find((item) => String(item.id) === String(slip.id));
+        if (!latestSlip || !['open', 'checkout_ready'].includes(latestSlip.status)) {
+            window.alert('対象伝票の状態が変わりました。営業中一覧を確認してください。');
+            return;
+        }
+
+        reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, queue: readQueue(latestSlip.id) };
+        table.textContent = latestSlip.tableDisplay || '会計';
         modal?.show();
-        if (slip.status !== 'checkout_ready') return;
+        if (latestSlip.status !== 'checkout_ready') return;
         await runExclusive(async () => {
             try {
                 const data = await post(config.getCheckoutStatementPrintDataUrl, { slipId: current.slipId });
@@ -214,6 +225,11 @@
         if (!current || !closedAt) { setMessage('退店時刻を確認してください。'); return; }
         await runExclusive(async () => {
             try {
+                const synchronized = await window.prosperBusinessHomeWaitForOperations?.();
+                if (synchronized === false) {
+                    setMessage('保存結果を確認できない変更があります。同期後に会計伝票を出力してください。');
+                    return;
+                }
                 const saved = await window.prosperBusinessHomeFlushKaraoke?.();
                 if (saved === false) {
                     setMessage('未保存のカラオケ回数を保存できませんでした。');
