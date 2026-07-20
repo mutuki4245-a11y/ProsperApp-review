@@ -12,6 +12,13 @@
     let pendingBackItemId = null;
     let isOrderCorrectionMode = false;
 
+    const getBackTargetLabel = (cast) => {
+        const drinkMemo = typeof cast.drinkMemo === 'string'
+            ? cast.drinkMemo.replace(/\s+/g, ' ').trim()
+            : '';
+        return drinkMemo ? `${cast.name}（${drinkMemo}）` : cast.name;
+    };
+
     initialOrderQueue.forEach((line) => {
         if (line.itemId > 0 && line.quantity > 0) {
             const key = makeOrderQueueKey(line.itemId, line.castBackCastId);
@@ -141,9 +148,7 @@
     const renderOrderAttendingCastModal = () => {
         const modalList = document.getElementById('orderAttendingCastModalList');
         window.CastSelectModal.renderOptionalBackTarget(modalList, castOptions, {
-            getLabel: (cast) => cast.name,
-            getHelpText: (cast) => cast.drinkMemo,
-            helpClass: 'cast-select-modal__drink-memo',
+            getLabel: getBackTargetLabel,
             onNone: () => {
                 if (pendingBackItemId) {
                     addToOrderQueue(pendingBackItemId, null);

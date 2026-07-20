@@ -118,7 +118,7 @@ begin
     v_display_name := nullif(trim(coalesce(p_display_name, '')), '');
     v_drink_memo := nullif(btrim(coalesce(p_drink_memo, '')), '');
     if v_display_name is null
-       or (v_drink_memo is not null and char_length(v_drink_memo) > 300) then
+       or (v_drink_memo is not null and char_length(v_drink_memo) > 30) then
         raise exception 'invalid_store_cast';
     end if;
 
@@ -184,7 +184,7 @@ begin
     end if;
 
     v_drink_memo := nullif(btrim(coalesce(p_drink_memo, '')), '');
-    if v_drink_memo is not null and char_length(v_drink_memo) > 300 then
+    if v_drink_memo is not null and char_length(v_drink_memo) > 30 then
         raise exception 'invalid_store_cast_drink_memo';
     end if;
 

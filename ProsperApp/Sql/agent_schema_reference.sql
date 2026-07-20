@@ -195,7 +195,7 @@ create table if not exists public.cast_master (
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_cast_master_status check (status in ('active', 'inactive', 'left')),
-    constraint chk_cast_master_drink_memo_length check (char_length(drink_memo) <= 300),
+    constraint chk_cast_master_drink_memo_length check (char_length(drink_memo) <= 30),
     constraint uq_cast_master_code unique (company_id, department_id, cast_code)
 );
 

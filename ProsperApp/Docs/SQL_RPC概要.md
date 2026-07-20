@@ -69,7 +69,7 @@ DB反映時の基本順序は以下。
 | --- | --- | --- |
 | 既存マスタ | `department_master` | 店舗マスタ。店舗別運用設定として勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割を持つ。 |
 | マスタ | `store_table_master` | 店舗ごとの卓番。`table_category_no`（0〜9）でカテゴリ順を持つ。 |
-| マスタ | `cast_master` | キャスト。店舗所属、表示順、任意入力の `drink_memo`（改行を含め300文字以内）を持つ。 |
+| マスタ | `cast_master` | キャスト。店舗所属、表示順、任意入力の `drink_memo`（30文字以内）を持つ。 |
 | マスタ | `store_item_category_master` | 商品カテゴリ。 |
 | マスタ | `store_item_master` | 商品マスタ。価格、商品種別、キャストバック対象、バック単価、バック種別を持つ。カラオケは `item_type = 'karaoke'`、指名料金は `item_type = 'nomination_fee'` のシステム商品。 |
 | マスタ | `store_nomination_back_master` | 店舗別の指名種別と指名バック設定。`nomination_kind`、基本種別、表示名、同伴時刻、バック単価、有効/無効を持つ。 |

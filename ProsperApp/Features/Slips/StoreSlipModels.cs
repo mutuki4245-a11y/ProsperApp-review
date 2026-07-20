@@ -72,7 +72,7 @@ public class StoreCastCreateInputModel
     public string DisplayName { get; set; } = string.Empty;
 
     [Display(Name = "ドリンクメモ")]
-    [StringLength(300, ErrorMessage = "ドリンクメモは300文字以内で入力してください。")]
+    [StringLength(30, ErrorMessage = "ドリンクメモは30文字以内で入力してください。")]
     public string? DrinkMemo { get; set; }
 }
 
@@ -82,7 +82,7 @@ public class StoreCastDrinkMemoInputModel
     public long CastId { get; set; }
 
     [Display(Name = "ドリンクメモ")]
-    [StringLength(300, ErrorMessage = "ドリンクメモは300文字以内で入力してください。")]
+    [StringLength(30, ErrorMessage = "ドリンクメモは30文字以内で入力してください。")]
     public string? DrinkMemo { get; set; }
 }
 

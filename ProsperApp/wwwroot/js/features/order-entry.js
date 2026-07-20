@@ -521,20 +521,17 @@
         label.className = 'cast-select-modal__item-label';
 
         const name = document.createElement('strong');
-        name.textContent = cast.name || cast.display || '';
+        const drinkMemo = typeof cast.drinkMemo === 'string'
+            ? cast.drinkMemo.replace(/\s+/g, ' ').trim()
+            : '';
+        const displayName = cast.name || cast.display || '';
+        name.textContent = drinkMemo ? `${displayName}（${drinkMemo}）` : displayName;
         label.appendChild(name);
 
         if (isNominated) {
             const badge = document.createElement('span');
             badge.textContent = '指名';
             label.appendChild(badge);
-        }
-
-        if (cast.drinkMemo) {
-            const drinkMemo = document.createElement('span');
-            drinkMemo.className = 'cast-select-modal__drink-memo';
-            drinkMemo.textContent = cast.drinkMemo;
-            label.appendChild(drinkMemo);
         }
 
         const controls = document.createElement('div');
