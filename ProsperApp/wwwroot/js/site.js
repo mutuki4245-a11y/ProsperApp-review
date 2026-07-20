@@ -238,6 +238,11 @@
             return false;
         }
 
+        if (form.dataset.partialSubmitting === 'true') {
+            return false;
+        }
+
+        form.dataset.partialSubmitting = 'true';
         const modalElement = options.modalId ? document.getElementById(options.modalId) : form.closest('.modal');
         const status = options.status ? section.querySelector(options.status) : null;
         setTerminalSaveStatus(status, 'saving');
@@ -273,6 +278,7 @@
             setTerminalSaveStatus(status, 'error');
             return false;
         } finally {
+            delete form.dataset.partialSubmitting;
             hide(form);
         }
     };
@@ -328,6 +334,11 @@
         }
 
         if (form.dataset.loadingLock === 'false') {
+            return;
+        }
+
+        if (isLocked) {
+            event.preventDefault();
             return;
         }
 
