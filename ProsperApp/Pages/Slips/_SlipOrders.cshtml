@@ -38,7 +38,7 @@
                 <div class="slip-create__panel-title-actions">
                     @if (Model.IsOpenSlip && activeStandardOrders.Count > 0)
                     {
-                        <output class="terminal-save-status" data-order-quantity-status data-save-state="saved" aria-live="polite">保存済み</output>
+                        <output class="terminal-save-status" data-order-quantity-status data-hide-when-saved data-save-state="saved" aria-live="polite" hidden>保存済み</output>
                         <button class="btn btn-outline-primary" type="button" data-order-correction-toggle aria-pressed="false">訂正モード</button>
                         <button class="btn btn-primary" type="submit" form="orderQuantityForm" data-order-quantity-save hidden disabled>数量を保存</button>
                     }
@@ -166,7 +166,7 @@
                 <div class="slip-create__panel-title-actions">
                     @if (Model.IsOpenSlip)
                     {
-                        <output class="terminal-save-status" data-adjustment-status data-save-state="saved" aria-live="polite">保存済み</output>
+                        <output class="terminal-save-status" data-adjustment-status data-hide-when-saved data-save-state="saved" aria-live="polite" hidden>保存済み</output>
                         <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#adjustmentModal">自由入力明細を追加</button>
                     }
                     <span class="terminal-count-badge">@StoreUiText.Yen(chargeTotal)</span>

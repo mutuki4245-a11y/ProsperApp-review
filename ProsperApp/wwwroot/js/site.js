@@ -204,6 +204,9 @@
         const normalizedState = terminalSaveStatusStates.has(state) ? state : 'saved';
         target.textContent = message || terminalSaveStatusMessages[normalizedState];
         target.dataset.saveState = normalizedState;
+        if (target.hasAttribute('data-hide-when-saved')) {
+            target.hidden = normalizedState === 'saved';
+        }
     };
 
     const formatMoneyAmount = (value) => Math.round(Number(value) || 0).toLocaleString('ja-JP');
