@@ -164,15 +164,27 @@ public class CastSalesAdjustmentModel(
         CastSalesAmountBasis = storeContext?.CastSalesAmountBasis ?? LocalSettings.CastSalesAmountBasisTotal;
         CastSalesSplitMode = storeContext?.CastSalesSplitMode ?? LocalSettings.CastSalesSplitModeSplit;
         CurrentBusinessDay = await currentBusinessDayTask;
-        CastSalesAdjustmentStatus = CurrentBusinessDay is null
-            ? new CastSalesAdjustmentStatus()
-            : await _castSalesAdjustmentRepository.GetStatusAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        CastSalesAdjustmentSlips = CurrentBusinessDay is null
-            ? []
-            : await _castSalesAdjustmentRepository.GetSlipsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-        CastSalesAdjustmentDetails = CurrentBusinessDay is null
-            ? []
-            : await LoadCastSalesAdjustmentDetailsAsync(CastSalesAdjustmentSlips, cancellationToken);
+        if (CurrentBusinessDay is null)
+        {
+            CastSalesAdjustmentStatus = new CastSalesAdjustmentStatus();
+            CastSalesAdjustmentSlips = [];
+            CastSalesAdjustmentDetails = [];
+            return;
+        }
+
+        var castSalesAdjustmentStatusTask = _castSalesAdjustmentRepository.GetStatusAsync(
+            CurrentBusinessDay.BusinessDayId,
+            cancellationToken);
+        var castSalesAdjustmentSlipsTask = _castSalesAdjustmentRepository.GetSlipsAsync(
+            CurrentBusinessDay.BusinessDayId,
+            cancellationToken);
+        await Task.WhenAll(castSalesAdjustmentStatusTask, castSalesAdjustmentSlipsTask);
+
+        CastSalesAdjustmentStatus = await castSalesAdjustmentStatusTask;
+        CastSalesAdjustmentSlips = await castSalesAdjustmentSlipsTask;
+        CastSalesAdjustmentDetails = await LoadCastSalesAdjustmentDetailsAsync(
+            CastSalesAdjustmentSlips,
+            cancellationToken);
     }
 
     public CastSalesAdjustmentDetail? FindCastSalesAdjustmentDetail(long slipId)
@@ -184,20 +196,21 @@ public class CastSalesAdjustmentModel(
         IReadOnlyList<CastSalesAdjustmentSlip> slips,
         CancellationToken cancellationToken)
     {
-        var details = new List<CastSalesAdjustmentDetail>();
-        foreach (var slip in slips)
+        var details = await Task.WhenAll(slips.Select(async slip =>
         {
             var detail = await _castSalesAdjustmentRepository.GetDetailAsync(slip.SlipId, cancellationToken);
-            if (detail is null)
+            if (detail is not null)
             {
-                continue;
+                ApplyInitialCastSalesAmounts(detail);
             }
 
-            ApplyInitialCastSalesAmounts(detail);
-            details.Add(detail);
-        }
+            return detail;
+        }));
 
-        return details;
+        return details
+            .Where(detail => detail is not null)
+            .Select(detail => detail!)
+            .ToList();
     }
 
     private void ApplyInitialCastSalesAmounts(CastSalesAdjustmentDetail detail)
