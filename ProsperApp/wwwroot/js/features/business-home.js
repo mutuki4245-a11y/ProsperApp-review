@@ -539,13 +539,15 @@
 
             const decrement = buildElement('button', 'btn btn-outline-secondary', '-');
             decrement.type = 'button';
+            decrement.setAttribute('aria-label', 'カラオケを減らす');
             decrement.dataset.businessKaraokeDecrement = '';
             const increment = buildElement('button', 'btn btn-outline-primary', '+');
             increment.type = 'button';
+            increment.setAttribute('aria-label', 'カラオケを増やす');
             increment.dataset.businessKaraokeIncrement = '';
             const quantity = buildElement('strong', null, displayQuantity);
             quantity.dataset.businessKaraokeDisplay = '';
-            karaoke.append(buildElement('span', null, 'カラオケ'), decrement, quantity, increment);
+            karaoke.append(decrement, quantity, increment);
             row.appendChild(karaoke);
         }
 
@@ -768,17 +770,15 @@
 
     const syncSlipRow = (row, slip) => {
         row.dataset.slipId = String(slip.id);
+        const isOpen = slip.status === 'open' && !slip.checkoutPending;
+        row.classList.toggle('slip-list__row--open', isOpen);
+        row.classList.toggle('slip-list__row--not-open', !isOpen);
+        row.setAttribute('aria-label', `${slip.tableDisplay} ${slip.checkoutPending ? '会計準備中' : slip.statusDisplay}`);
 
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
-        const statusElement = row.querySelector('[data-business-slip-status]');
-        if (statusElement) {
-            statusElement.className = `badge slip-list__status ${slip.statusBadgeClass}`;
-            setText(statusElement, slip.checkoutPending ? '会計準備中' : slip.statusDisplay);
-        }
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
         setText(row.querySelector('[data-business-slip-customers]'), slip.customerNames || '客名なし');
         setText(row.querySelector('[data-business-slip-casts]'), slip.castNames || '指名なし');
-        setText(row.querySelector('[data-business-slip-memo]'), slip.memo || '-');
         const checkoutButton = row.querySelector('[data-business-start-checkout]');
         const receiptButton = row.querySelector('[data-business-print-receipt]');
         const cancelButton = row.querySelector('[data-business-cancel-checkout]');
@@ -809,21 +809,17 @@
 
         const table = buildElement('strong', 'slip-list__table');
         table.dataset.businessSlipTable = '';
-        const statusElement = buildElement('span');
-        statusElement.dataset.businessSlipStatus = '';
         const openedTime = buildElement('span', 'slip-list__time');
         openedTime.dataset.businessSlipTime = '';
         const customers = buildElement('span', 'slip-list__customers');
         customers.dataset.businessSlipCustomers = '';
         const casts = buildElement('span', 'slip-list__casts');
         casts.dataset.businessSlipCasts = '';
-        const memo = buildElement('span', 'slip-list__memo');
-        memo.dataset.businessSlipMemo = '';
         const syncState = buildElement('span', 'slip-list__sync-state');
         syncState.dataset.businessSlipSyncState = '';
         syncState.hidden = true;
 
-        main.append(table, statusElement, openedTime, customers, casts, memo, syncState);
+        main.append(table, openedTime, customers, casts, syncState);
         main.appendChild(buildAmountElement(slip));
         const actions = buildElement('div', 'slip-list__actions');
         const detailsToggle = buildElement('button', 'btn btn-sm btn-outline-secondary', '詳細');
