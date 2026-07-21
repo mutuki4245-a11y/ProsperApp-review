@@ -185,7 +185,6 @@
         setModalHeading(section, currentSlip(slipId));
         renderLocalEditor(section, currentSlip(slipId));
         modal.show();
-        void loadEditorMarkup(section, slipId);
     };
 
     const syncCompanionPrice = (kindSelect, force = false) => {
