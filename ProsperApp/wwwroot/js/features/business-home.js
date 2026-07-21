@@ -568,35 +568,26 @@
     const buildSlipDetails = () => {
         const panel = buildElement('section', 'slip-list__details');
         panel.dataset.businessSlipDetails = '';
-        const heading = buildElement('h3', 'slip-list__details-heading');
-        heading.dataset.businessSlipDetailsHeading = '';
         const fields = buildElement('div', 'slip-list__details-content');
         fields.dataset.businessSlipDetailsContent = '';
         const actions = buildElement('div', 'slip-list__details-actions');
-        [
-            ['customers', '客を編集'],
-            ['nominations', '指名を編集'],
-            ['adjustments', '自由明細を編集']
-        ].forEach(([section, label]) => {
-            const button = buildElement('button', 'btn btn-sm btn-outline-primary', label);
-            button.type = 'button';
-            button.dataset.businessSlipEditor = section;
-            actions.appendChild(button);
-        });
+        const adjustmentButton = buildElement('button', 'btn btn-sm btn-outline-primary', '自由明細を編集');
+        adjustmentButton.type = 'button';
+        adjustmentButton.dataset.businessSlipEditor = 'adjustments';
+        actions.appendChild(adjustmentButton);
         const detailLink = buildElement('a', 'btn btn-sm btn-outline-secondary', '詳細画面');
         detailLink.dataset.businessSlipEdit = '';
         detailLink.dataset.businessFlushKaraoke = '';
         actions.appendChild(detailLink);
-        panel.append(heading, fields, actions);
+        panel.append(fields, actions);
         return panel;
     };
 
-    const detailSection = (title, emptyText) => {
+    const detailSection = (title) => {
         const section = buildElement('section', 'business-slip-detail-section');
         section.append(buildElement('h4', 'business-slip-detail-section__title', title));
         const body = buildElement('div', 'business-slip-detail-section__body');
         body.dataset.businessSlipDetailBody = title;
-        body.dataset.emptyText = emptyText;
         section.appendChild(body);
         return section;
     };
@@ -612,31 +603,30 @@
         return line;
     };
 
-    const renderCustomers = (target, slip) => {
-        target.replaceChildren();
-        const customers = Array.isArray(slip.customers) ? slip.customers : [];
-        if (customers.length === 0) {
-            target.textContent = '客情報はありません。';
-            return;
-        }
-        customers.forEach((customer) => {
-            const time = `入店 ${customer.enteredTime || '-'}${customer.leftTime ? ` / 退店 ${customer.leftTime}` : ''}`;
-            const state = customer.status === 'active' ? '在席' : customer.status === 'left' ? '退店済' : '取消';
-            target.append(detailLine(`#${customer.lineNo || '-'} ${customer.displayName || '客名なし'}`, `${time} / ${state}`, null, customer.pending));
-        });
+    const detailSummary = (kind, primary, secondary, editorLabel) => {
+        const row = buildElement('div', `business-slip-detail-summary business-slip-detail-summary--${kind}`);
+        row.append(
+            buildElement('strong', 'business-slip-detail-summary__primary', primary),
+            buildElement('span', 'business-slip-detail-summary__secondary', secondary)
+        );
+        const button = buildElement('button', 'btn btn-sm btn-outline-primary', editorLabel);
+        button.type = 'button';
+        button.dataset.businessSlipEditor = kind;
+        row.appendChild(button);
+        return row;
     };
 
-    const renderNominations = (target, slip) => {
-        target.replaceChildren();
-        const nominations = Array.isArray(slip.nominations) ? slip.nominations : [];
-        if (nominations.length === 0) {
-            target.textContent = '指名はありません。';
-            return;
-        }
-        nominations.forEach((nomination) => {
-            const sub = `${nomination.startedTime || '-'} / ${nomination.nominationDisplayName || nomination.nominationKind || '指名'}${nomination.status === 'active' ? '' : ` / ${nomination.status}`}`;
-            target.append(detailLine(nomination.displayName || 'キャスト', sub, formatYen(nomination.nominationPrice), nomination.pending));
-        });
+    const customerSummary = (slip) => {
+        const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
+        const names = customers.map((customer) => customer.displayName || '客名なし').join('、');
+        return detailSummary('customers', `在席 ${customers.length}人`, names || '在席客なし', '客を編集');
+    };
+
+    const nominationSummary = (slip) => {
+        const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((nomination) => nomination.status === 'active') : [];
+        const names = nominations.map((nomination) => nomination.displayName || 'キャスト').join('、');
+        const kinds = nominations.map((nomination) => nomination.nominationDisplayName || nomination.nominationKind || '指名').join('、');
+        return detailSummary('nominations', names || '指名なし', kinds || '指名区分なし', '指名を編集');
     };
 
     const renderOrderGroup = (target, slip, key, label, lines) => {
@@ -689,8 +679,6 @@
         });
         groups.forEach((lines, key) => renderOrderGroup(target, slip, `order:${key}`, lines[0]?.itemName || '-', lines));
         if (automatic.length > 0) {
-            const separator = buildElement('div', 'business-slip-auto-divider', '自動明細');
-            target.appendChild(separator);
             const autoGroups = new Map();
             automatic.forEach((line) => {
                 const key = `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}`;
@@ -698,17 +686,12 @@
                 group.push(line);
                 autoGroups.set(key, group);
             });
-            autoGroups.forEach((lines, key) => renderOrderGroup(target, slip, `auto:${key}`, lines[0]?.itemName || '自動明細', lines));
+            autoGroups.forEach((lines, key) => renderOrderGroup(target, slip, `auto:${key}`, lines[0]?.itemName || '-', lines));
         }
     };
 
     const renderAdjustments = (target, slip) => {
-        target.replaceChildren();
         const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
-        if (adjustments.length === 0) {
-            target.textContent = '自由入力明細はありません。';
-            return;
-        }
         adjustments.forEach((adjustment) => {
             target.append(detailLine(adjustment.lineName || '-', adjustment.createdTime || '-', formatSignedYen(adjustment.amount), adjustment.pending));
         });
@@ -723,9 +706,8 @@
 
         const isExpanded = expandedSlipIds.has(String(slip.id));
         const panelId = `business-slip-details-${slip.id}`;
-        const headingId = `${panelId}-heading`;
         panel.id = panelId;
-        panel.setAttribute('aria-labelledby', headingId);
+        panel.setAttribute('aria-label', `卓 ${slip.tableDisplay} の詳細`);
         panel.hidden = !isExpanded;
         row.classList.toggle('slip-list__row--expanded', isExpanded);
         toggle.dataset.businessSlipDetailsToggle = String(slip.id);
@@ -733,23 +715,13 @@
         toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
         toggle.setAttribute('aria-label', isExpanded ? '詳細を閉じる' : '詳細を開く');
         toggle.textContent = isExpanded ? '∧' : '∨';
-        const heading = panel.querySelector('[data-business-slip-details-heading]');
-        if (heading) {
-            heading.id = headingId;
-            heading.textContent = `卓 ${slip.tableDisplay} の詳細`;
-        }
         const content = panel.querySelector('[data-business-slip-details-content]');
         if (content) {
             content.replaceChildren();
-            const customerSection = detailSection('客', '客情報はありません。');
-            const nominationSection = detailSection('指名', '指名はありません。');
-            const orderSection = detailSection('注文', '注文はありません。');
-            const adjustmentSection = detailSection('自由明細', '自由入力明細はありません。');
-            renderCustomers(customerSection.querySelector('[data-business-slip-detail-body]'), slip);
-            renderNominations(nominationSection.querySelector('[data-business-slip-detail-body]'), slip);
+            const orderSection = detailSection('注文');
             renderOrders(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
-            renderAdjustments(adjustmentSection.querySelector('[data-business-slip-detail-body]'), slip);
-            content.append(customerSection, nominationSection, orderSection, adjustmentSection);
+            renderAdjustments(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
+            content.append(customerSummary(slip), nominationSummary(slip), orderSection);
         }
         const canEdit = slip.status === 'open' && !slip.checkoutPending;
         panel.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
