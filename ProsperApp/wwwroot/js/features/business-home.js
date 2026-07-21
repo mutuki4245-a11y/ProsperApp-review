@@ -548,7 +548,11 @@
             const quantity = buildElement('strong', null, displayQuantity);
             quantity.dataset.businessKaraokeDisplay = '';
             karaoke.append(decrement, quantity, increment);
-            row.appendChild(karaoke);
+        }
+
+        const actions = row.querySelector('.slip-list__actions');
+        if (actions && karaoke.parentElement !== actions) {
+            actions.appendChild(karaoke);
         }
 
         karaoke.dataset.slipId = String(slip.id);
