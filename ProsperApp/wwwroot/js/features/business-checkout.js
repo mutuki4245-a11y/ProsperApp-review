@@ -133,11 +133,11 @@
     const formatTime = (value) => value ? new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '-';
     const printable = () => ['printed', 'staff_complete'].includes(current?.queue?.state);
     const syncFooterActions = () => {
-        const hasQueue = Boolean(current?.queue);
-        const isRecoveringStatement = current?.status === 'checkout_ready' && !hasQueue;
-        issueAction.hidden = hasQueue || isRecoveringStatement;
-        printActions.hidden = !hasQueue;
-        confirmAction.hidden = !printable();
+        const isCheckoutReady = current?.status === 'checkout_ready';
+        const hasCheckoutQueue = isCheckoutReady && Boolean(current?.queue);
+        issueAction.hidden = isCheckoutReady;
+        printActions.hidden = !hasCheckoutQueue;
+        confirmAction.hidden = !hasCheckoutQueue || !printable();
     };
     const renderPrintState = () => {
         const state = current?.queue?.state || 'pending';
@@ -251,6 +251,7 @@
                 window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, true);
                 setMessage('会計伝票を発行中です。');
                 const data = await post(config.issueCheckoutStatementUrl, { slipId: current.slipId, closedAt });
+                current.status = 'checkout_ready';
                 current.queue = { state: 'pending', printData: data.printData, reviewData: data.reviewData }; writeQueue(); showCurrent();
                 const snapshotSynchronized = await window.prosperBusinessHomeReload?.();
                 if (snapshotSynchronized) {
