@@ -570,6 +570,11 @@
         panel.dataset.businessSlipDetails = '';
         const fields = buildElement('div', 'slip-list__details-content');
         fields.dataset.businessSlipDetailsContent = '';
+        panel.appendChild(fields);
+        return panel;
+    };
+
+    const buildSlipDetailActions = () => {
         const actions = buildElement('div', 'slip-list__details-actions');
         const adjustmentButton = buildElement('button', 'btn btn-sm btn-outline-primary', '自由明細を編集');
         adjustmentButton.type = 'button';
@@ -579,13 +584,13 @@
         detailLink.dataset.businessSlipEdit = '';
         detailLink.dataset.businessFlushKaraoke = '';
         actions.appendChild(detailLink);
-        panel.append(fields, actions);
-        return panel;
+        return actions;
     };
 
     const detailSection = (title) => {
         const section = buildElement('section', 'business-slip-detail-section');
         section.append(buildElement('h4', 'business-slip-detail-section__title', title));
+        section.appendChild(buildElement('div', 'business-slip-detail-section__divider'));
         const body = buildElement('div', 'business-slip-detail-section__body');
         body.dataset.businessSlipDetailBody = title;
         section.appendChild(body);
@@ -603,9 +608,10 @@
         return line;
     };
 
-    const detailSummary = (kind, primary, secondary, editorLabel) => {
+    const detailSummary = (heading, kind, primary, secondary, editorLabel) => {
         const row = buildElement('div', `business-slip-detail-summary business-slip-detail-summary--${kind}`);
         row.append(
+            buildElement('strong', 'business-slip-detail-summary__heading', heading),
             buildElement('strong', 'business-slip-detail-summary__primary', primary),
             buildElement('span', 'business-slip-detail-summary__secondary', secondary)
         );
@@ -619,14 +625,14 @@
     const customerSummary = (slip) => {
         const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
         const names = customers.map((customer) => customer.displayName || '客名なし').join('、');
-        return detailSummary('customers', `在席 ${customers.length}人`, names || '在席客なし', '客を編集');
+        return detailSummary('客', 'customers', `在席 ${customers.length}人`, names || '在席客なし', '客を編集');
     };
 
     const nominationSummary = (slip) => {
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((nomination) => nomination.status === 'active') : [];
         const names = nominations.map((nomination) => nomination.displayName || 'キャスト').join('、');
         const kinds = nominations.map((nomination) => nomination.nominationDisplayName || nomination.nominationKind || '指名').join('、');
-        return detailSummary('nominations', names || '指名なし', kinds || '指名区分なし', '指名を編集');
+        return detailSummary('指名', 'nominations', names || '指名なし', kinds || '指名区分なし', '指名を編集');
     };
 
     const renderOrderGroup = (target, slip, key, label, lines) => {
@@ -721,6 +727,7 @@
             const orderSection = detailSection('注文');
             renderOrders(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
             renderAdjustments(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
+            orderSection.appendChild(buildSlipDetailActions());
             content.append(customerSummary(slip), nominationSummary(slip), orderSection);
         }
         const canEdit = slip.status === 'open' && !slip.checkoutPending;

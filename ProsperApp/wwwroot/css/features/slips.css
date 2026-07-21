@@ -326,12 +326,11 @@
 }
 
 .slip-list__details-actions {
-  border-top: 1px solid #d9e2ec;
-  display: flex;
+  align-content: start;
+  display: grid;
   gap: 0.35rem;
-  justify-content: flex-end;
-  margin-top: 0.75rem;
-  padding-top: 0.65rem;
+  grid-area: actions;
+  min-width: max-content;
 }
 
 .slip-list__sync-state {
@@ -357,10 +356,11 @@
   align-items: center;
   display: grid;
   gap: 0.45rem;
-  grid-template-columns: minmax(5.5rem, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(3rem, 5.5rem) minmax(0, 1fr) minmax(0, 1fr) minmax(5.5rem, auto) minmax(0.75rem, 1.5rem) auto;
   min-width: 0;
 }
 
+.business-slip-detail-summary__heading,
 .business-slip-detail-summary__primary,
 .business-slip-detail-summary__secondary {
   min-width: 0;
@@ -369,32 +369,54 @@
   white-space: nowrap;
 }
 
+.business-slip-detail-summary__heading {
+  color: #475569;
+  font-size: 0.78rem;
+}
+
 .business-slip-detail-summary__secondary {
   color: #64748b;
   font-size: 0.82rem;
 }
 
 .business-slip-detail-summary .btn {
+  grid-column: 6;
   min-height: 2.2rem;
   white-space: nowrap;
 }
 
 .business-slip-detail-section {
+  align-items: start;
+  column-gap: 0.45rem;
+  display: grid;
+  grid-template-areas:
+    "title . . . . actions"
+    "divider divider divider divider divider actions"
+    ". body body body . actions";
+  grid-template-columns: minmax(3rem, 5.5rem) minmax(0, 1fr) minmax(6rem, auto) minmax(5.5rem, auto) minmax(0.75rem, 1.5rem) auto;
   min-width: 0;
 }
 
 .business-slip-detail-section__title {
-  border-bottom: 1px solid #d9e2ec;
   color: #475569;
   font-size: 0.78rem;
   font-weight: 800;
-  margin: 0.05rem 0 0.35rem;
-  padding-bottom: 0.3rem;
+  grid-area: title;
+  margin: 0;
+  padding: 0.22rem 0;
+}
+
+.business-slip-detail-section__divider {
+  border-top: 1px solid #d9e2ec;
+  grid-area: divider;
+  height: 1px;
+  margin: 0.15rem 0 0.3rem;
 }
 
 .business-slip-detail-section__body {
   display: grid;
   gap: 0.2rem;
+  grid-area: body;
 }
 
 .business-slip-detail-line,
