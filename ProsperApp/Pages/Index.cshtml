@@ -206,7 +206,6 @@
                                         @for (var i = 0; i < Model.CreateSlipInput.CustomerLabels.Count; i++)
                                         {
                                             <div class="customer-row" data-business-customer-row>
-                                                <label class="customer-row__index">@(i + 1)</label>
                                                 <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[@i]" value="@Model.CreateSlipInput.CustomerLabels[i]" maxlength="100" placeholder="客名・特徴など" />
                                             </div>
                                         }
@@ -214,8 +213,13 @@
                                 </section>
 
                                 <section class="slip-create__panel slip-create__panel--nominations">
-                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions">
-                                        <button class="btn btn-outline-primary" type="button" id="businessAddNominationButton" disabled="@(!hasNominationOptions)">追加</button>
+                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions slip-create__nomination-count">
+                                        <span class="slip-create__customer-count-label">指名</span>
+                                        <div class="slip-create__customer-count-controls" role="group" aria-label="指名人数">
+                                            <button class="btn btn-outline-primary" type="button" id="businessDecreaseNominationCount" aria-label="指名を減らす" disabled="@(Model.CreateSlipInput.CastNominations.Count == 0)">－</button>
+                                            <output class="slip-create__customer-count-value" id="businessNominationCount" aria-live="polite" aria-atomic="true">@($"{Model.CreateSlipInput.CastNominations.Count}人")</output>
+                                            <button class="btn btn-outline-primary" type="button" id="businessIncreaseNominationCount" aria-label="指名を増やす" disabled="@(!hasNominationOptions || Model.CreateSlipInput.CastNominations.Count >= 20)">＋</button>
+                                        </div>
                                     </div>
                                     @if (!hasNominationOptions)
                                     {
@@ -226,7 +230,6 @@
                                         {
                                             var nomination = Model.CreateSlipInput.CastNominations[i];
                                             <div class="nomination-row" data-business-nomination-row>
-                                                <label class="customer-row__index nomination-row__index">@(i + 1)</label>
                                                 <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[@i].NominationKind">
                                                     <option value="">指名区分</option>
                                                     @foreach (var option in nominationOptions)
@@ -256,7 +259,6 @@
                                                         <span data-business-selected-cast>@(nomination.CastName ?? "キャストを選択")</span>
                                                     </button>
                                                 </div>
-                                                <button class="btn btn-outline-danger nomination-row__remove" type="button" data-business-remove-nomination @(i == 0 ? "hidden" : null)>削除</button>
                                             </div>
                                         }
                                     </div>

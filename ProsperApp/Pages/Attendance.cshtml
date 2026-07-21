@@ -11,18 +11,6 @@
 }
 
 <section class="store-home terminal-page terminal-page--attendance">
-    <div class="page-section-heading">
-        <h1>勤怠入力</h1>
-        @if (Model.CurrentBusinessDay is null)
-        {
-            <p>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 保存時に自動作成</p>
-        }
-        else
-        {
-            <p>@Model.WorkflowLabel / @Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</p>
-        }
-    </div>
-
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
     {
         <div class="alert alert-success">@Model.SuccessMessage</div>
@@ -48,22 +36,11 @@
     }
     else
     {
-        @if (Model.CurrentBusinessDay is null)
-        {
-            <div class="alert alert-info">
-                保存すると営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") を自動作成します。
-            </div>
-        }
-
         <form method="post" class="closing-attendance-form" data-attendance-form="true">
             <input asp-for="Input.BusinessDayId" type="hidden" />
             <input asp-for="Input.SelectedCastIds" type="hidden" id="selectedAttendanceCastIds" />
             <input asp-for="Input.SelectedEntriesJson" type="hidden" id="selectedAttendanceEntriesJson" />
             <div class="closing-attendance-toolbar">
-                <div class="closing-attendance-toolbar__summary">
-                    <strong>出勤キャスト</strong>
-                    <span id="selectedAttendanceCount">@selectedAttendanceCount 名</span>
-                </div>
                 <button class="btn btn-outline-primary" type="button" id="addAttendanceCastButton">出勤キャストを追加</button>
             </div>
 

@@ -1486,10 +1486,11 @@
 }
 
 .slip-create-three-column {
+  align-items: start;
   display: grid;
   gap: 0.85rem;
   grid-row: 2;
-  grid-template-columns: minmax(16rem, 0.9fr) minmax(15rem, 0.8fr) minmax(22rem, 1.3fr);
+  grid-template-columns: minmax(15rem, 0.85fr) minmax(13rem, 0.7fr) minmax(25rem, 1.45fr);
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -1510,6 +1511,11 @@
   min-height: 0;
   overflow: hidden;
   padding: 0.7rem;
+}
+
+#createSlipModal .slip-create__panel--customers,
+#createSlipModal .slip-create__panel--nominations {
+  align-self: start;
 }
 
 #createSlipModal .slip-create__panel-title,
@@ -1563,7 +1569,8 @@
 #createSlipModal .table-picker-category-list,
 #businessCustomerList,
 #businessNominationList {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  max-height: min(20rem, 48dvh);
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -1578,15 +1585,15 @@
 }
 
 #createSlipModal .customer-row {
-  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 #createSlipModal .nomination-row {
-  grid-template-columns: 2.7rem minmax(0, 1fr) minmax(7rem, 0.7fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) 4.5rem minmax(8rem, 1.25fr);
 }
 
 #createSlipModal .nomination-row__cast {
-  grid-column: 2 / -1;
+  grid-column: auto;
 }
 
 @media (max-width: 1099.98px) {

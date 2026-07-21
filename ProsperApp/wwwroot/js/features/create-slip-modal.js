@@ -17,7 +17,9 @@
     const increaseCustomerCountButton = document.getElementById('businessIncreaseCustomerCount');
     const nominationList = document.getElementById('businessNominationList');
     const nominationEmpty = document.querySelector('[data-business-nomination-empty]');
-    const addNominationButton = document.getElementById('businessAddNominationButton');
+    const nominationCountDisplay = document.getElementById('businessNominationCount');
+    const decreaseNominationCountButton = document.getElementById('businessDecreaseNominationCount');
+    const increaseNominationCountButton = document.getElementById('businessIncreaseNominationCount');
     const castModalElement = document.getElementById('businessAttendingCastSelectModal');
     const castModalList = document.getElementById('businessAttendingCastModalList');
     const createSlipModal = new bootstrap.Modal(createSlipModalElement);
@@ -137,11 +139,7 @@
 
         const rows = getCustomerRows();
         rows.forEach((row, index) => {
-            const label = row.querySelector('.customer-row__index');
             const input = row.querySelector('input');
-            if (label) {
-                label.textContent = String(index + 1);
-            }
             if (input) {
                 input.name = `CreateSlipInput.CustomerLabels[${index}]`;
             }
@@ -163,7 +161,6 @@
         row.className = 'customer-row';
         row.dataset.businessCustomerRow = '';
         row.innerHTML = `
-            <label class="customer-row__index">${count + 1}</label>
             <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[${count}]" maxlength="100" placeholder="客名・特徴など" />
         `;
         customerList.appendChild(row);
@@ -218,24 +215,24 @@
             return;
         }
 
-        if (nominationKindOptions.length === 0) {
-            return;
-        }
-
-        const rows = nominationList.querySelectorAll('[data-business-nomination-row]');
+        const rows = getNominationRows();
         if (nominationEmpty) {
             nominationEmpty.hidden = rows.length > 0;
         }
+        if (nominationCountDisplay) {
+            nominationCountDisplay.textContent = `${rows.length}人`;
+        }
+        if (decreaseNominationCountButton) {
+            decreaseNominationCountButton.disabled = rows.length === 0;
+        }
+        if (increaseNominationCountButton) {
+            increaseNominationCountButton.disabled = nominationKindOptions.length === 0 || rows.length >= 20;
+        }
         rows.forEach((row, index) => {
-            const label = row.querySelector('.nomination-row__index');
             const kind = row.querySelector('.nomination-row__kind');
             const price = row.querySelector('.nomination-row__price');
             const castId = row.querySelector('[data-business-cast-id]');
             const castName = row.querySelector('[data-business-cast-name-hidden]');
-            const remove = row.querySelector('[data-business-remove-nomination]');
-            if (label) {
-                label.textContent = String(index + 1);
-            }
             if (kind) {
                 kind.name = `CreateSlipInput.CastNominations[${index}].NominationKind`;
             }
@@ -248,25 +245,17 @@
             if (castName) {
                 castName.name = `CreateSlipInput.CastNominations[${index}].CastName`;
             }
-            if (remove) {
-                remove.hidden = index === 0;
-            }
         });
     };
 
-    const addNominationRow = async () => {
-        if (!nominationList) {
+    const getNominationRows = () => nominationList?.querySelectorAll('[data-business-nomination-row]') ?? [];
+
+    const addNominationRow = () => {
+        if (!nominationList || nominationKindOptions.length === 0) {
             return;
         }
 
-        await loadCastOptions();
-        if (castOptions.length === 0) {
-            renderCastModal();
-            castModal?.show();
-            return;
-        }
-
-        const count = nominationList.querySelectorAll('[data-business-nomination-row]').length;
+        const count = getNominationRows().length;
         if (count >= 20) {
             return;
         }
@@ -275,7 +264,6 @@
         row.className = 'nomination-row';
         row.dataset.businessNominationRow = '';
         row.innerHTML = `
-            <label class="customer-row__index nomination-row__index">${count + 1}</label>
             <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[${count}].NominationKind">
                 ${nominationKindOptionsHtml}
             </select>
@@ -289,29 +277,26 @@
                     <span data-business-selected-cast>キャストを選択</span>
                 </button>
             </div>
-            <button class="btn btn-outline-danger nomination-row__remove" type="button" data-business-remove-nomination>削除</button>
         `;
         nominationList.appendChild(row);
         wireNominationRow(row);
         renumberNominationRows();
-        await openCastModal(row);
     };
 
-    nominationList?.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-business-remove-nomination]');
-        if (!button || !nominationList.contains(button)) {
+    const removeLastNominationRow = () => {
+        const rows = getNominationRows();
+        if (rows.length === 0) {
             return;
         }
 
-        button.closest('[data-business-nomination-row]')?.remove();
+        rows[rows.length - 1]?.remove();
         renumberNominationRows();
-    });
+    };
 
     decreaseCustomerCountButton?.addEventListener('click', removeLastCustomerRow);
     increaseCustomerCountButton?.addEventListener('click', addCustomerRow);
-    addNominationButton?.addEventListener('click', () => {
-        void addNominationRow();
-    });
+    decreaseNominationCountButton?.addEventListener('click', removeLastNominationRow);
+    increaseNominationCountButton?.addEventListener('click', addNominationRow);
     renumberCustomerRows();
     renumberNominationRows();
     nominationList?.querySelectorAll('[data-business-nomination-row]').forEach(wireNominationRow);
