@@ -18,7 +18,6 @@
     const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
     const businessSlipEditorOperationUrl = config.businessSlipEditorOperationUrl || '';
-    const slipEditUrl = config.slipEditUrl || '/Slips/Edit';
     const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
@@ -447,12 +446,6 @@
         return !isSamePageHash;
     };
 
-    const buildSlipEditUrl = (slipId) => {
-        const url = new URL(slipEditUrl, window.location.href);
-        url.searchParams.set('slipId', String(slipId));
-        return `${url.pathname}${url.search}${url.hash}`;
-    };
-
     const updateSummary = (result) => {
         const businessDateText = result?.businessDateDisplay || '';
         const businessDateValue = result?.businessDate || '';
@@ -580,10 +573,6 @@
         adjustmentButton.type = 'button';
         adjustmentButton.dataset.businessSlipEditor = 'adjustments';
         actions.appendChild(adjustmentButton);
-        const detailLink = buildElement('a', 'btn btn-sm btn-outline-secondary', '詳細画面');
-        detailLink.dataset.businessSlipEdit = '';
-        detailLink.dataset.businessFlushKaraoke = '';
-        actions.appendChild(detailLink);
         return actions;
     };
 
@@ -739,16 +728,6 @@
                 delete button.dataset.businessSlipId;
             }
         });
-        const editLink = panel.querySelector('[data-business-slip-edit]');
-        if (editLink) {
-            editLink.hidden = !canEdit;
-            if (canEdit) {
-                editLink.href = buildSlipEditUrl(slip.id);
-            } else {
-                editLink.removeAttribute('href');
-            }
-        }
-
         const pending = pendingForSlip(slip.id);
         const pendingState = row.querySelector('[data-business-slip-sync-state]');
         if (pendingState) {
