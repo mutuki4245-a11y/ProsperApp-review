@@ -46,11 +46,11 @@ as $$
     customer_summary as (
         select
             c.slip_id,
-            count(*) filter (where c.status <> 'cancelled')::integer as customer_count,
+            count(*) filter (where c.status = 'active')::integer as customer_count,
             string_agg(
                 coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
                 '、' order by c.line_no
-            ) filter (where c.status <> 'cancelled') as customer_names
+            ) filter (where c.status = 'active') as customer_names
         from public.store_slip_customers c
         join target_slips s on s.slip_id = c.slip_id
         group by c.slip_id
