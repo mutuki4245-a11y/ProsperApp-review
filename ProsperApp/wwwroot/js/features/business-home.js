@@ -573,10 +573,6 @@
         const fields = buildElement('div', 'slip-list__details-content');
         fields.dataset.businessSlipDetailsContent = '';
         const actions = buildElement('div', 'slip-list__details-actions');
-        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary', '会計伝票');
-        checkoutButton.type = 'button';
-        checkoutButton.dataset.businessStartCheckout = '';
-        actions.appendChild(checkoutButton);
         [
             ['customers', '客を編集'],
             ['nominations', '指名を編集'],
@@ -807,7 +803,7 @@
             checkoutButton.disabled = Boolean(slip.checkoutPending);
             checkoutButton.textContent = slip.checkoutPending
                 ? '会計準備中'
-                : slip.status === 'checkout_ready' ? '会計を続ける' : '会計伝票';
+                : slip.status === 'checkout_ready' ? '決済' : '会計伝票';
         }
         if (receiptButton) {
             receiptButton.hidden = slip.status !== 'checked_out';
@@ -846,13 +842,16 @@
         detailsToggle.type = 'button';
         detailsToggle.setAttribute('aria-label', '詳細を開く');
         detailsToggle.dataset.businessSlipDetailsToggle = '';
+        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary');
+        checkoutButton.type = 'button';
+        checkoutButton.dataset.businessStartCheckout = '';
         const receiptButton = buildElement('button', 'btn btn-sm btn-outline-primary', '領収書');
         receiptButton.type = 'button';
         receiptButton.dataset.businessPrintReceipt = '';
         const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
-        actionButtons.append(detailsToggle, receiptButton, cancelButton);
+        actionButtons.append(detailsToggle, checkoutButton, receiptButton, cancelButton);
         actions.appendChild(actionButtons);
         row.append(main, actions, buildSlipDetails());
 
