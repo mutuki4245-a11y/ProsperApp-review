@@ -1,4 +1,11 @@
 .slip-list-section {
+  --slip-action-column: 12.5rem;
+  --slip-amount-column: 6.5rem;
+  --slip-column-gap: 0.35rem;
+  --slip-karaoke-column: 7.95rem;
+  --slip-opened-column: 3.75rem;
+  --slip-people-column-min: 7rem;
+  --slip-table-column: 2.5rem;
   display: grid;
   gap: 0.7rem;
 }
@@ -73,9 +80,9 @@
   display: grid;
   font-size: 0.78rem;
   font-weight: 800;
-  gap: 0.35rem;
-  grid-template-columns: 2.5rem 3.75rem minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(6.5rem, auto) minmax(10rem, auto);
-  padding: 0 0.5rem;
+  gap: var(--slip-column-gap);
+  grid-template-columns: var(--slip-table-column) var(--slip-opened-column) minmax(var(--slip-people-column-min), 1fr) minmax(var(--slip-people-column-min), 1fr) minmax(var(--slip-amount-column), auto) var(--slip-karaoke-column) minmax(var(--slip-action-column), auto);
+  padding: 0 calc(0.5rem + 1px) 0 calc(0.5rem + 4px);
 }
 
 .slip-list__row {
@@ -107,8 +114,8 @@
 
 .slip-list__row--action {
   align-items: center;
-  gap: 0.4rem;
-  grid-template-columns: minmax(0, 1fr) minmax(12rem, auto);
+  gap: var(--slip-column-gap);
+  grid-template-columns: minmax(0, 1fr) var(--slip-karaoke-column) minmax(var(--slip-action-column), auto);
   min-height: 3.5rem;
   padding: 0.35rem 0.5rem;
 }
@@ -127,10 +134,10 @@
   border-radius: 8px;
   color: #102a43;
   display: grid;
-  gap: 0.35rem;
-  grid-template-columns: 2.5rem 3.75rem minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(6.5rem, auto);
+  gap: var(--slip-column-gap);
+  grid-template-columns: var(--slip-table-column) var(--slip-opened-column) minmax(var(--slip-people-column-min), 1fr) minmax(var(--slip-people-column-min), 1fr) minmax(var(--slip-amount-column), auto);
   min-width: 0;
-  padding: 0.2rem;
+  padding: 0;
   text-decoration: none;
 }
 
@@ -292,10 +299,11 @@
 }
 
 .slip-list__actions {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.5rem;
-  grid-column: 2;
+  align-items: center;
+  display: grid;
+  gap: var(--slip-column-gap);
+  grid-column: 2 / -1;
+  grid-template-columns: var(--slip-karaoke-column) minmax(var(--slip-action-column), auto);
 }
 
 .slip-list__details {
@@ -692,13 +700,21 @@
   min-height: 3rem;
 }
 
-.slip-list__actions {
+.slip-list__action-buttons {
   align-items: center;
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   justify-content: flex-end;
-  padding: 0.3rem 0.4rem 0.4rem;
   white-space: nowrap;
+}
+
+.slip-list__details-toggle {
+  font-size: 1.2rem;
+  line-height: 1;
+  min-height: 2.4rem;
+  min-width: 2.4rem;
+  padding: 0;
 }
 
 .checkout-final-summary {
@@ -1636,17 +1652,12 @@
 }
 
 @media (max-width: 1199.98px) {
-  .slip-list__header {
-    grid-template-columns: 2.5rem 3.75rem minmax(6rem, 1fr) minmax(6rem, 1fr) minmax(6.5rem, auto) minmax(10rem, auto);
-  }
-
-  .slip-list__row-main {
-    grid-template-columns: 2.5rem 3.75rem minmax(6rem, 1fr) minmax(6rem, 1fr) minmax(6.5rem, auto);
+  .slip-list-section {
+    --slip-people-column-min: 6rem;
   }
 
   .slip-list__row--action {
-    gap: 0.45rem;
-    grid-template-columns: minmax(0, 1fr) minmax(10rem, auto);
+    gap: var(--slip-column-gap);
   }
 
   .slip-list__row {

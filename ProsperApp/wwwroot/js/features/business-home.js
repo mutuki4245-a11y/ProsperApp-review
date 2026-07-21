@@ -552,7 +552,7 @@
 
         const actions = row.querySelector('.slip-list__actions');
         if (actions && karaoke.parentElement !== actions) {
-            actions.appendChild(karaoke);
+            actions.prepend(karaoke);
         }
 
         karaoke.dataset.slipId = String(slip.id);
@@ -726,7 +726,8 @@
         toggle.dataset.businessSlipDetailsToggle = String(slip.id);
         toggle.setAttribute('aria-controls', panelId);
         toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-        toggle.textContent = isExpanded ? '閉じる' : '詳細';
+        toggle.setAttribute('aria-label', isExpanded ? '詳細を閉じる' : '詳細を開く');
+        toggle.textContent = isExpanded ? '∧' : '∨';
         const content = panel.querySelector('[data-business-slip-details-content]');
         if (content) {
             content.replaceChildren();
@@ -826,8 +827,10 @@
         main.append(table, openedTime, customers, casts, syncState);
         main.appendChild(buildAmountElement(slip));
         const actions = buildElement('div', 'slip-list__actions');
-        const detailsToggle = buildElement('button', 'btn btn-sm btn-outline-secondary', '詳細');
+        const actionButtons = buildElement('div', 'slip-list__action-buttons');
+        const detailsToggle = buildElement('button', 'btn btn-sm btn-outline-secondary slip-list__details-toggle', '∨');
         detailsToggle.type = 'button';
+        detailsToggle.setAttribute('aria-label', '詳細を開く');
         detailsToggle.dataset.businessSlipDetailsToggle = '';
         const checkoutButton = buildElement('button', 'btn btn-sm btn-primary');
         checkoutButton.type = 'button';
@@ -838,7 +841,8 @@
         const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
-        actions.append(detailsToggle, checkoutButton, receiptButton, cancelButton);
+        actionButtons.append(detailsToggle, checkoutButton, receiptButton, cancelButton);
+        actions.appendChild(actionButtons);
         row.append(main, actions, buildSlipDetails());
 
         syncSlipRow(row, slip);
