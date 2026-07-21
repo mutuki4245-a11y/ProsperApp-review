@@ -658,9 +658,14 @@
 
     const customerSummary = (slip) => {
         const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
-        const names = customers.map((customer) => customer.displayName || '客名なし').join('、');
         const content = buildElement('div', 'business-slip-detail-summary__content');
-        content.appendChild(buildElement('strong', 'business-slip-detail-summary__primary', names || '在席客なし'));
+        if (customers.length === 0) {
+            content.appendChild(buildElement('strong', 'business-slip-detail-summary__empty', '在席客なし'));
+        } else {
+            customers.forEach((customer) => {
+                content.appendChild(buildElement('strong', 'business-slip-detail-summary__chip', customer.displayName || '客名なし'));
+            });
+        }
         return detailSummary('客', 'customers', content, '客を編集');
     };
 
@@ -668,10 +673,10 @@
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((nomination) => nomination.status === 'active') : [];
         const content = buildElement('div', 'business-slip-detail-summary__content');
         if (nominations.length === 0) {
-            content.appendChild(buildElement('strong', 'business-slip-detail-summary__primary', '指名なし'));
+            content.appendChild(buildElement('strong', 'business-slip-detail-summary__empty', '指名なし'));
         } else {
             nominations.forEach((nomination) => {
-                const pair = buildElement('strong', 'business-slip-detail-summary__primary');
+                const pair = buildElement('strong', 'business-slip-detail-summary__chip');
                 const kind = nomination.nominationDisplayName || nomination.nominationKind || '指名';
                 pair.textContent = `${nomination.displayName || 'キャスト'} — ${kind}`;
                 content.appendChild(pair);

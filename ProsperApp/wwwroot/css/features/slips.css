@@ -368,7 +368,8 @@
 }
 
 .business-slip-detail-summary__heading,
-.business-slip-detail-summary__primary {
+.business-slip-detail-summary__chip,
+.business-slip-detail-summary__empty {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -388,11 +389,27 @@
 }
 
 .business-slip-detail-summary__content {
-  align-items: baseline;
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.15rem 0.55rem;
+  gap: 0.3rem 0.4rem;
   min-width: 0;
+}
+
+.business-slip-detail-summary__chip {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 0.35rem;
+  color: #1e3a5f;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 0.24rem 0.45rem;
+}
+
+.business-slip-detail-summary__empty {
+  color: #64748b;
+  font-size: 0.82rem;
 }
 
 .business-slip-detail-summary .btn {
