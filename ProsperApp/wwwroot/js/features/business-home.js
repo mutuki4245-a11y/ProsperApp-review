@@ -614,7 +614,7 @@
     };
 
     const buildSlipDetailActions = () => {
-        const actions = buildElement('div', 'slip-list__details-actions');
+        const actions = buildElement('div', 'business-slip-detail-actions');
         const orderButton = buildElement('button', 'btn btn-sm btn-primary', '注文を編集');
         orderButton.type = 'button';
         orderButton.dataset.businessSlipEditor = 'orders';
@@ -625,13 +625,13 @@
         return actions;
     };
 
-    const detailSection = (title) => {
-        const section = buildElement('section', 'business-slip-detail-section');
-        section.append(buildElement('h4', 'business-slip-detail-section__title', title));
-        section.appendChild(buildElement('div', 'business-slip-detail-section__divider'));
-        const body = buildElement('div', 'business-slip-detail-section__body');
-        body.dataset.businessSlipDetailBody = title;
-        section.appendChild(body);
+    const orderSection = (slip) => {
+        const section = buildElement('section', 'business-slip-detail-orders');
+        section.setAttribute('aria-label', '注文と自由明細');
+        const body = buildElement('div', 'business-slip-detail-orders__body');
+        renderOrders(body, slip);
+        renderAdjustments(body, slip);
+        section.append(body, buildSlipDetailActions());
         return section;
     };
 
@@ -697,8 +697,8 @@
         header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         const backName = lines[0]?.backCastDisplayName ? ` / ${lines[0].backCastDisplayName}` : '';
         header.append(
-            buildElement('strong', null, label),
-            buildElement('span', null, `${totalQuantity}点${backName}`),
+            buildElement('strong', null, `${label}${backName}`),
+            buildElement('span', null, `* ${totalQuantity}点`),
             buildElement('strong', null, formatYen(totalAmount))
         );
         group.appendChild(header);
@@ -793,12 +793,14 @@
         const content = panel.querySelector('[data-business-slip-details-content]');
         if (content) {
             content.replaceChildren();
-            const orderSection = detailSection('注文');
-            const orderBody = orderSection.querySelector('[data-business-slip-detail-body]');
-            renderOrders(orderBody, slip);
-            renderAdjustments(orderBody, slip);
-            orderSection.appendChild(buildSlipDetailActions());
-            content.append(customerSummary(slip), nominationSummary(slip), orderSection, buildAccountingTotals(slip));
+            const layout = buildElement('div', 'business-slip-detail-layout');
+            const activity = buildElement('div', 'business-slip-detail-layout__activity');
+            const accounting = buildElement('aside', 'business-slip-detail-layout__accounting');
+            accounting.setAttribute('aria-label', '注文と会計');
+            activity.append(customerSummary(slip), nominationSummary(slip));
+            accounting.append(orderSection(slip), buildAccountingTotals(slip));
+            layout.append(activity, accounting);
+            content.appendChild(layout);
         }
         const canEdit = slip.status === 'open' && !slip.checkoutPending;
         panel.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
