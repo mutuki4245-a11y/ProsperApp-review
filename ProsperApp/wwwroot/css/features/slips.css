@@ -105,6 +105,10 @@
   border-left-color: #64748b;
 }
 
+.slip-list__row--expanded {
+  box-shadow: 0 6px 16px rgb(15 23 42 / 0.12);
+}
+
 .slip-list__row--link {
   align-items: center;
   color: #102a43;
@@ -307,9 +311,21 @@
 }
 
 .slip-list__details {
-  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
   grid-column: 1 / -1;
-  padding: 0.7rem 0.2rem 0.1rem;
+  margin: 0.1rem;
+  padding: 0.65rem 0.75rem 0.75rem;
+}
+
+.slip-list__details-heading {
+  border-left: 3px solid #0f766e;
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 800;
+  margin: 0 0 0.65rem;
+  padding-left: 0.45rem;
 }
 
 .slip-list__details-grid {
@@ -319,9 +335,12 @@
 }
 
 .slip-list__details-actions {
+  border-top: 1px solid #d9e2ec;
   display: flex;
+  gap: 0.35rem;
   justify-content: flex-end;
-  margin-top: 0.65rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
 }
 
 .slip-list__sync-state {

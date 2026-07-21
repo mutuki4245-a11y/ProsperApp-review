@@ -568,9 +568,15 @@
     const buildSlipDetails = () => {
         const panel = buildElement('section', 'slip-list__details');
         panel.dataset.businessSlipDetails = '';
+        const heading = buildElement('h3', 'slip-list__details-heading');
+        heading.dataset.businessSlipDetailsHeading = '';
         const fields = buildElement('div', 'slip-list__details-content');
         fields.dataset.businessSlipDetailsContent = '';
         const actions = buildElement('div', 'slip-list__details-actions');
+        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary', '会計伝票');
+        checkoutButton.type = 'button';
+        checkoutButton.dataset.businessStartCheckout = '';
+        actions.appendChild(checkoutButton);
         [
             ['customers', '客を編集'],
             ['nominations', '指名を編集'],
@@ -585,7 +591,7 @@
         detailLink.dataset.businessSlipEdit = '';
         detailLink.dataset.businessFlushKaraoke = '';
         actions.appendChild(detailLink);
-        panel.append(fields, actions);
+        panel.append(heading, fields, actions);
         return panel;
     };
 
@@ -721,13 +727,21 @@
 
         const isExpanded = expandedSlipIds.has(String(slip.id));
         const panelId = `business-slip-details-${slip.id}`;
+        const headingId = `${panelId}-heading`;
         panel.id = panelId;
+        panel.setAttribute('aria-labelledby', headingId);
         panel.hidden = !isExpanded;
+        row.classList.toggle('slip-list__row--expanded', isExpanded);
         toggle.dataset.businessSlipDetailsToggle = String(slip.id);
         toggle.setAttribute('aria-controls', panelId);
         toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
         toggle.setAttribute('aria-label', isExpanded ? '詳細を閉じる' : '詳細を開く');
         toggle.textContent = isExpanded ? '∧' : '∨';
+        const heading = panel.querySelector('[data-business-slip-details-heading]');
+        if (heading) {
+            heading.id = headingId;
+            heading.textContent = `卓 ${slip.tableDisplay} の詳細`;
+        }
         const content = panel.querySelector('[data-business-slip-details-content]');
         if (content) {
             content.replaceChildren();
@@ -832,16 +846,13 @@
         detailsToggle.type = 'button';
         detailsToggle.setAttribute('aria-label', '詳細を開く');
         detailsToggle.dataset.businessSlipDetailsToggle = '';
-        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary');
-        checkoutButton.type = 'button';
-        checkoutButton.dataset.businessStartCheckout = '';
         const receiptButton = buildElement('button', 'btn btn-sm btn-outline-primary', '領収書');
         receiptButton.type = 'button';
         receiptButton.dataset.businessPrintReceipt = '';
         const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
-        actionButtons.append(detailsToggle, checkoutButton, receiptButton, cancelButton);
+        actionButtons.append(detailsToggle, receiptButton, cancelButton);
         actions.appendChild(actionButtons);
         row.append(main, actions, buildSlipDetails());
 

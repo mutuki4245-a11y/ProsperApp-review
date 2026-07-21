@@ -9,6 +9,9 @@
         currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase) ||
         isSalesAttendance;
     var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
+    var bodyClass = isOrdersPage
+        ? "order-terminal"
+        : currentPath == "/" ? "sales-hub-page" : string.Empty;
 }
 <!DOCTYPE html>
 <html lang="ja">
@@ -29,7 +32,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/ProsperApp.styles.css" asp-append-version="true" />
 </head>
-<body class="@(isOrdersPage ? "order-terminal" : string.Empty)">
+<body class="@bodyClass">
     @if (!isOrdersPage)
     {
         <header>
