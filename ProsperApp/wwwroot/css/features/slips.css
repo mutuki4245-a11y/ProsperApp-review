@@ -1432,7 +1432,7 @@
 }
 
 #createSlipModal .modal-body {
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 #createSlipModal .validation-summary-valid {
@@ -1476,9 +1476,8 @@
 }
 
 .slip-modal-form--create {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100%;
+  display: block;
+  height: auto;
   margin: 0 auto;
   max-width: 1120px;
   min-height: 0;
@@ -1489,9 +1488,8 @@
   align-items: start;
   display: grid;
   gap: 0.85rem;
-  grid-row: 2;
   grid-template-columns: minmax(15rem, 0.85fr) minmax(13rem, 0.7fr) minmax(25rem, 1.45fr);
-  height: 100%;
+  height: auto;
   min-height: 0;
   min-width: 0;
 }
@@ -1499,8 +1497,8 @@
 .slip-create-three-column__column {
   display: grid;
   gap: 0.85rem;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  height: 100%;
+  grid-template-rows: auto auto auto;
+  height: auto;
   min-height: 0;
   min-width: 0;
 }
