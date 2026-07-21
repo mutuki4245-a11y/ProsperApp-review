@@ -5,6 +5,8 @@
         return;
     }
 
+    const createSlipForm = createSlipModalElement.querySelector('form');
+    const createSlipSubmitButton = document.getElementById('businessCreateSlipSubmit');
     let castOptions = Array.isArray(config.castOptions) ? config.castOptions : [];
     let castOptionsLoaded = castOptions.length > 0;
     let castOptionsLoading = null;
@@ -32,10 +34,9 @@
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
-    const nominationKindOptionsHtml = [
-        '<option value="">指名区分</option>',
-        ...nominationKindOptions.map((option, index) => `<option value="${escapeHtml(option.value)}" ${index === 0 ? 'selected' : ''} data-companion="${option.isCompanion === true ? 'true' : 'false'}">${escapeHtml(option.label)}</option>`)
-    ].join('');
+    const nominationKindOptionsHtml = nominationKindOptions
+        .map((option, index) => `<option value="${escapeHtml(option.value)}" ${index === 0 ? 'selected' : ''} data-companion="${option.isCompanion === true ? 'true' : 'false'}">${escapeHtml(option.label)}</option>`)
+        .join('');
     const nominationPriceOptions = Array.isArray(config.nominationPriceOptions) ? config.nominationPriceOptions : [];
     const nominationPriceOptionsHtml = nominationPriceOptions
         .map((price) => `<option value="${price.value}">${price.label}</option>`)
@@ -297,6 +298,28 @@
     increaseCustomerCountButton?.addEventListener('click', addCustomerRow);
     decreaseNominationCountButton?.addEventListener('click', removeLastNominationRow);
     increaseNominationCountButton?.addEventListener('click', addNominationRow);
+
+    let isExplicitCreateSlipSubmit = false;
+    createSlipForm?.addEventListener('submit', (event) => {
+        if (!isExplicitCreateSlipSubmit) {
+            event.preventDefault();
+            return;
+        }
+
+        isExplicitCreateSlipSubmit = false;
+    });
+    createSlipSubmitButton?.addEventListener('click', () => {
+        if (!createSlipForm) {
+            return;
+        }
+
+        isExplicitCreateSlipSubmit = true;
+        createSlipForm.requestSubmit();
+        window.queueMicrotask(() => {
+            isExplicitCreateSlipSubmit = false;
+        });
+    });
+
     renumberCustomerRows();
     renumberNominationRows();
     nominationList?.querySelectorAll('[data-business-nomination-row]').forEach(wireNominationRow);

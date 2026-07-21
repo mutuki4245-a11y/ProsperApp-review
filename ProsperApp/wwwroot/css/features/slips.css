@@ -1569,6 +1569,7 @@
 #createSlipModal .table-picker-category-list,
 #businessCustomerList,
 #businessNominationList {
+  align-content: start;
   flex: 1 1 auto;
   max-height: none;
   min-height: 0;
@@ -1589,11 +1590,22 @@
 }
 
 #createSlipModal .nomination-row {
-  grid-template-columns: minmax(0, 0.9fr) 4.5rem minmax(8rem, 1.25fr);
+  grid-template-columns: minmax(0, 1fr) 6.5rem 5.5rem;
 }
 
 #createSlipModal .nomination-row__cast {
   grid-column: auto;
+}
+
+#createSlipModal .selected-cast--button {
+  min-width: 0;
+}
+
+#createSlipModal .selected-cast--button [data-business-selected-cast] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1099.98px) {
