@@ -4,7 +4,6 @@
     const modalElement = document.querySelector('[data-business-slip-editor-modal]');
     const content = modalElement?.querySelector('[data-business-slip-editor-content]');
     const title = modalElement?.querySelector('[data-business-slip-editor-title]');
-    const table = modalElement?.querySelector('[data-business-slip-editor-table]');
     const backTargetModalElement = document.querySelector('[data-business-order-back-target-modal]');
     const backTargetList = backTargetModalElement?.querySelector('[data-business-order-back-target-list]');
     const backTargetConfirm = backTargetModalElement?.querySelector('[data-business-order-back-target-confirm]');
@@ -64,7 +63,6 @@
 
     const setModalHeading = (section, slip) => {
         if (title) title.textContent = labels[section] || '編集';
-        if (table) table.textContent = slip?.tableDisplay || '伝票';
     };
 
     const renderUnavailable = (message) => {

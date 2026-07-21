@@ -76,7 +76,7 @@
     };
 
     const refreshSlipSummary = (slip) => {
-        const customers = Array.isArray(slip.customers) ? slip.customers.filter((item) => item.status !== 'cancelled') : [];
+        const customers = Array.isArray(slip.customers) ? slip.customers.filter((item) => item.status === 'active') : [];
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((item) => item.status !== 'cancelled') : [];
         const orders = Array.isArray(slip.orders) ? slip.orders.filter((item) => item.status === 'active') : [];
         const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
@@ -1212,6 +1212,12 @@
     document.addEventListener('submit', (event) => {
         const targetForm = event.target;
         if (!(targetForm instanceof HTMLFormElement) || targetForm === form) {
+            return;
+        }
+
+        // The editor queues its own operation before flushing, so that operation and
+        // any dirty karaoke quantity are persisted by the same batch RPC.
+        if (targetForm.matches('[data-business-slip-editor-form]')) {
             return;
         }
 
