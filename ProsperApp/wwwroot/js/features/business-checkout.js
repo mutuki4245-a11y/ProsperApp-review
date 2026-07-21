@@ -60,18 +60,18 @@
         if (!response.ok || !data?.succeeded) throw new Error(data?.message || '会計処理に失敗しました。');
         return data;
     };
-    const runExclusive = async (action) => {
+    const runExclusive = async (action, showOverlay = true) => {
         if (isActionInFlight) {
             return;
         }
 
         isActionInFlight = true;
-        window.AppLoading?.show();
+        if (showOverlay) window.AppLoading?.show();
         try {
             return await action();
         } finally {
             isActionInFlight = false;
-            window.AppLoading?.hide();
+            if (showOverlay) window.AppLoading?.hide();
         }
     };
     const composeClosedAt = () => {
@@ -235,11 +235,21 @@
                     setMessage('未保存のカラオケ回数を保存できませんでした。');
                     return;
                 }
+                window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, true);
+                setMessage('会計伝票を発行中です。');
                 const data = await post(config.issueCheckoutStatementUrl, { slipId: current.slipId, closedAt });
                 current.queue = { state: 'pending', printData: data.printData, reviewData: data.reviewData }; writeQueue(); showCurrent();
-                window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-            } catch (error) { setMessage(error.message); }
-        });
+                const snapshotSynchronized = await window.prosperBusinessHomeReload?.();
+                if (snapshotSynchronized) {
+                    window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, false);
+                } else {
+                    setMessage('会計準備中です。最新状態を取得できるまで編集はできません。');
+                }
+            } catch (error) {
+                window.prosperBusinessHomeSetCheckoutLock?.(current?.slipId, false);
+                setMessage(error.message);
+            }
+        }, false);
     };
     const printStatement = async () => {
         if (!current?.queue) return;

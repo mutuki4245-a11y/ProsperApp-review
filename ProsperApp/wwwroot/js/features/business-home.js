@@ -26,6 +26,7 @@
     let serverSnapshot = null;
     let snapshotRevision = -1;
     const pendingOperations = new Map();
+    const checkoutLockSlipIds = new Set();
     const operationLanes = new Map();
     const expandedOrderGroupKeys = new Set();
     const expandedSlipIds = new Set();
@@ -200,6 +201,12 @@
         const projected = cloneSnapshot(serverSnapshot);
         if (!projected) return null;
         pendingOperations.forEach((operation) => projectOperation(projected, operation));
+        checkoutLockSlipIds.forEach((slipId) => {
+            const slip = projected.slips?.find((item) => String(item.id) === String(slipId));
+            if (slip && slip.status === 'open') {
+                slip.checkoutPending = true;
+            }
+        });
         const activeSlips = Array.isArray(projected.slips) ? projected.slips.filter((item) => item.status !== 'cancelled') : [];
         projected.openSlipCount = activeSlips.filter((item) => ['open', 'checkout_ready'].includes(item.status)).length;
         projected.checkedOutSlipCount = activeSlips.filter((item) => item.status === 'checked_out').length;
@@ -517,7 +524,7 @@
     const syncKaraokeControl = (row, slip) => {
         const amountValue = row.querySelector('[data-business-slip-amount-value]');
         let karaoke = row.querySelector('[data-business-karaoke-row]');
-        if (slip.status !== 'open') {
+        if (slip.status !== 'open' || slip.checkoutPending) {
             karaoke?.remove();
             setText(amountValue, formatYen(slip.accountingAmount));
             return;
@@ -727,7 +734,7 @@
             renderAdjustments(adjustmentSection.querySelector('[data-business-slip-detail-body]'), slip);
             content.append(customerSection, nominationSection, orderSection, adjustmentSection);
         }
-        const canEdit = slip.status === 'open';
+        const canEdit = slip.status === 'open' && !slip.checkoutPending;
         panel.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
             button.hidden = !canEdit;
             if (canEdit) {
@@ -749,10 +756,12 @@
         const pending = pendingForSlip(slip.id);
         const pendingState = row.querySelector('[data-business-slip-sync-state]');
         if (pendingState) {
-            pendingState.hidden = pending.length === 0;
-            pendingState.textContent = pending.some(isUnknownOperation)
-                ? '通信確認中'
-                : `保存中 ${pending.length}`;
+            pendingState.hidden = pending.length === 0 && !slip.checkoutPending;
+            pendingState.textContent = slip.checkoutPending
+                ? '会計準備中'
+                : pending.some(isUnknownOperation)
+                    ? '通信確認中'
+                    : `保存中 ${pending.length}`;
             pendingState.classList.toggle('is-unknown', pending.some(isUnknownOperation));
         }
     };
@@ -764,7 +773,7 @@
         const statusElement = row.querySelector('[data-business-slip-status]');
         if (statusElement) {
             statusElement.className = `badge slip-list__status ${slip.statusBadgeClass}`;
-            setText(statusElement, slip.statusDisplay);
+            setText(statusElement, slip.checkoutPending ? '会計準備中' : slip.statusDisplay);
         }
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
         setText(row.querySelector('[data-business-slip-customers]'), slip.customerNames || '客名なし');
@@ -776,7 +785,10 @@
         if (checkoutButton) {
             checkoutButton.hidden = !['open', 'checkout_ready'].includes(slip.status);
             checkoutButton.dataset.businessStartCheckout = String(slip.id);
-            checkoutButton.textContent = slip.status === 'checkout_ready' ? '会計を続ける' : '会計伝票';
+            checkoutButton.disabled = Boolean(slip.checkoutPending);
+            checkoutButton.textContent = slip.checkoutPending
+                ? '会計準備中'
+                : slip.status === 'checkout_ready' ? '会計を続ける' : '会計伝票';
         }
         if (receiptButton) {
             receiptButton.hidden = slip.status !== 'checked_out';
@@ -1007,6 +1019,15 @@
         });
         operationLanes.set(lane, tracked);
         return normalized.operationId;
+    };
+
+    const setCheckoutLock = (slipId, locked) => {
+        if (locked) {
+            checkoutLockSlipIds.add(String(slipId));
+        } else {
+            checkoutLockSlipIds.delete(String(slipId));
+        }
+        renderProjectedSnapshot();
     };
 
     const waitForBusinessOperations = async () => {
@@ -1277,6 +1298,7 @@
     window.prosperBusinessHomeReload = loadSlips;
     window.prosperBusinessHomeFlushKaraoke = submitDraft;
     window.prosperBusinessHomeEnqueueEditorOperation = enqueueEditorOperation;
+    window.prosperBusinessHomeSetCheckoutLock = setCheckoutLock;
     window.prosperBusinessHomeGetPendingForSlip = pendingForSlip;
     window.prosperBusinessHomeWaitForOperations = waitForBusinessOperations;
 })();
