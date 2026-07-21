@@ -1248,3 +1248,97 @@ begin
     return query select p_order_line_id;
 end;
 $$;
+
+create or replace function store.cancel_slip_nomination(
+    p_department_id bigint,
+    p_slip_cast_id bigint
+)
+returns table (
+    slip_cast_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip_cast public.store_slip_casts%rowtype;
+begin
+    select sc.*
+      into v_slip_cast
+    from public.store_slip_casts sc
+    join public.store_slips s
+      on s.slip_id = sc.slip_id
+    where sc.slip_cast_id = p_slip_cast_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+      and sc.status = 'active'
+    limit 1
+    for update;
+
+    if v_slip_cast.slip_cast_id is null then
+        raise exception 'store_slip_nomination_not_found';
+    end if;
+
+    update public.store_slip_casts sc
+       set status = 'cancelled',
+           updated_at = now()
+     where sc.slip_cast_id = p_slip_cast_id;
+
+    update public.store_slip_cast_backs b
+       set status = 'cancelled',
+           updated_at = now()
+     where b.slip_cast_id = p_slip_cast_id
+       and b.status = 'active';
+
+    update public.store_order_line_cast_backs b
+       set status = 'voided',
+           updated_at = now()
+      from public.store_order_lines ol
+     where ol.order_line_id = b.order_line_id
+       and ol.slip_id = v_slip_cast.slip_id
+       and ol.source_type = 'nomination_fee'
+       and ol.source_id = p_slip_cast_id
+       and b.status = 'active';
+
+    update public.store_order_lines ol
+       set status = 'voided',
+           updated_at = now()
+     where ol.slip_id = v_slip_cast.slip_id
+       and ol.source_type = 'nomination_fee'
+       and ol.source_id = p_slip_cast_id
+       and ol.status = 'active';
+
+    return query select p_slip_cast_id;
+end;
+$$;
+
+create or replace function store.void_slip_adjustment(
+    p_department_id bigint,
+    p_charge_line_id bigint
+)
+returns table (
+    charge_line_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    return query
+    update public.store_slip_charge_lines cl
+       set status = 'voided',
+           updated_at = now()
+      from public.store_slips s
+     where cl.charge_line_id = p_charge_line_id
+       and s.slip_id = cl.slip_id
+       and s.department_id = p_department_id
+       and s.status = 'open'
+       and cl.charge_type = 'adjustment'
+       and cl.status = 'active'
+    returning cl.charge_line_id;
+
+    if not found then
+        raise exception 'store_slip_adjustment_not_found';
+    end if;
+end;
+$$;

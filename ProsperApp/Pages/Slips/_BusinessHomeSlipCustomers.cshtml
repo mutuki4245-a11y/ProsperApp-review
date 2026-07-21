@@ -1,0 +1,118 @@
+@model SlipEditModel
+@{
+    var customers = Model.Detail?.Customers.OrderBy(x => x.LineNo).ToList() ?? [];
+    var activeCustomers = customers.Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal)).ToList();
+    var departedCustomers = customers.Where(x => !string.Equals(x.Status, "active", StringComparison.Ordinal)).ToList();
+}
+
+<div data-business-slip-editor-result="customers" data-business-slip-editor-manager>
+    <section class="slip-create__panel business-customer-editor">
+        <div class="slip-create__panel-title">
+            <div class="slip-create__panel-heading">
+                <h3>在席客</h3>
+                <small><span data-business-customer-active-count>@activeCustomers.Count</span> 人</small>
+            </div>
+            <button class="btn btn-sm btn-primary" type="button" data-business-editor-action="customer_add">客を追加</button>
+        </div>
+
+        <div class="business-customer-editor__active-list" data-business-customer-active-list>
+            @if (activeCustomers.Count == 0)
+            {
+                <p class="business-customer-editor__empty mb-0" data-business-customer-empty>在席客はいません。</p>
+            }
+            else
+            {
+                @foreach (var customer in activeCustomers)
+                {
+                    <article class="business-customer-editor__row" data-business-customer-row data-business-customer-id="@customer.SlipCustomerId">
+                        <div class="business-customer-editor__customer">
+                            <strong>@customer.DisplayName</strong>
+                            <span>入店 @Model.FormatStoreTime(customer.EnteredAt)</span>
+                        </div>
+                        <div class="business-customer-editor__actions">
+                            <button class="btn btn-sm btn-outline-primary" type="button" data-business-editor-action="customer_rename" data-business-editor-record-id="@customer.SlipCustomerId" data-business-editor-record-label="@customer.CustomerLabel" data-business-editor-record-display="@customer.DisplayName">名前変更</button>
+                            <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="customer_leave" data-business-editor-record-id="@customer.SlipCustomerId" data-business-editor-record-display="@customer.DisplayName">退店</button>
+                        </div>
+                    </article>
+                }
+            }
+        </div>
+    </section>
+
+    @if (departedCustomers.Count > 0)
+    {
+        <details class="business-customer-editor__history">
+            <summary>退店済み @departedCustomers.Count 人</summary>
+            <div>
+                @foreach (var customer in departedCustomers)
+                {
+                    <p><strong>@customer.DisplayName</strong><span>入店 @Model.FormatStoreTime(customer.EnteredAt) / 退店 @Model.FormatStoreTime(customer.LeftAt)</span></p>
+                }
+            </div>
+        </details>
+    }
+
+    <template data-business-editor-template="customer_add">
+        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-loading-lock="false">
+            <input type="hidden" name="SlipId" value="@Model.SlipId" />
+            <div class="business-slip-editor-action-form__title">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-business-editor-action="back">戻る</button>
+                <h3>客を追加</h3>
+            </div>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-7">
+                    <label class="form-label">客名</label>
+                    <input class="form-control form-control-lg" name="AddCustomersInput.CustomerLabels[0]" maxlength="100" placeholder="客名・特徴など" />
+                    <div class="form-text">名前は空欄でも登録できます。</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">入店時刻</label>
+                    <select class="form-select form-select-lg slip-time-select" name="AddCustomersInput.EnteredTime" aria-label="入店時刻">
+                        @foreach (var time in Model.TimeOptions)
+                        {
+                            <option value="@time" selected="@(Model.AddCustomersInput.EnteredTime == time)">@Model.FormatBusinessTimeOption(time)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 d-grid"><button class="btn btn-primary btn-lg" type="submit">追加を保存</button></div>
+            </div>
+        </form>
+    </template>
+
+    <template data-business-editor-template="customer_rename">
+        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-loading-lock="false">
+            <input type="hidden" name="SlipId" value="@Model.SlipId" />
+            <input type="hidden" name="UpdateCustomerInput.SlipCustomerId" data-business-editor-record-id-input />
+            <div class="business-slip-editor-action-form__title">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-business-editor-action="back">戻る</button>
+                <h3 data-business-editor-action-heading>客名を変更</h3>
+            </div>
+            <label class="form-label" for="businessCustomerLabel">客名</label>
+            <div class="business-slip-editor-action-form__single-row">
+                <input class="form-control form-control-lg" id="businessCustomerLabel" name="UpdateCustomerInput.CustomerLabel" maxlength="100" data-business-editor-record-label-input />
+                <button class="btn btn-primary btn-lg" type="submit">変更を保存</button>
+            </div>
+        </form>
+    </template>
+
+    <template data-business-editor-template="customer_leave">
+        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-loading-lock="false">
+            <input type="hidden" name="SlipId" value="@Model.SlipId" />
+            <input type="hidden" name="LeaveCustomerInput.SlipCustomerId" data-business-editor-record-id-input />
+            <div class="business-slip-editor-action-form__title">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-business-editor-action="back">戻る</button>
+                <h3 data-business-editor-action-heading>退店を登録</h3>
+            </div>
+            <label class="form-label">退店時刻</label>
+            <div class="business-slip-editor-action-form__single-row">
+                <select class="form-select form-select-lg slip-time-select" name="LeaveCustomerInput.LeftTime">
+                    @foreach (var time in Model.TimeOptions)
+                    {
+                        <option value="@time" selected="@(Model.LeaveCustomerInput.LeftTime == time)">@Model.FormatBusinessTimeOption(time)</option>
+                    }
+                </select>
+                <button class="btn btn-outline-danger btn-lg" type="submit">退店を保存</button>
+            </div>
+        </form>
+    </template>
+</div>

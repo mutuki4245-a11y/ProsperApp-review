@@ -1,0 +1,55 @@
+@using ProsperApp.Models
+@model SlipEditModel
+@{
+    var orders = Model.Detail?.Orders.Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal)).OrderBy(x => x.OrderedAt).ThenBy(x => x.LineNo).ToList() ?? [];
+    var orderableItems = Model.OrderItems.Where(x => x.IsStandard).ToList();
+}
+
+<div data-business-slip-editor-result="orders" data-business-slip-editor-manager>
+    <section class="slip-create__panel business-slip-editor-list">
+        <div class="slip-create__panel-title">
+            <div class="slip-create__panel-heading"><h3>注文</h3><small>@orders.Count 件 / @StoreUiText.Yen(orders.Sum(x => x.Amount))</small></div>
+            @if (orderableItems.Count > 0)
+            {
+                <button class="btn btn-sm btn-primary" type="button" data-business-editor-action="order_add">注文を追加</button>
+            }
+        </div>
+        <div class="business-slip-editor-list__rows">
+            @if (orders.Count == 0)
+            {
+                <p class="text-muted mb-0">注文はまだ登録されていません。</p>
+            }
+            else
+            {
+                @foreach (var order in orders)
+                {
+                    <article class="business-slip-editor-list__row">
+                        <div><strong>@order.ItemNameSnapshot × @order.Quantity</strong><span>@StoreUiText.Amount(order.Amount)@(!string.IsNullOrWhiteSpace(order.BackCastDisplayName) ? $" / バック: {order.BackCastDisplayName}" : string.Empty)</span></div>
+                        @if (order.IsStandard)
+                        {
+                            <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="order_delete" data-business-editor-record-id="@order.OrderLineId" data-business-editor-record-display="@order.ItemNameSnapshot">削除</button>
+                        }
+                    </article>
+                }
+            }
+        </div>
+    </section>
+
+    @if (orderableItems.Count == 0)
+    {
+        <div class="alert alert-secondary mt-3 mb-0">注文可能な商品が未登録です。</div>
+    }
+
+    <template data-business-editor-template="order_add">
+        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-loading-lock="false">
+            <input type="hidden" name="SlipId" value="@Model.SlipId" />
+            <div class="business-slip-editor-action-form__title"><button class="btn btn-sm btn-outline-secondary" type="button" data-business-editor-action="back">戻る</button><h3>注文を追加</h3></div>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5"><label class="form-label">商品</label><select class="form-select form-select-lg" name="AddOrderInput.ItemId" data-business-order-item required><option value="">商品を選択</option>@foreach (var item in orderableItems) { <option value="@item.ItemId" data-business-order-name="@item.ItemName" data-business-order-price="@item.DefaultPrice" data-business-order-cast-back-target="@item.IsCastBackTarget.ToString().ToLowerInvariant()">@item.ItemName / @StoreUiText.Amount(item.DefaultPrice)</option> }</select></div>
+                <div class="col-md-2"><label class="form-label">数量</label><input class="form-control form-control-lg" name="AddOrderInput.Quantity" type="number" min="1" max="999" step="1" value="1" required /></div>
+                <div class="col-md-3"><label class="form-label">バック先</label><select class="form-select form-select-lg" name="AddOrderInput.CastBackCastId" data-business-order-back-cast><option value="">なし</option>@foreach (var cast in Model.AttendanceCasts) { var label = string.IsNullOrWhiteSpace(cast.DrinkMemo) ? cast.DisplayName : $"{cast.DisplayName} / {cast.DrinkMemo}"; <option value="@cast.CastId" data-business-order-cast-name="@cast.DisplayName">@label</option> }</select></div>
+                <div class="col-md-2 d-grid"><button class="btn btn-primary btn-lg" type="submit">追加を保存</button></div>
+            </div>
+        </form>
+    </template>
+</div>

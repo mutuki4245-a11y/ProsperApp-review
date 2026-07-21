@@ -198,6 +198,8 @@ as $$
                         'orderedAt', ol.ordered_at,
                         'orderedTime', to_char(ol.ordered_at at time zone 'Asia/Tokyo', 'HH24:MI'),
                         'status', ol.status,
+                        'sourceType', ol.source_type,
+                        'sourceId', ol.source_id,
                         'backCastId', back.cast_id,
                         'backCastDisplayName', cm.display_name,
                         'backCastDepartmentName', d.department_name
@@ -277,10 +279,20 @@ declare
     v_nomination jsonb;
     v_adjustment_name text;
     v_adjustment_amount numeric(12, 0);
+    v_slip_cast_id bigint;
+    v_charge_line_id bigint;
+    v_order_line_id bigint;
+    v_order_item_id bigint;
+    v_order_quantity integer;
+    v_order_cast_back_cast_id bigint;
     v_revision bigint;
     v_snapshot jsonb;
 begin
-    if p_operation_type not in ('add_customer', 'update_customer', 'leave_customer', 'add_nomination', 'add_adjustment') then
+    if p_operation_type not in (
+        'add_customer', 'update_customer', 'leave_customer',
+        'add_nomination', 'cancel_nomination',
+        'add_adjustment', 'void_adjustment',
+        'add_order', 'void_order') then
         raise exception 'invalid_business_editor_operation';
     end if;
 
@@ -356,7 +368,13 @@ begin
             'nomination_price', p_payload->>'nomination_price'
         ));
         perform store.add_slip_nominations(p_department_id, p_slip_id, v_nomination);
-    else
+    elsif p_operation_type = 'cancel_nomination' then
+        if coalesce(p_payload->>'slip_cast_id', '') !~ '^[1-9][0-9]*$' then
+            raise exception 'store_slip_nomination_not_found';
+        end if;
+        v_slip_cast_id := (p_payload->>'slip_cast_id')::bigint;
+        perform store.cancel_slip_nomination(p_department_id, v_slip_cast_id);
+    elsif p_operation_type = 'add_adjustment' then
         v_adjustment_name := nullif(trim(coalesce(p_payload->>'line_name', '')), '');
         v_adjustment_amount := nullif(p_payload->>'amount', '')::numeric;
         if v_adjustment_name is null or char_length(v_adjustment_name) > 160 then
@@ -366,6 +384,39 @@ begin
             raise exception 'invalid_adjustment_amount';
         end if;
         perform store.add_slip_adjustment(p_department_id, p_slip_id, v_adjustment_name, v_adjustment_amount);
+    elsif p_operation_type = 'void_adjustment' then
+        if coalesce(p_payload->>'charge_line_id', '') !~ '^[1-9][0-9]*$' then
+            raise exception 'store_slip_adjustment_not_found';
+        end if;
+        v_charge_line_id := (p_payload->>'charge_line_id')::bigint;
+        perform store.void_slip_adjustment(p_department_id, v_charge_line_id);
+    elsif p_operation_type = 'add_order' then
+        if coalesce(p_payload->>'item_id', '') !~ '^[1-9][0-9]*$' or
+           coalesce(p_payload->>'quantity', '') !~ '^[1-9][0-9]*$' or
+           (nullif(p_payload->>'cast_back_cast_id', '') is not null and p_payload->>'cast_back_cast_id' !~ '^[1-9][0-9]*$') then
+            raise exception 'invalid_order_quantity';
+        end if;
+        v_order_item_id := (p_payload->>'item_id')::bigint;
+        v_order_quantity := (p_payload->>'quantity')::integer;
+        if v_order_quantity > 999 then
+            raise exception 'invalid_order_quantity';
+        end if;
+        v_order_cast_back_cast_id := nullif(p_payload->>'cast_back_cast_id', '')::bigint;
+        perform store.add_order_lines(
+            p_department_id,
+            p_slip_id,
+            jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+                'item_id', v_order_item_id,
+                'quantity', v_order_quantity,
+                'cast_back_cast_id', v_order_cast_back_cast_id
+            )))
+        );
+    else
+        if coalesce(p_payload->>'order_line_id', '') !~ '^[1-9][0-9]*$' then
+            raise exception 'store_order_line_not_found';
+        end if;
+        v_order_line_id := (p_payload->>'order_line_id')::bigint;
+        perform store.void_order_line(p_department_id, v_order_line_id);
     end if;
 
     select s.business_day_revision, s.snapshot

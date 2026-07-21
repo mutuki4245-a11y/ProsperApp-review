@@ -28,21 +28,28 @@ public partial class SlipEditModel
             return Partial("_BusinessSlipEditorUnavailable", this);
         }
 
+        if (section == "orders" && !_featureGate.IsEnabled(FeatureNames.Orders))
+        {
+            BusinessEditorUnavailableMessage = "注文機能が有効ではありません。";
+            return Partial("_BusinessSlipEditorUnavailable", this);
+        }
+
         return Partial(BusinessEditorPartialName(section!), this);
     }
 
     private static bool IsBusinessEditorSection(string? section)
     {
-        return section is "customers" or "nominations" or "adjustments";
+        return section is "customers" or "nominations" or "adjustments" or "orders";
     }
 
     private static string BusinessEditorPartialName(string section)
     {
         return section switch
         {
-            "customers" => "_BusinessSlipCustomers",
-            "nominations" => "_BusinessSlipNominations",
-            "adjustments" => "_BusinessSlipAdjustments",
+            "customers" => "_BusinessHomeSlipCustomers",
+            "nominations" => "_BusinessHomeSlipNominations",
+            "adjustments" => "_BusinessHomeSlipAdjustments",
+            "orders" => "_BusinessHomeSlipOrders",
             _ => throw new ArgumentOutOfRangeException(nameof(section), section, null)
         };
     }

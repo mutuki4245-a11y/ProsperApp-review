@@ -702,8 +702,9 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     is a compatibility bulk-save RPC for adjustment rows.
 --   store.add_slip_adjustment(p_department_id bigint, p_slip_id bigint, p_line_name text, p_amount numeric)
 --     adds one free-input adjustment row from the slip detail modal.
---     replaces active adjustment charge lines on an open slip.
---     p_adjustment_lines uses { line_name, amount }; negative amount is allowed.
+--     keeps existing active adjustment rows and allows a negative amount.
+--   store.void_slip_adjustment(p_department_id bigint, p_charge_line_id bigint)
+--     marks one active adjustment row on an open slip voided; it does not physically delete the audit row.
 --   store.save_karaoke_lines(p_department_id bigint, p_business_day_id bigint, p_karaoke_lines jsonb)
 --     replaces the active karaoke product order quantity for selected open slips in the business day.
 --     p_karaoke_lines uses { slip_id, quantity }; item_type='karaoke' unit price is fixed at 200 and service-taxable.
@@ -715,6 +716,15 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --     marks an active customer row left and refreshes store_slips.customer_count.
 --   store.void_order_line(p_department_id bigint, p_order_line_id bigint)
 --     marks an active standard order line and related store_order_line_cast_backs rows voided.
+--   store.cancel_slip_nomination(p_department_id bigint, p_slip_cast_id bigint)
+--     marks one active nomination and its nomination back cancelled, and voids its source-linked nomination_fee order line.
+--   store.get_business_day_snapshot(p_department_id bigint, p_business_day_id bigint)
+--     returns the current business_ui_revision and all slip details for the business hub.
+--     order objects include sourceType and sourceId so a nomination cancellation can project its linked fee correctly.
+--   store.apply_business_slip_editor_operation(p_department_id bigint, p_business_day_id bigint, p_slip_id bigint,
+--       p_operation_type text, p_operation_id text, p_payload jsonb)
+--     applies exactly one business-hub edit and returns the full snapshot. Operations are add/update/leave customer,
+--     add/cancel nomination, add/void adjustment, and add/void standard order.
 --   store.issue_checkout_statement(p_department_id bigint, p_slip_id bigint, p_closed_at timestamptz)
 --     changes an open slip to checkout_ready, fixes close time and non-left customer rows,
 --     and returns checkout-statement print_data plus review_data.

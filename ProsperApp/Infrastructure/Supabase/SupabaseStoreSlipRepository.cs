@@ -755,6 +755,16 @@ public class SupabaseStoreSlipRepository(
             return "対象の注文を確認してください。";
         }
 
+        if (rawError.Contains("store_slip_nomination_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "対象の指名を確認してください。";
+        }
+
+        if (rawError.Contains("store_slip_adjustment_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "対象の自由入力明細を確認してください。";
+        }
+
         if (rawError.Contains("invalid_order_quantity", StringComparison.OrdinalIgnoreCase))
         {
             return "注文数量を確認してください。";

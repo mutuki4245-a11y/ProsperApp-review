@@ -1,0 +1,45 @@
+@using ProsperApp.Models
+@model SlipEditModel
+@{
+    var adjustments = Model.Detail?.ChargeLines
+        .Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal) && string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
+        .OrderBy(x => x.LineNo)
+        .ToList() ?? [];
+}
+
+<div data-business-slip-editor-result="adjustments" data-business-slip-editor-manager>
+    <section class="slip-create__panel business-slip-editor-list">
+        <div class="slip-create__panel-title">
+            <div class="slip-create__panel-heading"><h3>自由入力明細</h3><small>@adjustments.Count 件 / @StoreUiText.Yen(adjustments.Sum(x => x.Amount))</small></div>
+            <button class="btn btn-sm btn-primary" type="button" data-business-editor-action="adjustment_add">明細を追加</button>
+        </div>
+        <div class="business-slip-editor-list__rows">
+            @if (adjustments.Count == 0)
+            {
+                <p class="text-muted mb-0">自由入力明細はまだ登録されていません。</p>
+            }
+            else
+            {
+                @foreach (var adjustment in adjustments)
+                {
+                    <article class="business-slip-editor-list__row">
+                        <div><strong>@adjustment.LineName</strong><span>@StoreUiText.Amount(adjustment.Amount)</span></div>
+                        <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="adjustment_delete" data-business-editor-record-id="@adjustment.ChargeLineId" data-business-editor-record-display="@adjustment.LineName">削除</button>
+                    </article>
+                }
+            }
+        </div>
+    </section>
+
+    <template data-business-editor-template="adjustment_add">
+        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-business-adjustment-form data-loading-lock="false">
+            <input type="hidden" name="SlipId" value="@Model.SlipId" />
+            <div class="business-slip-editor-action-form__title"><button class="btn btn-sm btn-outline-secondary" type="button" data-business-editor-action="back">戻る</button><h3>自由入力明細を追加</h3></div>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-7"><label class="form-label">明細名</label><input class="form-control form-control-lg" name="AdjustmentInput.LineName" maxlength="160" placeholder="例: 値引き" data-business-adjustment-name required /><small class="text-muted">値引きはマイナスで入力できます。</small></div>
+                <div class="col-md-3"><label class="form-label">価格</label><input class="form-control form-control-lg" name="AdjustmentInput.Amount" type="number" step="1" placeholder="0" data-business-adjustment-amount required /></div>
+                <div class="col-md-2 d-grid"><button class="btn btn-primary btn-lg" type="submit">追加を保存</button></div>
+            </div>
+        </form>
+    </template>
+</div>

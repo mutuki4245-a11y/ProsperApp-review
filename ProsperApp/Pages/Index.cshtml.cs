@@ -213,7 +213,11 @@ public class IndexModel(
 
         var input = await ReadCheckoutRequestAsync<BusinessSlipEditorOperationInput>(cancellationToken);
         if (input is null || input.SlipId <= 0 || string.IsNullOrWhiteSpace(input.OperationId) ||
-            input.OperationType is not ("add_customer" or "update_customer" or "leave_customer" or "add_nomination" or "add_adjustment"))
+            input.OperationType is not (
+                "add_customer" or "update_customer" or "leave_customer" or
+                "add_nomination" or "cancel_nomination" or
+                "add_adjustment" or "void_adjustment" or
+                "add_order" or "void_order"))
         {
             return BadRequest(new { succeeded = false, message = "編集内容を確認してください。" });
         }

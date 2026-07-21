@@ -50,11 +50,13 @@
 
     const operationTimeoutMs = 10000;
     const operationLane = (operation) => {
-        const section = operation.operationType === 'add_nomination'
+        const section = ['add_nomination', 'cancel_nomination'].includes(operation.operationType)
             ? 'nominations'
-            : operation.operationType === 'add_adjustment'
+            : ['add_adjustment', 'void_adjustment'].includes(operation.operationType)
                 ? 'adjustments'
-                : 'customers';
+                : ['add_order', 'void_order'].includes(operation.operationType)
+                    ? 'orders'
+                    : 'customers';
         return `${operation.slipId}:${section}`;
     };
 
@@ -177,7 +179,21 @@
                 orderedAt: now,
                 orderedTime: '',
                 status: 'active',
+                sourceType: 'nomination_fee',
+                sourceId: temporaryId,
                 pending: true
+            });
+        } else if (operation.operationType === 'cancel_nomination') {
+            const nomination = slip.nominations.find((item) => String(item.id) === String(payload.slip_cast_id));
+            if (nomination) {
+                nomination.status = 'cancelled';
+                nomination.pending = true;
+            }
+            slip.orders.forEach((order) => {
+                if (order.itemType === 'nomination_fee' && String(order.sourceId) === String(payload.slip_cast_id)) {
+                    order.status = 'voided';
+                    order.pending = true;
+                }
             });
         } else if (operation.operationType === 'add_adjustment') {
             const amount = Number(payload.amount) || 0;
@@ -191,6 +207,36 @@
                 status: 'active',
                 pending: true
             });
+        } else if (operation.operationType === 'void_adjustment') {
+            const adjustment = slip.adjustments.find((item) => String(item.id) === String(payload.charge_line_id));
+            if (adjustment) {
+                adjustment.status = 'voided';
+                adjustment.pending = true;
+            }
+        } else if (operation.operationType === 'add_order') {
+            const quantity = Math.max(1, Math.trunc(Number(payload.quantity) || 0));
+            const unitPrice = Number(payload.unit_price) || 0;
+            slip.orders.push({
+                id: temporaryId,
+                lineNo: Math.max(0, ...slip.orders.map((item) => Number(item.lineNo) || 0)) + 1,
+                itemName: payload.item_name || '商品',
+                itemType: 'standard',
+                quantity,
+                unitPrice,
+                amount: unitPrice * quantity,
+                orderedAt: now,
+                orderedTime: '',
+                status: 'active',
+                backCastId: payload.cast_back_cast_id || null,
+                backCastDisplayName: payload.cast_back_display_name || null,
+                pending: true
+            });
+        } else if (operation.operationType === 'void_order') {
+            const order = slip.orders.find((item) => String(item.id) === String(payload.order_line_id));
+            if (order) {
+                order.status = 'voided';
+                order.pending = true;
+            }
         }
 
         refreshSlipSummary(slip);
@@ -569,10 +615,13 @@
 
     const buildSlipDetailActions = () => {
         const actions = buildElement('div', 'slip-list__details-actions');
+        const orderButton = buildElement('button', 'btn btn-sm btn-primary', '注文を追加');
+        orderButton.type = 'button';
+        orderButton.dataset.businessSlipEditor = 'orders';
         const adjustmentButton = buildElement('button', 'btn btn-sm btn-outline-primary', '自由明細を編集');
         adjustmentButton.type = 'button';
         adjustmentButton.dataset.businessSlipEditor = 'adjustments';
-        actions.appendChild(adjustmentButton);
+        actions.append(orderButton, adjustmentButton);
         return actions;
     };
 
@@ -597,13 +646,9 @@
         return line;
     };
 
-    const detailSummary = (heading, kind, primary, secondary, editorLabel) => {
+    const detailSummary = (heading, kind, content, editorLabel) => {
         const row = buildElement('div', `business-slip-detail-summary business-slip-detail-summary--${kind}`);
-        row.append(
-            buildElement('strong', 'business-slip-detail-summary__heading', heading),
-            buildElement('strong', 'business-slip-detail-summary__primary', primary),
-            buildElement('span', 'business-slip-detail-summary__secondary', secondary)
-        );
+        row.append(buildElement('strong', 'business-slip-detail-summary__heading', heading), content);
         const button = buildElement('button', 'btn btn-sm btn-outline-primary', editorLabel);
         button.type = 'button';
         button.dataset.businessSlipEditor = kind;
@@ -614,14 +659,28 @@
     const customerSummary = (slip) => {
         const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
         const names = customers.map((customer) => customer.displayName || '客名なし').join('、');
-        return detailSummary('客', 'customers', names || '在席客なし', `在席 ${customers.length}人`, '客を編集');
+        const content = buildElement('div', 'business-slip-detail-summary__content');
+        content.append(
+            buildElement('strong', 'business-slip-detail-summary__primary', names || '在席客なし'),
+            buildElement('span', 'business-slip-detail-summary__secondary', `在席 ${customers.length}人`)
+        );
+        return detailSummary('客', 'customers', content, '客を編集');
     };
 
     const nominationSummary = (slip) => {
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((nomination) => nomination.status === 'active') : [];
-        const names = nominations.map((nomination) => nomination.displayName || 'キャスト').join('、');
-        const kinds = nominations.map((nomination) => nomination.nominationDisplayName || nomination.nominationKind || '指名').join('、');
-        return detailSummary('指名', 'nominations', names || '指名なし', kinds || '指名区分なし', '指名を編集');
+        const content = buildElement('div', 'business-slip-detail-summary__content business-slip-detail-summary__content--nominations');
+        if (nominations.length === 0) {
+            content.appendChild(buildElement('span', 'business-slip-detail-summary__secondary', '指名なし'));
+        } else {
+            nominations.forEach((nomination) => {
+                const pair = buildElement('span', 'business-slip-detail-summary__nomination');
+                const kind = nomination.nominationDisplayName || nomination.nominationKind || '指名';
+                pair.textContent = `${nomination.displayName || 'キャスト'} — ${kind} / ${formatYen(nomination.nominationPrice)}`;
+                content.appendChild(pair);
+            });
+        }
+        return detailSummary('指名', 'nominations', content, '指名を編集');
     };
 
     const renderOrderGroup = (target, slip, key, label, lines) => {
