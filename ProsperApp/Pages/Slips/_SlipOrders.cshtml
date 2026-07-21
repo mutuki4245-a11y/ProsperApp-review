@@ -23,9 +23,6 @@ else
     var activeSystemOrders = activeOrders
         .Where(x => !x.IsStandard)
         .ToList();
-    var orderableItems = Model.OrderItems
-        .Where(x => x.IsStandard)
-        .ToList();
     var activeOrderTotal = activeOrders.Sum(x => x.Amount);
     var fixedSystemOrderTotal = activeSystemOrders.Sum(x => x.Amount);
     var activeCharges = detail.ChargeLines
@@ -36,9 +33,6 @@ else
         .Where(x => string.Equals(x.ChargeType, "adjustment", StringComparison.Ordinal))
         .ToList();
     var chargeTotal = activeAdjustments.Sum(x => x.Amount);
-    var orderItemGroups = orderableItems
-        .GroupBy(x => x.CategoryName)
-        .ToList();
 
         <div class="slip-create__panel" data-order-correction-panel>
             <div class="slip-create__panel-title">
@@ -235,19 +229,7 @@ else
                                 <input type="hidden" asp-for="SlipId" />
                                 <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
                                 <span asp-validation-for="AdjustmentInput" class="text-danger"></span>
-                                <div class="row g-3">
-                                    <div class="col-12">
-                                        <label class="form-label" asp-for="AdjustmentInput.LineName">明細名</label>
-                                        <input class="form-control form-control-lg" asp-for="AdjustmentInput.LineName" maxlength="160" placeholder="例: 値引き" data-adjustment-name />
-                                        <span asp-validation-for="AdjustmentInput.LineName" class="text-danger"></span>
-                                    </div>
-                                    <div class="col-12">
-                                        <label class="form-label" asp-for="AdjustmentInput.Amount">価格</label>
-                                        <input class="form-control form-control-lg" asp-for="AdjustmentInput.Amount" type="number" step="1" placeholder="0" data-adjustment-amount />
-                                        <span asp-validation-for="AdjustmentInput.Amount" class="text-danger"></span>
-                                        <small class="text-muted">値引きはマイナスで入力できます。</small>
-                                    </div>
-                                </div>
+                                <partial name="_SlipAdjustmentAddFields" model="Model" />
                             </div>
                             <div class="modal-footer">
                                 <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
@@ -276,79 +258,8 @@ else
                                 <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
                                 <input type="hidden" asp-for="SlipId" />
                                 <input type="hidden" asp-for="OrderQueueJson" id="detailOrderQueueJson" value="[]" />
-                                <div id="detailOrderQueueFields"></div>
-
-                                @if (orderableItems.Count == 0)
-                                {
-                                    <div class="alert alert-secondary mb-0">注文可能な商品が未登録です。</div>
-                                }
-                                else
-                                {
-                                    <div class="order-entry__grid order-entry__grid--modal">
-                                        <section class="slip-create__panel order-entry__items">
-                                            <div class="slip-create__panel-title">
-                                                <h3>商品一覧</h3>
-                                                <span class="badge text-bg-secondary">@detail.TableDisplayName</span>
-                                            </div>
-
-                                            <div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ">
-                                                @for (var i = 0; i < orderItemGroups.Count; i++)
-                                                {
-                                                    <button class="order-category-tab @(i == 0 ? "is-active" : "")" type="button" data-detail-category-tab="@i">
-                                                        @orderItemGroups[i].Key
-                                                    </button>
-                                                }
-                                            </div>
-                                            <div class="order-item-groups">
-                                                @for (var groupIndex = 0; groupIndex < orderItemGroups.Count; groupIndex++)
-                                                {
-                                                    var group = orderItemGroups[groupIndex];
-                                                    <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-detail-category-panel="@groupIndex">
-                                                        <h3 class="visually-hidden">@group.Key</h3>
-                                                        <div class="order-item-grid">
-                                                            @foreach (var item in group)
-                                                            {
-                                                                <button
-                                                                    class="order-item-button"
-                                                                    type="button"
-                                                                    data-detail-item-id="@item.ItemId">
-                                                                    <strong>@item.ItemName</strong>
-                                                                    <span>@item.DefaultPriceText</span>
-                                                                    @if (item.IsCastBackTarget)
-                                                                    {
-                                                                        <small>@item.CastBackSummaryText</small>
-                                                                    }
-                                                                </button>
-                                                            }
-                                                        </div>
-                                                    </section>
-                                                }
-                                            </div>
-                                        </section>
-
-                                        <section class="slip-create__panel order-entry__queue">
-                                            <div class="slip-create__panel-title">
-                                                <div>
-                                                    <h3>注文キュー</h3>
-                                                    <small>@detail.TableDisplayName</small>
-                                                </div>
-                                                <div class="slip-create__panel-title-actions">
-                                                    <span class="terminal-save-status" data-save-state="saved" id="detailOrderQueueStatus" aria-live="polite">空</span>
-                                                    <button class="btn btn-outline-secondary" type="button" id="detailClearQueueButton">クリア</button>
-                                                </div>
-                                            </div>
-                                            <span asp-validation-for="QueueLines" class="text-danger"></span>
-
-                                            <div class="order-queue" id="detailOrderQueueList"></div>
-                                            <div class="order-queue__empty" id="detailOrderQueueEmpty">商品を選択してください。</div>
-
-                                            <div class="order-queue__total">
-                                                <span>合計</span>
-                                                <strong id="detailOrderQueueTotal">0 円</strong>
-                                            </div>
-                                        </section>
-                                    </div>
-                                }
+                                <span asp-validation-for="QueueLines" class="text-danger"></span>
+                                <partial name="_SlipOrderQueueFields" model="Model" />
                             </div>
                             <div class="modal-footer">
                                 <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>

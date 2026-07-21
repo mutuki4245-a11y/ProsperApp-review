@@ -1,0 +1,44 @@
+@model SlipEditModel
+@{
+    var orderItemGroups = Model.OrderItems
+        .Where(x => x.IsStandard)
+        .GroupBy(x => x.CategoryName)
+        .ToList();
+}
+
+<div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ" data-slip-order-catalog-tabs>
+    @for (var i = 0; i < orderItemGroups.Count; i++)
+    {
+        <button class="order-category-tab @(i == 0 ? "is-active" : "")" type="button" data-slip-order-catalog-tab="@i">
+            @orderItemGroups[i].Key
+        </button>
+    }
+</div>
+<div class="order-item-groups">
+    @for (var groupIndex = 0; groupIndex < orderItemGroups.Count; groupIndex++)
+    {
+        var group = orderItemGroups[groupIndex];
+        <section class="order-item-group @(groupIndex == 0 ? "is-active" : "")" data-slip-order-catalog-panel="@groupIndex">
+            <h3 class="visually-hidden">@group.Key</h3>
+            <div class="order-item-grid">
+                @foreach (var item in group)
+                {
+                    <button
+                        class="order-item-button"
+                        type="button"
+                        data-slip-order-catalog-item="@item.ItemId"
+                        data-slip-order-catalog-name="@item.ItemName"
+                        data-slip-order-catalog-price="@item.DefaultPrice"
+                        data-slip-order-catalog-cast-back-target="@item.IsCastBackTarget.ToString().ToLowerInvariant()">
+                        <strong>@item.ItemName</strong>
+                        <span>@item.DefaultPriceText</span>
+                        @if (item.IsCastBackTarget)
+                        {
+                            <small>@item.CastBackSummaryText</small>
+                        }
+                    </button>
+                }
+            </div>
+        </section>
+    }
+</div>

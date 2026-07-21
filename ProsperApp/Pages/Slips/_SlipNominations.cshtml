@@ -17,12 +17,6 @@ else
         .Select(x => (Value: x.NominationKind, Label: x.DisplayName))
         .ToArray();
     var hasNominationOptions = nominationOptions.Length > 0;
-    bool IsCompanionNomination(string? nominationKind) =>
-        Model.NominationOptions.Any(option =>
-            string.Equals(option.NominationKind, nominationKind, StringComparison.Ordinal) &&
-            string.Equals(option.NominationType, "companion", StringComparison.Ordinal));
-    var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
-    var addNomination = Model.AddNominationsInput.CastNominations.FirstOrDefault() ?? new CastNominationInputModel { NominationKind = nominationOptions.FirstOrDefault().Value };
     var nominationCount = Model.Detail?.Nominations.Count ?? 0;
     var nominationTotal = Model.Detail?.Nominations.Sum(x => x.NominationPrice) ?? 0;
 
@@ -113,57 +107,7 @@ else
                         <input type="hidden" asp-for="SlipId" />
                         <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
                         <span asp-validation-for="AddNominationsInput.CastNominations" class="text-danger"></span>
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <label class="form-label">指名区分</label>
-                                <select class="form-select form-select-lg nomination-row__kind" name="AddNominationsInput.CastNominations[0].NominationKind">
-                                    <option value="">指名区分</option>
-                                    @foreach (var option in nominationOptions)
-                                    {
-                                        var isSelected = addNomination.NominationKind == option.Value;
-                                        var isCompanion = IsCompanionNomination(option.Value);
-                                        <option value="@option.Value" selected="@isSelected" data-companion="@isCompanion.ToString().ToLowerInvariant()">@option.Label</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">指名料金</label>
-                                <select class="form-select form-select-lg nomination-row__price" name="AddNominationsInput.CastNominations[0].NominationPrice">
-                                    @foreach (var price in nominationPriceOptions)
-                                    {
-                                        if (addNomination.NominationPrice == price)
-                                        {
-                                            <option value="@price" selected>@StoreUiText.Yen(price)</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="@price">@StoreUiText.Yen(price)</option>
-                                        }
-                                    }
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">キャスト</label>
-                                <select class="form-select form-select-lg nomination-row__cast" name="AddNominationsInput.CastNominations[0].CastId">
-                                    <option value="">キャストを選択</option>
-                                    @foreach (var cast in Model.AttendanceCasts)
-                                    {
-                                        var label = string.IsNullOrWhiteSpace(cast.DepartmentName)
-                                            ? cast.DisplayName
-                                            : $"{cast.DisplayName} / {cast.DepartmentName}";
-                                        if (addNomination.CastId == cast.CastId)
-                                        {
-                                            <option value="@cast.CastId" selected>@label</option>
-                                        }
-                                        else
-                                        {
-                                            <option value="@cast.CastId">@label</option>
-                                        }
-                                    }
-                                </select>
-                                <span asp-validation-for="AddNominationsInput.CastNominations[0].CastId" class="text-danger"></span>
-                            </div>
-                        </div>
+                        <partial name="_SlipNominationAddFields" model="Model" />
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>

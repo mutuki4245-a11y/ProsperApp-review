@@ -15,7 +15,9 @@
         section: null,
         slipId: null,
         requestId: 0,
-        isSubmitting: false
+        isSubmitting: false,
+        orderQueue: new Map(),
+        pendingBackItemId: null
     };
 
     if (!editorUrl || !modalElement || !content || !window.bootstrap?.Modal) {
@@ -24,6 +26,7 @@
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
     const currentSlip = (slipId) => (window.prosperBusinessHomeSlips || []).find((slip) => String(slip.id) === String(slipId));
+    const formatYen = window.MoneyText?.yen ?? ((amount) => `${Number(amount || 0).toLocaleString('ja-JP')}円`);
     const actionTemplates = new Set(['customer_add', 'customer_rename', 'customer_leave', 'nomination_add', 'adjustment_add', 'order_add']);
     const deleteActions = {
         nomination_delete: { operationType: 'cancel_nomination', recordName: 'SlipCastId', label: 'この指名' },
@@ -54,7 +57,6 @@
     const prepareContent = () => {
         window.PartialForms?.prepareDynamicContent?.(content);
         content.querySelectorAll('.nomination-row__kind').forEach((kindSelect) => syncCompanionPrice(kindSelect));
-        content.querySelectorAll('[data-business-order-item]').forEach((itemSelect) => syncOrderBackCast(itemSelect));
         applyPendingPreview();
     };
 
@@ -107,13 +109,129 @@
         if (force || priceSelect.value === '' || priceSelect.value === '1000') priceSelect.value = '3000';
     };
 
-    const syncOrderBackCast = (itemSelect) => {
-        const castSelect = itemSelect?.closest('form')?.querySelector('[data-business-order-back-cast]');
-        if (!castSelect) return;
-        const canAssignBack = itemSelect.selectedOptions?.[0]?.dataset.businessOrderCastBackTarget === 'true';
-        castSelect.disabled = !canAssignBack;
-        castSelect.closest('.col-md-3')?.classList.toggle('is-disabled', !canAssignBack);
-        if (!canAssignBack) castSelect.value = '';
+    const businessOrderQueueKey = (itemId, castBackCastId) => `${itemId}:${castBackCastId ?? ''}`;
+
+    const businessOrderQueueForm = () => content.querySelector('[data-business-order-queue-form]');
+
+    const businessOrderItem = (form, itemId) => form?.querySelector(`[data-slip-order-catalog-item="${itemId}"]`);
+
+    const businessOrderCastOptions = (form) => Array.from(form?.querySelectorAll('[data-business-order-cast-id]') ?? [])
+        .map((cast) => ({
+            id: cast.dataset.businessOrderCastId || '',
+            name: cast.dataset.businessOrderCastName || '',
+            drinkMemo: cast.dataset.businessOrderCastMemo || ''
+        }))
+        .filter((cast) => cast.id);
+
+    const hideBusinessOrderBackPicker = (form) => {
+        state.pendingBackItemId = null;
+        form?.querySelector('[data-business-order-back-picker]')?.setAttribute('hidden', '');
+        form?.querySelector('.order-entry__queue')?.classList.remove('is-back-picking');
+    };
+
+    const renderBusinessOrderQueue = (form = businessOrderQueueForm()) => {
+        if (!form) return;
+        const fields = form.querySelector('#detailOrderQueueFields');
+        const list = form.querySelector('#detailOrderQueueList');
+        const serialized = form.querySelector('#detailOrderQueueJson');
+        const empty = form.querySelector('#detailOrderQueueEmpty');
+        const status = form.querySelector('#detailOrderQueueStatus');
+        const total = form.querySelector('#detailOrderQueueTotal');
+        const submit = form.querySelector('#detailSubmitOrderButton');
+        if (!fields || !list || !serialized || !empty || !status || !total || !submit) return;
+
+        fields.replaceChildren();
+        list.replaceChildren();
+        const lines = [];
+        let queueTotal = 0;
+
+        state.orderQueue.forEach((line, key) => {
+            const item = businessOrderItem(form, line.itemId);
+            if (!item || line.quantity <= 0) return;
+            const price = Number(item.dataset.slipOrderCatalogPrice) || 0;
+            const subtotal = price * line.quantity;
+            const cast = line.castBackCastId
+                ? businessOrderCastOptions(form).find((candidate) => String(candidate.id) === String(line.castBackCastId))
+                : null;
+            const index = lines.length;
+            lines.push({ itemId: Number(line.itemId), quantity: line.quantity, castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null });
+            queueTotal += subtotal;
+
+            fields.insertAdjacentHTML('beforeend', `
+                <input type="hidden" name="QueueLines[${index}].ItemId" value="${line.itemId}" />
+                <input type="hidden" name="QueueLines[${index}].Quantity" value="${line.quantity}" />
+                ${line.castBackCastId ? `<input type="hidden" name="QueueLines[${index}].CastBackCastId" value="${line.castBackCastId}" />` : ''}
+            `);
+
+            const row = document.createElement('div');
+            row.className = 'order-queue__row';
+            const main = document.createElement('div');
+            main.className = 'order-queue__row-main';
+            main.appendChild(Object.assign(document.createElement('strong'), { textContent: item.dataset.slipOrderCatalogName || '商品' }));
+            if (cast) {
+                main.appendChild(Object.assign(document.createElement('small'), {
+                    className: 'order-queue__back',
+                    textContent: `バック: ${cast.name}`
+                }));
+            }
+            const amount = document.createElement('div');
+            amount.className = 'order-queue__row-amount';
+            amount.append(
+                Object.assign(document.createElement('span'), { textContent: `${formatYen(price)} x ${line.quantity}` }),
+                Object.assign(document.createElement('strong'), { textContent: formatYen(subtotal) })
+            );
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn btn-outline-danger btn-sm';
+            remove.dataset.businessOrderQueueRemove = key;
+            remove.textContent = '削除';
+            row.append(main, amount, remove);
+            list.appendChild(row);
+        });
+
+        serialized.value = JSON.stringify(lines);
+        const hasQueue = lines.length > 0;
+        empty.hidden = hasQueue;
+        status.textContent = hasQueue ? '未送信' : '空';
+        status.dataset.saveState = hasQueue ? 'dirty' : 'saved';
+        total.textContent = formatYen(queueTotal);
+        submit.disabled = submit.dataset.submitBaseDisabled === 'true' || !hasQueue;
+    };
+
+    const addBusinessOrderToQueue = (form, itemId, castBackCastId = null) => {
+        const key = businessOrderQueueKey(itemId, castBackCastId);
+        const line = state.orderQueue.get(key) ?? { itemId: String(itemId), castBackCastId: castBackCastId ? String(castBackCastId) : null, quantity: 0 };
+        line.quantity += 1;
+        state.orderQueue.set(key, line);
+        hideBusinessOrderBackPicker(form);
+        renderBusinessOrderQueue(form);
+    };
+
+    const showBusinessOrderBackPicker = (form, itemId) => {
+        const picker = form?.querySelector('[data-business-order-back-picker]');
+        const list = form?.querySelector('[data-business-order-back-picker-list]');
+        if (!picker || !list) return;
+        state.pendingBackItemId = String(itemId);
+        const casts = businessOrderCastOptions(form);
+        window.CastSelectModal?.renderOptionalBackTarget(list, casts, {
+            getLabel: (cast) => cast.drinkMemo ? `${cast.name}（${cast.drinkMemo}）` : cast.name,
+            onNone: () => addBusinessOrderToQueue(form, state.pendingBackItemId, null),
+            onSelect: (cast) => addBusinessOrderToQueue(form, state.pendingBackItemId, cast.id)
+        });
+        picker.removeAttribute('hidden');
+        form.querySelector('.order-entry__queue')?.classList.add('is-back-picking');
+    };
+
+    const selectBusinessOrderCategory = (tab) => {
+        const form = tab.closest('[data-business-order-queue-form]');
+        if (!form) return;
+        const index = tab.dataset.slipOrderCatalogTab || '';
+        form.querySelectorAll('[data-slip-order-catalog-tab]').forEach((candidate) => {
+            candidate.classList.toggle('is-active', candidate === tab);
+        });
+        form.querySelectorAll('[data-slip-order-catalog-panel]').forEach((panel) => {
+            panel.classList.toggle('is-active', panel.dataset.slipOrderCatalogPanel === index);
+        });
     };
 
     const adjustmentHasInput = () => {
@@ -251,7 +369,11 @@
         if (heading && recordDisplay) heading.textContent = `${recordDisplay}を${action === 'customer_leave' ? '退店' : '変更'}`;
         window.PartialForms?.prepareDynamicContent?.(manager);
         manager.querySelectorAll('.nomination-row__kind').forEach((kindSelect) => syncCompanionPrice(kindSelect));
-        manager.querySelectorAll('[data-business-order-item]').forEach((itemSelect) => syncOrderBackCast(itemSelect));
+        if (action === 'order_add') {
+            state.orderQueue.clear();
+            state.pendingBackItemId = null;
+            renderBusinessOrderQueue(manager.querySelector('[data-business-order-queue-form]'));
+        }
         manager.querySelector('input:not([type="hidden"]), select')?.focus();
     };
 
@@ -337,6 +459,35 @@
         if (form.querySelector('[name="AdjustmentInput.LineName"]')) {
             return { slipId, operationType: 'add_adjustment', payload: { line_name: value('AdjustmentInput.LineName'), amount: Number(value('AdjustmentInput.Amount')) } };
         }
+        if (form.hasAttribute('data-business-order-queue-form')) {
+            let queueLines;
+            try {
+                queueLines = JSON.parse(value('OrderQueueJson') || '[]');
+            } catch {
+                return [];
+            }
+            if (!Array.isArray(queueLines)) return [];
+            return queueLines
+                .filter((line) => Number(line?.itemId) > 0 && Number(line?.quantity) > 0)
+                .map((line) => {
+                    const item = businessOrderItem(form, line.itemId);
+                    const cast = line.castBackCastId
+                        ? businessOrderCastOptions(form).find((candidate) => String(candidate.id) === String(line.castBackCastId))
+                        : null;
+                    return {
+                        slipId,
+                        operationType: 'add_order',
+                        payload: {
+                            item_id: Number(line.itemId),
+                            quantity: Number(line.quantity),
+                            cast_back_cast_id: line.castBackCastId ? Number(line.castBackCastId) : null,
+                            item_name: item?.dataset.slipOrderCatalogName || '',
+                            unit_price: Number(item?.dataset.slipOrderCatalogPrice) || 0,
+                            cast_back_display_name: cast?.name || ''
+                        }
+                    };
+                });
+        }
         if (form.querySelector('[name="AddOrderInput.ItemId"]')) {
             const item = form.querySelector('[name="AddOrderInput.ItemId"]')?.selectedOptions?.[0];
             const cast = form.querySelector('[name="AddOrderInput.CastBackCastId"]')?.selectedOptions?.[0];
@@ -359,17 +510,74 @@
     const submitEditor = (form) => {
         if (state.isSubmitting) return;
         const operation = buildOperation(form);
-        if (!operation || !window.prosperBusinessHomeEnqueueEditorOperation) {
-            setError('編集内容を確認してください。');
+        const operations = (Array.isArray(operation) ? operation : [operation]).filter(Boolean);
+        if (operations.length === 0 || !window.prosperBusinessHomeEnqueueEditorOperation) {
+            const queueError = form.querySelector('[data-business-order-queue-error]');
+            if (queueError) {
+                queueError.textContent = '商品を選択してください。';
+            } else {
+                setError('編集内容を確認してください。');
+            }
             return;
         }
         state.isSubmitting = true;
-        window.prosperBusinessHomeEnqueueEditorOperation(operation);
+        operations.forEach((nextOperation) => window.prosperBusinessHomeEnqueueEditorOperation(nextOperation));
         modal.hide();
         state.isSubmitting = false;
     };
 
     document.addEventListener('click', (event) => {
+        const orderItemButton = event.target.closest('[data-slip-order-catalog-item]');
+        if (orderItemButton && content.contains(orderItemButton)) {
+            const form = orderItemButton.closest('[data-business-order-queue-form]');
+            if (form) {
+                event.preventDefault();
+                if (orderItemButton.dataset.slipOrderCatalogCastBackTarget === 'true') {
+                    showBusinessOrderBackPicker(form, orderItemButton.dataset.slipOrderCatalogItem || '');
+                } else {
+                    addBusinessOrderToQueue(form, orderItemButton.dataset.slipOrderCatalogItem || '');
+                }
+                return;
+            }
+        }
+
+        const orderCategoryTab = event.target.closest('[data-slip-order-catalog-tab]');
+        if (orderCategoryTab && content.contains(orderCategoryTab) && orderCategoryTab.closest('[data-business-order-queue-form]')) {
+            event.preventDefault();
+            selectBusinessOrderCategory(orderCategoryTab);
+            return;
+        }
+
+        const orderQueueRemove = event.target.closest('[data-business-order-queue-remove]');
+        if (orderQueueRemove && content.contains(orderQueueRemove)) {
+            const form = orderQueueRemove.closest('[data-business-order-queue-form]');
+            if (form) {
+                event.preventDefault();
+                state.orderQueue.delete(orderQueueRemove.dataset.businessOrderQueueRemove || '');
+                renderBusinessOrderQueue(form);
+                return;
+            }
+        }
+
+        const clearOrderQueue = event.target.closest('#detailClearQueueButton');
+        if (clearOrderQueue && content.contains(clearOrderQueue)) {
+            const form = clearOrderQueue.closest('[data-business-order-queue-form]');
+            if (form) {
+                event.preventDefault();
+                state.orderQueue.clear();
+                hideBusinessOrderBackPicker(form);
+                renderBusinessOrderQueue(form);
+                return;
+            }
+        }
+
+        const cancelOrderBackPicker = event.target.closest('[data-business-order-back-picker-cancel]');
+        if (cancelOrderBackPicker && content.contains(cancelOrderBackPicker)) {
+            event.preventDefault();
+            hideBusinessOrderBackPicker(cancelOrderBackPicker.closest('[data-business-order-queue-form]'));
+            return;
+        }
+
         const actionButton = event.target.closest('[data-business-editor-action]');
         if (actionButton && content.contains(actionButton)) {
             event.preventDefault();
@@ -393,8 +601,6 @@
     document.addEventListener('change', (event) => {
         const kindSelect = event.target.closest('.nomination-row__kind');
         if (kindSelect && content.contains(kindSelect)) syncCompanionPrice(kindSelect, true);
-        const itemSelect = event.target.closest('[data-business-order-item]');
-        if (itemSelect && content.contains(itemSelect)) syncOrderBackCast(itemSelect);
     });
 
     document.addEventListener('submit', (event) => {
@@ -418,6 +624,8 @@
         state.section = null;
         state.slipId = null;
         state.isSubmitting = false;
+        state.orderQueue.clear();
+        state.pendingBackItemId = null;
         content.innerHTML = '<div class="slip-create__panel slip-detail-panel-loading">編集内容を読み込み中です。</div>';
     });
 

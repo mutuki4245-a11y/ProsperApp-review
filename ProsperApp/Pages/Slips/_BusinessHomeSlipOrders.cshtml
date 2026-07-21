@@ -41,15 +41,19 @@
     }
 
     <template data-business-editor-template="order_add">
-        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-loading-lock="false">
+        <form class="slip-create__panel business-slip-editor-action-form" data-business-slip-editor-form data-business-order-queue-form data-loading-lock="false">
             <input type="hidden" name="SlipId" value="@Model.SlipId" />
             <div class="business-slip-editor-action-form__title"><button class="btn btn-sm btn-outline-secondary" type="button" data-business-editor-action="back">戻る</button><h3>注文を追加</h3></div>
-            <div class="row g-3 align-items-end">
-                <div class="col-md-5"><label class="form-label">商品</label><select class="form-select form-select-lg" name="AddOrderInput.ItemId" data-business-order-item required><option value="">商品を選択</option>@foreach (var item in orderableItems) { <option value="@item.ItemId" data-business-order-name="@item.ItemName" data-business-order-price="@item.DefaultPrice" data-business-order-cast-back-target="@item.IsCastBackTarget.ToString().ToLowerInvariant()">@item.ItemName / @StoreUiText.Amount(item.DefaultPrice)</option> }</select></div>
-                <div class="col-md-2"><label class="form-label">数量</label><input class="form-control form-control-lg" name="AddOrderInput.Quantity" type="number" min="1" max="999" step="1" value="1" required /></div>
-                <div class="col-md-3"><label class="form-label">バック先</label><select class="form-select form-select-lg" name="AddOrderInput.CastBackCastId" data-business-order-back-cast><option value="">なし</option>@foreach (var cast in Model.AttendanceCasts) { var label = string.IsNullOrWhiteSpace(cast.DrinkMemo) ? cast.DisplayName : $"{cast.DisplayName} / {cast.DrinkMemo}"; <option value="@cast.CastId" data-business-order-cast-name="@cast.DisplayName">@label</option> }</select></div>
-                <div class="col-md-2 d-grid"><button class="btn btn-primary btn-lg" type="submit">追加を保存</button></div>
+            <input type="hidden" name="OrderQueueJson" id="detailOrderQueueJson" value="[]" />
+            <span class="text-danger" data-business-order-queue-error></span>
+            <div hidden data-business-order-casts>
+                @foreach (var cast in Model.AttendanceCasts)
+                {
+                    <span data-business-order-cast-id="@cast.CastId" data-business-order-cast-name="@cast.DisplayName" data-business-order-cast-memo="@cast.DrinkMemo"></span>
+                }
             </div>
+            <partial name="_SlipOrderQueueFields" model="Model" />
+            <button class="btn btn-primary btn-lg align-self-end" type="submit" id="detailSubmitOrderButton" data-submit-base-disabled="@((orderableItems.Count == 0).ToString().ToLowerInvariant())" disabled>オーダー保存</button>
         </form>
     </template>
 </div>

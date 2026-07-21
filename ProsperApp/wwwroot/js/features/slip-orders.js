@@ -296,9 +296,9 @@
     };
 
     section()?.addEventListener('click', (event) => {
-        const orderItemButton = event.target.closest('[data-detail-item-id]');
+        const orderItemButton = event.target.closest('[data-slip-order-catalog-item]');
         if (orderItemButton && section()?.contains(orderItemButton)) {
-            const itemId = orderItemButton.dataset.detailItemId ?? '';
+            const itemId = orderItemButton.dataset.slipOrderCatalogItem ?? '';
             const item = orderItems.find((candidate) => String(candidate.id) === String(itemId));
             if (!item || item.isKaraoke) {
                 return;
@@ -320,14 +320,14 @@
             return;
         }
 
-        const categoryTab = event.target.closest('[data-detail-category-tab]');
+        const categoryTab = event.target.closest('[data-slip-order-catalog-tab]');
         if (categoryTab && section()?.contains(categoryTab)) {
-            const index = categoryTab.dataset.detailCategoryTab ?? '';
-            findAll('[data-detail-category-tab]').forEach((tab) => {
+            const index = categoryTab.dataset.slipOrderCatalogTab ?? '';
+            findAll('[data-slip-order-catalog-tab]').forEach((tab) => {
                 tab.classList.toggle('is-active', tab === categoryTab);
             });
-            findAll('[data-detail-category-panel]').forEach((panel) => {
-                panel.classList.toggle('is-active', panel.dataset.detailCategoryPanel === index);
+            findAll('[data-slip-order-catalog-panel]').forEach((panel) => {
+                panel.classList.toggle('is-active', panel.dataset.slipOrderCatalogPanel === index);
             });
             return;
         }

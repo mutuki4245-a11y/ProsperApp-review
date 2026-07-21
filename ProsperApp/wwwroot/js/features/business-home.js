@@ -660,23 +660,20 @@
         const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
         const names = customers.map((customer) => customer.displayName || '客名なし').join('、');
         const content = buildElement('div', 'business-slip-detail-summary__content');
-        content.append(
-            buildElement('strong', 'business-slip-detail-summary__primary', names || '在席客なし'),
-            buildElement('span', 'business-slip-detail-summary__secondary', `在席 ${customers.length}人`)
-        );
+        content.appendChild(buildElement('strong', 'business-slip-detail-summary__primary', names || '在席客なし'));
         return detailSummary('客', 'customers', content, '客を編集');
     };
 
     const nominationSummary = (slip) => {
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((nomination) => nomination.status === 'active') : [];
-        const content = buildElement('div', 'business-slip-detail-summary__content business-slip-detail-summary__content--nominations');
+        const content = buildElement('div', 'business-slip-detail-summary__content');
         if (nominations.length === 0) {
-            content.appendChild(buildElement('span', 'business-slip-detail-summary__secondary', '指名なし'));
+            content.appendChild(buildElement('strong', 'business-slip-detail-summary__primary', '指名なし'));
         } else {
             nominations.forEach((nomination) => {
-                const pair = buildElement('span', 'business-slip-detail-summary__nomination');
+                const pair = buildElement('strong', 'business-slip-detail-summary__primary');
                 const kind = nomination.nominationDisplayName || nomination.nominationKind || '指名';
-                pair.textContent = `${nomination.displayName || 'キャスト'} — ${kind} / ${formatYen(nomination.nominationPrice)}`;
+                pair.textContent = `${nomination.displayName || 'キャスト'} — ${kind}`;
                 content.appendChild(pair);
             });
         }

@@ -1,0 +1,50 @@
+@model SlipEditModel
+@{
+    var orderableItems = Model.OrderItems.Where(x => x.IsStandard).ToList();
+    var tableDisplayName = Model.Detail?.TableDisplayName ?? "伝票";
+}
+
+@if (orderableItems.Count == 0)
+{
+    <div class="alert alert-secondary mb-0">注文可能な商品が未登録です。</div>
+}
+else
+{
+    <div class="order-entry__grid order-entry__grid--modal">
+        <section class="slip-create__panel order-entry__items">
+            <div class="slip-create__panel-title">
+                <h3>商品一覧</h3>
+                <span class="badge text-bg-secondary">@tableDisplayName</span>
+            </div>
+            <partial name="_SlipOrderItemCatalog" model="Model" />
+        </section>
+
+        <section class="slip-create__panel order-entry__queue">
+            <div class="slip-create__panel-title">
+                <div>
+                    <h3>注文キュー</h3>
+                    <small>@tableDisplayName</small>
+                </div>
+                <div class="slip-create__panel-title-actions">
+                    <span class="terminal-save-status" data-save-state="saved" id="detailOrderQueueStatus" aria-live="polite">空</span>
+                    <button class="btn btn-outline-secondary" type="button" id="detailClearQueueButton">クリア</button>
+                </div>
+            </div>
+
+            <div id="detailOrderQueueFields"></div>
+            <div class="order-queue" id="detailOrderQueueList"></div>
+            <div class="order-queue__empty" id="detailOrderQueueEmpty">商品を選択してください。</div>
+            <div class="order-queue__total">
+                <span>合計</span>
+                <strong id="detailOrderQueueTotal">0 円</strong>
+            </div>
+
+            <div class="business-order-back-picker" data-business-order-back-picker hidden>
+                <h4>バック先を選択</h4>
+                <p class="text-muted">バックなしでも追加できます。</p>
+                <div class="cast-select-modal__list" data-business-order-back-picker-list></div>
+                <button class="btn btn-outline-secondary mt-3" type="button" data-business-order-back-picker-cancel>戻る</button>
+            </div>
+        </section>
+    </div>
+}
