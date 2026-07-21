@@ -101,7 +101,7 @@ else
                                         <span>@order.ItemNameSnapshot</span>
                                         @if (order.HasCastBack)
                                         {
-                                            <small class="slip-order-back-cast">バック: @order.BackCastDisplayName</small>
+                                            <small class="slip-order-back-cast">@order.BackCastDisplayName</small>
                                         }
                                     </td>
                                     <td class="slip-detail-table__amount text-end">@StoreUiText.Amount(order.UnitPrice)</td>
@@ -138,7 +138,7 @@ else
                                         <span class="badge text-bg-secondary">自動</span>
                                         @if (order.HasCastBack)
                                         {
-                                            <small class="slip-order-back-cast">バック: @order.BackCastDisplayName</small>
+                                            <small class="slip-order-back-cast">@order.BackCastDisplayName</small>
                                         }
                                     </td>
                                     <td class="slip-detail-table__amount text-end">@StoreUiText.Amount(order.UnitPrice)</td>

@@ -24,10 +24,17 @@
                 @foreach (var order in orders)
                 {
                     <article class="business-slip-editor-list__row">
-                        <div><strong>@order.ItemNameSnapshot × @order.Quantity</strong><span>@StoreUiText.Amount(order.Amount)@(!string.IsNullOrWhiteSpace(order.BackCastDisplayName) ? $" / バック: {order.BackCastDisplayName}" : string.Empty)</span></div>
+                        <div>
+                            <strong>@order.ItemNameSnapshot</strong>
+                            <span>@Model.FormatStoreTime(order.OrderedAt) / @StoreUiText.Amount(order.UnitPrice) × @StoreUiText.Quantity(order.Quantity)@(!string.IsNullOrWhiteSpace(order.BackCastDisplayName) ? $" / {order.BackCastDisplayName}" : string.Empty) / @StoreUiText.Amount(order.Amount)</span>
+                        </div>
                         @if (order.IsStandard)
                         {
                             <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="order_delete" data-business-editor-record-id="@order.OrderLineId" data-business-editor-record-display="@order.ItemNameSnapshot">削除</button>
+                        }
+                        else
+                        {
+                            <span class="text-muted">削除不可</span>
                         }
                     </article>
                 }

@@ -110,7 +110,7 @@
                 row.append(Object.assign(document.createElement('strong'), { textContent: line.name || '-' }));
                 row.append(Object.assign(document.createElement('span'), { textContent: line.quantity == null ? '' : `${yen(line.unit_price)} × ${line.quantity}` }));
                 if (line.back_cast_display_name) {
-                    row.append(Object.assign(document.createElement('span'), { textContent: `バック: ${line.back_cast_display_name}` }));
+                    row.append(Object.assign(document.createElement('span'), { textContent: line.back_cast_display_name }));
                 }
                 row.append(Object.assign(document.createElement('strong'), { textContent: yen(line.amount) }));
                 target.appendChild(row);

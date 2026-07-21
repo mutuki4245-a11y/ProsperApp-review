@@ -171,7 +171,7 @@
             if (cast) {
                 main.appendChild(Object.assign(document.createElement('small'), {
                     className: 'order-queue__back',
-                    textContent: `バック: ${cast.name}`
+                    textContent: cast.name
                 }));
             }
             const amount = document.createElement('div');

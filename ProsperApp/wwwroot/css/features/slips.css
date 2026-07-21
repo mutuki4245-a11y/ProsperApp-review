@@ -454,24 +454,19 @@
   grid-area: body;
 }
 
-.business-slip-detail-line,
-.business-slip-order-group__header {
+.business-slip-detail-line {
   align-items: center;
   border: 0;
   color: #102a43;
   display: grid;
   font: inherit;
-  gap: 0.45rem;
-  grid-template-columns: minmax(0, 1fr) minmax(8rem, auto) auto;
+  gap: 0.3rem;
+  grid-template-columns: fit-content(22rem) max-content;
+  justify-content: start;
   min-width: 0;
   padding: 0.22rem 0;
   text-align: left;
   width: 100%;
-}
-
-.business-slip-order-group__header {
-  background: transparent;
-  cursor: pointer;
 }
 
 .business-slip-detail-line__main {
@@ -479,8 +474,7 @@
   min-width: 0;
 }
 
-.business-slip-detail-line__main span,
-.business-slip-order-group__header span {
+.business-slip-detail-line__main span {
   color: #64748b;
   font-size: 0.78rem;
   overflow-wrap: anywhere;
@@ -495,14 +489,39 @@
   color: #9a3412;
 }
 
-.business-slip-order-group {
-  border-bottom: 1px solid #edf2f7;
+.business-slip-detail-totals {
+  border-top: 1px solid #cbd5e1;
+  display: grid;
+  gap: 0.18rem;
+  grid-template-columns: minmax(3rem, 5.5rem) minmax(0, 1fr) 7.5rem;
+  margin-top: 0.15rem;
+  padding-top: 0.45rem;
 }
 
-.business-slip-order-group__events {
-  border-left: 2px solid #e2e8f0;
-  margin: 0 0 0.2rem 0.45rem;
-  padding-left: 0.55rem;
+.business-slip-detail-totals__line {
+  align-items: baseline;
+  color: #64748b;
+  display: flex;
+  font-size: 0.82rem;
+  grid-column: 2;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.business-slip-detail-totals__line strong {
+  color: #102a43;
+  white-space: nowrap;
+}
+
+.business-slip-detail-totals__line--total {
+  color: #102a43;
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-top: 0.12rem;
+}
+
+.business-slip-detail-totals__line--total strong {
+  font-size: 1.05rem;
 }
 
 .slip-list__detail-item {
@@ -1395,7 +1414,7 @@
   align-items: center;
   border-top: 1px solid #e2e8f0;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.5rem;
   grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
   padding: 0.55rem 0;

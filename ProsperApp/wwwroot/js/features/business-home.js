@@ -27,7 +27,6 @@
     const pendingOperations = new Map();
     const checkoutLockSlipIds = new Set();
     const operationLanes = new Map();
-    const expandedOrderGroupKeys = new Set();
     const expandedSlipIds = new Set();
     let hasLoaded = false;
     let refreshPromise = null;
@@ -615,7 +614,7 @@
 
     const buildSlipDetailActions = () => {
         const actions = buildElement('div', 'slip-list__details-actions');
-        const orderButton = buildElement('button', 'btn btn-sm btn-primary', '注文を追加');
+        const orderButton = buildElement('button', 'btn btn-sm btn-primary', '注文を編集');
         orderButton.type = 'button';
         orderButton.dataset.businessSlipEditor = 'orders';
         const adjustmentButton = buildElement('button', 'btn btn-sm btn-outline-primary', '自由明細を編集');
@@ -685,72 +684,32 @@
         return detailSummary('指名', 'nominations', content, '指名を編集');
     };
 
-    const renderOrderGroup = (target, slip, key, label, lines) => {
-        const groupKey = `${slip.id}:${key}`;
-        const expanded = expandedOrderGroupKeys.has(groupKey);
-        const totalQuantity = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
-        const totalAmount = lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
-        const group = buildElement('section', 'business-slip-order-group');
-        const header = buildElement('button', 'business-slip-order-group__header');
-        header.type = 'button';
-        header.dataset.businessOrderGroupToggle = groupKey;
-        header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        const backName = lines[0]?.backCastDisplayName ? ` / バック: ${lines[0].backCastDisplayName}` : '';
-        header.append(
-            buildElement('strong', null, label),
-            buildElement('span', null, `${totalQuantity}点${backName}`),
-            buildElement('strong', null, formatYen(totalAmount))
-        );
-        group.appendChild(header);
-        if (expanded) {
-            const events = buildElement('div', 'business-slip-order-group__events');
-            lines.forEach((line) => {
-                events.append(detailLine(
-                    `${line.orderedTime || '-'} / ${line.itemName || '-'}`,
-                    `${formatYen(line.unitPrice)} × ${line.quantity || 0}${line.backCastDisplayName ? ` / バック: ${line.backCastDisplayName}` : ''}`,
-                    formatYen(line.amount),
-                    line.pending
-                ));
-            });
-            group.appendChild(events);
-        }
-        target.appendChild(group);
-    };
-
-    const renderOrders = (target, slip) => {
-        target.replaceChildren();
-        const orders = (Array.isArray(slip.orders) ? slip.orders : []).filter((line) => line.status === 'active');
-        if (orders.length === 0) {
-            target.textContent = '注文はありません。';
-            return;
-        }
-        const standard = orders.filter((line) => (line.itemType || 'standard') === 'standard');
-        const automatic = orders.filter((line) => (line.itemType || 'standard') !== 'standard');
-        const groups = new Map();
-        standard.forEach((line) => {
-            const key = `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}\u0000${line.backCastId || ''}`;
-            const group = groups.get(key) || [];
-            group.push(line);
-            groups.set(key, group);
-        });
-        groups.forEach((lines, key) => renderOrderGroup(target, slip, `order:${key}`, lines[0]?.itemName || '-', lines));
-        if (automatic.length > 0) {
-            const autoGroups = new Map();
-            automatic.forEach((line) => {
-                const key = `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}`;
-                const group = autoGroups.get(key) || [];
-                group.push(line);
-                autoGroups.set(key, group);
-            });
-            autoGroups.forEach((lines, key) => renderOrderGroup(target, slip, `auto:${key}`, lines[0]?.itemName || '-', lines));
-        }
-    };
-
     const renderAdjustments = (target, slip) => {
         const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
         adjustments.forEach((adjustment) => {
             target.append(detailLine(adjustment.lineName || '-', adjustment.createdTime || '-', formatSignedYen(adjustment.amount), adjustment.pending));
         });
+    };
+
+    const buildAccountingTotals = (slip) => {
+        const subtotal = Math.round(Number(slip.orderSubtotalAmount) || 0);
+        const serviceCharge = Math.round(subtotal * 0.20);
+        const total = Math.round(Number(slip.accountingAmount) || 0);
+        const totals = buildElement('section', 'business-slip-detail-totals');
+        totals.setAttribute('aria-label', '会計内訳');
+
+        [
+            ['小計', subtotal, false],
+            ['サービス料', serviceCharge, false],
+            ['合計', total, true]
+        ].forEach(([label, amount, emphasized]) => {
+            const line = buildElement('div', 'business-slip-detail-totals__line');
+            if (emphasized) line.classList.add('business-slip-detail-totals__line--total');
+            line.append(buildElement('span', null, label), buildElement('strong', null, formatYen(amount)));
+            totals.appendChild(line);
+        });
+
+        return totals;
     };
 
     const syncSlipDetails = (row, slip) => {
@@ -775,10 +734,9 @@
         if (content) {
             content.replaceChildren();
             const orderSection = detailSection('注文');
-            renderOrders(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
             renderAdjustments(orderSection.querySelector('[data-business-slip-detail-body]'), slip);
             orderSection.appendChild(buildSlipDetailActions());
-            content.append(customerSummary(slip), nominationSummary(slip), orderSection);
+            content.append(customerSummary(slip), nominationSummary(slip), orderSection, buildAccountingTotals(slip));
         }
         const canEdit = slip.status === 'open' && !slip.checkoutPending;
         panel.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
@@ -1154,20 +1112,6 @@
     };
 
     form.addEventListener('click', (event) => {
-        const orderGroupToggle = event.target.closest('[data-business-order-group-toggle]');
-        if (orderGroupToggle) {
-            const key = orderGroupToggle.dataset.businessOrderGroupToggle;
-            if (expandedOrderGroupKeys.has(key)) {
-                expandedOrderGroupKeys.delete(key);
-            } else {
-                expandedOrderGroupKeys.add(key);
-            }
-            const row = orderGroupToggle.closest('[data-business-slip-row]');
-            const slip = row ? getSlip(row.dataset.slipId) : null;
-            if (row && slip) syncSlipDetails(row, slip);
-            return;
-        }
-
         const detailsToggle = event.target.closest('[data-business-slip-details-toggle]');
         if (detailsToggle) {
             const slip = getSlip(detailsToggle.dataset.businessSlipDetailsToggle);
