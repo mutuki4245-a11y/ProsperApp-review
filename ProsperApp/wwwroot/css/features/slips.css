@@ -1233,6 +1233,136 @@
   min-width: 0;
 }
 
+.business-customer-editor {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.business-customer-editor__empty {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.business-customer-editor__active-list {
+  display: grid;
+}
+
+.business-customer-editor__row {
+  align-items: start;
+  border-top: 1px solid #e2e8f0;
+  column-gap: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.65rem 0;
+}
+
+.business-customer-editor__row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.business-customer-editor__row.is-pending {
+  background: #fff7ed;
+  border-radius: 0.35rem;
+  margin: 0 -0.35rem;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.business-customer-editor__customer {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.business-customer-editor__customer strong {
+  color: #102a43;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.business-customer-editor__customer span,
+.business-customer-editor__history span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.business-customer-editor__pending {
+  color: #9a3412;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.business-customer-editor__actions {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.business-customer-editor__rename {
+  min-width: 0;
+}
+
+.business-customer-editor__rename summary {
+  list-style: none;
+}
+
+.business-customer-editor__rename summary::-webkit-details-marker {
+  display: none;
+}
+
+.business-customer-editor__rename[open] {
+  flex-basis: 100%;
+}
+
+.business-customer-editor__rename form {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: minmax(10rem, 1fr) auto;
+  margin-top: 0.45rem;
+}
+
+.business-customer-editor__leave {
+  align-items: center;
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: minmax(7rem, auto) auto;
+}
+
+.business-customer-editor__add {
+  border-top: 1px solid #cbd5e1;
+  margin-top: 0.75rem;
+}
+
+.business-customer-editor__history {
+  border-top: 1px solid #e2e8f0;
+  color: #475569;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.business-customer-editor__history summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.business-customer-editor__history > div {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.business-customer-editor__history p {
+  align-items: baseline;
+  display: flex;
+  gap: 0.45rem;
+  margin: 0;
+}
+
 .slip-detail-table {
   --slip-detail-action-column: 6.5rem;
   --slip-detail-action-wide-column: 11rem;

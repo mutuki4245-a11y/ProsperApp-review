@@ -1,103 +1,76 @@
 @model SlipEditModel
 @{
     var customers = Model.Detail?.Customers.OrderBy(x => x.LineNo).ToList() ?? [];
-    var nextCustomerLineNo = customers.Select(x => x.LineNo).DefaultIfEmpty(0).Max() + 1;
-    var activeCustomerCount = customers.Count(x => string.Equals(x.Status, "active", StringComparison.Ordinal));
+    var activeCustomers = customers.Where(x => string.Equals(x.Status, "active", StringComparison.Ordinal)).ToList();
+    var departedCustomers = customers.Where(x => !string.Equals(x.Status, "active", StringComparison.Ordinal)).ToList();
 }
 
 <div data-business-slip-editor-result="customers">
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    <section class="slip-create__panel">
+    <section class="slip-create__panel business-customer-editor">
         <div class="slip-create__panel-title">
             <div class="slip-create__panel-heading">
-                <h3>客一覧</h3>
-                <small>在席 @activeCustomerCount 人 / 合計 @customers.Count 人</small>
+                <h3>在席客</h3>
+                <small><span data-business-customer-active-count>@activeCustomers.Count</span> 人</small>
             </div>
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0 slip-detail-table slip-detail-table--customers">
-                <colgroup>
-                    <col class="slip-detail-table__col--number" />
-                    <col class="slip-detail-table__col--primary" />
-                    <col class="slip-detail-table__col--time" />
-                    <col class="slip-detail-table__col--time" />
-                    <col class="slip-detail-table__col--action-wide" />
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th class="slip-detail-table__number">#</th>
-                        <th class="slip-detail-table__primary">客</th>
-                        <th class="slip-detail-table__time">入店</th>
-                        <th class="slip-detail-table__time">退店</th>
-                        <th class="slip-detail-table__action">操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (customers.Count == 0)
-                    {
-                        <tr><td colspan="5" class="text-muted">客情報がありません。</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var customer in customers)
-                        {
-                            var isActive = string.Equals(customer.Status, "active", StringComparison.Ordinal);
-                            var customerLabel = Model.UpdateCustomerInput.SlipCustomerId == customer.SlipCustomerId
-                                ? Model.UpdateCustomerInput.CustomerLabel
-                                : customer.CustomerLabel;
-                            <tr>
-                                <td class="slip-detail-table__number">@customer.LineNo</td>
-                                <td class="slip-detail-table__primary">
-                                    <form method="post" asp-page-handler="UpdateCustomer" class="customer-name-form" data-business-slip-editor-form data-loading-lock="false">
-                                        <input type="hidden" asp-for="SlipId" />
-                                        <input type="hidden" name="EditorSurface" value="business-home" />
-                                        <input type="hidden" name="UpdateCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
-                                        <input class="form-control form-control-sm" name="UpdateCustomerInput.CustomerLabel" value="@customerLabel" maxlength="100" placeholder="@customer.DisplayName" />
-                                        <button class="btn btn-outline-primary btn-sm" type="submit">保存</button>
-                                    </form>
-                                </td>
-                                <td class="slip-detail-table__time">@Model.FormatStoreTime(customer.EnteredAt)</td>
-                                <td class="slip-detail-table__time">@Model.FormatStoreTime(customer.LeftAt)</td>
-                                <td class="slip-detail-table__action">
-                                    @if (isActive)
+        <div class="business-customer-editor__active-list" data-business-customer-active-list>
+            @if (activeCustomers.Count == 0)
+            {
+                <p class="business-customer-editor__empty mb-0" data-business-customer-empty>在席客はいません。</p>
+            }
+            else
+            {
+                @foreach (var customer in activeCustomers)
+                {
+                    var customerLabel = Model.UpdateCustomerInput.SlipCustomerId == customer.SlipCustomerId
+                        ? Model.UpdateCustomerInput.CustomerLabel
+                        : customer.CustomerLabel;
+                    <article class="business-customer-editor__row" data-business-customer-row data-business-customer-id="@customer.SlipCustomerId">
+                        <div class="business-customer-editor__customer">
+                            <strong>@customer.DisplayName</strong>
+                            <span>入店 @Model.FormatStoreTime(customer.EnteredAt)</span>
+                        </div>
+                        <div class="business-customer-editor__actions">
+                            <details class="business-customer-editor__rename">
+                                <summary class="btn btn-sm btn-outline-primary">名前を修正</summary>
+                                <form method="post" asp-page-handler="UpdateCustomer" data-business-slip-editor-form data-loading-lock="false">
+                                    <input type="hidden" asp-for="SlipId" />
+                                    <input type="hidden" name="EditorSurface" value="business-home" />
+                                    <input type="hidden" name="UpdateCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
+                                    <input class="form-control form-control-sm" name="UpdateCustomerInput.CustomerLabel" value="@customerLabel" maxlength="100" placeholder="@customer.DisplayName" aria-label="@customer.DisplayName の客名" />
+                                    <button class="btn btn-primary btn-sm" type="submit">保存</button>
+                                </form>
+                            </details>
+                            <form method="post" asp-page-handler="LeaveCustomer" class="business-customer-editor__leave" data-business-slip-editor-form data-loading-lock="false">
+                                <input type="hidden" asp-for="SlipId" />
+                                <input type="hidden" name="EditorSurface" value="business-home" />
+                                <input type="hidden" name="LeaveCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
+                                <select class="form-select form-select-sm slip-time-select" name="LeaveCustomerInput.LeftTime" aria-label="@customer.DisplayName の退店時刻">
+                                    @foreach (var time in Model.TimeOptions)
                                     {
-                                        <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action" data-business-slip-editor-form data-loading-lock="false">
-                                            <input type="hidden" asp-for="SlipId" />
-                                            <input type="hidden" name="EditorSurface" value="business-home" />
-                                            <input type="hidden" name="LeaveCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
-                                            <select class="form-select form-select-sm slip-time-select" name="LeaveCustomerInput.LeftTime" aria-label="退店時刻">
-                                                @foreach (var time in Model.TimeOptions)
-                                                {
-                                                    <option value="@time" selected="@(Model.LeaveCustomerInput.LeftTime == time)">@Model.FormatBusinessTimeOption(time)</option>
-                                                }
-                                            </select>
-                                            <button class="btn btn-primary btn-sm" type="submit">退店</button>
-                                        </form>
+                                        <option value="@time" selected="@(Model.LeaveCustomerInput.LeftTime == time)">@Model.FormatBusinessTimeOption(time)</option>
                                     }
-                                    else
-                                    {
-                                        <span class="text-muted">退店済</span>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
+                                </select>
+                                <button class="btn btn-outline-danger btn-sm" type="submit">退店</button>
+                            </form>
+                        </div>
+                    </article>
+                }
+            }
         </div>
         <span asp-validation-for="UpdateCustomerInput.CustomerLabel" class="text-danger"></span>
         <span asp-validation-for="LeaveCustomerInput.LeftTime" class="text-danger"></span>
     </section>
 
-    <form method="post" asp-page-handler="AddCustomers" class="slip-create__panel mt-3" data-business-slip-editor-form data-loading-lock="false">
+    <form method="post" asp-page-handler="AddCustomers" class="slip-create__panel business-customer-editor__add" data-business-slip-editor-form data-loading-lock="false">
         <input type="hidden" asp-for="SlipId" />
         <input type="hidden" name="EditorSurface" value="business-home" />
         <div class="slip-create__panel-title">
             <div class="slip-create__panel-heading">
                 <h3>客を追加</h3>
-                <small>客番号 @nextCustomerLineNo</small>
             </div>
         </div>
         <div class="row g-3 align-items-end">
@@ -122,4 +95,17 @@
             </div>
         </div>
     </form>
+
+    @if (departedCustomers.Count > 0)
+    {
+        <details class="business-customer-editor__history">
+            <summary>退店済み @departedCustomers.Count 人</summary>
+            <div>
+                @foreach (var customer in departedCustomers)
+                {
+                    <p><strong>@customer.DisplayName</strong><span>入店 @Model.FormatStoreTime(customer.EnteredAt) / 退店 @Model.FormatStoreTime(customer.LeftAt)</span></p>
+                }
+            </div>
+        </details>
+    }
 </div>

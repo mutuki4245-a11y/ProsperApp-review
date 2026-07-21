@@ -614,7 +614,7 @@
     const customerSummary = (slip) => {
         const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
         const names = customers.map((customer) => customer.displayName || '客名なし').join('、');
-        return detailSummary('客', 'customers', `在席 ${customers.length}人`, names || '在席客なし', '客を編集');
+        return detailSummary('客', 'customers', names || '在席客なし', `在席 ${customers.length}人`, '客を編集');
     };
 
     const nominationSummary = (slip) => {

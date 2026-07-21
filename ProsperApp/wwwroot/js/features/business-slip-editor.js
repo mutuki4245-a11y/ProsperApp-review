@@ -139,6 +139,65 @@
         tableBody.appendChild(row);
     };
 
+    const changeActiveCustomerCount = (delta) => {
+        const count = content.querySelector('[data-business-customer-active-count]');
+        if (!count) return;
+        const current = Number(count.textContent) || 0;
+        count.textContent = String(Math.max(0, current + delta));
+    };
+
+    const appendTemporaryCustomer = (payload) => {
+        const list = content.querySelector('[data-business-customer-active-list]');
+        if (!list) return;
+        list.querySelector('[data-business-customer-empty]')?.remove();
+
+        const row = document.createElement('article');
+        row.className = 'business-customer-editor__row is-pending';
+        const customer = document.createElement('div');
+        customer.className = 'business-customer-editor__customer';
+        const name = document.createElement('strong');
+        name.textContent = payload.customer_label?.trim() || '客名なし';
+        const entered = document.createElement('span');
+        entered.textContent = `入店 ${payload.entered_time || '-'} / 保存中`;
+        customer.append(name, entered);
+        const pending = document.createElement('span');
+        pending.className = 'business-customer-editor__pending';
+        pending.textContent = '追加を保存中';
+        row.append(customer, pending);
+        list.appendChild(row);
+        changeActiveCustomerCount(1);
+    };
+
+    const customerRow = (slipCustomerId) => content.querySelector(`[data-business-customer-id="${slipCustomerId}"]`);
+
+    const showPendingCustomerRename = (payload) => {
+        const row = customerRow(payload.slip_customer_id);
+        if (!row) return;
+        row.classList.add('is-pending');
+        const label = payload.customer_label?.trim() || '客名なし';
+        const name = row.querySelector('.business-customer-editor__customer strong');
+        if (name) name.textContent = label;
+        const input = row.querySelector('[name="UpdateCustomerInput.CustomerLabel"]');
+        if (input) input.value = label;
+        const entered = row.querySelector('.business-customer-editor__customer span');
+        if (entered) entered.textContent = `${entered.textContent.replace(/ \/ 保存中$/, '')} / 保存中`;
+    };
+
+    const showPendingCustomerLeave = (payload) => {
+        const row = customerRow(payload.slip_customer_id);
+        if (!row) return;
+        row.classList.add('is-pending');
+        const actions = row.querySelector('.business-customer-editor__actions');
+        if (actions) {
+            actions.replaceChildren();
+            const pending = document.createElement('span');
+            pending.className = 'business-customer-editor__pending';
+            pending.textContent = `退店 ${payload.left_time || '-'} を保存中`;
+            actions.appendChild(pending);
+        }
+        changeActiveCustomerCount(-1);
+    };
+
     const applyPendingPreview = () => {
         if (!state.slipId || !state.section) return;
         const pending = window.prosperBusinessHomeGetPendingForSlip?.(state.slipId) || [];
@@ -158,14 +217,15 @@
         sectionOperations.forEach((operation) => {
             const payload = operation.payload || {};
             if (operation.operationType === 'add_customer') {
-                appendTemporaryRow(`客を追加: ${payload.customer_label?.trim() || '客名なし'} / ${payload.entered_time || '-'}`);
+                appendTemporaryCustomer(payload);
             } else if (operation.operationType === 'add_nomination') {
                 appendTemporaryRow(`指名を追加: ${payload.cast_display_name || 'キャスト'} / ${payload.nomination_display_name || payload.nomination_kind || '-'}`);
             } else if (operation.operationType === 'add_adjustment') {
                 appendTemporaryRow(`自由入力明細を追加: ${payload.line_name || '-'} / ${payload.amount || 0}円`);
             } else if (operation.operationType === 'update_customer') {
-                const input = content.querySelector(`input[name="UpdateCustomerInput.CustomerLabel"]`);
-                if (input) input.value = payload.customer_label || '';
+                showPendingCustomerRename(payload);
+            } else if (operation.operationType === 'leave_customer') {
+                showPendingCustomerLeave(payload);
             }
         });
     };
