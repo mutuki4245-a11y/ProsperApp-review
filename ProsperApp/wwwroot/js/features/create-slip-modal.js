@@ -300,6 +300,20 @@
     increaseNominationCountButton?.addEventListener('click', addNominationRow);
 
     let isExplicitCreateSlipSubmit = false;
+    createSlipForm?.addEventListener('keydown', (event) => {
+        const target = event.target;
+        if (
+            event.key !== 'Enter' ||
+            event.isComposing ||
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLButtonElement ||
+            !(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+    });
     createSlipForm?.addEventListener('submit', (event) => {
         if (!isExplicitCreateSlipSubmit) {
             event.preventDefault();
