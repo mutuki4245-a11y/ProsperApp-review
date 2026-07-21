@@ -286,6 +286,24 @@
   overflow-y: auto;
 }
 
+.business-checkout-modal__footer {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.business-checkout-modal__footer-actions,
+.business-checkout-modal__footer-actions > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.business-checkout-modal__footer-actions > [hidden] {
+  display: none;
+}
+
 .operations-summary__list {
   margin-bottom: 0;
 }
@@ -638,6 +656,12 @@
   .account-sheet__group:nth-child(odd) {
     border-right: 0;
   }
+
+  .business-checkout-modal__footer .btn {
+    min-width: 0;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
 }
 
 @media (max-width: 767.98px) {
@@ -762,6 +786,18 @@
 
   .checkout-payment-row {
     grid-template-columns: 1fr;
+  }
+
+  .business-checkout-modal__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .business-checkout-modal__footer > .btn,
+  .business-checkout-modal__footer-actions,
+  .business-checkout-modal__footer-actions > div,
+  .business-checkout-modal__footer-actions .btn {
+    width: 100%;
   }
 
   .checkout-review__order {

@@ -20,6 +20,9 @@
     const receivedAmount = root.querySelector('[data-business-received-amount]');
     const addressee = root.querySelector('[data-business-receipt-addressee]');
     const confirmButton = root.querySelector('[data-business-confirm-checkout]');
+    const issueAction = root.querySelector('[data-business-checkout-issue-action]');
+    const printActions = root.querySelector('[data-business-checkout-print-actions]');
+    const confirmAction = root.querySelector('[data-business-checkout-confirm-action]');
     const storagePrefix = 'prosper:checkout-statement:v1:';
     let current = null;
     let isActionInFlight = false;
@@ -129,6 +132,13 @@
     };
     const formatTime = (value) => value ? new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '-';
     const printable = () => ['printed', 'staff_complete'].includes(current?.queue?.state);
+    const syncFooterActions = () => {
+        const hasQueue = Boolean(current?.queue);
+        const isRecoveringStatement = current?.status === 'checkout_ready' && !hasQueue;
+        issueAction.hidden = hasQueue || isRecoveringStatement;
+        printActions.hidden = !hasQueue;
+        confirmAction.hidden = !printable();
+    };
     const renderPrintState = () => {
         const state = current?.queue?.state || 'pending';
         const label = {
@@ -142,6 +152,7 @@
         printPanel.hidden = false;
         paymentPanel.hidden = !printable();
         confirmButton.disabled = !printable();
+        syncFooterActions();
     };
     const renderPayments = () => {
         const total = Math.round(Number(current?.queue?.printData?.total_amount) || 0);
@@ -192,6 +203,7 @@
     const reset = () => {
         current = null; setMessage(); statement.hidden = true; printPanel.hidden = true; paymentPanel.hidden = true; issuePanel.hidden = false;
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
+        syncFooterActions();
     };
     const open = async (slip) => {
         if (isActionInFlight) return;
@@ -209,6 +221,7 @@
         reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, queue: readQueue(latestSlip.id) };
         table.textContent = latestSlip.tableDisplay || '会計';
         modal?.show();
+        syncFooterActions();
         if (latestSlip.status !== 'checkout_ready') return;
         await runExclusive(async () => {
             try {
