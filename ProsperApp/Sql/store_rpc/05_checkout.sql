@@ -409,6 +409,15 @@ begin
            updated_at = now()
      where c.checkout_id = v_checkout.checkout_id;
 
+    update public.store_slip_customers c
+       set left_at = null,
+           left_at_source = null,
+           status = 'active',
+           updated_at = now()
+     where c.slip_id = p_slip_id
+       and c.status = 'left'
+       and c.left_at_source = 'accounting_slip';
+
     update public.store_slips s
        set closed_at = null,
            status = 'open',
