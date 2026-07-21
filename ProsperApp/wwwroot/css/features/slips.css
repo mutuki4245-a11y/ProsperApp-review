@@ -1590,7 +1590,7 @@
 }
 
 #createSlipModal .nomination-row {
-  grid-template-columns: minmax(0, 1fr) 6.5rem 5.5rem;
+  grid-template-columns: minmax(0, 0.6fr) 7.5rem minmax(0, 1fr);
 }
 
 #createSlipModal .nomination-row__cast {
