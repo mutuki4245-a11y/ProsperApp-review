@@ -54,7 +54,7 @@
     }
     else
     {
-        <form method="post" asp-page-handler="AddNominations" class="slip-create__panel mt-3" data-business-slip-editor-form>
+        <form method="post" asp-page-handler="AddNominations" class="slip-create__panel mt-3" data-business-slip-editor-form data-loading-lock="false">
             <input type="hidden" asp-for="SlipId" />
             <input type="hidden" name="EditorSurface" value="business-home" />
             <div class="slip-create__panel-title"><h3>指名を追加</h3></div>

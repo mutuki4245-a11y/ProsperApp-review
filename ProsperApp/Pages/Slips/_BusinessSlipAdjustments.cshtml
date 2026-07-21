@@ -36,7 +36,7 @@
         </div>
     </section>
 
-    <form method="post" asp-page-handler="AddAdjustment" class="slip-create__panel mt-3" data-business-slip-editor-form data-business-adjustment-form>
+    <form method="post" asp-page-handler="AddAdjustment" class="slip-create__panel mt-3" data-business-slip-editor-form data-business-adjustment-form data-loading-lock="false">
         <input type="hidden" asp-for="SlipId" />
         <input type="hidden" name="EditorSurface" value="business-home" />
         <div class="slip-create__panel-title"><h3>自由入力明細を追加</h3></div>

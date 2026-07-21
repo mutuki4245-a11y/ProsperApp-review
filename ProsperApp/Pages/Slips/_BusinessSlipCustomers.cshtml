@@ -50,7 +50,7 @@
                             <tr>
                                 <td class="slip-detail-table__number">@customer.LineNo</td>
                                 <td class="slip-detail-table__primary">
-                                    <form method="post" asp-page-handler="UpdateCustomer" class="customer-name-form" data-business-slip-editor-form>
+                                    <form method="post" asp-page-handler="UpdateCustomer" class="customer-name-form" data-business-slip-editor-form data-loading-lock="false">
                                         <input type="hidden" asp-for="SlipId" />
                                         <input type="hidden" name="EditorSurface" value="business-home" />
                                         <input type="hidden" name="UpdateCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
@@ -63,7 +63,7 @@
                                 <td class="slip-detail-table__action">
                                     @if (isActive)
                                     {
-                                        <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action" data-business-slip-editor-form>
+                                        <form method="post" asp-page-handler="LeaveCustomer" class="slip-detail-row-action" data-business-slip-editor-form data-loading-lock="false">
                                             <input type="hidden" asp-for="SlipId" />
                                             <input type="hidden" name="EditorSurface" value="business-home" />
                                             <input type="hidden" name="LeaveCustomerInput.SlipCustomerId" value="@customer.SlipCustomerId" />
@@ -91,7 +91,7 @@
         <span asp-validation-for="LeaveCustomerInput.LeftTime" class="text-danger"></span>
     </section>
 
-    <form method="post" asp-page-handler="AddCustomers" class="slip-create__panel mt-3" data-business-slip-editor-form>
+    <form method="post" asp-page-handler="AddCustomers" class="slip-create__panel mt-3" data-business-slip-editor-form data-loading-lock="false">
         <input type="hidden" asp-for="SlipId" />
         <input type="hidden" name="EditorSurface" value="business-home" />
         <div class="slip-create__panel-title">
