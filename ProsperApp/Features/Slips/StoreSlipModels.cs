@@ -197,6 +197,58 @@ public class BusinessSlipEditorOperationInput
     public JsonElement Payload { get; set; }
 }
 
+/// <summary>
+/// 営業中トップの未送信行を一度に確定する要求です。
+/// BatchId は応答未達時にも同じ値で再送し、追加行の二重登録を防ぎます。
+/// </summary>
+public class BusinessHomeChangeFlushInput
+{
+    public string BatchId { get; set; } = string.Empty;
+
+    public List<BusinessSlipEditorOperationInput> Operations { get; set; } = [];
+
+    public List<BusinessHomeKaraokeLineInput> KaraokeLines { get; set; } = [];
+}
+
+public class BusinessHomeKaraokeLineInput
+{
+    public string DraftId { get; set; } = string.Empty;
+
+    public long SlipId { get; set; }
+
+    public decimal Quantity { get; set; }
+}
+
+public class BusinessHomeChangeFlushResult
+{
+    public bool Succeeded { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public JsonElement Snapshot { get; init; }
+
+    public JsonElement OperationResults { get; init; }
+
+    public JsonElement KaraokeResults { get; init; }
+
+    public static BusinessHomeChangeFlushResult Success(
+        JsonElement snapshot,
+        JsonElement operationResults,
+        JsonElement karaokeResults) => new()
+        {
+            Succeeded = true,
+            Snapshot = snapshot,
+            OperationResults = operationResults,
+            KaraokeResults = karaokeResults
+        };
+
+    public static BusinessHomeChangeFlushResult Failed(string message) => new()
+    {
+        Succeeded = false,
+        ErrorMessage = message
+    };
+}
+
 public class BusinessDaySnapshotResult
 {
     public bool Succeeded { get; init; }

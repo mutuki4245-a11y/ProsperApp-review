@@ -233,6 +233,65 @@ public class SupabaseStoreSlipRepository(
         return BusinessDaySnapshotResult.Success(snapshot.Clone());
     }
 
+    public async Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(
+        BusinessHomeChangeFlushInput input,
+        long businessDayId,
+        CancellationToken ct)
+    {
+        if (!HasMutationSettings())
+        {
+            return BusinessHomeChangeFlushResult.Failed("Supabase Edge Function設定が未設定です。営業中の変更を保存できません。");
+        }
+
+        if (businessDayId <= 0 || string.IsNullOrWhiteSpace(input.BatchId) || input.BatchId.Length > 100 ||
+            input.Operations.Count > 100 || input.KaraokeLines.Count > 100)
+        {
+            return BusinessHomeChangeFlushResult.Failed("保存内容を確認してください。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.flush_business_home_changes",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDayId,
+                p_client_batch_id = input.BatchId,
+                p_operations = input.Operations.Select(operation => new
+                {
+                    operation_id = operation.OperationId,
+                    slip_id = operation.SlipId,
+                    operation_type = operation.OperationType,
+                    payload = operation.Payload
+                }),
+                p_karaoke_lines = input.KaraokeLines.Select(line => new
+                {
+                    draft_id = line.DraftId,
+                    slip_id = line.SlipId,
+                    quantity = line.Quantity
+                })
+            },
+            ct);
+
+        if (!result.Succeeded || result.Rows.Count == 0 ||
+            !result.Rows[0].TryGetProperty("snapshot", out var snapshot) ||
+            snapshot.ValueKind is not JsonValueKind.Object)
+        {
+            return BusinessHomeChangeFlushResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var row = result.Rows[0];
+        var operationResults = row.TryGetProperty("operation_results", out var operationRows) &&
+            operationRows.ValueKind is JsonValueKind.Array
+            ? operationRows.Clone()
+            : EmptyJsonArray();
+        var karaokeResults = row.TryGetProperty("karaoke_results", out var karaokeRows) &&
+            karaokeRows.ValueKind is JsonValueKind.Array
+            ? karaokeRows.Clone()
+            : EmptyJsonArray();
+
+        return BusinessHomeChangeFlushResult.Success(snapshot.Clone(), operationResults, karaokeResults);
+    }
+
     public async Task<SlipDetail?> GetSlipDetailAsync(long slipId, CancellationToken ct)
     {
         if (slipId <= 0)
@@ -843,6 +902,12 @@ public class SupabaseStoreSlipRepository(
         }
 
         return $"伝票を作成できません。{rawError}";
+    }
+
+    private static JsonElement EmptyJsonArray()
+    {
+        using var document = JsonDocument.Parse("[]");
+        return document.RootElement.Clone();
     }
 
     private static string ToCastLoadFriendlyError(string? rawError)

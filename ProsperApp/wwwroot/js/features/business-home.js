@@ -17,8 +17,7 @@
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
     const businessSlipsUrl = config.businessSlipsUrl || '';
-    const businessSlipEditorOperationUrl = config.businessSlipEditorOperationUrl || '';
-    const draftKey = `prosper:business:${form.dataset.businessDayId || 'current'}:karaoke`;
+    const flushBusinessHomeChangesUrl = config.flushBusinessHomeChangesUrl || '';
     const refreshIntervalMs = 10000;
     const accountingUnit = 240;
     let slips = [];
@@ -26,14 +25,14 @@
     let snapshotRevision = -1;
     const pendingOperations = new Map();
     const checkoutLockSlipIds = new Set();
-    const operationLanes = new Map();
     const expandedSlipIds = new Set();
     const expandedOrderGroupKeys = new Set();
     let hasLoaded = false;
     let refreshPromise = null;
     let isSaving = false;
-    let savePromise = null;
-    let allowPageUnload = false;
+    let flushPromise = null;
+    let pendingFlushBatch = null;
+    let flushTimer = null;
     let navigationInFlight = false;
 
     const formatYen = window.MoneyText.yen;
@@ -49,23 +48,10 @@
     };
 
     const operationTimeoutMs = 10000;
-    const operationLane = (operation) => {
-        const section = ['add_nomination', 'cancel_nomination'].includes(operation.operationType)
-            ? 'nominations'
-            : ['add_adjustment', 'void_adjustment'].includes(operation.operationType)
-                ? 'adjustments'
-                : ['add_order', 'void_order'].includes(operation.operationType)
-                    ? 'orders'
-                    : 'customers';
-        return `${operation.slipId}:${section}`;
-    };
-
     const pendingForSlip = (slipId) => Array.from(pendingOperations.values())
         .filter((operation) => String(operation.slipId) === String(slipId));
 
     const hasPendingOperations = () => pendingOperations.size > 0;
-
-    const isUnknownOperation = (operation) => operation.state === 'unknown';
 
     const showOperationNotice = (message) => {
         let notice = document.querySelector('[data-business-operation-notice]');
@@ -310,32 +296,12 @@
     };
     const isValidBusinessDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && value !== '0001-01-01';
 
-    function loadDraft() {
-        const raw = localStorage.getItem(draftKey);
-        if (!raw) {
-            return {};
-        }
-
-        try {
-            const parsed = JSON.parse(raw);
-            return parsed && typeof parsed === 'object' ? parsed : {};
-        } catch {
-            localStorage.removeItem(draftKey);
-            return {};
-        }
-    }
-
     const getSlip = (slipId) => slips.find((slip) => String(slip.id) === String(slipId));
     const getInitialQuantity = (slip) => toQuantity(slip?.karaokeQuantity);
     const createKaraokeDraftState = () => {
-        let draft = loadDraft();
-        const write = () => {
-            if (Object.keys(draft).length === 0) {
-                localStorage.removeItem(draftKey);
-            } else {
-                localStorage.setItem(draftKey, JSON.stringify(draft));
-            }
-        };
+        // 終了・再読み込み後に未送信行を復元しない。営業中の操作中だけメモリに保持する。
+        const draft = {};
+        const write = () => {};
         const cleanup = () => {
             let changed = false;
             Object.keys(draft).forEach((slipId) => {
@@ -403,6 +369,14 @@
                 });
                 write();
             },
+            markRejected(payloadRows) {
+                payloadRows.forEach((line) => {
+                    if (toQuantity(draft[line.slipId]) === line.quantity) {
+                        delete draft[line.slipId];
+                    }
+                });
+                write();
+            },
             write
         };
     };
@@ -413,14 +387,6 @@
 
     const getRequestVerificationToken = () =>
         form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-
-    const buildSavePayload = (payloadRows) => ({
-        businessDayId: Number(form.dataset.businessDayId || 0) || null,
-        karaokeLines: payloadRows.map((line) => ({
-            slipId: Number(line.slipId),
-            quantity: line.quantity
-        }))
-    });
 
     const buildSaveHeaders = () => {
         const headers = {
@@ -441,13 +407,6 @@
         } else {
             setKaraokeStatus('dirty');
         }
-    };
-
-    const allowNextPageUnload = () => {
-        allowPageUnload = true;
-        window.setTimeout(() => {
-            allowPageUnload = false;
-        }, 1500);
     };
 
     const shouldFlushForAnchor = (anchor, event) => {
@@ -815,12 +774,13 @@
         const pendingState = row.querySelector('[data-business-slip-sync-state]');
         if (pendingState) {
             pendingState.hidden = pending.length === 0 && !slip.checkoutPending;
+            const isSyncing = pending.some((operation) => operation.state === 'saving');
             pendingState.textContent = slip.checkoutPending
                 ? '会計準備中'
-                : pending.some(isUnknownOperation)
-                    ? '通信確認中'
-                    : `保存中 ${pending.length}`;
-            pendingState.classList.toggle('is-unknown', pending.some(isUnknownOperation));
+                : isSyncing
+                    ? `同期中 ${pending.length}`
+                    : `保存待ち ${pending.length}`;
+            pendingState.classList.toggle('is-unknown', false);
         }
     };
 
@@ -987,92 +947,168 @@
         return refreshPromise;
     };
 
-    const reconcileUnknownOperation = async (operation) => {
-        operation.state = 'unknown';
-        renderProjectedSnapshot();
-        const refreshed = await loadSlips();
-        if (refreshed) {
-            pendingOperations.delete(operation.operationId);
-            renderProjectedSnapshot();
-            return true;
-        }
-        showOperationNotice('保存結果を確認できません。通信復旧後に一覧を再取得してください。会計は同期確認後に行えます。');
-        return false;
+    const createClientId = () => window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+    const hasDirtyKaraoke = () => collectDirtyPayload().length > 0;
+    const hasUnconfirmedChanges = () => pendingFlushBatch !== null || hasPendingOperations() || hasDirtyKaraoke();
+
+    const createFlushBatch = () => {
+        const operations = Array.from(pendingOperations.values())
+            .filter((operation) => operation.state !== 'saving');
+        const karaokeLines = collectDirtyPayload().map((line) => ({
+            draftId: createClientId(),
+            slipId: Number(line.slipId),
+            quantity: line.quantity,
+            baseAmount: line.baseAmount
+        }));
+        if (operations.length === 0 && karaokeLines.length === 0) return null;
+
+        operations.forEach((operation) => { operation.state = 'saving'; });
+        return {
+            batchId: createClientId(),
+            operations,
+            karaokeLines
+        };
     };
 
-    const postEditorOperation = async (operation) => {
-        if (!businessSlipEditorOperationUrl) {
-            pendingOperations.delete(operation.operationId);
-            renderProjectedSnapshot();
-            showOperationNotice('営業中の編集保存先を取得できません。');
+    const friendlyFlushError = (message, fallback) => {
+        const raw = String(message || '');
+        if (raw.includes('store_slip_not_found')) return '対象の伝票は編集できません。';
+        if (raw.includes('store_slip_customer_not_found')) return '対象の客を確認してください。';
+        if (raw.includes('store_slip_nomination_not_found')) return '対象の指名を確認してください。';
+        if (raw.includes('store_slip_adjustment_not_found')) return '対象の自由明細を確認してください。';
+        if (raw.includes('store_order_line_not_found')) return '対象の注文を確認してください。';
+        if (raw.includes('invalid_customer_label')) return '客名は100文字以内で入力してください。';
+        if (raw.includes('invalid_customer_time') || raw.includes('invalid_left_at')) return '入退店時刻を確認してください。';
+        if (raw.includes('invalid_karaoke_quantity')) return 'カラオケ回数を確認してください。';
+        if (raw.includes('invalid_order_quantity')) return '注文数量を確認してください。';
+        if (raw.includes('invalid_adjustment_')) return '自由明細の内容を確認してください。';
+        return fallback;
+    };
+
+    const queueNoticeForFailedRows = (operationResults, karaokeResults) => {
+        const messages = [];
+        operationResults.filter((row) => row?.succeeded === false).forEach((row) => {
+            messages.push(friendlyFlushError(row.message, '編集内容を保存できませんでした。'));
+        });
+        karaokeResults.filter((row) => row?.succeeded === false).forEach((row) => {
+            messages.push(friendlyFlushError(row.message, 'カラオケ回数を保存できませんでした。'));
+        });
+        if (messages.length > 0) showOperationNotice([...new Set(messages)].join(' '));
+    };
+
+    const applyFlushResult = (batch, result) => {
+        const operationResults = Array.isArray(result?.operationResults) ? result.operationResults : [];
+        const karaokeResults = Array.isArray(result?.karaokeResults) ? result.karaokeResults : [];
+        const operationResultIds = new Set(operationResults.map((row) => String(row?.operation_id || '')));
+        const karaokeResultIds = new Set(karaokeResults.map((row) => String(row?.draft_id || '')));
+
+        if (batch.operations.some((operation) => !operationResultIds.has(String(operation.operationId))) ||
+            batch.karaokeLines.some((line) => !karaokeResultIds.has(String(line.draftId)))) {
             return false;
         }
 
-        operation.state = 'saving';
-        renderProjectedSnapshot();
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), operationTimeoutMs);
-        try {
-            const token = form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
-            const response = await fetch(businessSlipEditorOperationUrl, {
-                method: 'POST',
-                signal: controller.signal,
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    ...(token ? { RequestVerificationToken: token } : {})
-                },
-                body: JSON.stringify({
-                    operationId: operation.operationId,
-                    slipId: Number(operation.slipId),
-                    operationType: operation.operationType,
-                    payload: operation.payload
-                })
-            });
-            const result = await response.json().catch(() => null);
-            if (!response.ok || !result?.succeeded || !result?.snapshot) {
-                pendingOperations.delete(operation.operationId);
-                renderProjectedSnapshot();
-                showOperationNotice(result?.message || '保存できませんでした。変更を取り消しました。');
-                return false;
-            }
+        batch.operations.forEach((operation) => pendingOperations.delete(operation.operationId));
+        karaokeResults.filter((row) => row?.succeeded).forEach((row) => {
+            const line = batch.karaokeLines.find((candidate) => String(candidate.draftId) === String(row.draft_id));
+            if (line) karaokeDraft.markSaved([line]);
+        });
+        karaokeResults.filter((row) => row?.succeeded === false).forEach((row) => {
+            const line = batch.karaokeLines.find((candidate) => String(candidate.draftId) === String(row.draft_id));
+            if (line) karaokeDraft.markRejected([line]);
+        });
+        applySnapshot(result.snapshot);
+        queueNoticeForFailedRows(operationResults, karaokeResults);
+        return true;
+    };
 
-            pendingOperations.delete(operation.operationId);
-            applySnapshot(result.snapshot);
+    const flushBusinessHomeChanges = async () => {
+        if (flushPromise) return flushPromise;
+        if (!flushBusinessHomeChangesUrl) {
+            showOperationNotice('営業中の保存先を取得できません。');
+            return false;
+        }
+
+        pendingFlushBatch ??= createFlushBatch();
+        if (!pendingFlushBatch) {
+            markDirtyStatus();
             return true;
-        } catch (error) {
-            if (error?.name === 'AbortError' || !navigator.onLine) {
-                return reconcileUnknownOperation(operation);
-            }
-            pendingOperations.delete(operation.operationId);
-            renderProjectedSnapshot();
-            showOperationNotice('保存できませんでした。変更を取り消しました。');
-            return false;
-        } finally {
-            window.clearTimeout(timeout);
         }
+
+        const batch = pendingFlushBatch;
+        isSaving = true;
+        setKaraokeStatus('saving');
+        renderProjectedSnapshot();
+
+        flushPromise = (async () => {
+            const controller = new AbortController();
+            const timeout = window.setTimeout(() => controller.abort(), operationTimeoutMs);
+            try {
+                const response = await fetch(flushBusinessHomeChangesUrl, {
+                    method: 'POST',
+                    signal: controller.signal,
+                    headers: buildSaveHeaders(),
+                    body: JSON.stringify({
+                        batchId: batch.batchId,
+                        operations: batch.operations.map((operation) => ({
+                            operationId: operation.operationId,
+                            slipId: Number(operation.slipId),
+                            operationType: operation.operationType,
+                            payload: operation.payload
+                        })),
+                        karaokeLines: batch.karaokeLines.map((line) => ({
+                            draftId: line.draftId,
+                            slipId: line.slipId,
+                            quantity: line.quantity
+                        }))
+                    })
+                });
+                const result = await response.json().catch(() => null);
+                if (!response.ok || !result?.succeeded || !result?.snapshot || !applyFlushResult(batch, result)) {
+                    showOperationNotice(result?.message || '保存結果を確認できません。通信復旧後に同じ変更を再送します。');
+                    return false;
+                }
+
+                pendingFlushBatch = null;
+                renderProjectedSnapshot();
+                markDirtyStatus();
+                return true;
+            } catch {
+                showOperationNotice('保存結果を確認できません。通信復旧後に同じ変更を再送します。');
+                return false;
+            } finally {
+                window.clearTimeout(timeout);
+                isSaving = false;
+                flushPromise = null;
+                if (pendingFlushBatch !== batch) {
+                    markDirtyStatus();
+                } else {
+                    setKaraokeStatus('error');
+                }
+            }
+        })();
+
+        return flushPromise;
+    };
+
+    const scheduleFlush = () => {
+        if (flushTimer || flushPromise) return;
+        flushTimer = window.setTimeout(() => {
+            flushTimer = null;
+            void flushBusinessHomeChanges().then((saved) => {
+                if (saved && hasUnconfirmedChanges()) scheduleFlush();
+            });
+        }, 0);
     };
 
     const enqueueEditorOperation = (operation) => {
         const normalized = {
             ...operation,
-            operationId: operation.operationId || window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+            operationId: operation.operationId || createClientId(),
             state: 'queued'
         };
         pendingOperations.set(normalized.operationId, normalized);
         renderProjectedSnapshot();
-        const lane = operationLane(normalized);
-        const previous = operationLanes.get(lane) || Promise.resolve();
-        const running = previous
-            .catch(() => false)
-            .then(() => postEditorOperation(normalized));
-        const tracked = running.finally(() => {
-            if (operationLanes.get(lane) === tracked) {
-                operationLanes.delete(lane);
-            }
-        });
-        operationLanes.set(lane, tracked);
+        scheduleFlush();
         return normalized.operationId;
     };
 
@@ -1086,79 +1122,14 @@
     };
 
     const waitForBusinessOperations = async () => {
-        const running = Array.from(operationLanes.values());
-        if (running.length > 0) {
-            await Promise.all(running);
-        }
-        if (Array.from(pendingOperations.values()).some(isUnknownOperation)) {
-            return false;
-        }
-        return loadSlips();
-    };
-
-    const markSaved = (payloadRows) => {
-        karaokeDraft.markSaved(payloadRows);
-        renderSlips();
-    };
-
-    const submitDraftInternal = async () => {
-        const payloadRows = collectDirtyPayload();
-        if (payloadRows.length === 0) {
-            karaokeDraft.write();
-            setKaraokeStatus('saved', '同期済み');
-            return true;
-        }
-
-        isSaving = true;
-        setKaraokeStatus('saving');
-
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: JSON.stringify(buildSavePayload(payloadRows)),
-                headers: buildSaveHeaders()
-            });
-
-            const result = await response.json().catch(() => null);
-            if (!response.ok || (result && result.succeeded === false)) {
-                throw new Error(result?.message || 'Karaoke save failed.');
-            }
-
-            markSaved(payloadRows);
-            if (collectDirtyPayload().length === 0) {
-                setKaraokeStatus('saved');
-            } else {
-                setKaraokeStatus('dirty');
-            }
-            return true;
-        } catch {
-            karaokeDraft.write();
-            setKaraokeStatus('error');
-            return false;
-        } finally {
-            isSaving = false;
-        }
-    };
-
-    const submitDraft = () => {
-        if (savePromise) {
-            return savePromise;
-        }
-
-        savePromise = submitDraftInternal().finally(() => {
-            savePromise = null;
-        });
-        return savePromise;
+        if (!hasUnconfirmedChanges()) return true;
+        const saved = await flushBusinessHomeChanges();
+        if (!saved) return false;
+        return hasUnconfirmedChanges() ? waitForBusinessOperations() : true;
     };
 
     const submitAfterFlush = async (targetForm, submitter) => {
         window.AppLoading?.show(targetForm);
-        const saved = await submitDraft();
-        if (!saved) {
-            window.AppLoading?.hide(targetForm);
-            return;
-        }
-
         if (!await waitForBusinessOperations()) {
             window.AppLoading?.hide(targetForm);
             showOperationNotice('保存結果を確認できない操作があります。同期後に移動してください。');
@@ -1235,7 +1206,7 @@
     form.addEventListener('submit', (event) => {
         event.preventDefault();
         window.AppLoading?.show(form);
-        void submitDraft().finally(() => window.AppLoading?.hide(form));
+        void flushBusinessHomeChanges().finally(() => window.AppLoading?.hide(form));
     });
 
     document.addEventListener('submit', (event) => {
@@ -1246,11 +1217,10 @@
 
         if (targetForm.dataset.karaokeFlushBypass === 'true') {
             delete targetForm.dataset.karaokeFlushBypass;
-            allowNextPageUnload();
             return;
         }
 
-        if (event.defaultPrevented || !targetForm.checkValidity() || collectDirtyPayload().length === 0) {
+        if (event.defaultPrevented || !targetForm.checkValidity() || !hasUnconfirmedChanges()) {
             return;
         }
 
@@ -1259,8 +1229,13 @@
     }, true);
 
     document.addEventListener('click', (event) => {
-        const anchor = event.target.closest('a[data-business-flush-karaoke]');
+        const anchor = event.target.closest('a[href]');
         if (!anchor || !shouldFlushForAnchor(anchor, event)) {
+            return;
+        }
+
+        const destination = new URL(anchor.href, window.location.href);
+        if (destination.origin !== window.location.origin || destination.pathname.toLowerCase().includes('/logout') || !hasUnconfirmedChanges()) {
             return;
         }
 
@@ -1271,32 +1246,23 @@
 
         navigationInFlight = true;
         window.AppLoading?.show(anchor);
-        void submitDraft().then((saved) => {
-            if (!saved) {
+        void waitForBusinessOperations().then((synchronized) => {
+            if (!synchronized) {
                 navigationInFlight = false;
                 window.AppLoading?.hide(anchor);
                 return;
             }
-            void waitForBusinessOperations().then((synchronized) => {
-                if (!synchronized) {
-                    navigationInFlight = false;
-                    window.AppLoading?.hide(anchor);
-                    showOperationNotice('保存結果を確認できない操作があります。同期後に移動してください。');
-                    return;
-                }
 
-                allowNextPageUnload();
-                window.location.assign(anchor.href);
-            });
+            window.location.assign(anchor.href);
         });
-    });
+    }, true);
 
     window.addEventListener('keydown', (event) => {
         if (event.key !== 'F5' && !(event.key.toLowerCase() === 'r' && (event.ctrlKey || event.metaKey))) {
             return;
         }
 
-        if (hasPendingOperations()) {
+        if (hasUnconfirmedChanges()) {
             event.preventDefault();
             showOperationNotice('保存中の変更があります。同期完了後に再読み込みできます。');
             return;
@@ -1304,15 +1270,6 @@
 
         event.preventDefault();
         markDirtyStatus();
-    });
-
-    window.addEventListener('beforeunload', (event) => {
-        if (allowPageUnload || collectDirtyPayload().length === 0) {
-            return;
-        }
-
-        event.preventDefault();
-        event.returnValue = '';
     });
 
     revealButton?.addEventListener('pointerdown', () => setAmountVisible(true));
@@ -1335,6 +1292,7 @@
     window.addEventListener('online', () => {
         markDirtyStatus();
         void loadSlips();
+        scheduleFlush();
     });
     window.addEventListener('focus', () => {
         if (document.visibilityState === 'visible') {
@@ -1354,7 +1312,7 @@
 
     void loadSlips();
     window.prosperBusinessHomeReload = loadSlips;
-    window.prosperBusinessHomeFlushKaraoke = submitDraft;
+    window.prosperBusinessHomeFlushKaraoke = flushBusinessHomeChanges;
     window.prosperBusinessHomeEnqueueEditorOperation = enqueueEditorOperation;
     window.prosperBusinessHomeSetCheckoutLock = setCheckoutLock;
     window.prosperBusinessHomeGetPendingForSlip = pendingForSlip;

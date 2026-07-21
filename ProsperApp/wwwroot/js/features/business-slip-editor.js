@@ -5,6 +5,9 @@
     const content = modalElement?.querySelector('[data-business-slip-editor-content]');
     const title = modalElement?.querySelector('[data-business-slip-editor-title]');
     const table = modalElement?.querySelector('[data-business-slip-editor-table]');
+    const backTargetModalElement = document.querySelector('[data-business-order-back-target-modal]');
+    const backTargetList = backTargetModalElement?.querySelector('[data-business-order-back-target-list]');
+    const backTargetConfirm = backTargetModalElement?.querySelector('[data-business-order-back-target-confirm]');
     const labels = {
         customers: '客を編集',
         nominations: '指名を編集',
@@ -16,15 +19,18 @@
         slipId: null,
         requestId: 0,
         isSubmitting: false,
+        showingAction: false,
         orderQueue: new Map(),
-        pendingBackItemId: null
+        pendingBackItemId: null,
+        pendingBackSelection: new Map()
     };
 
-    if (!editorUrl || !modalElement || !content || !window.bootstrap?.Modal) {
+    if (!modalElement || !content || !window.bootstrap?.Modal) {
         return;
     }
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    const backTargetModal = backTargetModalElement ? bootstrap.Modal.getOrCreateInstance(backTargetModalElement) : null;
     const currentSlip = (slipId) => (window.prosperBusinessHomeSlips || []).find((slip) => String(slip.id) === String(slipId));
     const formatYen = window.MoneyText?.yen ?? ((amount) => `${Number(amount || 0).toLocaleString('ja-JP')}円`);
     const actionTemplates = new Set(['customer_add', 'customer_rename', 'customer_leave', 'nomination_add', 'adjustment_add', 'order_add']);
@@ -32,10 +38,6 @@
         nomination_delete: { operationType: 'cancel_nomination', recordName: 'SlipCastId', label: 'この指名' },
         adjustment_delete: { operationType: 'void_adjustment', recordName: 'ChargeLineId', label: 'この自由入力明細' },
         order_delete: { operationType: 'void_order', recordName: 'OrderLineId', label: 'この注文' }
-    };
-
-    const setLoading = () => {
-        content.innerHTML = '<div class="slip-create__panel slip-detail-panel-loading">編集内容を読み込み中です。</div>';
     };
 
     const setError = (message) => {
@@ -70,33 +72,120 @@
         setError(message);
     };
 
-    const openEditor = async (section, slipId) => {
-        if (!Object.hasOwn(labels, section) || !slipId) return;
+    const appendEditorAction = (row, action, text, record = {}) => {
+        const button = document.createElement('button');
+        button.className = action.endsWith('_delete') ? 'btn btn-sm btn-outline-danger' : 'btn btn-sm btn-outline-primary';
+        button.type = 'button';
+        button.dataset.businessEditorAction = action;
+        if (record.id !== undefined) button.dataset.businessEditorRecordId = String(record.id);
+        if (record.label !== undefined) button.dataset.businessEditorRecordLabel = record.label || '';
+        if (record.display !== undefined) button.dataset.businessEditorRecordDisplay = record.display || '';
+        button.textContent = text;
+        row.appendChild(button);
+    };
 
-        const requestId = ++state.requestId;
+    const createLocalEditorRow = (primary, secondary) => {
+        const row = document.createElement('article');
+        row.className = 'business-slip-editor-list__row';
+        const text = document.createElement('div');
+        text.appendChild(Object.assign(document.createElement('strong'), { textContent: primary }));
+        if (secondary) text.appendChild(Object.assign(document.createElement('span'), { textContent: secondary }));
+        row.appendChild(text);
+        return row;
+    };
+
+    const renderLocalEditor = (section, slip) => {
+        if (!slip || slip.status !== 'open') {
+            renderUnavailable('この伝票は会計準備中または会計済みのため編集できません。営業中一覧を再表示してください。');
+            return;
+        }
+
+        const manager = document.createElement('div');
+        manager.dataset.businessSlipEditorManager = '';
+        const panel = document.createElement('section');
+        panel.className = 'slip-create__panel business-slip-editor-list';
+        const titleRow = document.createElement('div');
+        titleRow.className = 'slip-create__panel-title';
+        const actionLabel = {
+            customers: '客を追加',
+            nominations: '指名を追加',
+            adjustments: '明細を追加',
+            orders: '注文を追加'
+        }[section] || '追加';
+        const add = document.createElement('button');
+        add.className = 'btn btn-sm btn-primary';
+        add.type = 'button';
+        add.dataset.businessEditorAction = `${section === 'customers' ? 'customer' : section.slice(0, -1)}_add`;
+        add.textContent = actionLabel;
+        titleRow.appendChild(add);
+        const rows = document.createElement('div');
+        rows.className = 'business-slip-editor-list__rows';
+
+        if (section === 'customers') {
+            (slip.customers || []).filter((item) => item.status === 'active').forEach((customer) => {
+                const row = createLocalEditorRow(customer.displayName || '客名なし', `入店 ${customer.enteredTime || '-'}`);
+                row.dataset.businessCustomerRow = '';
+                row.dataset.businessCustomerId = String(customer.id);
+                appendEditorAction(row, 'customer_rename', '名前変更', { id: customer.id, label: customer.customerLabel, display: customer.displayName });
+                appendEditorAction(row, 'customer_leave', '退店', { id: customer.id, display: customer.displayName });
+                rows.appendChild(row);
+            });
+        } else if (section === 'nominations') {
+            (slip.nominations || []).filter((item) => item.status === 'active').forEach((nomination) => {
+                const row = createLocalEditorRow(nomination.displayName || 'キャスト', nomination.nominationDisplayName || nomination.nominationKind || '指名');
+                appendEditorAction(row, 'nomination_delete', '削除', { id: nomination.id, display: `${nomination.displayName || 'キャスト'}（${nomination.nominationDisplayName || nomination.nominationKind || '指名'}）` });
+                rows.appendChild(row);
+            });
+        } else if (section === 'adjustments') {
+            (slip.adjustments || []).filter((item) => item.status === 'active').forEach((adjustment) => {
+                const row = createLocalEditorRow(adjustment.lineName || '-', formatYen(adjustment.amount));
+                appendEditorAction(row, 'adjustment_delete', '削除', { id: adjustment.id, display: adjustment.lineName || '自由入力明細' });
+                rows.appendChild(row);
+            });
+        } else {
+            (slip.orders || []).filter((item) => item.status === 'active' && item.itemType === 'standard').forEach((order) => {
+                const back = order.backCastDisplayName ? ` / ${order.backCastDisplayName}` : '';
+                const row = createLocalEditorRow(order.itemName || '商品', `${formatYen(order.unitPrice)} × ${order.quantity || 0}${back} / ${formatYen(order.amount)}`);
+                appendEditorAction(row, 'order_delete', '削除', { id: order.id, display: order.itemName || '注文' });
+                rows.appendChild(row);
+            });
+        }
+
+        if (!rows.childElementCount) {
+            rows.appendChild(Object.assign(document.createElement('p'), { className: 'text-muted mb-0', textContent: '登録はありません。' }));
+        }
+        panel.append(titleRow, rows);
+        manager.appendChild(panel);
+        content.replaceChildren(manager);
+    };
+
+    const loadEditorMarkup = async (section, slipId, force = false) => {
+        if (!editorUrl) return false;
+        const requestId = state.requestId;
+        try {
+            const response = await fetch(buildUrl(section, slipId), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!response.ok) throw new Error('Business slip editor load failed.');
+            const html = await response.text();
+            if (requestId !== state.requestId || (!force && state.showingAction) || !modalElement.classList.contains('show')) return false;
+            content.innerHTML = html;
+            prepareContent();
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    const openEditor = (section, slipId) => {
+        if (!Object.hasOwn(labels, section) || !slipId) return;
+        state.requestId += 1;
         state.section = section;
         state.slipId = String(slipId);
         state.isSubmitting = false;
+        state.showingAction = false;
         setModalHeading(section, currentSlip(slipId));
-        setLoading();
+        renderLocalEditor(section, currentSlip(slipId));
         modal.show();
-
-        try {
-            const response = await fetch(buildUrl(section, slipId), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (!response.ok) throw new Error('Business slip editor load failed.');
-
-            const html = await response.text();
-            if (requestId !== state.requestId || !modalElement.classList.contains('show')) return;
-
-            content.innerHTML = html;
-            prepareContent();
-        } catch {
-            if (requestId === state.requestId && modalElement.classList.contains('show')) {
-                renderUnavailable('編集内容を取得できませんでした。営業中一覧を再表示してから開き直してください。');
-            }
-        }
+        void loadEditorMarkup(section, slipId);
     };
 
     const syncCompanionPrice = (kindSelect, force = false) => {
@@ -123,10 +212,10 @@
         }))
         .filter((cast) => cast.id);
 
-    const hideBusinessOrderBackPicker = (form) => {
+    const hideBusinessOrderBackPicker = () => {
         state.pendingBackItemId = null;
-        form?.querySelector('[data-business-order-back-picker]')?.setAttribute('hidden', '');
-        form?.querySelector('.order-entry__queue')?.classList.remove('is-back-picking');
+        state.pendingBackSelection.clear();
+        if (backTargetModalElement?.classList.contains('show')) backTargetModal?.hide();
     };
 
     const renderBusinessOrderQueue = (form = businessOrderQueueForm()) => {
@@ -203,23 +292,80 @@
         const line = state.orderQueue.get(key) ?? { itemId: String(itemId), castBackCastId: castBackCastId ? String(castBackCastId) : null, quantity: 0 };
         line.quantity += 1;
         state.orderQueue.set(key, line);
-        hideBusinessOrderBackPicker(form);
         renderBusinessOrderQueue(form);
     };
 
-    const showBusinessOrderBackPicker = (form, itemId) => {
-        const picker = form?.querySelector('[data-business-order-back-picker]');
-        const list = form?.querySelector('[data-business-order-back-picker-list]');
-        if (!picker || !list) return;
-        state.pendingBackItemId = String(itemId);
-        const casts = businessOrderCastOptions(form);
-        window.CastSelectModal?.renderOptionalBackTarget(list, casts, {
-            getLabel: (cast) => cast.drinkMemo ? `${cast.name}（${cast.drinkMemo}）` : cast.name,
-            onNone: () => addBusinessOrderToQueue(form, state.pendingBackItemId, null),
-            onSelect: (cast) => addBusinessOrderToQueue(form, state.pendingBackItemId, cast.id)
+    const changeBusinessOrderBackSelection = (castId, delta) => {
+        const key = String(castId ?? '');
+        const current = state.pendingBackSelection.get(key) ?? 0;
+        const next = Math.max(0, current + delta);
+        if (key === '' && next > 0) {
+            state.pendingBackSelection.clear();
+        } else if (key !== '') {
+            state.pendingBackSelection.delete('');
+        }
+        if (next > 0) state.pendingBackSelection.set(key, next);
+        else state.pendingBackSelection.delete(key);
+        renderBusinessOrderBackPicker();
+    };
+
+    const renderBusinessOrderBackPicker = () => {
+        const form = businessOrderQueueForm();
+        if (!form || !backTargetList) return;
+        const nominatedCastIds = new Set((currentSlip(state.slipId)?.nominations || [])
+            .filter((nomination) => nomination.status === 'active')
+            .map((nomination) => String(nomination.castId)));
+        const casts = [{ id: '', name: '指定なし', drinkMemo: '' }, ...businessOrderCastOptions(form)];
+        backTargetList.replaceChildren();
+        casts.forEach((cast) => {
+            const key = String(cast.id);
+            const count = state.pendingBackSelection.get(key) ?? 0;
+            const row = document.createElement('div');
+            row.className = 'cast-select-modal__item cast-select-modal__item--stepper';
+            row.classList.toggle('is-selected', count > 0);
+            row.classList.toggle('is-nominated', key !== '' && nominatedCastIds.has(key));
+
+            const label = document.createElement('div');
+            label.className = 'cast-select-modal__item-label';
+            const displayName = cast.drinkMemo ? `${cast.name}（${cast.drinkMemo}）` : cast.name;
+            label.appendChild(Object.assign(document.createElement('strong'), { textContent: displayName }));
+            if (key !== '' && nominatedCastIds.has(key)) {
+                label.appendChild(Object.assign(document.createElement('span'), { textContent: '指名' }));
+            }
+
+            const controls = document.createElement('div');
+            controls.className = 'cast-select-modal__stepper';
+            const decrement = document.createElement('button');
+            decrement.type = 'button';
+            decrement.className = 'btn btn-outline-secondary btn-sm';
+            decrement.textContent = '-';
+            decrement.disabled = count <= 0;
+            decrement.addEventListener('click', () => changeBusinessOrderBackSelection(cast.id, -1));
+            const quantity = document.createElement('strong');
+            quantity.textContent = String(count);
+            quantity.setAttribute('aria-label', `${displayName} ${count}件`);
+            const increment = document.createElement('button');
+            increment.type = 'button';
+            increment.className = 'btn btn-outline-primary btn-sm';
+            increment.textContent = '+';
+            increment.addEventListener('click', () => changeBusinessOrderBackSelection(cast.id, 1));
+            controls.append(decrement, quantity, increment);
+            row.append(label, controls);
+            backTargetList.appendChild(row);
         });
-        picker.removeAttribute('hidden');
-        form.querySelector('.order-entry__queue')?.classList.add('is-back-picking');
+
+        if (backTargetConfirm) {
+            const total = Array.from(state.pendingBackSelection.values()).reduce((sum, count) => sum + count, 0);
+            backTargetConfirm.disabled = !state.pendingBackItemId || total <= 0;
+        }
+    };
+
+    const showBusinessOrderBackPicker = (form, itemId) => {
+        if (!form || !backTargetModal || !backTargetList) return;
+        state.pendingBackItemId = String(itemId);
+        state.pendingBackSelection.clear();
+        renderBusinessOrderBackPicker();
+        backTargetModal.show();
     };
 
     const selectBusinessOrderCategory = (tab) => {
@@ -233,6 +379,23 @@
             panel.classList.toggle('is-active', panel.dataset.slipOrderCatalogPanel === index);
         });
     };
+
+    backTargetConfirm?.addEventListener('click', () => {
+        const form = businessOrderQueueForm();
+        if (!form || !state.pendingBackItemId || state.pendingBackSelection.size === 0) return;
+        state.pendingBackSelection.forEach((count, castId) => {
+            for (let index = 0; index < count; index += 1) {
+                addBusinessOrderToQueue(form, state.pendingBackItemId, castId || null);
+            }
+        });
+        hideBusinessOrderBackPicker();
+    });
+
+    backTargetModalElement?.addEventListener('hidden.bs.modal', () => {
+        state.pendingBackItemId = null;
+        state.pendingBackSelection.clear();
+        if (backTargetConfirm) backTargetConfirm.disabled = true;
+    });
 
     const adjustmentHasInput = () => {
         const form = content.querySelector('[data-business-adjustment-form]');
@@ -357,8 +520,18 @@
     const showTemplateAction = (action, button) => {
         const manager = content.querySelector('[data-business-slip-editor-manager]');
         const template = manager?.querySelector(`template[data-business-editor-template="${action}"]`);
-        if (!manager || !template) return;
+        if (!manager || !template) {
+            if (!state.section || !state.slipId) return;
+            state.showingAction = true;
+            content.innerHTML = '<div class="slip-create__panel slip-detail-panel-loading">入力内容を準備しています。</div>';
+            void loadEditorMarkup(state.section, state.slipId, true).then((loaded) => {
+                if (loaded) showTemplateAction(action, button);
+                else renderUnavailable('入力内容を取得できませんでした。営業中一覧を再表示してから開き直してください。');
+            });
+            return;
+        }
 
+        state.showingAction = true;
         manager.replaceChildren(template.content.cloneNode(true));
         const recordId = button?.dataset.businessEditorRecordId || '';
         const recordLabel = button?.dataset.businessEditorRecordLabel || '';
@@ -381,6 +554,8 @@
         const definition = deleteActions[action];
         const manager = content.querySelector('[data-business-slip-editor-manager]');
         if (!definition || !manager) return;
+
+        state.showingAction = true;
 
         const form = document.createElement('form');
         form.className = 'slip-create__panel business-slip-editor-action-form';
@@ -571,13 +746,6 @@
             }
         }
 
-        const cancelOrderBackPicker = event.target.closest('[data-business-order-back-picker-cancel]');
-        if (cancelOrderBackPicker && content.contains(cancelOrderBackPicker)) {
-            event.preventDefault();
-            hideBusinessOrderBackPicker(cancelOrderBackPicker.closest('[data-business-order-queue-form]'));
-            return;
-        }
-
         const actionButton = event.target.closest('[data-business-editor-action]');
         if (actionButton && content.contains(actionButton)) {
             event.preventDefault();
@@ -624,9 +792,11 @@
         state.section = null;
         state.slipId = null;
         state.isSubmitting = false;
+        state.showingAction = false;
         state.orderQueue.clear();
         state.pendingBackItemId = null;
-        content.innerHTML = '<div class="slip-create__panel slip-detail-panel-loading">編集内容を読み込み中です。</div>';
+        state.pendingBackSelection.clear();
+        content.replaceChildren();
     });
 
     document.addEventListener('prosper:business-slips-updated', (event) => {

@@ -725,6 +725,11 @@ create table if not exists public.store_slip_cast_sales_adjustments (
 --       p_operation_type text, p_operation_id text, p_payload jsonb)
 --     applies exactly one business-hub edit and returns the full snapshot. Operations are add/update/leave customer,
 --     add/cancel nomination, add/void adjustment, and add/void standard order.
+--   store.flush_business_home_changes(p_department_id bigint, p_business_day_id bigint, p_client_batch_id text,
+--       p_operations jsonb, p_karaoke_lines jsonb)
+--     applies all pending business-hub edits and karaoke drafts in one Edge RPC response. Each row receives an
+--     independent success/failure result; repeating the same client batch id returns the stored row results without
+--     reapplying additions, then includes a current full business-day snapshot.
 --   store.issue_checkout_statement(p_department_id bigint, p_slip_id bigint, p_closed_at timestamptz)
 --     changes an open slip to checkout_ready, fixes close time and non-left customer rows,
 --     and returns checkout-statement print_data plus review_data.

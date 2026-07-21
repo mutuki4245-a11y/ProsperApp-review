@@ -32,10 +32,6 @@
                         data-slip-order-catalog-cast-back-target="@item.IsCastBackTarget.ToString().ToLowerInvariant()">
                         <strong>@item.ItemName</strong>
                         <span>@item.DefaultPriceText</span>
-                        @if (item.IsCastBackTarget)
-                        {
-                            <small>@item.CastBackSummaryText</small>
-                        }
                     </button>
                 }
             </div>

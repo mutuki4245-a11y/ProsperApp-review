@@ -13,8 +13,7 @@ else
     <div class="order-entry__grid order-entry__grid--modal">
         <section class="slip-create__panel order-entry__items">
             <div class="slip-create__panel-title">
-                <h3>商品一覧</h3>
-                <span class="badge text-bg-secondary">@tableDisplayName</span>
+                <span class="visually-hidden">商品一覧</span>
             </div>
             <partial name="_SlipOrderItemCatalog" model="Model" />
         </section>
@@ -23,7 +22,6 @@ else
             <div class="slip-create__panel-title">
                 <div>
                     <h3>注文キュー</h3>
-                    <small>@tableDisplayName</small>
                 </div>
                 <div class="slip-create__panel-title-actions">
                     <span class="terminal-save-status" data-save-state="saved" id="detailOrderQueueStatus" aria-live="polite">空</span>
@@ -39,12 +37,6 @@ else
                 <strong id="detailOrderQueueTotal">0 円</strong>
             </div>
 
-            <div class="business-order-back-picker" data-business-order-back-picker hidden>
-                <h4>バック先を選択</h4>
-                <p class="text-muted">バックなしでも追加できます。</p>
-                <div class="cast-select-modal__list" data-business-order-back-picker-list></div>
-                <button class="btn btn-outline-secondary mt-3" type="button" data-business-order-back-picker-cancel>戻る</button>
-            </div>
         </section>
     </div>
 }

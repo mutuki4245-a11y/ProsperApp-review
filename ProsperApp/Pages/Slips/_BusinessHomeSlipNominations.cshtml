@@ -10,7 +10,6 @@
 <div data-business-slip-editor-result="nominations" data-business-slip-editor-manager>
     <section class="slip-create__panel business-slip-editor-list">
         <div class="slip-create__panel-title">
-            <div class="slip-create__panel-heading"><h3>指名一覧</h3><small>@nominations.Count 件 / @StoreUiText.Yen(nominations.Sum(x => x.NominationPrice))</small></div>
             @if (canAdd)
             {
                 <button class="btn btn-sm btn-primary" type="button" data-business-editor-action="nomination_add">指名を追加</button>
@@ -26,7 +25,7 @@
                 @foreach (var nomination in nominations)
                 {
                     <article class="business-slip-editor-list__row">
-                        <div><strong>@nomination.CastDisplayName</strong><span>@nomination.NominationDisplayName / @StoreUiText.Amount(nomination.NominationPrice) / @Model.FormatStoreTime(nomination.StartedAt)</span></div>
+                        <div><strong>@nomination.CastDisplayName</strong><span>@nomination.NominationDisplayName</span></div>
                         <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="nomination_delete" data-business-editor-record-id="@nomination.SlipCastId" data-business-editor-record-display="@nomination.CastDisplayName（@nomination.NominationDisplayName）">削除</button>
                     </article>
                 }

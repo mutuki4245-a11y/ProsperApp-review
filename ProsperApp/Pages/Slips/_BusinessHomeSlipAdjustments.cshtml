@@ -10,23 +10,15 @@
 <div data-business-slip-editor-result="adjustments" data-business-slip-editor-manager>
     <section class="slip-create__panel business-slip-editor-list">
         <div class="slip-create__panel-title">
-            <div class="slip-create__panel-heading"><h3>自由入力明細</h3><small>@adjustments.Count 件 / @StoreUiText.Yen(adjustments.Sum(x => x.Amount))</small></div>
             <button class="btn btn-sm btn-primary" type="button" data-business-editor-action="adjustment_add">明細を追加</button>
         </div>
         <div class="business-slip-editor-list__rows">
-            @if (adjustments.Count == 0)
+            @foreach (var adjustment in adjustments)
             {
-                <p class="text-muted mb-0">自由入力明細はまだ登録されていません。</p>
-            }
-            else
-            {
-                @foreach (var adjustment in adjustments)
-                {
-                    <article class="business-slip-editor-list__row">
-                        <div><strong>@adjustment.LineName</strong><span>@StoreUiText.Amount(adjustment.Amount)</span></div>
-                        <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="adjustment_delete" data-business-editor-record-id="@adjustment.ChargeLineId" data-business-editor-record-display="@adjustment.LineName">削除</button>
-                    </article>
-                }
+                <article class="business-slip-editor-list__row">
+                    <div><strong>@adjustment.LineName</strong><span>@StoreUiText.Amount(adjustment.Amount)</span></div>
+                    <button class="btn btn-sm btn-outline-danger" type="button" data-business-editor-action="adjustment_delete" data-business-editor-record-id="@adjustment.ChargeLineId" data-business-editor-record-display="@adjustment.LineName">削除</button>
+                </article>
             }
         </div>
     </section>

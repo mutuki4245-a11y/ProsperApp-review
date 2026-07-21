@@ -46,6 +46,7 @@ declare
         'store.save_slip_adjustments',
         'store.add_slip_adjustment',
         'store.apply_business_slip_editor_operation',
+        'store.flush_business_home_changes',
         'store.save_karaoke_lines',
         'store.save_order_line_quantities',
         'store.leave_slip_customer',

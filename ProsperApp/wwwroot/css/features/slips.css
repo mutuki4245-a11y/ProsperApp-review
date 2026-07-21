@@ -1530,20 +1530,6 @@
   opacity: 0.55;
 }
 
-.business-order-back-picker {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.business-order-back-picker h4,
-.business-order-back-picker p {
-  margin: 0;
-}
-
-.order-entry__queue.is-back-picking > :not(.business-order-back-picker) {
-  display: none;
-}
-
 .slip-detail-table {
   --slip-detail-action-column: 6.5rem;
   --slip-detail-action-wide-column: 11rem;

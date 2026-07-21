@@ -18,6 +18,8 @@ public interface IStoreSlipRepository
 
     Task<BusinessDaySnapshotResult> ApplyBusinessSlipEditorOperationAsync(BusinessSlipEditorOperationInput input, long businessDayId, CancellationToken ct);
 
+    Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(BusinessHomeChangeFlushInput input, long businessDayId, CancellationToken ct);
+
     Task<SlipDetail?> GetSlipDetailAsync(long slipId, CancellationToken ct);
 
     Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct);

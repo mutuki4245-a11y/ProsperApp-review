@@ -240,6 +240,54 @@ public class IndexModel(
         return new JsonResult(new { succeeded = true, operationId = input.OperationId, snapshot = result.Snapshot });
     }
 
+    public async Task<IActionResult> OnPostFlushBusinessHomeChangesAsync(CancellationToken cancellationToken)
+    {
+        if (!SlipsEnabled)
+        {
+            return NotFound();
+        }
+
+        var input = await ReadCheckoutRequestAsync<BusinessHomeChangeFlushInput>(cancellationToken);
+        if (input is null || input.Operations is null || input.KaraokeLines is null ||
+            string.IsNullOrWhiteSpace(input.BatchId) || input.BatchId.Length > 100 ||
+            input.Operations.Count > 100 || input.KaraokeLines.Count > 100 ||
+            input.Operations.Any(operation => operation.SlipId <= 0 || string.IsNullOrWhiteSpace(operation.OperationId) ||
+                operation.OperationType is not (
+                    "add_customer" or "update_customer" or "leave_customer" or
+                    "add_nomination" or "cancel_nomination" or
+                    "add_adjustment" or "void_adjustment" or
+                    "add_order" or "void_order")) ||
+            input.KaraokeLines.Any(line => line.SlipId <= 0 || string.IsNullOrWhiteSpace(line.DraftId) ||
+                line.Quantity < 0 || line.Quantity > 999 || line.Quantity != decimal.Truncate(line.Quantity)))
+        {
+            return BadRequest(new { succeeded = false, message = "保存内容を確認してください。" });
+        }
+
+        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (currentBusinessDay is null)
+        {
+            return BadRequest(new { succeeded = false, message = "営業中の営業日がありません。" });
+        }
+
+        var result = await _slipRepository.FlushBusinessHomeChangesAsync(
+            input,
+            currentBusinessDay.BusinessDayId,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { succeeded = false, batchId = input.BatchId, message = result.ErrorMessage });
+        }
+
+        return new JsonResult(new
+        {
+            succeeded = true,
+            batchId = input.BatchId,
+            snapshot = result.Snapshot,
+            operationResults = result.OperationResults,
+            karaokeResults = result.KaraokeResults
+        });
+    }
+
     public async Task<IActionResult> OnPostCreateSlipAsync(CancellationToken cancellationToken)
     {
         if (!SlipsEnabled)

@@ -416,6 +416,19 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.flush_business_home_changes",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_client_batch_id", type: "text" },
+        { name: "p_operations", type: "jsonb" },
+        { name: "p_karaoke_lines", type: "jsonb" },
+      ],
+    },
+  ],
+  [
     "store.save_karaoke_lines",
     {
       result: "rows",
