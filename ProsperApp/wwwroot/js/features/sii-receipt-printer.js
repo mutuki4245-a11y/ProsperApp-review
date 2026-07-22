@@ -251,7 +251,31 @@
                     false);
             }
 
-            await trySdkCall('appendText', () => manager.appendText({ text: receiptLayout.buildReceiptText(request) }));
+            const parts = typeof receiptLayout.buildReceiptParts === 'function'
+                ? receiptLayout.buildReceiptParts(request)
+                : { beforeTotal: receiptLayout.buildReceiptText(request), total: '', afterTotal: '' };
+            await trySdkCall('appendText', () => manager.appendText({ text: parts.beforeTotal }));
+            const enlarged = typeof manager.appendBinary === 'function'
+                ? await trySdkCall(
+                    '領収金額文字拡大',
+                    () => manager.appendBinary({ data: new Blob([new Uint8Array([0x1d, 0x21, 0x10])]) }),
+                    false)
+                : null;
+            try {
+                if (parts.total) {
+                    await trySdkCall('appendText', () => manager.appendText({ text: parts.total }));
+                }
+            } finally {
+                if (enlarged) {
+                    await trySdkCall(
+                        '文字サイズ復帰',
+                        () => manager.appendBinary({ data: new Blob([new Uint8Array([0x1d, 0x21, 0x00])]) }),
+                        false);
+                }
+            }
+            if (parts.afterTotal) {
+                await trySdkCall('appendText', () => manager.appendText({ text: parts.afterTotal }));
+            }
             await trySdkCall('appendFeed', () => manager.appendFeed({ value: 2 }), false);
             await trySdkCall('appendCut', () => manager.appendCut({ cuttingMethod: 'partial' }), false);
             await trySdkCall('doPrint', () => manager.doPrint({}));

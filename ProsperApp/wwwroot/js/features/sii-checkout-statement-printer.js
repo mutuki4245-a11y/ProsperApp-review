@@ -2,7 +2,7 @@
     const compact = (value, fallback = '') => String(value ?? fallback).trim();
     const toAmount = (value) => Math.round(Number(value) || 0);
 
-    const createText = (request, lineWidth) => {
+    const createTextParts = (request, lineWidth) => {
         const width = Number.isFinite(Number(lineWidth)) ? Math.max(24, Number(lineWidth)) : 48;
         const separator = '-'.repeat(width);
         const yen = (value) => `${toAmount(value).toLocaleString('ja-JP')}円`;
@@ -26,9 +26,19 @@
             separator
         ];
 
+        const orders = new Map();
         (Array.isArray(request.orders) ? request.orders : []).forEach((line) => {
-            lines.push(compact(line.name, '商品'));
-            lines.push(twoColumn(`  ${toAmount(line.unit_price).toLocaleString('ja-JP')} x ${line.quantity}`, yen(line.amount)));
+            const name = compact(line.name, '商品');
+            const unitPrice = toAmount(line.unit_price);
+            const key = `${name}\u0000${unitPrice}`;
+            const current = orders.get(key) ?? { name, unitPrice, quantity: 0, amount: 0 };
+            current.quantity += toAmount(line.quantity);
+            current.amount += toAmount(line.amount);
+            orders.set(key, current);
+        });
+        orders.forEach((line) => {
+            lines.push(line.name);
+            lines.push(twoColumn(`  ${line.unitPrice.toLocaleString('ja-JP')} x ${line.quantity}`, yen(line.amount)));
         });
         (Array.isArray(request.adjustments) ? request.adjustments : []).forEach((line) => {
             lines.push(twoColumn(compact(line.name, '調整'), yen(line.amount)));
@@ -36,11 +46,11 @@
         lines.push(separator);
         lines.push(twoColumn('小計', yen(request.subtotal_amount)));
         lines.push(twoColumn('サービス料', yen(request.service_charge_amount)));
-        lines.push(twoColumn('内消費税額', yen(request.consumption_tax_amount)));
-        lines.push(twoColumn('合計', yen(request.total_amount)));
-        lines.push('');
-        lines.push('');
-        return `${lines.join('\n')}\n`;
+        return {
+            beforeTotal: `${lines.join('\n')}\n`,
+            total: `${twoColumn('合計', yen(request.total_amount))}\n`,
+            afterTotal: `${twoColumn('', `（内消費税額 ${yen(request.consumption_tax_amount)}）`)}\n\n\n`
+        };
     };
 
     const getManager = () => {
@@ -69,6 +79,16 @@
         }
     };
 
+    const appendText = (manager, text) => call('印字データ送信', () => manager.appendText({ text }));
+
+    const appendTotalSizeCommand = async (manager, value) => {
+        if (typeof manager.appendBinary !== 'function') return null;
+        return call(
+            value === 0x10 ? '合計文字拡大' : '文字サイズ復帰',
+            () => manager.appendBinary({ data: new Blob([new Uint8Array([0x1d, 0x21, value])]) }),
+            true);
+    };
+
     const print = async (request) => {
         const Manager = getManager();
         if (!Manager) throw new Error('SII Web SDK Serverを利用できません。');
@@ -84,7 +104,15 @@
                 ...request,
                 store_name: compact(config.storeName) || request.store_name
             };
-            await call('印字データ送信', () => manager.appendText({ text: createText(statementRequest, config.lineWidth) }));
+            const text = createTextParts(statementRequest, config.lineWidth);
+            await appendText(manager, text.beforeTotal);
+            const enlarged = await appendTotalSizeCommand(manager, 0x10);
+            try {
+                await appendText(manager, text.total);
+            } finally {
+                if (enlarged) await appendTotalSizeCommand(manager, 0x00);
+            }
+            await appendText(manager, text.afterTotal);
             await call('紙送り', () => manager.appendFeed({ value: 2 }), true);
             await call('カット指定', () => manager.appendCut({ cuttingMethod: 'partial' }), true);
             await call('印刷実行', () => manager.doPrint({}));

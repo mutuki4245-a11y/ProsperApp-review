@@ -18,15 +18,14 @@
         }).format(new Date(value));
         const addresseeText = (request) => {
             const value = compact(request.addressee);
-            return value.endsWith('様') ? value : value ? `${value} 様` : '様';
+            return value.endsWith('様') ? value : value ? `${value} 様` : '';
         };
         const issuerText = (issuer, property) => compact(issuer?.[property], property === 'logo' ? '' : '未設定');
-        const buildReceiptText = (request) => {
+        const buildReceiptParts = (request) => {
             const lines = [];
             const issuer = request.issuer || {};
             const totalAmount = toAmount(request.total_amount);
             lines.push(issuerText(issuer, 'logo'));
-            lines.push(issuerText(issuer, 'company_name'));
             lines.push(issuerText(issuer, 'store_name'));
             lines.push(issuerText(issuer, 'address'));
             lines.push(`TEL ${issuerText(issuer, 'phone')}`);
@@ -35,36 +34,45 @@
             if (request.isRetry) lines.push(centerLine('再試行'));
             lines.push(separator());
             lines.push(twoColumnLine('宛名', addresseeText(request)));
+            lines.push('');
+            lines.push('');
+            lines.push('');
             lines.push(twoColumnLine('発行日', dateTime(request.issued_at)));
             lines.push('');
             lines.push(centerLine(compact(request.particulars, 'ご飲食代として')));
             lines.push('');
-            lines.push(twoColumnLine('領収金額', formatYen(totalAmount)));
-            lines.push(twoColumnLine('10%対象', formatYen(request.taxable_amount_including_tax)));
-            lines.push(twoColumnLine('内消費税額', formatYen(request.consumption_tax_amount)));
+            const beforeTotal = `${lines.join('\n')}\n`;
+            const total = `${twoColumnLine('領収金額', formatYen(totalAmount))}\n`;
+            const afterTotal = [];
+            afterTotal.push(twoColumnLine('', `（内消費税額 ${formatYen(request.consumption_tax_amount)}）`));
             const payments = Array.isArray(request.payments) ? request.payments : [];
+            afterTotal.push('支払い方法：');
             if (payments.length === 0) {
-                lines.push(twoColumnLine('支払い方法', '請求なし 0円'));
+                afterTotal.push('（請求なし 0円）');
             } else {
-                payments.forEach((payment) => lines.push(twoColumnLine(compact(payment.method_name, '支払い'), formatYen(payment.amount))));
+                payments.forEach((payment) => afterTotal.push(`（${compact(payment.method_name, '支払い')} ${formatYen(payment.amount)}）`));
             }
             if (totalAmount >= 55000) {
-                lines.push(''); lines.push('収入印紙欄'); lines.push('+------------------------------+'); lines.push('|                              |'); lines.push('|                              |'); lines.push('+------------------------------+');
+                afterTotal.push(''); afterTotal.push('収入印紙欄'); afterTotal.push('+------------------------------+'); afterTotal.push('|                              |'); afterTotal.push('|                              |'); afterTotal.push('+------------------------------+');
             }
-            lines.push('');
-            lines.push('担当者印');
-            lines.push('+--------------------+');
-            lines.push('|                    |');
-            lines.push('|                    |');
-            lines.push('|                    |');
-            lines.push('+--------------------+');
-            lines.push(separator());
-            lines.push('');
-            return `${lines.join('\n')}\n`;
+            afterTotal.push('');
+            afterTotal.push('担当者印');
+            afterTotal.push('+--------------------+');
+            afterTotal.push('|                    |');
+            afterTotal.push('|                    |');
+            afterTotal.push('|                    |');
+            afterTotal.push('+--------------------+');
+            afterTotal.push(separator());
+            afterTotal.push('');
+            return { beforeTotal, total, afterTotal: `${afterTotal.join('\n')}\n` };
+        };
+        const buildReceiptText = (request) => {
+            const { beforeTotal, total, afterTotal } = buildReceiptParts(request);
+            return `${beforeTotal}${total}${afterTotal}`;
         };
         const describeReceipt = (request) => `${dateTime(request.issued_at)} / ${formatYen(request.total_amount)}`;
         const receiptKey = (request) => compact(request.checkoutId, 'unknown');
-        return { buildReceiptText, describeReceipt, formatYen, receiptKey };
+        return { buildReceiptParts, buildReceiptText, describeReceipt, formatYen, receiptKey };
     };
 
     window.ProsperSiiReceiptLayout = { create };

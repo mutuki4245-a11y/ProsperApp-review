@@ -789,6 +789,8 @@
         const isOpen = slip.status === 'open' && !slip.checkoutPending;
         row.classList.toggle('slip-list__row--open', isOpen);
         row.classList.toggle('slip-list__row--not-open', !isOpen);
+        row.classList.toggle('slip-list__row--checkout-ready', slip.status === 'checkout_ready' || Boolean(slip.checkoutPending));
+        row.classList.toggle('slip-list__row--checked-out', slip.status === 'checked_out');
         row.setAttribute('aria-label', `${slip.tableDisplay} ${slip.checkoutPending ? '会計準備中' : slip.statusDisplay}`);
 
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
@@ -843,13 +845,13 @@
         detailsToggle.type = 'button';
         detailsToggle.setAttribute('aria-label', '詳細を開く');
         detailsToggle.dataset.businessSlipDetailsToggle = '';
-        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary');
+        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary slip-list__checkout-action');
         checkoutButton.type = 'button';
         checkoutButton.dataset.businessStartCheckout = '';
         const receiptButton = buildElement('button', 'btn btn-sm btn-outline-primary', '領収書');
         receiptButton.type = 'button';
         receiptButton.dataset.businessPrintReceipt = '';
-        const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger', '会計取消');
+        const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger slip-list__checkout-action', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
         actionButtons.append(detailsToggle, checkoutButton, receiptButton, cancelButton);

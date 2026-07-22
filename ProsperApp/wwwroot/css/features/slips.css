@@ -105,6 +105,18 @@
   border-left-color: #64748b;
 }
 
+.slip-list__row--checkout-ready {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #d97706;
+}
+
+.slip-list__row--checked-out {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  border-left-color: #64748b;
+}
+
 .slip-list__row--expanded {
   box-shadow: 0 6px 16px rgb(15 23 42 / 0.12);
 }
@@ -308,6 +320,29 @@
   gap: var(--slip-column-gap);
   grid-column: 2 / -1;
   grid-template-columns: var(--slip-karaoke-column) minmax(var(--slip-action-column), auto);
+}
+
+.slip-list__action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--slip-column-gap);
+  grid-column: 2;
+  justify-self: end;
+}
+
+.slip-list__checkout-action {
+  inline-size: 6.25rem;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.slip-list__row--checkout-ready .slip-list__details {
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.slip-list__row--checked-out .slip-list__details {
+  background: #e2e8f0;
 }
 
 .slip-list__details {
@@ -1015,7 +1050,7 @@
   border-top: 1px solid #e2e8f0;
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: 4rem minmax(0, 1fr) minmax(7rem, auto) minmax(6rem, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, auto) minmax(6rem, auto);
   min-height: 2.75rem;
   padding-top: 0.45rem;
 }
@@ -1037,7 +1072,12 @@
 
 .checkout-review__total strong {
   color: #0f766e;
-  font-size: 1.25rem;
+  font-size: 1.45rem;
+}
+
+.checkout-review__tax {
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 .placeholder-page {

@@ -116,6 +116,19 @@
             const valueElement = document.createElement('strong'); valueElement.textContent = value || '-';
             item.append(labelElement, valueElement); summary.appendChild(item);
         });
+        const groupOrders = (lines) => {
+            const groups = new Map();
+            (Array.isArray(lines) ? lines : []).forEach((line) => {
+                const name = line?.name || '-';
+                const unitPrice = Math.round(Number(line?.unit_price) || 0);
+                const key = `${name}\u0000${unitPrice}`;
+                const current = groups.get(key) || { name, unit_price: unitPrice, quantity: 0, amount: 0 };
+                current.quantity += Number(line?.quantity) || 0;
+                current.amount += Number(line?.amount) || 0;
+                groups.set(key, current);
+            });
+            return Array.from(groups.values());
+        };
         const lineRows = (lines, target, noData) => {
             target.replaceChildren();
             if (!Array.isArray(lines) || lines.length === 0) { target.textContent = noData; return; }
@@ -123,21 +136,20 @@
                 const row = document.createElement('div'); row.className = 'checkout-review__order';
                 row.append(Object.assign(document.createElement('strong'), { textContent: line.name || '-' }));
                 row.append(Object.assign(document.createElement('span'), { textContent: line.quantity == null ? '' : `${yen(line.unit_price)} × ${line.quantity}` }));
-                if (line.back_cast_display_name) {
-                    row.append(Object.assign(document.createElement('span'), { textContent: line.back_cast_display_name }));
-                }
                 row.append(Object.assign(document.createElement('strong'), { textContent: yen(line.amount) }));
                 target.appendChild(row);
             });
         };
-        lineRows(reviewData.orders || printData.orders, orders, '注文はありません。');
+        lineRows(groupOrders(reviewData.orders || printData.orders), orders, '注文はありません。');
         lineRows(printData.adjustments, adjustments, '調整はありません。');
         totals.replaceChildren();
         [
             ['小計', printData.subtotal_amount], ['サービス料', printData.service_charge_amount],
-            ['内消費税額', printData.consumption_tax_amount], ['合計', printData.total_amount]
+            ['合計', printData.total_amount], ['（内消費税額）', printData.consumption_tax_amount]
         ].forEach(([label, amount]) => {
             const row = document.createElement('div');
+            if (label === '合計') row.classList.add('checkout-review__total');
+            if (label === '（内消費税額）') row.classList.add('checkout-review__tax');
             row.append(Object.assign(document.createElement('span'), { textContent: label }));
             row.append(Object.assign(document.createElement('strong'), { textContent: yen(amount) }));
             totals.appendChild(row);
