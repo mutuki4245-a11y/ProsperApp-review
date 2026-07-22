@@ -16,9 +16,11 @@
         const dateTime = (value) => new Intl.DateTimeFormat('ja-JP', {
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
         }).format(new Date(value));
-        const addresseeText = (request) => {
-            const value = compact(request.addressee);
-            return value.endsWith('様') ? value : value ? `${value} 様` : '様';
+        const addresseeName = (request) => compact(request.addressee).replace(/\s*様$/, '');
+        const addresseeLine = (request) => {
+            const name = addresseeName(request);
+            const underlineLength = Math.max(16, receiptWidth - textWidth(name) - textWidth('様') - 8);
+            return twoColumnLine('', `${name}${'-'.repeat(underlineLength)}様`);
         };
         const issuerText = (issuer, property) => compact(issuer?.[property], property === 'logo' ? '' : '未設定');
         const buildReceiptParts = (request) => {
@@ -33,10 +35,10 @@
             lines.push(centerLine('領収書'));
             if (request.isRetry) lines.push(centerLine('再試行'));
             lines.push(separator());
-            lines.push(twoColumnLine('宛名', addresseeText(request)));
-            lines.push(twoColumnLine('', '-'.repeat(Math.max(16, receiptWidth - 8))));
+            lines.push('宛名');
             lines.push('');
             lines.push('');
+            lines.push(addresseeLine(request));
             lines.push('');
             lines.push(twoColumnLine('発行日', dateTime(request.issued_at)));
             lines.push('');
@@ -49,9 +51,9 @@
             const payments = Array.isArray(request.payments) ? request.payments : [];
             afterTotal.push('支払い方法：');
             if (payments.length === 0) {
-                afterTotal.push('（請求なし 0円）');
+                afterTotal.push(twoColumnLine('', '（請求なし 0円）'));
             } else {
-                payments.forEach((payment) => afterTotal.push(`（${compact(payment.method_name, '支払い')} ${formatYen(payment.amount)}）`));
+                payments.forEach((payment) => afterTotal.push(twoColumnLine('', `（${compact(payment.method_name, '支払い')} ${formatYen(payment.amount)}）`)));
             }
             if (totalAmount >= 55000) {
                 afterTotal.push(''); afterTotal.push('収入印紙欄'); afterTotal.push('+------------------------------+'); afterTotal.push('|                              |'); afterTotal.push('|                              |'); afterTotal.push('+------------------------------+');
