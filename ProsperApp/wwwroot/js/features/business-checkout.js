@@ -86,6 +86,20 @@
         date.setHours(hour, minute, 0, 0);
         return date.toISOString();
     };
+    const setDefaultClosedTime = () => {
+        const now = new Date();
+        const rounded = new Date(now);
+        const remainder = rounded.getMinutes() % 5;
+        if (remainder !== 0 || rounded.getSeconds() !== 0 || rounded.getMilliseconds() !== 0) {
+            rounded.setMinutes(rounded.getMinutes() + (5 - remainder), 0, 0);
+        }
+
+        const businessHour = rounded.getHours() < 12 ? rounded.getHours() + 24 : rounded.getHours();
+        const value = `${String(businessHour).padStart(2, '0')}:${String(rounded.getMinutes()).padStart(2, '0')}`;
+        if (Array.from(closedTime.options).some((option) => option.value === value)) {
+            closedTime.value = value;
+        }
+    };
     const text = (element, value) => { element.textContent = String(value); };
     const showStatement = (printData, reviewData = {}) => {
         const summary = root.querySelector('[data-business-statement-summary]');
@@ -229,6 +243,7 @@
             reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, queue: readQueue(latestSlip.id) };
             table.textContent = latestSlip.tableDisplay || '会計';
             modal?.show();
+            if (latestSlip.status === 'open') setDefaultClosedTime();
             syncFooterActions();
             if (latestSlip.status !== 'checkout_ready') return;
             try {
