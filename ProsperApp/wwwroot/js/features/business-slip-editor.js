@@ -4,9 +4,12 @@
     const modalElement = document.querySelector('[data-business-slip-editor-modal]');
     const content = modalElement?.querySelector('[data-business-slip-editor-content]');
     const title = modalElement?.querySelector('[data-business-slip-editor-title]');
+    const modalFooter = modalElement?.querySelector('[data-business-slip-editor-footer]');
     const backTargetModalElement = document.querySelector('[data-business-order-back-target-modal]');
     const backTargetList = backTargetModalElement?.querySelector('[data-business-order-back-target-list]');
     const backTargetConfirm = backTargetModalElement?.querySelector('[data-business-order-back-target-confirm]');
+    const attendingCastModalElement = document.getElementById('businessAttendingCastSelectModal');
+    const attendingCastList = document.getElementById('businessAttendingCastModalList');
     const labels = {
         customers: '客を編集',
         nominations: '指名を編集',
@@ -28,6 +31,7 @@
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
     const backTargetModal = backTargetModalElement ? bootstrap.Modal.getOrCreateInstance(backTargetModalElement) : null;
+    const attendingCastModal = attendingCastModalElement ? bootstrap.Modal.getOrCreateInstance(attendingCastModalElement) : null;
     const currentSlip = (slipId) => (window.prosperBusinessHomeSlips || []).find((slip) => String(slip.id) === String(slipId));
     const formatYen = window.MoneyText?.yen ?? ((amount) => `${Number(amount || 0).toLocaleString('ja-JP')}円`);
     const actionTemplates = new Set(['customer_add', 'customer_rename', 'customer_leave', 'nomination_add', 'adjustment_add', 'order_add']);
@@ -55,9 +59,24 @@
         setError(message);
     };
 
+    const resetFooterAction = () => {
+        modalFooter?.querySelector('[data-business-slip-editor-submit]')?.remove();
+    };
+
+    const setFooterAction = (form, submit) => {
+        if (!modalFooter || !form || !submit) return;
+        resetFooterAction();
+        if (!form.id) form.id = 'businessSlipEditorActionForm';
+        submit.dataset.businessSlipEditorSubmit = '';
+        submit.setAttribute('form', form.id);
+        modalFooter.appendChild(submit);
+    };
+
     const appendEditorAction = (row, action, text, record = {}) => {
         const button = document.createElement('button');
-        button.className = action.endsWith('_delete') ? 'btn btn-sm btn-outline-danger' : 'btn btn-sm btn-outline-primary';
+        button.className = action === 'customer_leave'
+            ? 'btn btn-sm btn-danger'
+            : action.endsWith('_delete') ? 'btn btn-sm btn-outline-danger' : 'btn btn-sm btn-outline-primary';
         button.type = 'button';
         button.dataset.businessEditorAction = action;
         if (record.id !== undefined) button.dataset.businessEditorRecordId = String(record.id);
@@ -85,6 +104,8 @@
     };
 
     const renderLocalEditor = (section, slip) => {
+        resetFooterAction();
+        modalElement.classList.remove('is-order-editor');
         if (!slip || slip.status !== 'open') {
             renderUnavailable('この伝票は会計準備中または会計済みのため編集できません。営業中一覧を再表示してください。');
             return;
@@ -117,7 +138,8 @@
 
         if (section === 'customers') {
             (slip.customers || []).filter((item) => item.status === 'active').forEach((customer) => {
-                const row = createLocalEditorRow(customer.displayName || '客名なし', `入店 ${customer.enteredTime || '-'}`);
+                const enteredTime = customer.enteredTime || '-';
+                const row = createLocalEditorRow(`${customer.displayName || '客名なし'}（${enteredTime}）`);
                 row.dataset.businessCustomerRow = '';
                 row.dataset.businessCustomerId = String(customer.id);
                 appendEditorAction(row, 'customer_rename', '名前変更', { id: customer.id, label: customer.customerLabel, display: customer.displayName });
@@ -137,9 +159,17 @@
                 rows.appendChild(row);
             });
         } else {
-            (slip.orders || []).filter((item) => item.status === 'active' && item.itemType === 'standard').forEach((order) => {
+            (slip.orders || [])
+                .filter((item) => item.status === 'active' && item.itemType === 'standard')
+                .sort((left, right) => String(left.orderedAt || left.orderedTime || '').localeCompare(String(right.orderedAt || right.orderedTime || '')) || (Number(left.lineNo) || 0) - (Number(right.lineNo) || 0))
+                .forEach((order) => {
                 const back = order.backCastDisplayName ? ` / ${order.backCastDisplayName}` : '';
-                const row = createLocalEditorRow(order.itemName || '商品', `${formatYen(order.unitPrice)} × ${order.quantity || 0}${back} / ${formatYen(order.amount)}`);
+                const orderTime = order.orderedTime || (() => {
+                    const orderedAt = new Date(order.orderedAt || '');
+                    return Number.isNaN(orderedAt.getTime()) ? '-' : `${String(orderedAt.getHours()).padStart(2, '0')}:${String(orderedAt.getMinutes()).padStart(2, '0')}`;
+                })();
+                const row = createLocalEditorRow(`${orderTime} ${order.itemName || '商品'}${back}`, `× ${order.quantity || 0}　${formatYen(order.amount)}`);
+                row.classList.add('business-slip-editor-list__row--order');
                 appendEditorAction(row, 'order_delete', '削除', { id: order.id, display: order.itemName || '注文' });
                 rows.appendChild(row);
             });
@@ -194,6 +224,7 @@
     const createActionForm = (heading, submitLabel, formClass = '') => {
         const form = document.createElement('form');
         form.className = `slip-create__panel business-slip-editor-action-form ${formClass}`.trim();
+        form.id = 'businessSlipEditorActionForm';
         form.dataset.businessSlipEditorForm = '';
         form.dataset.loadingLock = 'false';
 
@@ -210,18 +241,18 @@
         back.textContent = '戻る';
         titleRow.append(back, Object.assign(document.createElement('h3'), { textContent: heading }));
         const fields = document.createElement('div');
-        fields.className = 'row g-3';
+        fields.className = 'business-slip-editor-action-fields';
         const submit = document.createElement('button');
-        submit.className = 'btn btn-primary btn-lg align-self-end';
+        submit.className = 'btn btn-primary btn-lg';
         submit.type = 'submit';
         submit.textContent = submitLabel;
         form.append(slipId, titleRow, fields, submit);
         return { form, fields, submit };
     };
 
-    const appendField = (fields, labelText, control) => {
+    const appendField = (fields, labelText, control, className = '') => {
         const field = document.createElement('div');
-        field.className = 'col-12';
+        field.className = `business-slip-editor-action-field ${className}`.trim();
         const label = document.createElement('label');
         label.className = 'form-label';
         label.textContent = labelText;
@@ -280,7 +311,7 @@
         const empty = form.querySelector('#detailOrderQueueEmpty');
         const status = form.querySelector('#detailOrderQueueStatus');
         const total = form.querySelector('#detailOrderQueueTotal');
-        const submit = form.querySelector('#detailSubmitOrderButton');
+        const submit = form.querySelector('#detailSubmitOrderButton') || modalFooter?.querySelector('#detailSubmitOrderButton');
         if (!fields || !list || !serialized || !empty || !status || !total || !submit) return;
 
         fields.replaceChildren();
@@ -310,19 +341,12 @@
             row.className = 'order-queue__row';
             const main = document.createElement('div');
             main.className = 'order-queue__row-main';
-            main.appendChild(Object.assign(document.createElement('strong'), { textContent: item.dataset.slipOrderCatalogName || '商品' }));
-            if (cast) {
-                main.appendChild(Object.assign(document.createElement('small'), {
-                    className: 'order-queue__back',
-                    textContent: cast.name
-                }));
-            }
+            main.appendChild(Object.assign(document.createElement('strong'), {
+                textContent: `${item.dataset.slipOrderCatalogName || '商品'}${cast ? ` / ${cast.name}` : ''}`
+            }));
             const amount = document.createElement('div');
             amount.className = 'order-queue__row-amount';
-            amount.append(
-                Object.assign(document.createElement('span'), { textContent: `${formatYen(price)} x ${line.quantity}` }),
-                Object.assign(document.createElement('strong'), { textContent: formatYen(subtotal) })
-            );
+            amount.textContent = `× ${line.quantity}　${formatYen(subtotal)}`;
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.className = 'btn btn-outline-danger btn-sm';
@@ -353,11 +377,6 @@
         const key = String(castId ?? '');
         const current = state.pendingBackSelection.get(key) ?? 0;
         const next = Math.max(0, current + delta);
-        if (key === '' && next > 0) {
-            state.pendingBackSelection.clear();
-        } else if (key !== '') {
-            state.pendingBackSelection.delete('');
-        }
         if (next > 0) state.pendingBackSelection.set(key, next);
         else state.pendingBackSelection.delete(key);
         renderBusinessOrderBackPicker();
@@ -376,7 +395,6 @@
             const count = state.pendingBackSelection.get(key) ?? 0;
             const row = document.createElement('div');
             row.className = 'cast-select-modal__item cast-select-modal__item--stepper';
-            row.classList.toggle('is-selected', count > 0);
             row.classList.toggle('is-nominated', key !== '' && nominatedCastIds.has(key));
 
             const label = document.createElement('div');
@@ -419,6 +437,7 @@
         state.pendingBackItemId = String(itemId);
         state.pendingBackSelection.clear();
         renderBusinessOrderBackPicker();
+        modalElement.classList.add('is-child-modal-active');
         backTargetModal.show();
     };
 
@@ -446,6 +465,7 @@
     });
 
     backTargetModalElement?.addEventListener('hidden.bs.modal', () => {
+        modalElement.classList.remove('is-child-modal-active');
         state.pendingBackItemId = null;
         state.pendingBackSelection.clear();
         if (backTargetConfirm) backTargetConfirm.disabled = true;
@@ -457,6 +477,22 @@
         const name = form.querySelector('[data-business-adjustment-name]')?.value?.trim() || '';
         const amount = Number(form.querySelector('[data-business-adjustment-amount]')?.value || 0);
         return name.length > 0 || amount !== 0;
+    };
+
+    const openNominationCastPicker = (form) => {
+        const castId = form?.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
+        const castName = form?.querySelector('[data-business-editor-cast-display]');
+        if (!castId || !castName || !attendingCastModal || !attendingCastList || !window.CastSelectModal) return;
+        window.CastSelectModal.renderRequired(attendingCastList, configuredCasts(), {
+            getLabel: (cast) => cast.name || '',
+            onSelect: (cast) => {
+                castId.value = String(cast.id || '');
+                castName.textContent = cast.name || 'キャストを選択';
+                attendingCastModal.hide();
+            }
+        });
+        modalElement.classList.add('is-child-modal-active');
+        attendingCastModal.show();
     };
 
     const createOrderAddForm = () => {
@@ -630,20 +666,31 @@
             form = actionForm.form;
         } else if (action === 'nomination_add') {
             const actionForm = createActionForm('指名を追加', '追加');
+            actionForm.fields.classList.add('business-slip-editor-action-fields--nomination');
             const kind = document.createElement('select');
-            kind.className = 'form-select form-select-lg nomination-row__kind';
+            kind.className = 'form-select nomination-row__kind';
             kind.name = 'AddNominationsInput.CastNominations[0].NominationKind';
             kind.required = true;
             appendSelectOptions(kind, configuredNominationOptions(), configuredNominationOptions()[0]?.value, '指名区分');
             const price = document.createElement('select');
-            price.className = 'form-select form-select-lg nomination-row__price';
+            price.className = 'form-select nomination-row__price';
             price.name = 'AddNominationsInput.CastNominations[0].NominationPrice';
             appendSelectOptions(price, configuredNominationPrices(), '1000');
-            const cast = document.createElement('select');
-            cast.className = 'form-select form-select-lg nomination-row__cast';
-            cast.name = 'AddNominationsInput.CastNominations[0].CastId';
-            cast.required = true;
-            appendSelectOptions(cast, configuredCasts().map((item) => ({ value: item.id, label: item.name })), '', 'キャストを選択');
+            const cast = document.createElement('div');
+            cast.className = 'nomination-row__cast';
+            const castId = document.createElement('input');
+            castId.type = 'hidden';
+            castId.name = 'AddNominationsInput.CastNominations[0].CastId';
+            castId.required = true;
+            const castButton = document.createElement('button');
+            castButton.className = 'selected-cast selected-cast--button';
+            castButton.type = 'button';
+            castButton.dataset.businessEditorOpenCastPicker = '';
+            const castDisplay = document.createElement('span');
+            castDisplay.dataset.businessEditorCastDisplay = '';
+            castDisplay.textContent = 'キャストを選択';
+            castButton.appendChild(castDisplay);
+            cast.append(castId, castButton);
             appendField(actionForm.fields, '指名区分', kind);
             appendField(actionForm.fields, '指名料金', price);
             appendField(actionForm.fields, 'キャスト', cast);
@@ -652,6 +699,7 @@
             syncCompanionPrice(kind);
         } else if (action === 'adjustment_add') {
             const actionForm = createActionForm('自由入力明細を追加', '追加');
+            actionForm.fields.classList.add('business-slip-editor-action-fields--adjustment');
             actionForm.form.dataset.businessAdjustmentForm = '';
             const name = document.createElement('input');
             name.className = 'form-control form-control-lg';
@@ -676,7 +724,9 @@
         }
 
         if (!form) return;
+        modalElement.classList.toggle('is-order-editor', action === 'order_add');
         manager.replaceChildren(form);
+        setFooterAction(form, form.querySelector('button[type="submit"]'));
         if (action === 'order_add') renderBusinessOrderQueue(form);
         form.querySelector('input:not([type="hidden"]), select')?.focus();
     };
@@ -711,15 +761,13 @@
         const warning = document.createElement('p');
         warning.className = 'mb-3';
         warning.textContent = `${button.dataset.businessEditorRecordDisplay || definition.label} を削除します。`;
-        const actions = document.createElement('div');
-        actions.className = 'business-slip-editor-action-form__single-row';
         const submit = document.createElement('button');
         submit.type = 'submit';
         submit.className = 'btn btn-danger btn-lg';
         submit.textContent = '削除する';
-        actions.appendChild(submit);
-        form.append(slipId, titleRow, warning, actions);
+        form.append(slipId, titleRow, warning, submit);
         manager.replaceChildren(form);
+        setFooterAction(form, submit);
         submit.focus();
     };
 
@@ -750,7 +798,7 @@
             return { slipId, operationType: 'leave_customer', payload: { slip_customer_id: Number(value('LeaveCustomerInput.SlipCustomerId')), left_time: value('LeaveCustomerInput.LeftTime') } };
         }
         if (form.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]')) {
-            const castSelect = form.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
+            const castInput = form.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
             const kindSelect = form.querySelector('[name="AddNominationsInput.CastNominations[0].NominationKind"]');
             return {
                 slipId,
@@ -759,7 +807,7 @@
                     cast_id: Number(value('AddNominationsInput.CastNominations[0].CastId')),
                     nomination_kind: value('AddNominationsInput.CastNominations[0].NominationKind'),
                     nomination_price: Number(value('AddNominationsInput.CastNominations[0].NominationPrice')),
-                    cast_display_name: castSelect?.selectedOptions?.[0]?.textContent?.trim() || '',
+                    cast_display_name: form.querySelector('[data-business-editor-cast-display]')?.textContent?.trim() || castInput?.selectedOptions?.[0]?.textContent?.trim() || '',
                     nomination_display_name: kindSelect?.selectedOptions?.[0]?.textContent?.trim() || ''
                 }
             };
@@ -817,6 +865,15 @@
 
     const submitEditor = (form) => {
         if (state.isSubmitting) return;
+        const nominationCastInput = form.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
+        if (nominationCastInput && Number(nominationCastInput.value) <= 0) {
+            const message = form.querySelector('[data-business-editor-cast-error]') || document.createElement('div');
+            message.className = 'text-danger';
+            message.dataset.businessEditorCastError = '';
+            message.textContent = 'キャストを選択してください。';
+            if (!message.parentElement) nominationCastInput.closest('.business-slip-editor-action-field')?.appendChild(message);
+            return;
+        }
         const operation = buildOperation(form);
         const operations = (Array.isArray(operation) ? operation : [operation]).filter(Boolean);
         if (operations.length === 0 || !window.prosperBusinessHomeEnqueueEditorOperation) {
@@ -835,6 +892,13 @@
     };
 
     document.addEventListener('click', (event) => {
+        const nominationCastPicker = event.target.closest('[data-business-editor-open-cast-picker]');
+        if (nominationCastPicker && content.contains(nominationCastPicker)) {
+            event.preventDefault();
+            openNominationCastPicker(nominationCastPicker.closest('[data-business-slip-editor-form]'));
+            return;
+        }
+
         const orderItemButton = event.target.closest('[data-slip-order-catalog-item]');
         if (orderItemButton && content.contains(orderItemButton)) {
             const form = orderItemButton.closest('[data-business-order-queue-form]');
@@ -921,6 +985,7 @@
     });
 
     modalElement.addEventListener('hidden.bs.modal', () => {
+        modalElement.classList.remove('is-child-modal-active', 'is-order-editor');
         state.section = null;
         state.slipId = null;
         state.isSubmitting = false;
@@ -928,6 +993,10 @@
         state.pendingBackItemId = null;
         state.pendingBackSelection.clear();
         content.replaceChildren();
+    });
+
+    attendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
+        modalElement.classList.remove('is-child-modal-active');
     });
 
     document.addEventListener('prosper:business-slips-updated', (event) => {

@@ -24,8 +24,8 @@
     const increaseNominationCountButton = document.getElementById('businessIncreaseNominationCount');
     const castModalElement = document.getElementById('businessAttendingCastSelectModal');
     const castModalList = document.getElementById('businessAttendingCastModalList');
-    const createSlipModal = new bootstrap.Modal(createSlipModalElement);
-    const castModal = castModalElement ? new bootstrap.Modal(castModalElement) : null;
+    const createSlipModal = bootstrap.Modal.getOrCreateInstance(createSlipModalElement);
+    const castModal = castModalElement ? bootstrap.Modal.getOrCreateInstance(castModalElement) : null;
     let castModalTargetRow = null;
     const nominationKindOptions = Array.isArray(config.nominationKindOptions) ? config.nominationKindOptions : [];
     const escapeHtml = (value) => String(value ?? '')
@@ -195,8 +195,14 @@
         castModalTargetRow = row;
         await loadCastOptions();
         renderCastModal();
+        createSlipModalElement.classList.add('is-child-modal-active');
         castModal?.show();
     };
+
+    castModalElement?.addEventListener('hidden.bs.modal', () => {
+        createSlipModalElement.classList.remove('is-child-modal-active');
+        castModalTargetRow = null;
+    });
 
     const wireNominationRow = (row) => {
         const kindSelect = row.querySelector('.nomination-row__kind');

@@ -276,6 +276,10 @@
             </div>
         </div>
 
+    }
+
+    @if (Model.CanCreateSalesInput || Model.SlipsEnabled)
+    {
         <div class="modal fade" id="businessAttendingCastSelectModal" tabindex="-1" aria-labelledby="businessAttendingCastSelectModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-scrollable modal-lg">
                 <div class="modal-content">
@@ -377,7 +381,7 @@
     @if (Model.SlipsEnabled)
     {
         <div class="modal fade" id="businessSlipEditorModal" tabindex="-1" aria-labelledby="businessSlipEditorModalLabel" aria-hidden="true" data-business-slip-editor-modal>
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-dialog modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
                         <div>
@@ -388,14 +392,14 @@
                     <div class="modal-body slip-modal-form" data-business-slip-editor-content>
                         <div class="slip-create__panel slip-detail-panel-loading">編集内容を読み込み中です。</div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer" data-business-slip-editor-footer>
                         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
                     </div>
                 </div>
             </div>
         </div>
         <div class="modal fade" id="businessOrderBackTargetModal" tabindex="-1" aria-labelledby="businessOrderBackTargetModalLabel" aria-hidden="true" data-business-order-back-target-modal>
-            <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-dialog modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h2 class="modal-title fs-5" id="businessOrderBackTargetModalLabel">バック対象キャスト選択</h2>

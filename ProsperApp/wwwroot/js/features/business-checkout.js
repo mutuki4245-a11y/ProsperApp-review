@@ -201,7 +201,7 @@
         renderPayments();
     };
     const reset = () => {
-        if (current?.status === 'open') {
+        if (current?.slipId) {
             window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, false);
         }
         current = null; setMessage(); statement.hidden = true; printPanel.hidden = true; paymentPanel.hidden = true; issuePanel.hidden = false;

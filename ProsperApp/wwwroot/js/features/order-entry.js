@@ -494,12 +494,6 @@
         const key = String(castId ?? '');
         const current = pendingBackCastSelection.get(key) ?? 0;
         const next = Math.max(0, current + delta);
-        if (key === '' && next > 0) {
-            pendingBackCastSelection = new Map();
-        } else if (key !== '') {
-            pendingBackCastSelection.delete('');
-        }
-
         if (next > 0) {
             pendingBackCastSelection.set(key, next);
         } else {
@@ -515,7 +509,6 @@
         const isNominated = nominationCastIds.has(String(cast.id));
         const count = pendingBackCastSelection.get(String(cast.id)) ?? 0;
         row.classList.toggle('is-nominated', isNominated);
-        row.classList.toggle('is-selected', count > 0);
 
         const label = document.createElement('div');
         label.className = 'cast-select-modal__item-label';
@@ -563,7 +556,6 @@
         const row = document.createElement('div');
         row.className = 'cast-select-modal__item cast-select-modal__item--none cast-select-modal__item--stepper';
         const count = pendingBackCastSelection.get('') ?? 0;
-        row.classList.toggle('is-selected', count > 0);
 
         const label = document.createElement('div');
         label.className = 'cast-select-modal__item-label';
