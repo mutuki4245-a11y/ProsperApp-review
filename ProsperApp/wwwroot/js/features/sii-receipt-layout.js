@@ -18,7 +18,7 @@
         }).format(new Date(value));
         const addresseeText = (request) => {
             const value = compact(request.addressee);
-            return value.endsWith('様') ? value : value ? `${value} 様` : '';
+            return value.endsWith('様') ? value : value ? `${value} 様` : '様';
         };
         const issuerText = (issuer, property) => compact(issuer?.[property], property === 'logo' ? '' : '未設定');
         const buildReceiptParts = (request) => {
@@ -34,6 +34,7 @@
             if (request.isRetry) lines.push(centerLine('再試行'));
             lines.push(separator());
             lines.push(twoColumnLine('宛名', addresseeText(request)));
+            lines.push(twoColumnLine('', '-'.repeat(Math.max(16, receiptWidth - 8))));
             lines.push('');
             lines.push('');
             lines.push('');
