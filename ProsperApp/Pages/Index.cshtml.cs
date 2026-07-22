@@ -70,6 +70,7 @@ public class IndexModel(
             : _receiptPrinterOptions.BrowserWebSocketHost,
         codePage = _receiptPrinterOptions.BrowserCodePage,
         internationalCharacter = _receiptPrinterOptions.BrowserInternationalCharacter,
+        storeName = StoreContext?.DepartmentName,
         lineWidth = _receiptPrinterOptions.LineWidth is >= 24 and <= 64
             ? _receiptPrinterOptions.LineWidth
             : 48

@@ -38,7 +38,7 @@ begin
     end if;
 
     select
-        coalesce(nullif(trim(d.receipt_display_name), ''), d.department_name, '未設定'),
+        coalesce(nullif(trim(d.department_name), ''), nullif(trim(d.receipt_display_name), ''), '未設定'),
         coalesce(nullif(trim(concat_ws(' ', t.table_code, t.table_name)), ''), '未設定')
       into v_store_name, v_table_display_name
       from public.department_master d

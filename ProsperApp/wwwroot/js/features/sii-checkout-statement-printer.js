@@ -6,12 +6,14 @@
         const width = Number.isFinite(Number(lineWidth)) ? Math.max(24, Number(lineWidth)) : 48;
         const separator = '-'.repeat(width);
         const yen = (value) => `${toAmount(value).toLocaleString('ja-JP')}円`;
+        const charWidth = (char) => (char.codePointAt(0) ?? 0) > 0x00ff ? 2 : 1;
+        const textWidth = (text) => Array.from(String(text)).reduce((total, char) => total + charWidth(char), 0);
+        const spaces = (count) => ' '.repeat(Math.max(0, count));
         const dateTime = (value) => new Intl.DateTimeFormat('ja-JP', {
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
         }).format(new Date(value));
         const twoColumn = (left, right) => {
-            const padding = Math.max(1, width - Array.from(String(left)).length * 2 - String(right).length);
-            return `${left}${' '.repeat(padding)}${right}`;
+            return `${left}${spaces(Math.max(1, width - textWidth(left) - textWidth(right)))}${right}`;
         };
         const lines = [
             compact(request.store_name, '店舗'),
@@ -78,7 +80,11 @@
             started = true;
             if (compact(config.codePage)) await call('コードページ設定', () => manager.setCodePage({ codePage: config.codePage }), true);
             if (compact(config.internationalCharacter)) await call('国際文字設定', () => manager.setInternationalCharacter({ internationalCharacter: config.internationalCharacter }), true);
-            await call('印字データ送信', () => manager.appendText({ text: createText(request, config.lineWidth) }));
+            const statementRequest = {
+                ...request,
+                store_name: compact(config.storeName) || request.store_name
+            };
+            await call('印字データ送信', () => manager.appendText({ text: createText(statementRequest, config.lineWidth) }));
             await call('紙送り', () => manager.appendFeed({ value: 2 }), true);
             await call('カット指定', () => manager.appendCut({ cuttingMethod: 'partial' }), true);
             await call('印刷実行', () => manager.doPrint({}));
