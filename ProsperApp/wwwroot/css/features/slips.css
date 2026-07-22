@@ -1525,6 +1525,18 @@
   white-space: nowrap;
 }
 
+.business-slip-editor-list__row--customer {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.business-slip-editor-list__row--customer .business-slip-editor-list__actions {
+  flex-wrap: nowrap;
+}
+
+.business-slip-editor-list__row--customer .business-slip-editor-list__actions .btn {
+  white-space: nowrap;
+}
+
 .business-slip-editor-list__actions {
   display: flex;
   flex-wrap: wrap;
@@ -1552,6 +1564,10 @@
 
 .business-slip-editor-action-fields--nomination {
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 1.35fr);
+}
+
+.business-slip-editor-action-fields--customer {
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.6fr);
 }
 
 .business-slip-editor-action-fields--adjustment {
@@ -1585,6 +1601,10 @@
 #businessOrderBackTargetModal .modal-dialog,
 #businessAttendingCastSelectModal .modal-dialog {
   max-width: min(34rem, calc(100vw - 1rem));
+}
+
+#businessAttendingCastSelectModal {
+  z-index: 1070;
 }
 
 .modal.is-child-modal-active .modal-content {

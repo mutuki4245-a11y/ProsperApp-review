@@ -140,6 +140,7 @@
             (slip.customers || []).filter((item) => item.status === 'active').forEach((customer) => {
                 const enteredTime = customer.enteredTime || '-';
                 const row = createLocalEditorRow(`${customer.displayName || '客名なし'}（${enteredTime}）`);
+                row.classList.add('business-slip-editor-list__row--customer');
                 row.dataset.businessCustomerRow = '';
                 row.dataset.businessCustomerId = String(customer.id);
                 appendEditorAction(row, 'customer_rename', '名前変更', { id: customer.id, label: customer.customerLabel, display: customer.displayName });
@@ -632,6 +633,7 @@
 
         if (action === 'customer_add') {
             const actionForm = createActionForm('客を追加', '追加');
+            actionForm.fields.classList.add('business-slip-editor-action-fields--customer');
             const name = document.createElement('input');
             name.className = 'form-control form-control-lg';
             name.name = 'AddCustomersInput.CustomerLabels[0]';

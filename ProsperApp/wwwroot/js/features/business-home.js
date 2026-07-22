@@ -1176,9 +1176,11 @@
             if (expandedSlipIds.has(slipId)) {
                 expandedSlipIds.delete(slipId);
             } else {
+                expandedSlipIds.clear();
+                expandedOrderGroupKeys.clear();
                 expandedSlipIds.add(slipId);
             }
-            syncSlipDetails(row, slip);
+            renderSlips();
             return;
         }
 
