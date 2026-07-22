@@ -48,7 +48,6 @@
         lines.push(twoColumn('サービス料', yen(request.service_charge_amount)));
         return {
             beforeTotal: `${lines.join('\n')}\n`,
-            total: `${twoColumn('合計', yen(request.total_amount))}\n`,
             afterTotal: `${twoColumn('', `（内消費税額 ${yen(request.consumption_tax_amount)}）`)}\n\n\n`
         };
     };
@@ -81,12 +80,14 @@
 
     const appendText = (manager, text) => call('印字データ送信', () => manager.appendText({ text }));
 
-    const appendTotalSizeCommand = async (manager, value) => {
-        if (typeof manager.appendBinary !== 'function') return null;
-        return call(
-            value === 0x10 ? '合計文字拡大' : '文字サイズ復帰',
-            () => manager.appendBinary({ data: new Blob([new Uint8Array([0x1d, 0x21, value])]) }),
-            true);
+    const appendTotalImage = async (manager, request, lineWidth) => {
+        if (typeof manager.appendImage !== 'function' || typeof window.ProsperSiiPrintImage?.createTotal !== 'function') {
+            throw new Error('合計額の画像印字を利用できません。ページを再読み込みしてください。');
+        }
+        const image = await window.ProsperSiiPrintImage.createTotal({
+            label: '合計', amount: request.total_amount, lineWidth
+        });
+        await call('合計画像送信', () => manager.appendImage({ data: image }));
     };
 
     const print = async (request) => {
@@ -106,12 +107,7 @@
             };
             const text = createTextParts(statementRequest, config.lineWidth);
             await appendText(manager, text.beforeTotal);
-            const enlarged = await appendTotalSizeCommand(manager, 0x10);
-            try {
-                await appendText(manager, text.total);
-            } finally {
-                if (enlarged) await appendTotalSizeCommand(manager, 0x00);
-            }
+            await appendTotalImage(manager, statementRequest, config.lineWidth);
             await appendText(manager, text.afterTotal);
             await call('紙送り', () => manager.appendFeed({ value: 2 }), true);
             await call('カット指定', () => manager.appendCut({ cuttingMethod: 'partial' }), true);

@@ -116,6 +116,16 @@
         }
     };
 
+    const appendTotalImage = async (manager, request) => {
+        if (typeof manager.appendImage !== 'function' || typeof window.ProsperSiiPrintImage?.createTotal !== 'function') {
+            throw new Error('領収金額の画像印字を利用できません。ページを再読み込みしてください。');
+        }
+        const image = await window.ProsperSiiPrintImage.createTotal({
+            label: '領収金額', amount: request.total_amount, lineWidth: config.lineWidth
+        });
+        await trySdkCall('領収金額画像送信', () => manager.appendImage({ data: image }));
+    };
+
     const receiptKey = (request) => receiptLayout.receiptKey(request);
 
     const readPendingReceipts = () => {
@@ -255,24 +265,7 @@
                 ? receiptLayout.buildReceiptParts(request)
                 : { beforeTotal: receiptLayout.buildReceiptText(request), total: '', afterTotal: '' };
             await trySdkCall('appendText', () => manager.appendText({ text: parts.beforeTotal }));
-            const enlarged = typeof manager.appendBinary === 'function'
-                ? await trySdkCall(
-                    '領収金額文字拡大',
-                    () => manager.appendBinary({ data: new Blob([new Uint8Array([0x1d, 0x21, 0x10])]) }),
-                    false)
-                : null;
-            try {
-                if (parts.total) {
-                    await trySdkCall('appendText', () => manager.appendText({ text: parts.total }));
-                }
-            } finally {
-                if (enlarged) {
-                    await trySdkCall(
-                        '文字サイズ復帰',
-                        () => manager.appendBinary({ data: new Blob([new Uint8Array([0x1d, 0x21, 0x00])]) }),
-                        false);
-                }
-            }
+            await appendTotalImage(manager, request);
             if (parts.afterTotal) {
                 await trySdkCall('appendText', () => manager.appendText({ text: parts.afterTotal }));
             }

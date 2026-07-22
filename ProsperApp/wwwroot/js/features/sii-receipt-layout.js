@@ -55,13 +55,6 @@
             if (totalAmount >= 55000) {
                 afterTotal.push(''); afterTotal.push('収入印紙欄'); afterTotal.push('+------------------------------+'); afterTotal.push('|                              |'); afterTotal.push('|                              |'); afterTotal.push('+------------------------------+');
             }
-            afterTotal.push('');
-            afterTotal.push('担当者印');
-            afterTotal.push('+--------------------+');
-            afterTotal.push('|                    |');
-            afterTotal.push('|                    |');
-            afterTotal.push('|                    |');
-            afterTotal.push('+--------------------+');
             afterTotal.push(separator());
             afterTotal.push('');
             return { beforeTotal, total, afterTotal: `${afterTotal.join('\n')}\n` };
