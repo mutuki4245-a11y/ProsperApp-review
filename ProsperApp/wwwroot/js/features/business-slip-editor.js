@@ -127,7 +127,7 @@
         add.dataset.businessEditorAction = `${section === 'customers' ? 'customer' : section.slice(0, -1)}_add`;
         add.textContent = actionLabel;
         const addUnavailable =
-            (section === 'nominations' && (configuredCasts().length === 0 || configuredNominationOptions().length === 0)) ||
+            (section === 'nominations' && (availableNominationCasts().length === 0 || configuredNominationOptions().length === 0)) ||
             (section === 'orders' && configuredOrderItems().length === 0);
         add.disabled = addUnavailable;
         if (addUnavailable) {
@@ -212,6 +212,16 @@
     const configuredNominationOptions = () => Array.isArray(editorOptions.nominationOptions) ? editorOptions.nominationOptions : [];
     const configuredNominationPrices = () => Array.isArray(editorOptions.nominationPriceOptions) ? editorOptions.nominationPriceOptions : [];
     const configuredOrderItems = () => Array.isArray(editorOptions.orderItems) ? editorOptions.orderItems : [];
+    const activeNominationCastIds = () => new Set(
+        (currentSlip(state.slipId)?.nominations || [])
+            .filter((nomination) => nomination.status === 'active')
+            .map((nomination) => String(nomination.castId || ''))
+            .filter(Boolean)
+    );
+    const availableNominationCasts = () => {
+        const selectedCastIds = activeNominationCastIds();
+        return configuredCasts().filter((cast) => !selectedCastIds.has(String(cast.id)));
+    };
 
     const currentStoreTime = () => {
         const now = new Date();
@@ -484,8 +494,9 @@
         const castId = form?.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
         const castName = form?.querySelector('[data-business-editor-cast-display]');
         if (!castId || !castName || !attendingCastModal || !attendingCastList || !window.CastSelectModal) return;
-        window.CastSelectModal.renderRequired(attendingCastList, configuredCasts(), {
+        window.CastSelectModal.renderRequired(attendingCastList, availableNominationCasts(), {
             getLabel: (cast) => cast.name || '',
+            emptyMessage: '追加できる出勤キャストがいません。',
             onSelect: (cast) => {
                 castId.value = String(cast.id || '');
                 castName.textContent = cast.name || 'キャストを選択';
@@ -696,7 +707,7 @@
             appendField(actionForm.fields, '指名区分', kind);
             appendField(actionForm.fields, '指名料金', price);
             appendField(actionForm.fields, 'キャスト', cast);
-            actionForm.submit.disabled = configuredNominationOptions().length === 0 || configuredCasts().length === 0;
+            actionForm.submit.disabled = configuredNominationOptions().length === 0 || availableNominationCasts().length === 0;
             form = actionForm.form;
             syncCompanionPrice(kind);
         } else if (action === 'adjustment_add') {
@@ -873,6 +884,14 @@
             message.className = 'text-danger';
             message.dataset.businessEditorCastError = '';
             message.textContent = 'キャストを選択してください。';
+            if (!message.parentElement) nominationCastInput.closest('.business-slip-editor-action-field')?.appendChild(message);
+            return;
+        }
+        if (nominationCastInput && activeNominationCastIds().has(String(nominationCastInput.value))) {
+            const message = form.querySelector('[data-business-editor-cast-error]') || document.createElement('div');
+            message.className = 'text-danger';
+            message.dataset.businessEditorCastError = '';
+            message.textContent = 'このキャストは既に指名登録されています。';
             if (!message.parentElement) nominationCastInput.closest('.business-slip-editor-action-field')?.appendChild(message);
             return;
         }

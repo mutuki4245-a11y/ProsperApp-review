@@ -116,6 +116,7 @@
         hiddenInput.value = cast.id;
         hiddenName.value = cast.display;
         selected.textContent = cast.display;
+        renumberNominationRows();
     };
 
     const getCustomerRows = () => customerList?.querySelectorAll('[data-business-customer-row]') ?? [];
@@ -179,9 +180,22 @@
         renumberCustomerRows();
     };
 
+    const selectedNominationCastIds = () => new Set(
+        Array.from(nominationList?.querySelectorAll('[data-business-nomination-row]') ?? [])
+            .map((row) => row.querySelector('[data-business-cast-id]')?.value || '')
+            .filter(Boolean)
+            .map(String)
+    );
+
+    const availableNominationCasts = () => {
+        const selectedCastIds = selectedNominationCastIds();
+        return castOptions.filter((cast) => !selectedCastIds.has(String(cast.id)));
+    };
+
     const renderCastModal = () => {
-        window.CastSelectModal.renderRequired(castModalList, castOptions, {
+        window.CastSelectModal.renderRequired(castModalList, availableNominationCasts(), {
             getLabel: (cast) => cast.display,
+            emptyMessage: '選択できる出勤キャストがありません。',
             onSelect: (cast) => {
                 if (castModalTargetRow) {
                     setSelectedCast(castModalTargetRow, cast);
@@ -194,6 +208,7 @@
     const openCastModal = async (row) => {
         castModalTargetRow = row;
         await loadCastOptions();
+        renumberNominationRows();
         renderCastModal();
         createSlipModalElement.classList.add('is-child-modal-active');
         castModal?.show();
@@ -233,7 +248,10 @@
             decreaseNominationCountButton.disabled = rows.length === 0;
         }
         if (increaseNominationCountButton) {
-            increaseNominationCountButton.disabled = nominationKindOptions.length === 0 || rows.length >= 20;
+            increaseNominationCountButton.disabled =
+                nominationKindOptions.length === 0 ||
+                rows.length >= 20 ||
+                availableNominationCasts().length === 0;
         }
         rows.forEach((row, index) => {
             const kind = row.querySelector('.nomination-row__kind');
@@ -258,7 +276,7 @@
     const getNominationRows = () => nominationList?.querySelectorAll('[data-business-nomination-row]') ?? [];
 
     const addNominationRow = () => {
-        if (!nominationList || nominationKindOptions.length === 0) {
+        if (!nominationList || nominationKindOptions.length === 0 || availableNominationCasts().length === 0) {
             return;
         }
 
@@ -346,8 +364,9 @@
     castModalElement?.addEventListener('hidden.bs.modal', () => {
         castModalTargetRow = null;
     });
-    createSlipModalElement.addEventListener('shown.bs.modal', () => {
-        void loadCastOptions();
+    createSlipModalElement.addEventListener('shown.bs.modal', async () => {
+        await loadCastOptions();
+        renumberNominationRows();
     });
 
     if (showCreateSlipModal) {

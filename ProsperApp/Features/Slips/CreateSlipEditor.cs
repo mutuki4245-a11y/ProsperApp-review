@@ -224,6 +224,12 @@ public static class CreateSlipEditor
         var allowedNominationKinds = nominationOptions
             .Select(x => x.NominationKind)
             .ToHashSet(StringComparer.Ordinal);
+        var duplicateCastIds = nominations
+            .Where(nomination => nomination.CastId is not null)
+            .GroupBy(nomination => nomination.CastId!.Value)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet();
 
         for (var i = 0; i < nominations.Count; i++)
         {
@@ -231,6 +237,12 @@ public static class CreateSlipEditor
             ValidateNominationKind(nomination, allowedNominationKinds, i, errors);
             ValidateNominationPrice(nomination, i, errors);
             ValidateNominationCast(nomination, allowedCastIds, i, errors);
+            if (nomination.CastId is not null && duplicateCastIds.Contains(nomination.CastId.Value))
+            {
+                errors.Add(new CreateSlipValidationError(
+                    $"{NominationLinesKey}[{i}].{nameof(CastNominationInputModel.CastId)}",
+                    "同じキャストは1枚の伝票に重複して指名登録できません。"));
+            }
         }
     }
 

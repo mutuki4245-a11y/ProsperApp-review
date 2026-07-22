@@ -1527,13 +1527,18 @@
 
 .business-slip-editor-list__row--customer {
   grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.35rem 0;
 }
 
 .business-slip-editor-list__row--customer .business-slip-editor-list__actions {
-  flex-wrap: nowrap;
+  align-items: center;
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: max-content max-content;
 }
 
 .business-slip-editor-list__row--customer .business-slip-editor-list__actions .btn {
+  line-height: 1.2;
   white-space: nowrap;
 }
 
