@@ -23,6 +23,9 @@
     const issueAction = root.querySelector('[data-business-checkout-issue-action]');
     const printActions = root.querySelector('[data-business-checkout-print-actions]');
     const confirmAction = root.querySelector('[data-business-checkout-confirm-action]');
+    const printStatementButton = root.querySelector('[data-business-print-statement]');
+    const releaseCheckoutButton = root.querySelector('[data-business-release-checkout]');
+    const proceedPaymentButton = root.querySelector('[data-business-proceed-payment]');
     const storagePrefix = 'prosper:checkout-statement:v1:';
     let current = null;
     let isActionInFlight = false;
@@ -37,16 +40,19 @@
     const readQueue = (slipId) => {
         try {
             const value = JSON.parse(localStorage.getItem(key(slipId)) || 'null');
-            return value?.printData && value?.state ? value : null;
+            if (!value?.printData || !value?.state) return null;
+            if (value.state === 'staff_complete') value.state = 'printed';
+            return value;
         } catch {
             localStorage.removeItem(key(slipId));
             return null;
         }
     };
-    const writeQueue = () => {
-        if (!current?.slipId || !current?.queue) return;
-        localStorage.setItem(key(current.slipId), JSON.stringify(current.queue));
+    const writeQueueFor = (checkout) => {
+        if (!checkout?.slipId || !checkout?.queue || checkout.queueDiscarded) return;
+        localStorage.setItem(key(checkout.slipId), JSON.stringify(checkout.queue));
     };
+    const writeQueue = () => writeQueueFor(current);
     const removeQueue = (slipId) => localStorage.removeItem(key(slipId));
     const post = async (url, payload) => {
         const response = await fetch(url, {
@@ -157,27 +163,30 @@
         statement.hidden = false;
     };
     const formatTime = (value) => value ? new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '-';
-    const printable = () => ['printed', 'staff_complete'].includes(current?.queue?.state);
     const syncFooterActions = () => {
         const isCheckoutReady = current?.status === 'checkout_ready';
         const hasCheckoutQueue = isCheckoutReady && Boolean(current?.queue);
+        const paymentStep = current?.step === 'payment';
+        const printing = Boolean(current?.statementPrintTask);
         issueAction.hidden = isCheckoutReady;
-        printActions.hidden = !hasCheckoutQueue;
-        confirmAction.hidden = !hasCheckoutQueue || !printable();
+        printActions.hidden = !hasCheckoutQueue || paymentStep;
+        confirmAction.hidden = !hasCheckoutQueue || !paymentStep;
+        printStatementButton.disabled = !hasCheckoutQueue || printing;
+        releaseCheckoutButton.disabled = !hasCheckoutQueue || printing;
+        proceedPaymentButton.disabled = !hasCheckoutQueue;
     };
     const renderPrintState = () => {
         const state = current?.queue?.state || 'pending';
         const label = {
-            pending: '印刷待ちです。印刷成功または店員完了の明示後に会計を確定できます。',
-            printing: '印刷中です。完了するまで会計を確定できません。',
-            failed: '印刷に失敗しました。再試行するか、店員が印刷完了として進んでください。',
-            printed: '印刷済みです。会計を確定できます。',
-            staff_complete: '店員が印刷完了として進むことを確認しました。会計を確定できます。'
-        }[state] || '印刷待ちです。';
+            pending: '会計伝票を印刷します。必要なら再印刷できます。',
+            printing: '会計伝票を印刷しています。',
+            failed: '会計伝票を印刷できませんでした。必要なら再印刷してください。',
+            printed: '会計伝票を印刷しました。必要なら再印刷できます。'
+        }[state] || '会計伝票を印刷します。必要なら再印刷できます。';
         text(printState, label);
         printPanel.hidden = false;
-        paymentPanel.hidden = !printable();
-        confirmButton.disabled = !printable();
+        paymentPanel.hidden = current?.step !== 'payment';
+        confirmButton.disabled = current?.step !== 'payment';
         syncFooterActions();
     };
     const renderPayments = () => {
@@ -252,7 +261,7 @@
                 return;
             }
 
-            reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, queue: readQueue(latestSlip.id) };
+            reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, step: 'statement', queue: readQueue(latestSlip.id) };
             table.textContent = latestSlip.tableDisplay || '会計';
             modal?.show();
             if (latestSlip.status === 'open') setDefaultClosedTime();
@@ -286,7 +295,9 @@
                 setMessage('会計伝票を発行中です。');
                 const data = await post(config.issueCheckoutStatementUrl, { slipId: current.slipId, closedAt });
                 current.status = 'checkout_ready';
+                current.step = 'statement';
                 current.queue = { state: 'pending', printData: data.printData, reviewData: data.reviewData }; writeQueue(); showCurrent();
+                void printStatementCore();
                 const snapshotSynchronized = await window.prosperBusinessHomeReload?.();
                 if (snapshotSynchronized) {
                     window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, false);
@@ -299,22 +310,37 @@
             }
         }, false);
     };
-    const printStatement = async () => {
-        if (!current?.queue) return;
-        await runExclusive(async () => {
-            current.queue.state = 'printing'; writeQueue(); renderPrintState();
+    const printStatementCore = () => {
+        const checkout = current;
+        if (!checkout?.queue) return Promise.resolve();
+        if (checkout.statementPrintTask) return checkout.statementPrintTask;
+
+        checkout.queue.state = 'printing';
+        writeQueueFor(checkout);
+        const task = Promise.resolve().then(async () => {
             try {
                 if (!config.receiptPrinterEnabled || !window.ProsperCheckoutStatementPrinter?.print) throw new Error('会計伝票プリンターを利用できません。');
-                await window.ProsperCheckoutStatementPrinter.print(current.queue.printData);
-                current.queue.state = 'printed';
+                await window.ProsperCheckoutStatementPrinter.print(checkout.queue.printData);
+                checkout.queue.state = 'printed';
             } catch (error) {
-                current.queue.state = 'failed'; setMessage(`会計伝票を印刷できませんでした。${error.message}`);
+                checkout.queue.state = 'failed';
+                if (current === checkout) setMessage(`会計伝票を印刷できませんでした。${error.message}`);
+            } finally {
+                checkout.statementPrintTask = null;
+                writeQueueFor(checkout);
+                if (current === checkout) renderPrintState();
             }
-            writeQueue(); renderPrintState();
         });
+        checkout.statementPrintTask = task;
+        if (current === checkout) renderPrintState();
+        return task;
+    };
+    const printStatement = () => {
+        if (!current?.queue || current.statementPrintTask) return;
+        void printStatementCore();
     };
     const release = async () => {
-        if (isActionInFlight || !current || !window.confirm('会計準備を解除して伝票を編集可能に戻しますか？')) return;
+        if (isActionInFlight || !current || current.statementPrintTask || !window.confirm('会計準備を解除して伝票を編集可能に戻しますか？')) return;
         await runExclusive(async () => {
             try {
                 await post(config.releaseCheckoutReadyUrl, { slipId: current.slipId });
@@ -322,18 +348,25 @@
             } catch (error) { setMessage(error.message); }
         });
     };
+    const proceedPayment = () => {
+        if (!current?.queue || current.status !== 'checkout_ready') return;
+        current.step = 'payment';
+        renderPrintState();
+        renderPayments();
+    };
     const confirm = async () => {
-        if (!current || !printable()) return;
+        if (!current || current.step !== 'payment') return;
         const payments = selectedPayments();
         const total = Math.round(Number(current.queue.printData.total_amount) || 0);
         if ((total === 0 && payments.length > 0) || (total > 0 && payments.length === 0)) { setMessage('決済方法を確認してください。'); return; }
         await runExclusive(async () => {
             try {
                 const data = await post(config.confirmCheckoutUrl, { slipId: current.slipId, payments, receivedAmount: receivedAmount.value === '' ? null : Math.round(Number(receivedAmount.value) || 0) });
+                current.queueDiscarded = true;
                 removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
                 const receipt = { ...data.printData, checkoutId: data.checkoutId, addressee: addressee.value || '' };
-                const printTask = window.ProsperSiiReceiptPrinterApi?.print(receipt);
-                printTask?.catch(() => {});
+                const printReceipt = () => window.ProsperSiiReceiptPrinterApi?.print(receipt)?.catch(() => {});
+                printReceipt();
             } catch (error) { setMessage(error.message); }
         });
     };
@@ -367,8 +400,8 @@
     });
     root.querySelector('[data-business-issue-statement]')?.addEventListener('click', () => void issue());
     root.querySelector('[data-business-print-statement]')?.addEventListener('click', () => void printStatement());
-    root.querySelector('[data-business-statement-staff-complete]')?.addEventListener('click', () => { if (!isActionInFlight && current?.queue) { current.queue.state = 'staff_complete'; writeQueue(); renderPrintState(); } });
     root.querySelector('[data-business-release-checkout]')?.addEventListener('click', () => void release());
+    root.querySelector('[data-business-proceed-payment]')?.addEventListener('click', proceedPayment);
     confirmButton?.addEventListener('click', () => void confirm());
     paymentRows?.addEventListener('click', (event) => {
         if (isActionInFlight) return;

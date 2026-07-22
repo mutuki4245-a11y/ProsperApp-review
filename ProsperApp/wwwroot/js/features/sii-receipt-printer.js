@@ -116,6 +116,10 @@
         }
     };
 
+    const enqueuePrint = (job) => typeof window.ProsperSiiPrintQueue?.enqueue === 'function'
+        ? window.ProsperSiiPrintQueue.enqueue(job)
+        : job();
+
     const appendTotalImage = async (manager, request) => {
         if (typeof manager.appendImage !== 'function' || typeof window.ProsperSiiPrintImage?.createTotal !== 'function') {
             throw new Error('領収金額の画像印字を利用できません。ページを再読み込みしてください。');
@@ -302,7 +306,7 @@
         }
 
         retryButton.disabled = true;
-        void printRequest(item.request).catch((error) => {
+        void enqueuePrint(() => printRequest(item.request)).catch((error) => {
             console.warn('SII receipt reprint failed.', error);
             const message = formatErrorMessage(error);
             upsertPendingReceipt(item.request, message);
@@ -321,7 +325,7 @@
             isRetry: Boolean(request?.isRetry || (explicitReprint && hasSuccessfulReceipt(request)))
         };
         try {
-            await printRequest(prepared);
+            await enqueuePrint(() => printRequest(prepared));
         } catch (error) {
             upsertPendingReceipt(prepared, formatErrorMessage(error));
             throw error;

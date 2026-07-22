@@ -90,7 +90,7 @@
         await call('合計画像送信', () => manager.appendImage({ data: image }));
     };
 
-    const print = async (request) => {
+    const printNow = async (request) => {
         const Manager = getManager();
         if (!Manager) throw new Error('SII Web SDK Serverを利用できません。');
         const config = window.prosperSiiReceiptPrinter ?? {};
@@ -115,6 +115,13 @@
         } finally {
             if (started) await call('SII Web SDK Server切断', () => manager.stop({}), true);
         }
+    };
+
+    const print = (request) => {
+        const job = () => printNow(request);
+        return typeof window.ProsperSiiPrintQueue?.enqueue === 'function'
+            ? window.ProsperSiiPrintQueue.enqueue(job)
+            : job();
     };
 
     window.ProsperCheckoutStatementPrinter = { print };
