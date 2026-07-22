@@ -6,6 +6,10 @@
 
     const modalElement = document.getElementById('businessCheckoutModal');
     const modal = window.bootstrap?.Modal.getOrCreateInstance(modalElement);
+    const paymentModalElement = document.getElementById('businessPaymentModal');
+    const paymentModal = window.bootstrap?.Modal.getOrCreateInstance(paymentModalElement);
+    const paymentRoot = paymentModalElement?.querySelector('[data-business-payment-modal]');
+    if (!paymentRoot) return;
     const message = root.querySelector('[data-business-checkout-message]');
     const table = root.querySelector('[data-business-checkout-table]');
     const issuePanel = root.querySelector('[data-business-checkout-issue-panel]');
@@ -13,28 +17,33 @@
     const statement = root.querySelector('[data-business-checkout-statement]');
     const printPanel = root.querySelector('[data-business-statement-print-panel]');
     const printState = root.querySelector('[data-business-statement-print-state]');
-    const paymentPanel = root.querySelector('[data-business-payment-panel]');
-    const paymentRows = root.querySelector('[data-business-payment-rows]');
-    const paymentSummary = root.querySelector('[data-business-payment-summary]');
-    const receivedRow = root.querySelector('[data-business-received-row]');
-    const receivedAmount = root.querySelector('[data-business-received-amount]');
-    const addressee = root.querySelector('[data-business-receipt-addressee]');
-    const confirmButton = root.querySelector('[data-business-confirm-checkout]');
+    const paymentMessage = paymentRoot.querySelector('[data-business-payment-message]');
+    const paymentTable = paymentRoot.querySelector('[data-business-payment-table]');
+    const paymentRows = paymentRoot.querySelector('[data-business-payment-rows]');
+    const paymentSummary = paymentRoot.querySelector('[data-business-payment-summary]');
+    const receivedRow = paymentRoot.querySelector('[data-business-received-row]');
+    const receivedAmount = paymentRoot.querySelector('[data-business-received-amount]');
+    const addressee = paymentRoot.querySelector('[data-business-receipt-addressee]');
+    const confirmButton = paymentRoot.querySelector('[data-business-confirm-checkout]');
     const issueAction = root.querySelector('[data-business-checkout-issue-action]');
     const printActions = root.querySelector('[data-business-checkout-print-actions]');
-    const confirmAction = root.querySelector('[data-business-checkout-confirm-action]');
     const printStatementButton = root.querySelector('[data-business-print-statement]');
     const releaseCheckoutButton = root.querySelector('[data-business-release-checkout]');
     const proceedPaymentButton = root.querySelector('[data-business-proceed-payment]');
     const storagePrefix = 'prosper:checkout-statement:v1:';
     let current = null;
     let isActionInFlight = false;
+    let paymentModalCloseIsProgrammatic = false;
 
     const yen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
     const token = () => sourceForm.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
     const setMessage = (value = '') => {
         message.hidden = !value;
         message.textContent = value;
+    };
+    const setPaymentMessage = (value = '') => {
+        paymentMessage.hidden = !value;
+        paymentMessage.textContent = value;
     };
     const key = (slipId) => `${storagePrefix}${slipId}`;
     const readQueue = (slipId) => {
@@ -166,11 +175,9 @@
     const syncFooterActions = () => {
         const isCheckoutReady = current?.status === 'checkout_ready';
         const hasCheckoutQueue = isCheckoutReady && Boolean(current?.queue);
-        const paymentStep = current?.step === 'payment';
         const printing = Boolean(current?.statementPrintTask);
         issueAction.hidden = isCheckoutReady;
-        printActions.hidden = !hasCheckoutQueue || paymentStep;
-        confirmAction.hidden = !hasCheckoutQueue || !paymentStep;
+        printActions.hidden = !hasCheckoutQueue;
         printStatementButton.disabled = !hasCheckoutQueue || printing;
         releaseCheckoutButton.disabled = !hasCheckoutQueue || printing;
         proceedPaymentButton.disabled = !hasCheckoutQueue;
@@ -185,8 +192,6 @@
         }[state] || '会計伝票を印刷します。必要なら再印刷できます。';
         text(printState, label);
         printPanel.hidden = false;
-        paymentPanel.hidden = current?.step !== 'payment';
-        confirmButton.disabled = current?.step !== 'payment';
         syncFooterActions();
     };
     const renderPayments = () => {
@@ -218,6 +223,7 @@
         const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
         const cash = payments.find((payment) => payment.methodCode === 'cash');
         receivedRow.hidden = !cash;
+        if (!cash) receivedAmount.value = '';
         const received = Math.round(Number(receivedAmount.value) || 0);
         paymentSummary.replaceChildren();
         [['会計額', yen(total)], ['決済合計', yen(paid)], ['差額', yen(total - paid)]].forEach(([label, value]) => {
@@ -239,7 +245,8 @@
         if (current?.slipId) {
             window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, false);
         }
-        current = null; setMessage(); statement.hidden = true; printPanel.hidden = true; paymentPanel.hidden = true; issuePanel.hidden = false;
+        current = null; setMessage(); setPaymentMessage(); statement.hidden = true; printPanel.hidden = true; issuePanel.hidden = false;
+        modalElement?.classList.remove('is-child-modal-active');
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
         syncFooterActions();
     };
@@ -351,23 +358,31 @@
     const proceedPayment = () => {
         if (!current?.queue || current.status !== 'checkout_ready') return;
         current.step = 'payment';
-        renderPrintState();
+        paymentTable.textContent = current.tableDisplay || '会計';
+        setPaymentMessage();
         renderPayments();
+        confirmButton.disabled = false;
+        modalElement?.classList.add('is-child-modal-active');
+        paymentModal?.show();
     };
     const confirm = async () => {
         if (!current || current.step !== 'payment') return;
         const payments = selectedPayments();
         const total = Math.round(Number(current.queue.printData.total_amount) || 0);
-        if ((total === 0 && payments.length > 0) || (total > 0 && payments.length === 0)) { setMessage('決済方法を確認してください。'); return; }
+        if ((total === 0 && payments.length > 0) || (total > 0 && payments.length === 0)) { setPaymentMessage('決済方法を確認してください。'); return; }
         await runExclusive(async () => {
             try {
                 const data = await post(config.confirmCheckoutUrl, { slipId: current.slipId, payments, receivedAmount: receivedAmount.value === '' ? null : Math.round(Number(receivedAmount.value) || 0) });
                 current.queueDiscarded = true;
-                removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
+                removeQueue(current.slipId);
+                paymentModalCloseIsProgrammatic = true;
+                paymentModal?.hide();
+                modal?.hide();
+                window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
                 const receipt = { ...data.printData, checkoutId: data.checkoutId, addressee: addressee.value || '' };
                 const printReceipt = () => window.ProsperSiiReceiptPrinterApi?.print(receipt)?.catch(() => {});
                 printReceipt();
-            } catch (error) { setMessage(error.message); }
+            } catch (error) { setPaymentMessage(error.message); }
         });
     };
     const printReceipt = async (slip) => {
@@ -407,10 +422,16 @@
         if (isActionInFlight) return;
         const button = event.target.closest('[data-payment-code]'); if (!button) return;
         const selected = !button.classList.contains('btn-primary'); const input = paymentRows.querySelector(`[data-payment-amount="${button.dataset.paymentCode}"]`);
+        const row = button.closest('.checkout-payment-row');
         button.classList.toggle('btn-primary', selected); button.classList.toggle('btn-outline-primary', !selected); input.disabled = !selected;
+        row?.classList.toggle('checkout-payment-row--selected', selected);
         if (selected && !input.value) {
             const currentPaid = selectedPayments().filter((payment) => payment.methodCode !== button.dataset.paymentCode).reduce((sum, payment) => sum + payment.amount, 0);
             input.value = Math.max(0, Math.round(Number(current?.queue?.printData?.total_amount) || 0) - currentPaid);
+        }
+        if (!selected) {
+            input.value = '';
+            if (button.dataset.paymentCode === 'cash') receivedAmount.value = '';
         }
         renderPaymentSummary();
     });
@@ -418,5 +439,18 @@
     receivedAmount?.addEventListener('input', () => { if (!isActionInFlight) renderPaymentSummary(); });
     window.addEventListener('prosper:business-slips-refresh', () => window.prosperBusinessHomeReload?.());
     modalElement?.addEventListener('hidden.bs.modal', reset);
+    paymentModalElement?.addEventListener('hide.bs.modal', (event) => {
+        if (isActionInFlight && !paymentModalCloseIsProgrammatic) event.preventDefault();
+    });
+    paymentModalElement?.addEventListener('hidden.bs.modal', () => {
+        modalElement?.classList.remove('is-child-modal-active');
+        const wasProgrammatic = paymentModalCloseIsProgrammatic;
+        paymentModalCloseIsProgrammatic = false;
+        if (wasProgrammatic || !current || current.step !== 'payment') return;
+        current.step = 'statement';
+        receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
+        setPaymentMessage();
+        syncFooterActions();
+    });
     window.ProsperBusinessCheckout = { open };
 })();
