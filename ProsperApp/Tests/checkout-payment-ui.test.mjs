@@ -135,8 +135,16 @@ const document = {
     dispatch: (type, event) => (documentListeners.get(type) || []).forEach((listener) => listener(event))
 };
 
-const modal = { show() {}, hide() {} };
-const paymentModal = { shown: false, show() { this.shown = true; }, hide() {} };
+const modal = {
+    shown: 0,
+    show() { this.shown += 1; },
+    hide() { modalElement.dispatch('hidden.bs.modal'); }
+};
+const paymentModal = {
+    shown: false,
+    show() { this.shown = true; },
+    hide() { paymentModalElement.dispatch('hidden.bs.modal'); }
+};
 const storage = new Map();
 const context = {
     console,
@@ -204,5 +212,8 @@ assert.equal(cashAmount.disabled, true, '選択解除時は金額欄を無効化
 assert.equal(cashAmount.value, '', '選択解除時は金額を残さないこと');
 assert.equal(paymentElements['[data-business-received-amount]'].value, '', '現金の選択解除時は受取額も残さないこと');
 assert.equal(cashButton.closest('.checkout-payment-row').classList.contains('checkout-payment-row--selected'), false, '選択解除時は行の強調も消すこと');
+
+paymentModal.hide();
+assert.equal(modal.shown, 2, '決済モーダルを戻ると会計伝票モーダルへ戻ること');
 
 console.log('Checkout payment selection reset checks passed.');

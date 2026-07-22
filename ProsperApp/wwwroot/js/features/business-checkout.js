@@ -34,6 +34,7 @@
     let current = null;
     let isActionInFlight = false;
     let paymentModalCloseIsProgrammatic = false;
+    let modalTransition = null;
 
     const yen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
     const token = () => sourceForm.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
@@ -246,7 +247,6 @@
             window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, false);
         }
         current = null; setMessage(); setPaymentMessage(); statement.hidden = true; printPanel.hidden = true; issuePanel.hidden = false;
-        modalElement?.classList.remove('is-child-modal-active');
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
         syncFooterActions();
     };
@@ -362,8 +362,8 @@
         setPaymentMessage();
         renderPayments();
         confirmButton.disabled = false;
-        modalElement?.classList.add('is-child-modal-active');
-        paymentModal?.show();
+        modalTransition = 'to-payment';
+        modal?.hide();
     };
     const confirm = async () => {
         if (!current || current.step !== 'payment') return;
@@ -438,19 +438,30 @@
     paymentRows?.addEventListener('input', () => { if (!isActionInFlight) renderPaymentSummary(); });
     receivedAmount?.addEventListener('input', () => { if (!isActionInFlight) renderPaymentSummary(); });
     window.addEventListener('prosper:business-slips-refresh', () => window.prosperBusinessHomeReload?.());
-    modalElement?.addEventListener('hidden.bs.modal', reset);
+    modalElement?.addEventListener('hidden.bs.modal', () => {
+        if (modalTransition === 'to-payment') {
+            modalTransition = null;
+            paymentModal?.show();
+            return;
+        }
+        reset();
+    });
     paymentModalElement?.addEventListener('hide.bs.modal', (event) => {
         if (isActionInFlight && !paymentModalCloseIsProgrammatic) event.preventDefault();
     });
     paymentModalElement?.addEventListener('hidden.bs.modal', () => {
-        modalElement?.classList.remove('is-child-modal-active');
         const wasProgrammatic = paymentModalCloseIsProgrammatic;
         paymentModalCloseIsProgrammatic = false;
-        if (wasProgrammatic || !current || current.step !== 'payment') return;
+        if (wasProgrammatic) {
+            reset();
+            return;
+        }
+        if (!current || current.step !== 'payment') return;
         current.step = 'statement';
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
         setPaymentMessage();
-        syncFooterActions();
+        showCurrent();
+        modal?.show();
     });
     window.ProsperBusinessCheckout = { open };
 })();

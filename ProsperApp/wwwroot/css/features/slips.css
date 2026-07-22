@@ -1657,10 +1657,6 @@
   z-index: 1070;
 }
 
-#businessPaymentModal {
-  z-index: 1070;
-}
-
 #businessPaymentModal .modal-dialog {
   max-width: min(40rem, calc(100vw - 1rem));
 }
