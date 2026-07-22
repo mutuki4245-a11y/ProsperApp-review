@@ -201,29 +201,36 @@
         renderPayments();
     };
     const reset = () => {
+        if (current?.status === 'open') {
+            window.prosperBusinessHomeSetCheckoutLock?.(current.slipId, false);
+        }
         current = null; setMessage(); statement.hidden = true; printPanel.hidden = true; paymentPanel.hidden = true; issuePanel.hidden = false;
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
         syncFooterActions();
     };
     const open = async (slip) => {
         if (isActionInFlight) return;
-        const synchronized = await window.prosperBusinessHomeWaitForOperations?.();
-        if (synchronized === false) {
-            window.alert('保存結果を確認できない変更があります。営業中一覧の同期後に会計してください。');
-            return;
-        }
-        const latestSlip = (window.prosperBusinessHomeSlips || []).find((item) => String(item.id) === String(slip.id));
-        if (!latestSlip || !['open', 'checkout_ready'].includes(latestSlip.status)) {
-            window.alert('対象伝票の状態が変わりました。営業中一覧を確認してください。');
-            return;
-        }
-
-        reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, queue: readQueue(latestSlip.id) };
-        table.textContent = latestSlip.tableDisplay || '会計';
-        modal?.show();
-        syncFooterActions();
-        if (latestSlip.status !== 'checkout_ready') return;
+        const requestedSlipId = Number(slip.id);
+        window.prosperBusinessHomeSetCheckoutLock?.(requestedSlipId, true);
         await runExclusive(async () => {
+            const synchronized = await window.prosperBusinessHomeWaitForOperations?.();
+            if (synchronized === false) {
+                window.prosperBusinessHomeSetCheckoutLock?.(requestedSlipId, false);
+                window.alert('保存結果を確認できない変更があります。営業中一覧の同期後に会計してください。');
+                return;
+            }
+            const latestSlip = (window.prosperBusinessHomeSlips || []).find((item) => String(item.id) === String(requestedSlipId));
+            if (!latestSlip || !['open', 'checkout_ready'].includes(latestSlip.status)) {
+                window.prosperBusinessHomeSetCheckoutLock?.(requestedSlipId, false);
+                window.alert('対象伝票の状態が変わりました。営業中一覧を確認してください。');
+                return;
+            }
+
+            reset(); current = { slipId: Number(latestSlip.id), tableDisplay: latestSlip.tableDisplay, status: latestSlip.status, queue: readQueue(latestSlip.id) };
+            table.textContent = latestSlip.tableDisplay || '会計';
+            modal?.show();
+            syncFooterActions();
+            if (latestSlip.status !== 'checkout_ready') return;
             try {
                 const data = await post(config.getCheckoutStatementPrintDataUrl, { slipId: current.slipId });
                 current.queue ??= { state: 'pending', printData: data.printData, reviewData: data.reviewData };

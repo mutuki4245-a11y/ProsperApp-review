@@ -1,6 +1,6 @@
 (() => {
     const config = window.prosperBusinessHome ?? {};
-    const editorUrl = config.businessSlipEditorUrl || '';
+    const editorOptions = config.editorOptions ?? {};
     const modalElement = document.querySelector('[data-business-slip-editor-modal]');
     const content = modalElement?.querySelector('[data-business-slip-editor-content]');
     const title = modalElement?.querySelector('[data-business-slip-editor-title]');
@@ -16,9 +16,7 @@
     const state = {
         section: null,
         slipId: null,
-        requestId: 0,
         isSubmitting: false,
-        showingAction: false,
         orderQueue: new Map(),
         pendingBackItemId: null,
         pendingBackSelection: new Map()
@@ -48,19 +46,6 @@
         content.appendChild(alert);
     };
 
-    const buildUrl = (section, slipId) => {
-        const url = new URL(editorUrl, window.location.href);
-        url.searchParams.set('section', section);
-        url.searchParams.set('slipId', String(slipId));
-        return url.toString();
-    };
-
-    const prepareContent = () => {
-        window.PartialForms?.prepareDynamicContent?.(content);
-        content.querySelectorAll('.nomination-row__kind').forEach((kindSelect) => syncCompanionPrice(kindSelect));
-        applyPendingPreview();
-    };
-
     const setModalHeading = (section, slip) => {
         if (title) title.textContent = labels[section] || '編集';
     };
@@ -79,7 +64,14 @@
         if (record.label !== undefined) button.dataset.businessEditorRecordLabel = record.label || '';
         if (record.display !== undefined) button.dataset.businessEditorRecordDisplay = record.display || '';
         button.textContent = text;
-        row.appendChild(button);
+        let actions = row.querySelector('[data-business-editor-row-actions]');
+        if (!actions) {
+            actions = document.createElement('div');
+            actions.className = 'business-slip-editor-list__actions';
+            actions.dataset.businessEditorRowActions = '';
+            row.appendChild(actions);
+        }
+        actions.appendChild(button);
     };
 
     const createLocalEditorRow = (primary, secondary) => {
@@ -102,8 +94,6 @@
         manager.dataset.businessSlipEditorManager = '';
         const panel = document.createElement('section');
         panel.className = 'slip-create__panel business-slip-editor-list';
-        const titleRow = document.createElement('div');
-        titleRow.className = 'slip-create__panel-title';
         const actionLabel = {
             customers: '客を追加',
             nominations: '指名を追加',
@@ -115,7 +105,13 @@
         add.type = 'button';
         add.dataset.businessEditorAction = `${section === 'customers' ? 'customer' : section.slice(0, -1)}_add`;
         add.textContent = actionLabel;
-        titleRow.appendChild(add);
+        const addUnavailable =
+            (section === 'nominations' && (configuredCasts().length === 0 || configuredNominationOptions().length === 0)) ||
+            (section === 'orders' && configuredOrderItems().length === 0);
+        add.disabled = addUnavailable;
+        if (addUnavailable) {
+            add.title = section === 'nominations' ? '出勤キャストと指名区分を登録してください。' : '注文可能な商品を登録してください。';
+        }
         const rows = document.createElement('div');
         rows.className = 'business-slip-editor-list__rows';
 
@@ -152,34 +148,19 @@
         if (!rows.childElementCount) {
             rows.appendChild(Object.assign(document.createElement('p'), { className: 'text-muted mb-0', textContent: '登録はありません。' }));
         }
-        panel.append(titleRow, rows);
+        const footer = document.createElement('div');
+        footer.className = 'business-slip-editor-list__footer';
+        footer.appendChild(add);
+        panel.append(rows, footer);
         manager.appendChild(panel);
         content.replaceChildren(manager);
     };
 
-    const loadEditorMarkup = async (section, slipId, force = false) => {
-        if (!editorUrl) return false;
-        const requestId = state.requestId;
-        try {
-            const response = await fetch(buildUrl(section, slipId), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            if (!response.ok) throw new Error('Business slip editor load failed.');
-            const html = await response.text();
-            if (requestId !== state.requestId || (!force && state.showingAction) || !modalElement.classList.contains('show')) return false;
-            content.innerHTML = html;
-            prepareContent();
-            return true;
-        } catch {
-            return false;
-        }
-    };
-
     const openEditor = (section, slipId) => {
         if (!Object.hasOwn(labels, section) || !slipId) return;
-        state.requestId += 1;
         state.section = section;
         state.slipId = String(slipId);
         state.isSubmitting = false;
-        state.showingAction = false;
         setModalHeading(section, currentSlip(slipId));
         renderLocalEditor(section, currentSlip(slipId));
         modal.show();
@@ -193,6 +174,82 @@
         if (!priceSelect || !Array.from(priceSelect.options).some((item) => item.value === '3000')) return;
 
         if (force || priceSelect.value === '' || priceSelect.value === '1000') priceSelect.value = '3000';
+    };
+
+    const configuredTimeOptions = () => Array.isArray(editorOptions.timeOptions) ? editorOptions.timeOptions : [];
+    const configuredCasts = () => Array.isArray(editorOptions.attendanceCasts) ? editorOptions.attendanceCasts : [];
+    const configuredNominationOptions = () => Array.isArray(editorOptions.nominationOptions) ? editorOptions.nominationOptions : [];
+    const configuredNominationPrices = () => Array.isArray(editorOptions.nominationPriceOptions) ? editorOptions.nominationPriceOptions : [];
+    const configuredOrderItems = () => Array.isArray(editorOptions.orderItems) ? editorOptions.orderItems : [];
+
+    const currentStoreTime = () => {
+        const now = new Date();
+        const minute = Math.floor(now.getMinutes() / 5) * 5;
+        const value = `${String(now.getHours()).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        return configuredTimeOptions().some((option) => option.value === value)
+            ? value
+            : configuredTimeOptions()[0]?.value || '';
+    };
+
+    const createActionForm = (heading, submitLabel, formClass = '') => {
+        const form = document.createElement('form');
+        form.className = `slip-create__panel business-slip-editor-action-form ${formClass}`.trim();
+        form.dataset.businessSlipEditorForm = '';
+        form.dataset.loadingLock = 'false';
+
+        const slipId = document.createElement('input');
+        slipId.type = 'hidden';
+        slipId.name = 'SlipId';
+        slipId.value = state.slipId || '';
+        const titleRow = document.createElement('div');
+        titleRow.className = 'business-slip-editor-action-form__title';
+        const back = document.createElement('button');
+        back.className = 'btn btn-sm btn-outline-secondary';
+        back.type = 'button';
+        back.dataset.businessEditorAction = 'back';
+        back.textContent = '戻る';
+        titleRow.append(back, Object.assign(document.createElement('h3'), { textContent: heading }));
+        const fields = document.createElement('div');
+        fields.className = 'row g-3';
+        const submit = document.createElement('button');
+        submit.className = 'btn btn-primary btn-lg align-self-end';
+        submit.type = 'submit';
+        submit.textContent = submitLabel;
+        form.append(slipId, titleRow, fields, submit);
+        return { form, fields, submit };
+    };
+
+    const appendField = (fields, labelText, control) => {
+        const field = document.createElement('div');
+        field.className = 'col-12';
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.textContent = labelText;
+        field.append(label, control);
+        fields.appendChild(field);
+        return field;
+    };
+
+    const appendSelectOptions = (select, options, selectedValue, placeholder = '') => {
+        if (placeholder) {
+            select.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: placeholder }));
+        }
+        options.forEach((option) => {
+            const element = document.createElement('option');
+            element.value = String(option.value ?? option.id ?? '');
+            element.textContent = option.label ?? option.name ?? '';
+            element.selected = String(element.value) === String(selectedValue ?? '');
+            if (option.isCompanion) element.dataset.companion = 'true';
+            select.appendChild(element);
+        });
+    };
+
+    const createTimeSelect = (name, selectedValue = currentStoreTime()) => {
+        const select = document.createElement('select');
+        select.className = 'form-select form-select-lg slip-time-select';
+        select.name = name;
+        appendSelectOptions(select, configuredTimeOptions(), selectedValue);
+        return select;
     };
 
     const businessOrderQueueKey = (itemId, castBackCastId) => `${itemId}:${castBackCastId ?? ''}`;
@@ -402,157 +459,236 @@
         return name.length > 0 || amount !== 0;
     };
 
-    const appendTemporaryRow = (text) => {
-        const tableBody = content.querySelector('tbody');
-        if (tableBody) {
-            const row = document.createElement('tr');
-            row.className = 'table-info';
-            const cell = document.createElement('td');
-            cell.colSpan = tableBody.closest('table')?.querySelectorAll('thead th').length || 1;
-            cell.textContent = `${text}（保存中）`;
-            row.appendChild(cell);
-            tableBody.appendChild(row);
-            return;
-        }
-
-        const list = content.querySelector('.business-slip-editor-list__rows');
-        if (!list) return;
-        const row = document.createElement('article');
-        row.className = 'business-slip-editor-list__row is-pending';
-        const label = document.createElement('span');
-        label.textContent = `${text}（保存中）`;
-        row.appendChild(label);
-        list.appendChild(row);
-    };
-
-    const changeActiveCustomerCount = (delta) => {
-        const count = content.querySelector('[data-business-customer-active-count]');
-        if (!count) return;
-        count.textContent = String(Math.max(0, (Number(count.textContent) || 0) + delta));
-    };
-
-    const appendTemporaryCustomer = (payload) => {
-        const list = content.querySelector('[data-business-customer-active-list]');
-        if (!list) return;
-        list.querySelector('[data-business-customer-empty]')?.remove();
-
-        const row = document.createElement('article');
-        row.className = 'business-customer-editor__row is-pending';
-        const customer = document.createElement('div');
-        customer.className = 'business-customer-editor__customer';
-        customer.append(
-            Object.assign(document.createElement('strong'), { textContent: payload.customer_label?.trim() || '客名なし' }),
-            Object.assign(document.createElement('span'), { textContent: `入店 ${payload.entered_time || '-'} / 保存中` })
-        );
-        row.append(customer, Object.assign(document.createElement('span'), { className: 'business-customer-editor__pending', textContent: '追加を保存中' }));
-        list.appendChild(row);
-        changeActiveCustomerCount(1);
-    };
-
-    const findRecordButton = (recordId) => Array.from(content.querySelectorAll('[data-business-editor-record-id]'))
-        .find((button) => String(button.dataset.businessEditorRecordId) === String(recordId));
-
-    const markPendingDelete = (recordId, message) => {
-        const button = findRecordButton(recordId);
-        const row = button?.closest('.business-slip-editor-list__row');
-        if (!row) return;
-        row.classList.add('is-pending');
-        const actions = button.parentElement;
-        if (actions) actions.replaceChildren(Object.assign(document.createElement('span'), { className: 'business-customer-editor__pending', textContent: message }));
-    };
-
-    const customerRow = (slipCustomerId) => content.querySelector(`[data-business-customer-id="${slipCustomerId}"]`);
-
-    const showPendingCustomerRename = (payload) => {
-        const row = customerRow(payload.slip_customer_id);
-        if (!row) return;
-        row.classList.add('is-pending');
-        const label = payload.customer_label?.trim() || '客名なし';
-        const name = row.querySelector('.business-customer-editor__customer strong');
-        if (name) name.textContent = label;
-        const entered = row.querySelector('.business-customer-editor__customer span');
-        if (entered && !entered.textContent.includes('保存中')) entered.textContent = `${entered.textContent} / 保存中`;
-    };
-
-    const showPendingCustomerLeave = (payload) => {
-        const row = customerRow(payload.slip_customer_id);
-        if (!row) return;
-        row.classList.add('is-pending');
-        const actions = row.querySelector('.business-customer-editor__actions');
-        if (actions) actions.replaceChildren(Object.assign(document.createElement('span'), { className: 'business-customer-editor__pending', textContent: `退店 ${payload.left_time || '-'} を保存中` }));
-        changeActiveCustomerCount(-1);
-    };
-
-    const applyPendingPreview = () => {
-        if (!state.slipId || !state.section) return;
-        const pending = window.prosperBusinessHomeGetPendingForSlip?.(state.slipId) || [];
-        const sectionOperations = pending.filter((operation) => {
-            if (state.section === 'customers') return ['add_customer', 'update_customer', 'leave_customer'].includes(operation.operationType);
-            if (state.section === 'nominations') return ['add_nomination', 'cancel_nomination'].includes(operation.operationType);
-            if (state.section === 'adjustments') return ['add_adjustment', 'void_adjustment'].includes(operation.operationType);
-            return ['add_order', 'void_order'].includes(operation.operationType);
+    const createOrderAddForm = () => {
+        const { form, fields, submit } = createActionForm('注文を追加', '注文を追加', 'business-slip-editor-order-form');
+        form.dataset.businessOrderQueueForm = '';
+        const queueJson = document.createElement('input');
+        queueJson.type = 'hidden';
+        queueJson.name = 'OrderQueueJson';
+        queueJson.id = 'detailOrderQueueJson';
+        queueJson.value = '[]';
+        const error = document.createElement('span');
+        error.className = 'text-danger';
+        error.dataset.businessOrderQueueError = '';
+        const casts = document.createElement('div');
+        casts.hidden = true;
+        casts.dataset.businessOrderCasts = '';
+        configuredCasts().forEach((cast) => {
+            const item = document.createElement('span');
+            item.dataset.businessOrderCastId = String(cast.id);
+            item.dataset.businessOrderCastName = cast.name || '';
+            item.dataset.businessOrderCastMemo = cast.drinkMemo || '';
+            casts.appendChild(item);
         });
-        if (sectionOperations.length === 0) return;
+        form.insertBefore(queueJson, fields);
+        form.insertBefore(error, fields);
+        form.insertBefore(casts, fields);
 
-        const message = document.createElement('div');
-        message.className = 'alert alert-info py-2';
-        message.setAttribute('role', 'status');
-        message.textContent = `${sectionOperations.length}件の変更を保存中です。`;
-        content.prepend(message);
-
-        sectionOperations.forEach((operation) => {
-            const payload = operation.payload || {};
-            if (operation.operationType === 'add_customer') appendTemporaryCustomer(payload);
-            else if (operation.operationType === 'update_customer') showPendingCustomerRename(payload);
-            else if (operation.operationType === 'leave_customer') showPendingCustomerLeave(payload);
-            else if (operation.operationType === 'add_nomination') appendTemporaryRow(`指名を追加: ${payload.cast_display_name || 'キャスト'} / ${payload.nomination_display_name || payload.nomination_kind || '-'}`);
-            else if (operation.operationType === 'cancel_nomination') markPendingDelete(payload.slip_cast_id, '削除を保存中');
-            else if (operation.operationType === 'add_adjustment') appendTemporaryRow(`自由入力明細を追加: ${payload.line_name || '-'} / ${payload.amount || 0}円`);
-            else if (operation.operationType === 'void_adjustment') markPendingDelete(payload.charge_line_id, '削除を保存中');
-            else if (operation.operationType === 'add_order') appendTemporaryRow(`注文を追加: ${payload.item_name || '商品'} × ${payload.quantity || 0}`);
-            else if (operation.operationType === 'void_order') markPendingDelete(payload.order_line_id, '削除を保存中');
+        fields.className = 'order-entry__grid order-entry__grid--modal';
+        const itemPanel = document.createElement('section');
+        itemPanel.className = 'slip-create__panel order-entry__items';
+        const queuePanel = document.createElement('section');
+        queuePanel.className = 'slip-create__panel order-entry__queue';
+        const itemGroups = new Map();
+        configuredOrderItems().forEach((item) => {
+            const category = item.category || '未分類';
+            const group = itemGroups.get(category) || [];
+            group.push(item);
+            itemGroups.set(category, group);
         });
-    };
 
-    const showTemplateAction = (action, button) => {
-        const manager = content.querySelector('[data-business-slip-editor-manager]');
-        const template = manager?.querySelector(`template[data-business-editor-template="${action}"]`);
-        if (!manager || !template) {
-            if (!state.section || !state.slipId) return;
-            state.showingAction = true;
-            content.innerHTML = '<div class="slip-create__panel slip-detail-panel-loading">入力内容を準備しています。</div>';
-            void loadEditorMarkup(state.section, state.slipId, true).then((loaded) => {
-                if (loaded) showTemplateAction(action, button);
-                else renderUnavailable('入力内容を取得できませんでした。営業中一覧を再表示してから開き直してください。');
+        if (itemGroups.size === 0) {
+            itemPanel.appendChild(Object.assign(document.createElement('p'), { className: 'text-muted mb-0', textContent: '注文可能な商品が未登録です。' }));
+            submit.dataset.submitBaseDisabled = 'true';
+            submit.disabled = true;
+        } else {
+            const tabs = document.createElement('div');
+            tabs.className = 'order-category-tabs';
+            tabs.setAttribute('role', 'tablist');
+            tabs.setAttribute('aria-label', '商品カテゴリ');
+            tabs.dataset.slipOrderCatalogTabs = '';
+            const panels = document.createElement('div');
+            panels.className = 'order-item-groups';
+            Array.from(itemGroups.entries()).forEach(([category, items], index) => {
+                const tab = document.createElement('button');
+                tab.className = 'order-category-tab';
+                tab.type = 'button';
+                tab.dataset.slipOrderCatalogTab = String(index);
+                tab.classList.toggle('is-active', index === 0);
+                tab.textContent = category;
+                tabs.appendChild(tab);
+
+                const panel = document.createElement('section');
+                panel.className = 'order-item-group';
+                panel.dataset.slipOrderCatalogPanel = String(index);
+                panel.classList.toggle('is-active', index === 0);
+                const grid = document.createElement('div');
+                grid.className = 'order-item-grid';
+                items.forEach((item) => {
+                    const button = document.createElement('button');
+                    button.className = 'order-item-button';
+                    button.type = 'button';
+                    button.dataset.slipOrderCatalogItem = String(item.id);
+                    button.dataset.slipOrderCatalogName = item.name || '';
+                    button.dataset.slipOrderCatalogPrice = String(item.price ?? 0);
+                    button.dataset.slipOrderCatalogCastBackTarget = item.isCastBackTarget ? 'true' : 'false';
+                    button.append(
+                        Object.assign(document.createElement('strong'), { textContent: item.name || '商品' }),
+                        Object.assign(document.createElement('span'), { textContent: formatYen(item.price) })
+                    );
+                    grid.appendChild(button);
+                });
+                panel.appendChild(grid);
+                panels.appendChild(panel);
             });
-            return;
+            itemPanel.append(tabs, panels);
+            submit.dataset.submitBaseDisabled = 'false';
+            submit.disabled = true;
         }
 
-        state.showingAction = true;
-        manager.replaceChildren(template.content.cloneNode(true));
+        const queueTitle = document.createElement('div');
+        queueTitle.className = 'slip-create__panel-title';
+        const queueHeading = document.createElement('h3');
+        queueHeading.textContent = '注文キュー';
+        const queueActions = document.createElement('div');
+        queueActions.className = 'slip-create__panel-title-actions';
+        const queueStatus = document.createElement('span');
+        queueStatus.className = 'terminal-save-status';
+        queueStatus.id = 'detailOrderQueueStatus';
+        queueStatus.dataset.saveState = 'saved';
+        queueStatus.setAttribute('aria-live', 'polite');
+        queueStatus.textContent = '空';
+        const clear = document.createElement('button');
+        clear.className = 'btn btn-outline-secondary';
+        clear.type = 'button';
+        clear.id = 'detailClearQueueButton';
+        clear.textContent = 'クリア';
+        queueActions.append(queueStatus, clear);
+        queueTitle.append(queueHeading, queueActions);
+        const queueFields = document.createElement('div');
+        queueFields.id = 'detailOrderQueueFields';
+        const queueList = document.createElement('div');
+        queueList.className = 'order-queue';
+        queueList.id = 'detailOrderQueueList';
+        const empty = document.createElement('div');
+        empty.className = 'order-queue__empty';
+        empty.id = 'detailOrderQueueEmpty';
+        empty.textContent = '商品を選択してください。';
+        const total = document.createElement('div');
+        total.className = 'order-queue__total';
+        total.append(
+            Object.assign(document.createElement('span'), { textContent: '合計' }),
+            Object.assign(document.createElement('strong'), { id: 'detailOrderQueueTotal', textContent: formatYen(0) })
+        );
+        queuePanel.append(queueTitle, queueFields, queueList, empty, total);
+        fields.append(itemPanel, queuePanel);
+        submit.id = 'detailSubmitOrderButton';
+        return form;
+    };
+
+    const showLocalAction = (action, button) => {
+        const manager = content.querySelector('[data-business-slip-editor-manager]');
+        if (!manager) return;
         const recordId = button?.dataset.businessEditorRecordId || '';
         const recordLabel = button?.dataset.businessEditorRecordLabel || '';
         const recordDisplay = button?.dataset.businessEditorRecordDisplay || '';
-        manager.querySelectorAll('[data-business-editor-record-id-input]').forEach((input) => { input.value = recordId; });
-        manager.querySelectorAll('[data-business-editor-record-label-input]').forEach((input) => { input.value = recordLabel || recordDisplay; });
-        const heading = manager.querySelector('[data-business-editor-action-heading]');
-        if (heading && recordDisplay) heading.textContent = `${recordDisplay}を${action === 'customer_leave' ? '退店' : '変更'}`;
-        window.PartialForms?.prepareDynamicContent?.(manager);
-        manager.querySelectorAll('.nomination-row__kind').forEach((kindSelect) => syncCompanionPrice(kindSelect));
-        if (action === 'order_add') {
+        let form;
+
+        if (action === 'customer_add') {
+            const actionForm = createActionForm('客を追加', '追加');
+            const name = document.createElement('input');
+            name.className = 'form-control form-control-lg';
+            name.name = 'AddCustomersInput.CustomerLabels[0]';
+            name.maxLength = 100;
+            name.placeholder = '客名・特徴など';
+            appendField(actionForm.fields, '客名', name).appendChild(Object.assign(document.createElement('div'), { className: 'form-text', textContent: '名前は空欄でも登録できます。' }));
+            appendField(actionForm.fields, '入店時刻', createTimeSelect('AddCustomersInput.EnteredTime'));
+            form = actionForm.form;
+        } else if (action === 'customer_rename') {
+            const actionForm = createActionForm(`${recordDisplay || '客名'}を変更`, '変更を保存');
+            const customerId = document.createElement('input');
+            customerId.type = 'hidden';
+            customerId.name = 'UpdateCustomerInput.SlipCustomerId';
+            customerId.value = recordId;
+            const name = document.createElement('input');
+            name.className = 'form-control form-control-lg';
+            name.name = 'UpdateCustomerInput.CustomerLabel';
+            name.maxLength = 100;
+            name.value = recordLabel || recordDisplay;
+            actionForm.form.insertBefore(customerId, actionForm.fields);
+            appendField(actionForm.fields, '客名', name);
+            form = actionForm.form;
+        } else if (action === 'customer_leave') {
+            const actionForm = createActionForm(`${recordDisplay || '客'}を退店`, '退店を保存');
+            actionForm.submit.className = 'btn btn-outline-danger btn-lg align-self-end';
+            const customerId = document.createElement('input');
+            customerId.type = 'hidden';
+            customerId.name = 'LeaveCustomerInput.SlipCustomerId';
+            customerId.value = recordId;
+            actionForm.form.insertBefore(customerId, actionForm.fields);
+            appendField(actionForm.fields, '退店時刻', createTimeSelect('LeaveCustomerInput.LeftTime'));
+            form = actionForm.form;
+        } else if (action === 'nomination_add') {
+            const actionForm = createActionForm('指名を追加', '追加');
+            const kind = document.createElement('select');
+            kind.className = 'form-select form-select-lg nomination-row__kind';
+            kind.name = 'AddNominationsInput.CastNominations[0].NominationKind';
+            kind.required = true;
+            appendSelectOptions(kind, configuredNominationOptions(), configuredNominationOptions()[0]?.value, '指名区分');
+            const price = document.createElement('select');
+            price.className = 'form-select form-select-lg nomination-row__price';
+            price.name = 'AddNominationsInput.CastNominations[0].NominationPrice';
+            appendSelectOptions(price, configuredNominationPrices(), '1000');
+            const cast = document.createElement('select');
+            cast.className = 'form-select form-select-lg nomination-row__cast';
+            cast.name = 'AddNominationsInput.CastNominations[0].CastId';
+            cast.required = true;
+            appendSelectOptions(cast, configuredCasts().map((item) => ({ value: item.id, label: item.name })), '', 'キャストを選択');
+            appendField(actionForm.fields, '指名区分', kind);
+            appendField(actionForm.fields, '指名料金', price);
+            appendField(actionForm.fields, 'キャスト', cast);
+            actionForm.submit.disabled = configuredNominationOptions().length === 0 || configuredCasts().length === 0;
+            form = actionForm.form;
+            syncCompanionPrice(kind);
+        } else if (action === 'adjustment_add') {
+            const actionForm = createActionForm('自由入力明細を追加', '追加');
+            actionForm.form.dataset.businessAdjustmentForm = '';
+            const name = document.createElement('input');
+            name.className = 'form-control form-control-lg';
+            name.name = 'AdjustmentInput.LineName';
+            name.maxLength = 160;
+            name.placeholder = '例: 値引き';
+            name.dataset.adjustmentName = '';
+            const amount = document.createElement('input');
+            amount.className = 'form-control form-control-lg';
+            amount.name = 'AdjustmentInput.Amount';
+            amount.type = 'number';
+            amount.step = '1';
+            amount.placeholder = '0';
+            amount.dataset.adjustmentAmount = '';
+            appendField(actionForm.fields, '明細名', name);
+            appendField(actionForm.fields, '価格', amount).appendChild(Object.assign(document.createElement('small'), { className: 'text-muted', textContent: '値引きはマイナスで入力できます。' }));
+            form = actionForm.form;
+        } else if (action === 'order_add') {
             state.orderQueue.clear();
             state.pendingBackItemId = null;
-            renderBusinessOrderQueue(manager.querySelector('[data-business-order-queue-form]'));
+            form = createOrderAddForm();
         }
-        manager.querySelector('input:not([type="hidden"]), select')?.focus();
+
+        if (!form) return;
+        manager.replaceChildren(form);
+        if (action === 'order_add') renderBusinessOrderQueue(form);
+        form.querySelector('input:not([type="hidden"]), select')?.focus();
+    };
+
+    const showTemplateAction = (action, button) => {
+        showLocalAction(action, button);
     };
 
     const showDeleteAction = (action, button) => {
         const definition = deleteActions[action];
         const manager = content.querySelector('[data-business-slip-editor-manager]');
         if (!definition || !manager) return;
-
-        state.showingAction = true;
 
         const form = document.createElement('form');
         form.className = 'slip-create__panel business-slip-editor-action-form';
@@ -785,11 +921,9 @@
     });
 
     modalElement.addEventListener('hidden.bs.modal', () => {
-        state.requestId += 1;
         state.section = null;
         state.slipId = null;
         state.isSubmitting = false;
-        state.showingAction = false;
         state.orderQueue.clear();
         state.pendingBackItemId = null;
         state.pendingBackSelection.clear();

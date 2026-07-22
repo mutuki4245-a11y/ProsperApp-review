@@ -1464,6 +1464,14 @@
   display: grid;
 }
 
+.business-slip-editor-list__footer {
+  border-top: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+}
+
 .business-slip-editor-list__row {
   align-items: center;
   border-top: 1px solid #e2e8f0;
@@ -1494,6 +1502,13 @@
   color: #64748b;
   font-size: 0.82rem;
   overflow-wrap: anywhere;
+}
+
+.business-slip-editor-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
 }
 
 .business-slip-editor-list__row.is-pending {

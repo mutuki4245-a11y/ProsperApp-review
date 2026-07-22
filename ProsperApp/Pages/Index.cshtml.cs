@@ -47,6 +47,8 @@ public class IndexModel(
 
     public IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts { get; set; } = [];
 
+    public IReadOnlyList<StoreOrderItemOption> OrderItems { get; set; } = [];
+
     public IReadOnlyList<NominationBackMasterItem> NominationOptions { get; set; } = [];
 
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
@@ -542,11 +544,14 @@ public class IndexModel(
         var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
         var tablesTask = _slipRepository.GetTablesAsync(cancellationToken);
         var nominationOptionsTask = _nominationBackRepository.GetSettingsAsync(cancellationToken);
+        var orderItemsTask = OrdersEnabled
+            ? _orderRepository.GetItemsAsync(cancellationToken)
+            : Task.FromResult<IReadOnlyList<StoreOrderItemOption>>([]);
 
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         TimeOptions = _storeClock.BuildTimeOptions(5);
 
-        await Task.WhenAll(storeContextTask, currentBusinessDayTask, tablesTask, nominationOptionsTask);
+        await Task.WhenAll(storeContextTask, currentBusinessDayTask, tablesTask, nominationOptionsTask, orderItemsTask);
 
         StoreContext = await storeContextTask;
         CurrentBusinessDay = await currentBusinessDayTask;
@@ -555,6 +560,9 @@ public class IndexModel(
             .Where(x => x.IsActive)
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.DisplayName)
+            .ToList();
+        OrderItems = (await orderItemsTask)
+            .Where(x => x.IsStandard)
             .ToList();
 
         if (CurrentBusinessDay is null)

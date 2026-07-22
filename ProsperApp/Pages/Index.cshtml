@@ -450,9 +450,41 @@
             confirmCheckoutUrl = Url.Page("/Index", "ConfirmCheckout"),
             getCheckoutReceiptPrintDataUrl = Url.Page("/Index", "GetCheckoutReceiptPrintData"),
             cancelCheckoutUrl = Url.Page("/Index", "CancelCheckout"),
-            businessSlipEditorUrl = Url.Page("/Slips/Edit", "BusinessEditor"),
             businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
-            receiptPrinterEnabled = Model.IsReceiptPrinterEnabled
+            receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
+            editorOptions = new
+            {
+                timeOptions = Model.TimeOptions.Select(time => new
+                {
+                    value = time,
+                    label = Model.FormatBusinessTimeOption(time)
+                }),
+                attendanceCasts = Model.AttendanceCasts.Select(cast => new
+                {
+                    id = cast.CastId,
+                    name = cast.DisplayName,
+                    drinkMemo = cast.DrinkMemo
+                }),
+                nominationOptions = Model.NominationOptions.Select(option => new
+                {
+                    value = option.NominationKind,
+                    label = option.DisplayName,
+                    isCompanion = string.Equals(option.NominationType, "companion", StringComparison.Ordinal)
+                }),
+                nominationPriceOptions = nominationPriceOptions.Select(price => new
+                {
+                    value = price,
+                    label = StoreUiText.Yen(price)
+                }),
+                orderItems = Model.OrderItems.Select(item => new
+                {
+                    id = item.ItemId,
+                    name = item.ItemName,
+                    category = item.CategoryName,
+                    price = item.DefaultPrice,
+                    isCastBackTarget = item.IsCastBackTarget
+                })
+            }
         });
     </script>
     <script src="~/js/features/business-home.js" asp-append-version="true"></script>
