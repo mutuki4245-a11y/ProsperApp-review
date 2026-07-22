@@ -48,6 +48,7 @@
         lines.push(twoColumn('サービス料', yen(request.service_charge_amount)));
         return {
             beforeTotal: `${lines.join('\n')}\n`,
+            total: `${twoColumn('合計', yen(request.total_amount))}\n`,
             afterTotal: `${twoColumn('', `（内消費税額 ${yen(request.consumption_tax_amount)}）`)}\n\n\n`
         };
     };
@@ -80,16 +81,6 @@
 
     const appendText = (manager, text) => call('印字データ送信', () => manager.appendText({ text }));
 
-    const appendTotalImage = async (manager, request, lineWidth) => {
-        if (typeof manager.appendImage !== 'function' || typeof window.ProsperSiiPrintImage?.createTotal !== 'function') {
-            throw new Error('合計額の画像印字を利用できません。ページを再読み込みしてください。');
-        }
-        const image = await window.ProsperSiiPrintImage.createTotal({
-            label: '合計', amount: request.total_amount, lineWidth
-        });
-        await call('合計画像送信', () => manager.appendImage({ data: image }));
-    };
-
     const printNow = async (request) => {
         const Manager = getManager();
         if (!Manager) throw new Error('SII Web SDK Serverを利用できません。');
@@ -107,7 +98,7 @@
             };
             const text = createTextParts(statementRequest, config.lineWidth);
             await appendText(manager, text.beforeTotal);
-            await appendTotalImage(manager, statementRequest, config.lineWidth);
+            await appendText(manager, text.total);
             await appendText(manager, text.afterTotal);
             await call('紙送り', () => manager.appendFeed({ value: 2 }), true);
             await call('カット指定', () => manager.appendCut({ cuttingMethod: 'partial' }), true);
