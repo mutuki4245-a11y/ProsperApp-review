@@ -476,6 +476,16 @@ begin
             raise exception 'cast_not_selected';
         end if;
 
+        if exists (
+            select 1
+            from public.store_slip_casts sc
+            where sc.slip_id = p_slip_id
+              and sc.cast_id = v_cast_id
+              and sc.status = 'active'
+        ) then
+            raise exception 'duplicate_nomination_cast';
+        end if;
+
         if v_nomination_price is null or
            v_nomination_price < 1000 or
            v_nomination_price > 20000 or

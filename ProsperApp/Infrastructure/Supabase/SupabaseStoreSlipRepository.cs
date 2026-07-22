@@ -839,6 +839,11 @@ public class SupabaseStoreSlipRepository(
             return "指名キャストを候補から選択してください。";
         }
 
+        if (rawError.Contains("duplicate_nomination_cast", StringComparison.OrdinalIgnoreCase))
+        {
+            return "このキャストは既に指名登録されています。";
+        }
+
         if (rawError.Contains("invalid_nomination_type", StringComparison.OrdinalIgnoreCase) ||
             rawError.Contains("invalid_companion_time", StringComparison.OrdinalIgnoreCase))
         {
