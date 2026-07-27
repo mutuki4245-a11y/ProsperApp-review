@@ -691,16 +691,35 @@
         target.appendChild(group);
     };
 
+    const orderDetailType = (line) => {
+        if (line?.itemType === 'set_fee') return 'set_fee';
+        if (line?.itemType === 'extension_fee') return 'extension_fee';
+        if (line?.itemType === 'nomination_fee' || line?.sourceType === 'nomination_fee') return 'nomination_fee';
+        if (line?.itemType === 'karaoke') return 'karaoke';
+        return 'other';
+    };
+
+    const orderDetailRank = (line) => ({
+        set_fee: 0,
+        extension_fee: 1,
+        nomination_fee: 2,
+        karaoke: 3,
+        other: 4
+    }[orderDetailType(line)]);
+
     const renderOrders = (target, slip) => {
         target.replaceChildren();
-        const orders = (Array.isArray(slip.orders) ? slip.orders : []).filter((line) => line.status === 'active');
+        const orders = (Array.isArray(slip.orders) ? slip.orders : [])
+            .filter((line) => line.status === 'active')
+            .sort((left, right) =>
+                orderDetailRank(left) - orderDetailRank(right) ||
+                String(left.orderedAt || left.orderedTime || '').localeCompare(String(right.orderedAt || right.orderedTime || '')) ||
+                (Number(left.lineNo) || 0) - (Number(right.lineNo) || 0));
         if (orders.length === 0) {
             target.appendChild(buildElement('span', 'business-slip-detail-summary__empty', '注文はありません。'));
             return;
         }
 
-        const standard = orders.filter((line) => (line.itemType || 'standard') === 'standard');
-        const automatic = orders.filter((line) => (line.itemType || 'standard') !== 'standard');
         const renderGroups = (lines, prefix, keyBuilder) => {
             const groups = new Map();
             lines.forEach((line) => {
@@ -712,8 +731,7 @@
             groups.forEach((groupLines, key) => renderOrderGroup(target, slip, `${prefix}:${key}`, groupLines[0]?.itemName || '-', groupLines));
         };
 
-        renderGroups(standard, 'order', (line) => `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}\u0000${line.backCastId || ''}`);
-        renderGroups(automatic, 'auto', (line) => `${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}`);
+        renderGroups(orders, 'order', (line) => `${orderDetailType(line)}\u0000${line.itemName || ''}\u0000${Number(line.unitPrice) || 0}\u0000${line.backCastId || ''}`);
     };
 
     const renderAdjustments = (target, slip) => {
