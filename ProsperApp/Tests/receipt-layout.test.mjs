@@ -17,12 +17,12 @@ const text = layout.buildReceiptText({
     payments: [{ method_name: '現金', amount: 3000 }, { method_name: 'クレジット', amount: 1080 }]
 });
 const lines = text.split('\n');
-const addresseeIndex = lines.indexOf('宛名');
+const addresseeIndex = lines.findIndex((line) => line.includes('田中') && line.endsWith('様'));
 
-assert.ok(addresseeIndex >= 0, '宛名見出しを出力すること');
-assert.equal(lines[addresseeIndex + 1], '', '宛名欄の1行目を空けること');
-assert.equal(lines[addresseeIndex + 2], '', '宛名欄の2行目を空けること');
-assert.match(lines[addresseeIndex + 3], /田中.*-+様$/, '宛名欄の3行目に下線と様を出力すること');
+assert.equal(lines.includes('宛名'), false, '宛名ラベルを出力しないこと');
+assert.equal(lines[addresseeIndex - 1], '', '宛名欄の前に余白を確保すること');
+assert.equal(lines[addresseeIndex - 2], '', '宛名欄の前に余白を確保すること');
+assert.match(lines[addresseeIndex], /田中.*-+様$/, '宛名欄に下線と様を出力すること');
 
 const paymentTitleIndex = lines.indexOf('支払い方法：');
 assert.ok(paymentTitleIndex >= 0, '支払い方法見出しを出力すること');
@@ -31,5 +31,22 @@ assert.ok(paymentTitleIndex >= 0, '支払い方法見出しを出力すること
     assert.equal(line.trim(), payment, '支払い方法の内容を保持すること');
     assert.equal(line.endsWith(payment), true, '支払い方法を右寄せすること');
 });
+
+const stampText = layout.buildReceiptText({
+    total_amount: 55000,
+    issued_at: '2026-07-22T12:00:00+09:00',
+    issuer: {}
+});
+const stampLines = stampText.split('\n');
+const stampTitleIndex = stampLines.indexOf('収入印紙欄');
+const stampEdge = '+----------------+';
+const stampInside = '|                |';
+
+assert.ok(stampTitleIndex >= 0, '55,000円以上では収入印紙欄を出力すること');
+assert.equal(stampLines[stampTitleIndex + 1], stampEdge, '収入印紙欄の上辺を出力すること');
+for (let offset = 2; offset <= 6; offset += 1) {
+    assert.equal(stampLines[stampTitleIndex + offset], stampInside, '収入印紙欄を正方形に近い高さまで確保すること');
+}
+assert.equal(stampLines[stampTitleIndex + 7], stampEdge, '収入印紙欄の下辺を出力すること');
 
 console.log('Receipt layout checks passed.');

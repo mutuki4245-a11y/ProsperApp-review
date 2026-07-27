@@ -22,6 +22,13 @@
             const underlineLength = Math.max(16, receiptWidth - textWidth(name) - textWidth('様') - 8);
             return twoColumnLine('', `${name}${'-'.repeat(underlineLength)}様`);
         };
+        const stampBox = () => {
+            const innerWidth = 16;
+            const innerRows = 5;
+            const edge = `+${'-'.repeat(innerWidth)}+`;
+            const inside = `|${' '.repeat(innerWidth)}|`;
+            return [edge, ...Array.from({ length: innerRows }, () => inside), edge];
+        };
         const issuerText = (issuer, property) => compact(issuer?.[property], property === 'logo' ? '' : '未設定');
         const buildReceiptParts = (request) => {
             const lines = [];
@@ -35,7 +42,6 @@
             lines.push(centerLine('領収書'));
             if (request.isRetry) lines.push(centerLine('再試行'));
             lines.push(separator());
-            lines.push('宛名');
             lines.push('');
             lines.push('');
             lines.push(addresseeLine(request));
@@ -56,7 +62,9 @@
                 payments.forEach((payment) => afterTotal.push(twoColumnLine('', `（${compact(payment.method_name, '支払い')} ${formatYen(payment.amount)}）`)));
             }
             if (totalAmount >= 55000) {
-                afterTotal.push(''); afterTotal.push('収入印紙欄'); afterTotal.push('+------------------------------+'); afterTotal.push('|                              |'); afterTotal.push('|                              |'); afterTotal.push('+------------------------------+');
+                afterTotal.push('');
+                afterTotal.push('収入印紙欄');
+                afterTotal.push(...stampBox());
             }
             afterTotal.push(separator());
             afterTotal.push('');
