@@ -19,7 +19,10 @@
         const addresseeName = (request) => compact(request.addressee).replace(/\s*様$/, '');
         const addresseeLine = (request) => {
             const name = addresseeName(request);
-            return twoColumnLine(`${spaces(6)}${name}`, '様');
+            const nameStart = Math.max(0, Math.floor((receiptWidth - textWidth(name)) / 2));
+            const honorificStart = receiptWidth - textWidth('様');
+            const gap = Math.max(1, honorificStart - nameStart - textWidth(name));
+            return `${spaces(nameStart)}${name}${spaces(gap)}様`;
         };
         const addresseeUnderline = () => `${spaces(2)}${'-'.repeat(Math.max(16, receiptWidth - 4))}`;
         const stampBox = () => {

@@ -23,6 +23,7 @@ assert.equal(lines.includes('宛名'), false, '宛名ラベルを出力しない
 assert.equal(lines[addresseeIndex - 1], '', '宛名欄の前に余白を確保すること');
 assert.equal(lines[addresseeIndex - 2], '', '宛名欄の前に余白を確保すること');
 assert.match(lines[addresseeIndex], /田中.*様$/, '宛名欄の最下行に氏名と様を出力すること');
+assert.equal(lines[addresseeIndex].indexOf('田中'), 22, '入力氏名を宛名欄の中央に配置すること');
 assert.equal(lines[addresseeIndex].includes('-'), false, '氏名と様は下線の上に配置すること');
 assert.match(lines[addresseeIndex + 1], /^  -+$/, '宛名欄の直下に下線を出力すること');
 
