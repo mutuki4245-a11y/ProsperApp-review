@@ -201,7 +201,7 @@ Codexは原則としてローカル開発サーバーを起動しない。
 
 `main` は安定版として扱う。
 
-原則として、すべてのタスクは `main` で直接作業し、確認後に `origin/main` へpushしてよい。ユーザーが明示的にデプロイ不要と指示した場合を除き、タスク完了には `main` へのpushとAzure App Serviceへの直接デプロイを含める。
+原則として、すべてのタスクは `main` で直接作業し、確認後に `origin/main` へpushしてよい。タスク完了には `main` へのpushを含める。Azure App Serviceへの直接デプロイは、アプリの実行成果物に影響する変更がある場合、またはユーザーが明示的に依頼した場合だけ行う。
 
 ただし、GitHub Actionsのデプロイworkflowが有効な間は、`main` へのpushが自動デプロイを起動する前提で扱う。push前に、変更内容・確認結果・戻し方を説明できる状態にする。
 
@@ -213,16 +213,16 @@ main直の基本手順:
 4. `dotnet build --no-restore` など、変更内容に応じた確認を実行する。
 5. 意味のある単位で `git add` / `git commit` する。
 6. 問題なければ `git push origin main` でリモートへ反映する。
-7. `.codex/prosper-web.PublishSettings` がある場合は、この後の「Azure App Service デプロイ運用」に従って直接デプロイし、公開URLを確認する。
-8. pushまたは直接デプロイが失敗した場合は、タスク完了とせず、非秘密のエラー内容と未反映の状態を報告する。
+7. C#、Razor、`wwwroot`、実行時設定など、アプリの実行成果物に影響する変更がある場合は、この後の「Azure App Service デプロイ運用」に従って直接デプロイし、公開URLを確認する。
+8. push、または必要な直接デプロイが失敗した場合は、タスク完了とせず、非秘密のエラー内容と未反映の状態を報告する。
 
 ### Azure App Service デプロイ運用
 
-Azure App Serviceへの反映は、ユーザーが `.codex/prosper-web.PublishSettings` を配置している場合、そのローカルpublish profileを使った直接デプロイを優先する。ユーザーが明示的にデプロイ不要と指示した場合を除き、`main` へのpushが完了した各タスクで、GitHub Actions経由の自動デプロイを前提にせず、このpublish profileを使ってdeployする。
+Azure App Serviceへの反映は、ユーザーが `.codex/prosper-web.PublishSettings` を配置している場合、そのローカルpublish profileを使った直接デプロイを優先する。C#、Razor、`wwwroot`、実行時設定など、アプリの実行成果物に影響する変更を `main` へpushした後、またはユーザーが明示的に依頼した場合に、GitHub Actions経由の自動デプロイを前提にせず、このpublish profileを使ってdeployする。`AGENTS.md`、ドキュメント、テストのみ、SQLソースのみの変更では、ユーザーが明示的に依頼しない限りAzureデプロイしない。
 
 直接デプロイの基本手順:
 
-1. タスクの実装、確認、必要なcommitと `main` へのpushまで完了させる。
+1. アプリの実行成果物に影響するタスクについて、実装、確認、必要なcommitと `main` へのpushまで完了させる。
 2. `dotnet build --no-restore` など、変更内容に応じた確認を通す。
 3. `dotnet publish ProsperApp.csproj --configuration Release --no-build --output .codex/deploy/<task>/publish /p:UseAppHost=false` のように、ignored配下へRelease publishを作成する。
 4. publish出力をzip化し、`.codex/prosper-web.PublishSettings` のKudu/ZipDeploy認証情報でAzure App Serviceへアップロードする。
@@ -274,7 +274,7 @@ Azure App Serviceへの反映は、ユーザーが `.codex/prosper-web.PublishSe
 - 保存ごとではなく、ビルドや最低限の確認ができた区切りでコミットする。
 - `bin/`、`obj/`、一時ビルド出力、秘密情報を含むローカル設定はコミットしない。
 - 複数テーマが混ざった場合は、後で追いやすいようにコミットを分ける。
-- ローカルだけに残す明確な理由がない限り、タスク完了時は `main` へのpushと、publish profileがある場合のAzure App Service直接デプロイまで行い、GitHub上のコミットと公開URLを確認できる状態にする。
+- ローカルだけに残す明確な理由がない限り、タスク完了時は `main` へpushし、アプリの実行成果物に影響する変更または明示依頼がある場合だけAzure App Serviceへ直接デプロイする。GitHub上のコミットと、デプロイした場合の公開URLを確認できる状態にする。
 
 ブランチからmainへマージする明示指示を受けた後の手順:
 
@@ -283,7 +283,7 @@ Azure App Serviceへの反映は、ユーザーが `.codex/prosper-web.PublishSe
 3. `git merge task/<task-name>`
 4. `main` のビルドまたは必要な確認を行う。
 5. 問題なければ `git push origin main` でリモートへ反映する。
-6. ユーザーが明示的にデプロイ不要と指示していない場合は、Azure App Serviceへ直接デプロイして公開URLを確認する。
+6. アプリの実行成果物に影響する変更または明示依頼がある場合だけ、Azure App Serviceへ直接デプロイして公開URLを確認する。
 7. merge後、不要なら `git branch -d task/<task-name>` でローカル作業ブランチを削除する。
 
 チーム運用では、タスクブランチをpushしてPull Requestを作り、レビューとCI確認後に `main` へmergeする。merge後の `main` もpushまで行い、GitHub上の状態を最新にする。
