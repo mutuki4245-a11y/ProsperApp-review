@@ -127,7 +127,7 @@
         add.dataset.businessEditorAction = `${section === 'customers' ? 'customer' : section.slice(0, -1)}_add`;
         add.textContent = actionLabel;
         const addUnavailable =
-            (section === 'nominations' && (availableNominationCasts().length === 0 || configuredNominationOptions().length === 0)) ||
+            (section === 'nominations' && (configuredCasts().length === 0 || configuredNominationOptions().length === 0)) ||
             (section === 'orders' && configuredOrderItems().length === 0);
         add.disabled = addUnavailable;
         if (addUnavailable) {
@@ -218,10 +218,12 @@
             .map((nomination) => String(nomination.castId || ''))
             .filter(Boolean)
     );
-    const availableNominationCasts = () => {
+    const availableNominationCasts = (allowDuplicates = false) => {
+        if (allowDuplicates) return configuredCasts();
         const selectedCastIds = activeNominationCastIds();
         return configuredCasts().filter((cast) => !selectedCastIds.has(String(cast.id)));
     };
+    const allowsDuplicateNominations = (form) => form?.querySelector('[data-business-editor-allow-nomination-duplicates]')?.checked === true;
 
     const currentStoreTime = () => {
         const now = new Date();
@@ -494,7 +496,7 @@
         const castId = form?.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
         const castName = form?.querySelector('[data-business-editor-cast-display]');
         if (!castId || !castName || !attendingCastModal || !attendingCastList || !window.CastSelectModal) return;
-        window.CastSelectModal.renderRequired(attendingCastList, availableNominationCasts(), {
+        window.CastSelectModal.renderRequired(attendingCastList, availableNominationCasts(allowsDuplicateNominations(form)), {
             getLabel: (cast) => cast.name || '',
             emptyMessage: '追加できる出勤キャストがいません。',
             onSelect: (cast) => {
@@ -704,10 +706,26 @@
             castDisplay.textContent = 'キャストを選択';
             castButton.appendChild(castDisplay);
             cast.append(castId, castButton);
+            const allowDuplicates = document.createElement('input');
+            allowDuplicates.className = 'form-check-input';
+            allowDuplicates.type = 'checkbox';
+            allowDuplicates.id = 'businessEditorAllowNominationDuplicates';
+            allowDuplicates.dataset.businessEditorAllowNominationDuplicates = '';
+            const allowDuplicatesLabel = document.createElement('label');
+            allowDuplicatesLabel.className = 'form-check-label';
+            allowDuplicatesLabel.htmlFor = allowDuplicates.id;
+            allowDuplicatesLabel.textContent = '重複あり';
+            const duplicateField = document.createElement('div');
+            duplicateField.className = 'form-check business-slip-editor-action-field--nomination-duplicate';
+            duplicateField.append(allowDuplicates, allowDuplicatesLabel);
+            allowDuplicates.addEventListener('change', () => {
+                actionForm.form.querySelector('[data-business-editor-cast-error]')?.remove();
+            });
             appendField(actionForm.fields, '指名区分', kind);
             appendField(actionForm.fields, '指名料金', price);
             appendField(actionForm.fields, 'キャスト', cast);
-            actionForm.submit.disabled = configuredNominationOptions().length === 0 || availableNominationCasts().length === 0;
+            actionForm.fields.appendChild(duplicateField);
+            actionForm.submit.disabled = configuredNominationOptions().length === 0 || configuredCasts().length === 0;
             form = actionForm.form;
             syncCompanionPrice(kind);
         } else if (action === 'adjustment_add') {
@@ -820,6 +838,7 @@
                     cast_id: Number(value('AddNominationsInput.CastNominations[0].CastId')),
                     nomination_kind: value('AddNominationsInput.CastNominations[0].NominationKind'),
                     nomination_price: Number(value('AddNominationsInput.CastNominations[0].NominationPrice')),
+                    allow_duplicate: allowsDuplicateNominations(form),
                     cast_display_name: form.querySelector('[data-business-editor-cast-display]')?.textContent?.trim() || castInput?.selectedOptions?.[0]?.textContent?.trim() || '',
                     nomination_display_name: kindSelect?.selectedOptions?.[0]?.textContent?.trim() || ''
                 }
@@ -887,11 +906,11 @@
             if (!message.parentElement) nominationCastInput.closest('.business-slip-editor-action-field')?.appendChild(message);
             return;
         }
-        if (nominationCastInput && activeNominationCastIds().has(String(nominationCastInput.value))) {
+        if (nominationCastInput && !allowsDuplicateNominations(form) && activeNominationCastIds().has(String(nominationCastInput.value))) {
             const message = form.querySelector('[data-business-editor-cast-error]') || document.createElement('div');
             message.className = 'text-danger';
             message.dataset.businessEditorCastError = '';
-            message.textContent = 'このキャストは既に指名登録されています。';
+            message.textContent = 'このキャストは既に指名登録されています。重複ありをONにすると追加できます。';
             if (!message.parentElement) nominationCastInput.closest('.business-slip-editor-action-field')?.appendChild(message);
             return;
         }

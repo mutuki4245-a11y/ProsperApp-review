@@ -426,6 +426,7 @@ declare
     v_slip public.store_slips%rowtype;
     v_nomination jsonb;
     v_cast_id bigint;
+    v_allow_duplicate boolean;
     v_nomination_kind text;
     v_nomination_type text;
     v_nomination_price numeric(12, 0);
@@ -469,6 +470,11 @@ begin
         )
     loop
         v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
+        v_allow_duplicate := case
+            when v_nomination ? 'allow_duplicate' and v_nomination->>'allow_duplicate' = 'true' then true
+            when not (v_nomination ? 'allow_duplicate') or v_nomination->>'allow_duplicate' = 'false' then false
+            else null
+        end;
         v_nomination_kind := nullif(trim(coalesce(v_nomination->>'nomination_kind', '')), '');
         v_nomination_price := nullif(v_nomination->>'nomination_price', '')::numeric;
 
@@ -476,7 +482,11 @@ begin
             raise exception 'cast_not_selected';
         end if;
 
-        if exists (
+        if v_allow_duplicate is null then
+            raise exception 'invalid_allow_duplicate';
+        end if;
+
+        if not v_allow_duplicate and exists (
             select 1
             from public.store_slip_casts sc
             where sc.slip_id = p_slip_id

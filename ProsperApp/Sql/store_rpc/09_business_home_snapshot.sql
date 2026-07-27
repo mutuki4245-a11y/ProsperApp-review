@@ -365,7 +365,8 @@ begin
         v_nomination := jsonb_build_array(jsonb_build_object(
             'cast_id', p_payload->>'cast_id',
             'nomination_kind', p_payload->>'nomination_kind',
-            'nomination_price', p_payload->>'nomination_price'
+            'nomination_price', p_payload->>'nomination_price',
+            'allow_duplicate', coalesce(p_payload->'allow_duplicate', 'false'::jsonb)
         ));
         perform store.add_slip_nominations(p_department_id, p_slip_id, v_nomination);
     elsif p_operation_type = 'cancel_nomination' then

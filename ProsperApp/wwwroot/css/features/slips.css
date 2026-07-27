@@ -1616,6 +1616,11 @@
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 0.95fr) minmax(0, 1.35fr);
 }
 
+.business-slip-editor-action-field--nomination-duplicate {
+  grid-column: 1 / -1;
+  margin-top: -0.15rem;
+}
+
 .business-slip-editor-action-fields--customer {
   grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.6fr);
 }

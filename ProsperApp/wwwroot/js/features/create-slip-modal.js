@@ -163,7 +163,7 @@
         row.className = 'customer-row';
         row.dataset.businessCustomerRow = '';
         row.innerHTML = `
-            <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[${count}]" maxlength="100" placeholder="客名・特徴など" />
+            <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[${count}]" maxlength="100" placeholder="お客様名" />
         `;
         customerList.appendChild(row);
         row.querySelector('input')?.focus();
