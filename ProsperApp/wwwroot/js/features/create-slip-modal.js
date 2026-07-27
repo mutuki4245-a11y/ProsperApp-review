@@ -24,6 +24,8 @@
     const increaseNominationCountButton = document.getElementById('businessIncreaseNominationCount');
     const castModalElement = document.getElementById('businessAttendingCastSelectModal');
     const castModalList = document.getElementById('businessAttendingCastModalList');
+    const castModalDuplicateFilter = document.getElementById('businessAttendingCastDuplicateFilter');
+    const castModalAllowDuplicates = document.getElementById('businessAttendingCastAllowNominationDuplicates');
     const createSlipModal = bootstrap.Modal.getOrCreateInstance(createSlipModalElement);
     const castModal = castModalElement ? bootstrap.Modal.getOrCreateInstance(castModalElement) : null;
     let castModalTargetRow = null;
@@ -209,6 +211,8 @@
         castModalTargetRow = row;
         await loadCastOptions();
         renumberNominationRows();
+        if (castModalDuplicateFilter) castModalDuplicateFilter.hidden = true;
+        if (castModalAllowDuplicates) castModalAllowDuplicates.checked = false;
         renderCastModal();
         createSlipModalElement.classList.add('is-child-modal-active');
         castModal?.show();

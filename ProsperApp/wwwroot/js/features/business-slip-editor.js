@@ -10,6 +10,8 @@
     const backTargetConfirm = backTargetModalElement?.querySelector('[data-business-order-back-target-confirm]');
     const attendingCastModalElement = document.getElementById('businessAttendingCastSelectModal');
     const attendingCastList = document.getElementById('businessAttendingCastModalList');
+    const attendingCastDuplicateFilter = document.getElementById('businessAttendingCastDuplicateFilter');
+    const attendingCastAllowDuplicates = document.getElementById('businessAttendingCastAllowNominationDuplicates');
     const labels = {
         customers: '客を編集',
         nominations: '指名を編集',
@@ -223,7 +225,11 @@
         const selectedCastIds = activeNominationCastIds();
         return configuredCasts().filter((cast) => !selectedCastIds.has(String(cast.id)));
     };
-    const allowsDuplicateNominations = (form) => form?.querySelector('[data-business-editor-allow-nomination-duplicates]')?.checked === true;
+    const allowsDuplicateNominations = (form) => form?.querySelector('[data-business-editor-allow-nomination-duplicates]')?.value === 'true';
+    const setAllowsDuplicateNominations = (form, allowed) => {
+        const input = form?.querySelector('[data-business-editor-allow-nomination-duplicates]');
+        if (input) input.value = allowed ? 'true' : 'false';
+    };
 
     const currentStoreTime = () => {
         const now = new Date();
@@ -496,15 +502,27 @@
         const castId = form?.querySelector('[name="AddNominationsInput.CastNominations[0].CastId"]');
         const castName = form?.querySelector('[data-business-editor-cast-display]');
         if (!castId || !castName || !attendingCastModal || !attendingCastList || !window.CastSelectModal) return;
-        window.CastSelectModal.renderRequired(attendingCastList, availableNominationCasts(allowsDuplicateNominations(form)), {
-            getLabel: (cast) => cast.name || '',
-            emptyMessage: '追加できる出勤キャストがいません。',
-            onSelect: (cast) => {
-                castId.value = String(cast.id || '');
-                castName.textContent = cast.name || 'キャストを選択';
-                attendingCastModal.hide();
-            }
-        });
+        const renderCandidates = () => {
+            window.CastSelectModal.renderRequired(attendingCastList, availableNominationCasts(allowsDuplicateNominations(form)), {
+                getLabel: (cast) => cast.name || '',
+                emptyMessage: '追加できる出勤キャストがいません。',
+                onSelect: (cast) => {
+                    castId.value = String(cast.id || '');
+                    castName.textContent = cast.name || 'キャストを選択';
+                    attendingCastModal.hide();
+                }
+            });
+        };
+        if (attendingCastDuplicateFilter && attendingCastAllowDuplicates) {
+            attendingCastDuplicateFilter.hidden = false;
+            attendingCastAllowDuplicates.checked = allowsDuplicateNominations(form);
+            attendingCastAllowDuplicates.onchange = () => {
+                setAllowsDuplicateNominations(form, attendingCastAllowDuplicates.checked);
+                form.querySelector('[data-business-editor-cast-error]')?.remove();
+                renderCandidates();
+            };
+        }
+        renderCandidates();
         modalElement.classList.add('is-child-modal-active');
         attendingCastModal.show();
     };
@@ -707,24 +725,13 @@
             castButton.appendChild(castDisplay);
             cast.append(castId, castButton);
             const allowDuplicates = document.createElement('input');
-            allowDuplicates.className = 'form-check-input';
-            allowDuplicates.type = 'checkbox';
-            allowDuplicates.id = 'businessEditorAllowNominationDuplicates';
+            allowDuplicates.type = 'hidden';
+            allowDuplicates.value = 'false';
             allowDuplicates.dataset.businessEditorAllowNominationDuplicates = '';
-            const allowDuplicatesLabel = document.createElement('label');
-            allowDuplicatesLabel.className = 'form-check-label';
-            allowDuplicatesLabel.htmlFor = allowDuplicates.id;
-            allowDuplicatesLabel.textContent = '重複あり';
-            const duplicateField = document.createElement('div');
-            duplicateField.className = 'form-check business-slip-editor-action-field--nomination-duplicate';
-            duplicateField.append(allowDuplicates, allowDuplicatesLabel);
-            allowDuplicates.addEventListener('change', () => {
-                actionForm.form.querySelector('[data-business-editor-cast-error]')?.remove();
-            });
             appendField(actionForm.fields, '指名区分', kind);
             appendField(actionForm.fields, '指名料金', price);
             appendField(actionForm.fields, 'キャスト', cast);
-            actionForm.fields.appendChild(duplicateField);
+            actionForm.form.appendChild(allowDuplicates);
             actionForm.submit.disabled = configuredNominationOptions().length === 0 || configuredCasts().length === 0;
             form = actionForm.form;
             syncCompanionPrice(kind);
@@ -1036,6 +1043,11 @@
     });
 
     attendingCastModalElement?.addEventListener('hidden.bs.modal', () => {
+        if (attendingCastDuplicateFilter) attendingCastDuplicateFilter.hidden = true;
+        if (attendingCastAllowDuplicates) {
+            attendingCastAllowDuplicates.checked = false;
+            attendingCastAllowDuplicates.onchange = null;
+        }
         modalElement.classList.remove('is-child-modal-active');
     });
 
