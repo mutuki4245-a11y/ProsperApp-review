@@ -6,6 +6,7 @@ revoke usage on schema store from public, anon, authenticated, service_role;
 alter default privileges in schema store revoke execute on functions from public;
 alter default privileges in schema store revoke execute on functions from anon, authenticated, service_role;
 
+drop function if exists public.to_base36_3(integer);
 drop function if exists public.get_store_departments();
 drop function if exists public.get_store_context(bigint);
 drop function if exists public.get_current_business_day(bigint);
