@@ -104,7 +104,8 @@ as $$
             calculated.quantity,
             calculated.unit_price,
             calculated.amount,
-            calculated.pricing_plan_version
+            calculated.pricing_plan_version,
+            calculated.is_materialized
         from target_slips s
         cross join lateral (
             select
@@ -115,7 +116,8 @@ as $$
                 calculated.quantity,
                 calculated.unit_price,
                 calculated.amount,
-                calculated.pricing_plan_version
+                calculated.pricing_plan_version,
+                false as is_materialized
             from store.calculate_slip_pricing(s.department_id, s.slip_id, now()) calculated
             where s.status = 'open'
 
@@ -129,7 +131,14 @@ as $$
                 pl.quantity,
                 pl.unit_price,
                 pl.amount,
-                pl.pricing_plan_version
+                pl.pricing_plan_version,
+                exists (
+                    select 1
+                    from public.store_order_lines ol
+                    where ol.source_type = 'automatic_pricing'
+                      and ol.source_id = pl.pricing_line_id
+                      and ol.status = 'active'
+                ) as is_materialized
             from public.store_slip_pricing_lines pl
             where pl.slip_id = s.slip_id
               and s.status <> 'open'
@@ -139,7 +148,7 @@ as $$
     pricing_summary as (
         select
             pl.slip_id,
-            coalesce(sum(pl.amount), 0) as pricing_subtotal_amount,
+            coalesce(sum(pl.amount) filter (where not pl.is_materialized), 0) as pricing_subtotal_amount,
             coalesce(jsonb_agg(jsonb_build_object(
                 'pricingCode', pl.pricing_code,
                 'lineName', pl.line_name,
@@ -150,10 +159,67 @@ as $$
                 'unitPrice', pl.unit_price,
                 'amount', pl.amount,
                 'pricingPlanVersion', pl.pricing_plan_version,
+                'isMaterialized', pl.is_materialized,
                 'status', 'active'
             ) order by pl.occurred_at, pl.pricing_code), '[]'::jsonb) as pricing_lines
         from pricing_lines pl
         group by pl.slip_id
+    ),
+    order_payloads as (
+        select
+            ol.slip_id,
+            ol.order_line_id::text as id,
+            ol.line_no,
+            ol.item_name_snapshot as item_name,
+            coalesce(i.item_type, case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end) as item_type,
+            ol.quantity,
+            ol.unit_price,
+            ol.amount,
+            ol.ordered_at,
+            ol.status,
+            ol.source_type,
+            ol.source_id,
+            back.cast_id as back_cast_id,
+            cm.display_name as back_cast_display_name,
+            d.department_name as back_cast_department_name,
+            false as is_dynamic_pricing
+        from public.store_order_lines ol
+        join target_slips s on s.slip_id = ol.slip_id
+        left join public.store_item_master i on i.item_id = ol.item_id
+        left join lateral (
+            select b.cast_id
+            from public.store_order_line_cast_backs b
+            where b.order_line_id = ol.order_line_id
+              and b.status = 'active'
+            order by b.order_line_cast_back_id asc
+            limit 1
+        ) back on true
+        left join public.cast_master cm on cm.cast_id = back.cast_id
+        left join public.department_master d on d.department_id = cm.department_id
+
+        union all
+
+        -- 営業中は未保存の見積りも、確定後と同じシステム商品形式で返します。
+        select
+            pl.slip_id,
+            format('pricing:%s:%s', pl.pricing_code, extract(epoch from pl.occurred_at)::bigint) as id,
+            1000000 + row_number() over (partition by pl.slip_id order by pl.occurred_at, pl.pricing_code)::integer as line_no,
+            pl.line_name as item_name,
+            case pl.pricing_code when 'set' then 'set_fee' else 'extension_fee' end as item_type,
+            pl.quantity,
+            pl.unit_price,
+            pl.amount,
+            pl.occurred_at as ordered_at,
+            'active'::text as status,
+            'automatic_pricing'::text as source_type,
+            null::bigint as source_id,
+            null::bigint as back_cast_id,
+            null::text as back_cast_display_name,
+            null::text as back_cast_department_name,
+            true as is_dynamic_pricing
+        from pricing_lines pl
+        join target_slips s on s.slip_id = pl.slip_id
+        where s.status = 'open'
     ),
     summaries as (
         select
@@ -254,10 +320,10 @@ as $$
                 ), '[]'::jsonb),
                 'orders', coalesce((
                     select jsonb_agg(jsonb_build_object(
-                        'id', ol.order_line_id,
+                        'id', ol.id,
                         'lineNo', ol.line_no,
-                        'itemName', ol.item_name_snapshot,
-                        'itemType', coalesce(i.item_type, case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end),
+                        'itemName', ol.item_name,
+                        'itemType', ol.item_type,
                         'quantity', ol.quantity,
                         'unitPrice', ol.unit_price,
                         'amount', ol.amount,
@@ -266,22 +332,12 @@ as $$
                         'status', ol.status,
                         'sourceType', ol.source_type,
                         'sourceId', ol.source_id,
-                        'backCastId', back.cast_id,
-                        'backCastDisplayName', cm.display_name,
-                        'backCastDepartmentName', d.department_name
+                        'backCastId', ol.back_cast_id,
+                        'backCastDisplayName', ol.back_cast_display_name,
+                        'backCastDepartmentName', ol.back_cast_department_name,
+                        'isDynamicPricing', ol.is_dynamic_pricing
                     ) order by ol.ordered_at asc, ol.line_no asc)
-                    from public.store_order_lines ol
-                    left join public.store_item_master i on i.item_id = ol.item_id
-                    left join lateral (
-                        select b.cast_id
-                        from public.store_order_line_cast_backs b
-                        where b.order_line_id = ol.order_line_id
-                          and b.status = 'active'
-                        order by b.order_line_cast_back_id asc
-                        limit 1
-                    ) back on true
-                    left join public.cast_master cm on cm.cast_id = back.cast_id
-                    left join public.department_master d on d.department_id = cm.department_id
+                    from order_payloads ol
                     where ol.slip_id = s.slip_id
                 ), '[]'::jsonb),
                 'adjustments', coalesce((

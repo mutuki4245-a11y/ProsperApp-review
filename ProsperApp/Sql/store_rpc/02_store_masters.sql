@@ -571,7 +571,11 @@ as $$
             c.category_code,
             c.category_name,
             i.item_id,
-            i.item_name,
+            case i.item_type
+                when 'set_fee' then 'セット料金'
+                when 'extension_fee' then '延長料金'
+                else i.item_name
+            end as item_name,
             i.item_type,
             i.default_price,
             i.sort_order,

@@ -170,7 +170,7 @@ create table if not exists public.store_item_master (
     is_active boolean not null default true,
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
-    constraint chk_store_item_master_type check (item_type in ('standard', 'karaoke', 'nomination_fee')),
+    constraint chk_store_item_master_type check (item_type in ('standard', 'karaoke', 'nomination_fee', 'set_fee', 'extension_fee')),
     constraint chk_store_item_master_default_price check (default_price >= 0),
     constraint chk_store_item_master_cast_back_unit_amount check (cast_back_unit_amount >= 0),
     constraint chk_store_item_master_cast_back_regular_unit_amount check (cast_back_regular_unit_amount >= 0),
@@ -319,7 +319,7 @@ alter table public.store_item_master
 
 alter table public.store_item_master
     add constraint chk_store_item_master_type
-    check (item_type in ('standard', 'karaoke', 'nomination_fee'));
+    check (item_type in ('standard', 'karaoke', 'nomination_fee', 'set_fee', 'extension_fee'));
 
 do $$
 begin
@@ -811,7 +811,7 @@ create table if not exists public.store_order_lines (
     constraint chk_store_order_lines_unit_price check (unit_price >= 0),
     constraint chk_store_order_lines_amount check (amount >= 0),
     constraint chk_store_order_lines_status check (status in ('active', 'voided')),
-    constraint chk_store_order_lines_source_type check (source_type is null or source_type in ('nomination_fee')),
+    constraint chk_store_order_lines_source_type check (source_type is null or source_type in ('nomination_fee', 'automatic_pricing')),
     constraint uq_store_order_lines_line unique (slip_id, line_no)
 );
 
@@ -835,7 +835,7 @@ alter table public.store_order_lines
 
 alter table public.store_order_lines
     add constraint chk_store_order_lines_source_type
-    check (source_type is null or source_type in ('nomination_fee'));
+    check (source_type is null or source_type in ('nomination_fee', 'automatic_pricing'));
 
 do $$
 declare
@@ -1282,6 +1282,14 @@ create unique index if not exists ux_store_item_master_karaoke_active
 create unique index if not exists ux_store_item_master_nomination_fee_active
     on public.store_item_master(company_id, department_id)
     where item_type = 'nomination_fee' and is_active = true;
+
+create unique index if not exists ux_store_item_master_set_fee_active
+    on public.store_item_master(company_id, department_id)
+    where item_type = 'set_fee' and is_active = true;
+
+create unique index if not exists ux_store_item_master_extension_fee_active
+    on public.store_item_master(company_id, department_id)
+    where item_type = 'extension_fee' and is_active = true;
 
 create index if not exists idx_payment_method_master_active
     on public.payment_method_master(company_id, department_id, is_active, sort_order);

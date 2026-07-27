@@ -58,7 +58,16 @@ begin
       into v_pricing_subtotal_amount
       from public.store_slip_pricing_lines pl
      where pl.slip_id = p_slip_id
-       and pl.status = 'active';
+       and pl.status = 'active'
+       -- 移行前に確定した伝票だけは、対応するシステム商品行が無いため
+       -- 料金計算の正本から補います。新規伝票は注文行に一度だけ計上されます。
+       and not exists (
+           select 1
+           from public.store_order_lines ol
+           where ol.source_type = 'automatic_pricing'
+             and ol.source_id = pl.pricing_line_id
+             and ol.status = 'active'
+       );
 
     select coalesce(sum(cl.amount), 0)
       into v_adjustment_amount
@@ -136,6 +145,13 @@ begin
             from public.store_slip_pricing_lines pl
             where pl.slip_id = p_slip_id
               and pl.status = 'active'
+              and not exists (
+                  select 1
+                  from public.store_order_lines ol
+                  where ol.source_type = 'automatic_pricing'
+                    and ol.source_id = pl.pricing_line_id
+                    and ol.status = 'active'
+              )
         ), '[]'::jsonb),
         'adjustments', coalesce((
             select jsonb_agg(jsonb_build_object(
@@ -226,6 +242,13 @@ as $$
               and pl.status = 'active'
               and s.department_id = p_department_id
               and s.status = 'checkout_ready'
+              and not exists (
+                  select 1
+                  from public.store_order_lines ol
+                  where ol.source_type = 'automatic_pricing'
+                    and ol.source_id = pl.pricing_line_id
+                    and ol.status = 'active'
+              )
         ), '[]'::jsonb)
     );
 $$;
@@ -267,42 +290,80 @@ begin
 
     -- 会計伝票を出す時点で料金案を固定します。退店時刻は境界を含み、
     -- 各客の退店時刻は境界を含まないため、先に計算してから未退店客を退店にします。
+    -- 料金計算の正本と対応する編集不可のシステム商品行は、同じトランザクションで作ります。
+    update public.store_order_lines ol
+       set status = 'voided',
+           voided_at = coalesce(ol.voided_at, now()),
+           updated_at = now()
+     where ol.slip_id = p_slip_id
+       and ol.source_type = 'automatic_pricing'
+       and ol.status = 'active';
+
     update public.store_slip_pricing_lines pl
        set status = 'voided',
            updated_at = now()
      where pl.slip_id = p_slip_id
        and pl.status = 'active';
 
-    insert into public.store_slip_pricing_lines (
-        slip_id, business_day_id, business_date, company_id, department_id,
-        pricing_plan_id, pricing_plan_version, pricing_mode, line_no,
-        pricing_code, line_name, occurred_at, customer_count, quantity,
-        unit_price, amount, slip_cast_id, status
+    with inserted_pricing as (
+        insert into public.store_slip_pricing_lines (
+            slip_id, business_day_id, business_date, company_id, department_id,
+            pricing_plan_id, pricing_plan_version, pricing_mode, line_no,
+            pricing_code, line_name, occurred_at, customer_count, quantity,
+            unit_price, amount, slip_cast_id, status
+        )
+        select
+            v_slip.slip_id,
+            v_slip.business_day_id,
+            v_slip.business_date,
+            v_slip.company_id,
+            v_slip.department_id,
+            calculated.pricing_plan_id,
+            calculated.pricing_plan_version,
+            calculated.pricing_mode,
+            coalesce((
+                select max(existing.line_no)
+                from public.store_slip_pricing_lines existing
+                where existing.slip_id = p_slip_id
+            ), 0) + row_number() over (order by calculated.occurred_at, calculated.pricing_code)::integer,
+            calculated.pricing_code,
+            calculated.line_name,
+            calculated.occurred_at,
+            calculated.customer_count,
+            calculated.quantity,
+            calculated.unit_price,
+            calculated.amount,
+            calculated.slip_cast_id,
+            'active'
+        from store.calculate_slip_pricing(p_department_id, p_slip_id, p_closed_at) calculated
+        returning pricing_line_id, pricing_code, line_name, occurred_at, quantity, unit_price, amount
+    ), pricing_items as (
+        select *
+        from store.ensure_pricing_system_items(p_department_id)
+    )
+    insert into public.store_order_lines (
+        slip_id, line_no, item_id, item_name_snapshot, quantity, unit_price,
+        amount, ordered_at, status, source_type, source_id
     )
     select
-        v_slip.slip_id,
-        v_slip.business_day_id,
-        v_slip.business_date,
-        v_slip.company_id,
-        v_slip.department_id,
-        calculated.pricing_plan_id,
-        calculated.pricing_plan_version,
-        calculated.pricing_mode,
+        p_slip_id,
         coalesce((
             select max(existing.line_no)
-            from public.store_slip_pricing_lines existing
+            from public.store_order_lines existing
             where existing.slip_id = p_slip_id
-        ), 0) + row_number() over (order by calculated.occurred_at, calculated.pricing_code)::integer,
-        calculated.pricing_code,
-        calculated.line_name,
-        calculated.occurred_at,
-        calculated.customer_count,
-        calculated.quantity,
-        calculated.unit_price,
-        calculated.amount,
-        calculated.slip_cast_id,
-        'active'
-    from store.calculate_slip_pricing(p_department_id, p_slip_id, p_closed_at) calculated;
+        ), 0) + row_number() over (order by inserted.occurred_at, inserted.pricing_line_id)::integer,
+        item.item_id,
+        inserted.line_name,
+        inserted.quantity,
+        inserted.unit_price,
+        inserted.amount,
+        inserted.occurred_at,
+        'active',
+        'automatic_pricing',
+        inserted.pricing_line_id
+    from inserted_pricing inserted
+    join pricing_items item
+      on item.pricing_code = inserted.pricing_code;
 
     update public.store_slip_customers c
        set left_at = p_closed_at,
@@ -367,6 +428,14 @@ begin
            updated_at = now()
      where pl.slip_id = p_slip_id
        and pl.status = 'active';
+
+    update public.store_order_lines ol
+       set status = 'voided',
+           voided_at = coalesce(ol.voided_at, now()),
+           updated_at = now()
+     where ol.slip_id = p_slip_id
+       and ol.source_type = 'automatic_pricing'
+       and ol.status = 'active';
 
     update public.store_slip_customers c
        set left_at = null,
@@ -516,7 +585,14 @@ begin
       into v_pricing_subtotal_amount
       from public.store_slip_pricing_lines pl
      where pl.slip_id = p_slip_id
-       and pl.status = 'active';
+       and pl.status = 'active'
+       and not exists (
+           select 1
+           from public.store_order_lines ol
+           where ol.source_type = 'automatic_pricing'
+             and ol.source_id = pl.pricing_line_id
+             and ol.status = 'active'
+       );
 
     select coalesce(sum(cl.amount), 0)
       into v_adjustment_amount

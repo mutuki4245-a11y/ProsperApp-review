@@ -90,7 +90,11 @@
         slip.customerNames = names.join('、') || '客名なし';
         slip.castNames = castNames.join('、') || '指名なし';
         slip.orderCount = orders.length;
-        slip.orderSubtotalAmount = orders.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        // 営業中のセット・延長料金は、明細ではシステム商品として見せますが、
+        // 金額の正本は直前スナップショットの pricingLines です。
+        slip.orderSubtotalAmount = orders
+            .filter((item) => item.isDynamicPricing !== true)
+            .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         // 時間料金そのものはサーバー側の料金計算モジュールだけが決めます。
         // 楽観表示では直前スナップショットの料金案を保ったまま、通常注文だけを反映します。
         if (pricingLines) {
@@ -596,7 +600,6 @@
         section.setAttribute('aria-label', '注文と自由明細');
         const body = buildElement('div', 'business-slip-detail-orders__body');
         renderOrders(body, slip);
-        renderPricingLines(body, slip);
         renderAdjustments(body, slip);
         section.append(body, buildSlipDetailActions());
         return section;
@@ -718,19 +721,6 @@
         });
     };
 
-    const renderPricingLines = (target, slip) => {
-        const lines = Array.isArray(slip.pricingLines) ? slip.pricingLines.filter((line) => line.status === 'active') : [];
-        lines.forEach((line) => {
-            const people = Number(line.customerCount) || 0;
-            const quantity = Number(line.quantity) || 0;
-            target.append(detailLine(
-                `${line.occurredTime || '-'} / ${line.lineName || '時間料金'}`,
-                `${people}人 / ${formatYen(line.unitPrice)} × ${quantity}`,
-                formatYen(line.amount)
-            ));
-        });
-    };
-
     const buildAccountingTotals = (slip) => {
         const orderSubtotal = Math.round(Number(slip.orderSubtotalAmount) || 0);
         const pricingSubtotal = Math.round(Number(slip.pricingSubtotalAmount) || 0);
@@ -741,8 +731,6 @@
         totals.setAttribute('aria-label', '会計内訳');
 
         [
-            ['商品小計', orderSubtotal, false],
-            ['時間料金', pricingSubtotal, false],
             ['小計', subtotal, false],
             ['サービス料', serviceCharge, false],
             ['合計', total, true]

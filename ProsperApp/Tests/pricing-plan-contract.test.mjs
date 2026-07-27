@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const pricingSource = await readFile(new URL('../Sql/store_rpc/11_pricing.sql', import.meta.url), 'utf8');
 const snapshotSource = await readFile(new URL('../Sql/store_rpc/09_business_home_snapshot.sql', import.meta.url), 'utf8');
+const systemItemSource = await readFile(new URL('../Sql/store_rpc/12_pricing_system_items.sql', import.meta.url), 'utf8');
 
 assert.match(pricingSource, /pricing_mode = 'set_extension_v1'/, '標準料金実装を明示すること');
 assert.match(pricingSource, /from generate_series\(1, greatest\(v_extension_count, 0\)\)/, 'セット終了ちょうどから延長イベントを生成すること');
@@ -11,5 +12,10 @@ assert.match(pricingSource, /store_slip_pricing_lines/, '会計時に固定す�
 assert.match(pricingSource, /slip_cast_id bigint references public\.store_slip_casts/, '将来のキャスト帰属余地を保持すること');
 assert.match(snapshotSource, /store\.calculate_slip_pricing\(s\.department_id, s\.slip_id, now\(\)\)/, '営業中はサーバーで現在時刻の見積りを作ること');
 assert.match(snapshotSource, /'pricingLines'/, '全伝票スナップショットに自動料金明細を含めること');
+assert.match(snapshotSource, /'automatic_pricing'::text as source_type/, '営業中の見積りもシステム商品形式で明細へ含めること');
+assert.match(snapshotSource, /'isDynamicPricing'/, '楽観更新時に見積りを二重計上しないこと');
+assert.match(systemItemSource, /'set_fee'/, 'セット料金のシステム商品種別を持つこと');
+assert.match(systemItemSource, /'extension_fee'/, '延長料金のシステム商品種別を持つこと');
+assert.match(systemItemSource, /'automatic_pricing'/, 'システム商品行の生成元を区別すること');
 
 console.log('Pricing plan contract checks passed.');

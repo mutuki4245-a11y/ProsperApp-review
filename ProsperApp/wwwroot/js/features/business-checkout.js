@@ -120,7 +120,6 @@
     const showStatement = (printData, reviewData = {}) => {
         const summary = root.querySelector('[data-business-statement-summary]');
         const orders = root.querySelector('[data-business-statement-orders]');
-        const pricing = root.querySelector('[data-business-statement-pricing]');
         const adjustments = root.querySelector('[data-business-statement-adjustments]');
         const totals = root.querySelector('[data-business-statement-totals]');
         summary.replaceChildren();
@@ -165,11 +164,9 @@
             });
         };
         lineRows(groupOrders(printData.orders), orders, '注文はありません。');
-        lineRows(printData.pricing_lines, pricing, '時間料金はありません。');
         lineRows(printData.adjustments, adjustments, '調整はありません。');
         totals.replaceChildren();
         [
-            ['商品小計', printData.order_subtotal_amount], ['時間料金', printData.pricing_subtotal_amount],
             ['小計', printData.subtotal_amount], ['サービス料', printData.service_charge_amount],
             ['合計', printData.total_amount], ['（内消費税額）', printData.consumption_tax_amount]
         ].forEach(([label, amount]) => {
