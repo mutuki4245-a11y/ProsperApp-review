@@ -19,9 +19,9 @@
         const addresseeName = (request) => compact(request.addressee).replace(/\s*様$/, '');
         const addresseeLine = (request) => {
             const name = addresseeName(request);
-            const underlineLength = Math.max(16, receiptWidth - textWidth(name) - textWidth('様') - 8);
-            return twoColumnLine('', `${name}${'-'.repeat(underlineLength)}様`);
+            return twoColumnLine(`${spaces(6)}${name}`, '様');
         };
+        const addresseeUnderline = () => `${spaces(2)}${'-'.repeat(Math.max(16, receiptWidth - 4))}`;
         const stampBox = () => {
             const innerWidth = 16;
             const innerRows = 5;
@@ -45,6 +45,7 @@
             lines.push('');
             lines.push('');
             lines.push(addresseeLine(request));
+            lines.push(addresseeUnderline());
             lines.push('');
             lines.push(twoColumnLine('発行日', dateTime(request.issued_at)));
             lines.push('');

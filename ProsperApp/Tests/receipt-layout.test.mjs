@@ -22,7 +22,9 @@ const addresseeIndex = lines.findIndex((line) => line.includes('田中') && line
 assert.equal(lines.includes('宛名'), false, '宛名ラベルを出力しないこと');
 assert.equal(lines[addresseeIndex - 1], '', '宛名欄の前に余白を確保すること');
 assert.equal(lines[addresseeIndex - 2], '', '宛名欄の前に余白を確保すること');
-assert.match(lines[addresseeIndex], /田中.*-+様$/, '宛名欄に下線と様を出力すること');
+assert.match(lines[addresseeIndex], /田中.*様$/, '宛名欄の最下行に氏名と様を出力すること');
+assert.equal(lines[addresseeIndex].includes('-'), false, '氏名と様は下線の上に配置すること');
+assert.match(lines[addresseeIndex + 1], /^  -+$/, '宛名欄の直下に下線を出力すること');
 
 const paymentTitleIndex = lines.indexOf('支払い方法：');
 assert.ok(paymentTitleIndex >= 0, '支払い方法見出しを出力すること');
