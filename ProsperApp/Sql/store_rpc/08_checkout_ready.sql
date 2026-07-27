@@ -3,6 +3,7 @@
 drop function if exists store.issue_checkout_statement(bigint, bigint, timestamp with time zone);
 drop function if exists store.get_checkout_statement_print_data(bigint, bigint);
 drop function if exists store.release_checkout_ready(bigint, bigint);
+drop function if exists store.confirm_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric);
 drop function if exists store.confirm_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric, jsonb);
 drop function if exists store.confirm_checkout(bigint, bigint, jsonb, numeric);
 drop function if exists store.get_checkout_receipt_print_data(bigint, bigint);

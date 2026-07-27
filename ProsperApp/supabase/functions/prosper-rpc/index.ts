@@ -395,17 +395,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.save_slip_adjustments",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_adjustment_lines", type: "jsonb" },
-      ],
-    },
-  ],
-  [
     "store.add_slip_adjustment",
     {
       result: "rows",

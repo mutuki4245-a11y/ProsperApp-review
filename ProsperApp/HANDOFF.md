@@ -338,8 +338,6 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - `p_cast_nominations` は `cast_id`, `nomination_kind`, `nomination_price` を持つJSON配列です。`nomination_kind` から店舗別マスタの基本種別と同伴時刻を解決します。
   - `nomination_price` はUI/ドキュメント上の指名料金です。1000円から20000円まで1000円刻みで、`item_type = 'nomination_fee'` のシステム商品として注文行へ自動追加し、会計額へ加算します。
   - 有効な指名バック設定がありバック単価が0円より大きい場合、`store_slip_cast_backs` に現在単価の実績を作成します。
-- `store.save_slip_adjustments(p_department_id, p_slip_id, p_adjustment_lines)`
-  - 通常商品とは別枠の自由入力明細を一括保存する互換用RPCです。商品マスタへは登録しません。
 - `store.add_slip_adjustment(p_department_id, p_slip_id, p_line_name, p_amount)`
   - 伝票詳細の自由入力明細モーダルから1件追加します。商品マスタへは登録せず、負値も許容します。
   - `amount` は負値を許容し、会計合計額へ直接加減します。

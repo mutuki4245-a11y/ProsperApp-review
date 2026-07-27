@@ -200,7 +200,6 @@ DB反映時の基本順序は以下。
 | `store.add_slip_customers` | 既存伝票へ客行を追加する。 |
 | `store.add_slip_nominations` | 既存伝票へ指名を追加する。指名料金のシステム注文行と、指名バック設定が有効かつ0円より大きい場合は `store_slip_cast_backs` を作成する。 |
 | `store.leave_slip_customer` | 客行を退店扱いにする。 |
-| `store.save_slip_adjustments` | 自由入力の会計調整行を一括保存する互換用RPC。 |
 | `store.add_slip_adjustment` | 伝票詳細の自由入力明細モーダルから調整行を1件追加する。 |
 | `store.save_karaoke_lines` | 営業中トップの遷移時保存で、営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
 | `store.save_order_line_quantities` | 伝票詳細の訂正モードから通常注文行の数量を保存する。数量0は対象注文行と紐づくバック実績を取消扱いにする。 |
@@ -344,7 +343,6 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.add_slip_nominations` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。指名種別はキャッシュ済みマスタを検証に使い、実績はRPC側で現在DBマスタからスナップショット保存する。 |
 | `store.add_order_lines` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。注文対象伝票や伝票詳細は次回取得で反映する。 |
 | `store.void_order_line` | 保存結果のみ。 | 戻り値は成功判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
-| `store.save_slip_adjustments` | 保存結果のみ。 | 互換用の一括保存RPC。戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。 |
 | `store.add_slip_adjustment` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
 | `store.save_karaoke_lines` | 保存結果のみ。 | 戻り値の `saved_count` をAjax結果判定に使い、キャッシュしない。営業中一覧や伝票詳細は次回取得で反映する。 |
 | `store.save_order_line_quantities` | 保存結果のみ。 | 戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。通常注文数量、バック実績、伝票詳細、営業中一覧は次回取得で反映する。 |
