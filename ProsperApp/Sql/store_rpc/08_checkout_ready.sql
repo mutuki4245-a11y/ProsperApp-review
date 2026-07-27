@@ -107,12 +107,28 @@ begin
                 'unit_price', ol.unit_price,
                 'amount', ol.amount,
                 'source_type', coalesce(ol.source_type, ''),
+                'item_type', coalesce(
+                    i.item_type,
+                    case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end
+                ),
                 'back_cast_display_name', coalesce(back_cast.display_name, '')
             ) order by
-                case when ol.source_type = 'nomination_fee' then 0 else 1 end,
+                case coalesce(
+                    i.item_type,
+                    case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end
+                )
+                    when 'set_fee' then 0
+                    when 'extension_fee' then 1
+                    when 'nomination_fee' then 2
+                    when 'karaoke' then 3
+                    else 4
+                end,
+                ol.ordered_at,
                 ol.line_no,
                 ol.order_line_id)
             from public.store_order_lines ol
+            left join public.store_item_master i
+              on i.item_id = ol.item_id
             left join public.store_slip_casts sc
               on sc.slip_cast_id = ol.source_id
              and sc.slip_id = ol.slip_id
@@ -197,14 +213,30 @@ as $$
                 'unit_price', ol.unit_price,
                 'amount', ol.amount,
                 'source_type', coalesce(ol.source_type, ''),
+                'item_type', coalesce(
+                    i.item_type,
+                    case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end
+                ),
                 'back_cast_display_name', coalesce(back_cast.display_name, '')
             ) order by
-                case when ol.source_type = 'nomination_fee' then 0 else 1 end,
+                case coalesce(
+                    i.item_type,
+                    case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end
+                )
+                    when 'set_fee' then 0
+                    when 'extension_fee' then 1
+                    when 'nomination_fee' then 2
+                    when 'karaoke' then 3
+                    else 4
+                end,
+                ol.ordered_at,
                 ol.line_no,
                 ol.order_line_id)
             from public.store_order_lines ol
             join public.store_slips s
               on s.slip_id = ol.slip_id
+            left join public.store_item_master i
+              on i.item_id = ol.item_id
             left join public.store_slip_casts sc
               on sc.slip_cast_id = ol.source_id
              and sc.slip_id = ol.slip_id

@@ -15,12 +15,13 @@ const statement = context.window.ProsperCheckoutStatementPrinter.createTextParts
     customer_count: 2,
     orders: [
         { name: 'ドリンク', back_cast_display_name: '田中', quantity: 1, unit_price: 1000, amount: 1000 },
-        { name: '担当(佐藤)', source_type: 'nomination_fee', quantity: 1, unit_price: 2000, amount: 2000 },
-        { name: '同伴(田中)', source_type: 'nomination_fee', quantity: 1, unit_price: 3000, amount: 3000 },
+        { name: '担当(佐藤)', item_type: 'nomination_fee', source_type: 'nomination_fee', quantity: 1, unit_price: 2000, amount: 2000 },
+        { name: '同伴(田中)', item_type: 'nomination_fee', source_type: 'nomination_fee', quantity: 1, unit_price: 3000, amount: 3000 },
         { name: 'ドリンク', back_cast_display_name: '田中', quantity: 2, unit_price: 1000, amount: 2000 },
         { name: 'ドリンク', back_cast_display_name: '佐藤', quantity: 1, unit_price: 1000, amount: 1000 },
-        { name: 'セット料金', source_type: 'automatic_pricing', quantity: 2, unit_price: 3000, amount: 6000 },
-        { name: '延長料金', source_type: 'automatic_pricing', quantity: 1, unit_price: 2000, amount: 2000 }
+        { name: 'セット料金', item_type: 'set_fee', source_type: 'automatic_pricing', quantity: 2, unit_price: 3000, amount: 6000 },
+        { name: '延長料金', item_type: 'extension_fee', source_type: 'automatic_pricing', quantity: 1, unit_price: 2000, amount: 2000 },
+        { name: 'カラオケ', item_type: 'karaoke', quantity: 1, unit_price: 200, amount: 200 }
     ],
     pricing_lines: [],
     adjustments: [],
@@ -35,9 +36,13 @@ const statement = context.window.ProsperCheckoutStatementPrinter.createTextParts
 assert.match(statement.find((line) => line.startsWith('退店')) || '', /2026\/07\/22 25:00$/, '退店時刻は25:00を上限に印字すること');
 const companionIndex = statement.indexOf('同伴(田中)');
 const nominationIndex = statement.indexOf('担当(佐藤)');
+const setFeeIndex = statement.indexOf('セット料金');
+const extensionFeeIndex = statement.indexOf('延長料金');
+const karaokeIndex = statement.indexOf('カラオケ');
 const orderIndex = statement.indexOf('ドリンク/田中');
 assert.ok(companionIndex >= 0 && nominationIndex >= 0, '指名料金はキャスト名付きの明細名で印字すること');
-assert.ok(companionIndex < orderIndex && nominationIndex < orderIndex, '指名料金を注文明細より先に印字すること');
+assert.ok(setFeeIndex < extensionFeeIndex && extensionFeeIndex < companionIndex && companionIndex < karaokeIndex && karaokeIndex < orderIndex, '会計伝票はセット料金、延長料金、指名料金、カラオケ、その他の順に印字すること');
+assert.ok(nominationIndex < karaokeIndex, '同伴以外の指名料金もカラオケより先に印字すること');
 assert.ok(statement.includes('ドリンク/田中'), 'バック対象キャストを商品名に併記すること');
 assert.ok(statement.includes('ドリンク/佐藤'), '別のバック対象キャストは別明細にすること');
 assert.equal(statement.filter((line) => line === 'ドリンク/田中').length, 1, '同じバック対象キャストの明細だけを集約すること');
@@ -55,5 +60,7 @@ assert.match(rpcSource, /from public\.store_slip_pricing_lines pl/, '固定済�
 assert.match(rpcSource, /store\.calculate_slip_pricing\(p_department_id, p_slip_id, p_closed_at\)/, '会計伝票出力時に選択退店時刻で自動料金を固定すること');
 assert.match(rpcSource, /from store\.ensure_pricing_system_items\(p_department_id\)/, '固定済み料金ごとにシステム商品を用意すること');
 assert.match(rpcSource, /'automatic_pricing'/, '自動料金の注文行を手動注文と区別すること');
+assert.match(rpcSource, /'item_type', coalesce\(\s*i\.item_type/, '会計伝票RPCは商品種別を印字データへ含めること');
+assert.match(rpcSource, /when 'set_fee' then 0[\s\S]*when 'extension_fee' then 1[\s\S]*when 'nomination_fee' then 2[\s\S]*when 'karaoke' then 3/, '会計伝票RPCは明細種別の順序を固定すること');
 
 console.log('Checkout statement layout checks passed.');

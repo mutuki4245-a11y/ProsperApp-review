@@ -45,6 +45,18 @@
         const twoColumn = (left, right) => {
             return `${left}${spaces(Math.max(1, width - textWidth(left) - textWidth(right)))}${right}`;
         };
+        const orderType = (line) => {
+            const itemType = compact(line.item_type);
+            if (['set_fee', 'extension_fee', 'nomination_fee', 'karaoke'].includes(itemType)) return itemType;
+            return compact(line.source_type) === 'nomination_fee' ? 'nomination_fee' : 'other';
+        };
+        const orderRank = (itemType) => ({
+            set_fee: 0,
+            extension_fee: 1,
+            nomination_fee: 2,
+            karaoke: 3,
+            other: 4
+        })[itemType] ?? 4;
         const lines = [
             compact(request.store_name, '店舗'),
             '会計伝票',
@@ -61,11 +73,12 @@
             const name = compact(line.name, '商品');
             const backCastName = compact(line.back_cast_display_name);
             const unitPrice = toAmount(line.unit_price);
-            const key = `${name}\u0000${backCastName}\u0000${unitPrice}`;
+            const itemType = orderType(line);
+            const key = `${itemType}\u0000${name}\u0000${backCastName}\u0000${unitPrice}`;
             const current = orders.get(key) ?? {
                 name: backCastName ? `${name}/${backCastName}` : name,
                 unitPrice,
-                isNominationFee: compact(line.source_type) === 'nomination_fee',
+                itemType,
                 quantity: 0,
                 amount: 0
             };
@@ -74,7 +87,7 @@
             orders.set(key, current);
         });
         Array.from(orders.values())
-            .sort((left, right) => Number(right.isNominationFee) - Number(left.isNominationFee))
+            .sort((left, right) => orderRank(left.itemType) - orderRank(right.itemType))
             .forEach((line) => {
                 lines.push(line.name);
                 lines.push(twoColumn(`  ${line.unitPrice.toLocaleString('ja-JP')} x ${line.quantity}`, yen(line.amount)));
