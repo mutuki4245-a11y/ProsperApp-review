@@ -60,6 +60,7 @@ drop function if exists public.confirm_store_checkout(bigint, bigint, timestamp 
 drop function if exists public.create_store_slip(bigint, bigint, timestamp with time zone, text[], bigint[], text);
 drop function if exists public.create_store_slip(bigint, bigint, timestamp with time zone, text[], jsonb, text);
 drop function if exists public.get_pending_receipts(bigint, text);
+drop function if exists public.save_quick_entry(bigint, numeric, text, text, text, text);
 drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
 drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
 drop function if exists public.mark_receipt_scan_mistake(bigint, text, text);
