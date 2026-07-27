@@ -67,6 +67,7 @@ begin
         'schema_version', 'checkout-statement-v1',
         'store_name', v_store_name,
         'table_display_name', v_table_display_name,
+        'business_date', v_slip.business_date,
         'opened_at', v_slip.opened_at,
         'closed_at', v_slip.closed_at,
         'customer_count', (
@@ -77,12 +78,38 @@ begin
         ),
         'orders', coalesce((
             select jsonb_agg(jsonb_build_object(
-                'name', ol.item_name_snapshot,
+                'name', case
+                    when ol.source_type = 'nomination_fee' and sc.nomination_type = 'companion'
+                        then format('同伴(%s)', coalesce(nullif(trim(nomination_cast.display_name), ''), 'キャスト'))
+                    when ol.source_type = 'nomination_fee'
+                        then format('担当(%s)', coalesce(nullif(trim(nomination_cast.display_name), ''), 'キャスト'))
+                    else ol.item_name_snapshot
+                end,
                 'quantity', ol.quantity,
                 'unit_price', ol.unit_price,
-                'amount', ol.amount
-            ) order by ol.line_no, ol.order_line_id)
+                'amount', ol.amount,
+                'source_type', coalesce(ol.source_type, ''),
+                'back_cast_display_name', coalesce(back_cast.display_name, '')
+            ) order by
+                case when ol.source_type = 'nomination_fee' then 0 else 1 end,
+                ol.line_no,
+                ol.order_line_id)
             from public.store_order_lines ol
+            left join public.store_slip_casts sc
+              on sc.slip_cast_id = ol.source_id
+             and sc.slip_id = ol.slip_id
+            left join public.cast_master nomination_cast
+              on nomination_cast.cast_id = sc.cast_id
+            left join lateral (
+                select nullif(trim(cm.display_name), '') as display_name
+                from public.store_order_line_cast_backs ob
+                join public.cast_master cm
+                  on cm.cast_id = ob.cast_id
+                where ob.order_line_id = ol.order_line_id
+                  and ob.status = 'active'
+                order by ob.order_line_cast_back_id asc
+                limit 1
+            ) back_cast on true
             where ol.slip_id = p_slip_id
               and ol.status = 'active'
         ), '[]'::jsonb),
@@ -117,20 +144,40 @@ as $$
     select jsonb_build_object(
         'orders', coalesce((
             select jsonb_agg(jsonb_build_object(
-                'name', ol.item_name_snapshot,
+                'name', case
+                    when ol.source_type = 'nomination_fee' and sc.nomination_type = 'companion'
+                        then format('同伴(%s)', coalesce(nullif(trim(nomination_cast.display_name), ''), 'キャスト'))
+                    when ol.source_type = 'nomination_fee'
+                        then format('担当(%s)', coalesce(nullif(trim(nomination_cast.display_name), ''), 'キャスト'))
+                    else ol.item_name_snapshot
+                end,
                 'quantity', ol.quantity,
                 'unit_price', ol.unit_price,
                 'amount', ol.amount,
-                'back_cast_display_name', coalesce(cm.display_name, '')
-            ) order by ol.line_no, ol.order_line_id)
+                'source_type', coalesce(ol.source_type, ''),
+                'back_cast_display_name', coalesce(back_cast.display_name, '')
+            ) order by
+                case when ol.source_type = 'nomination_fee' then 0 else 1 end,
+                ol.line_no,
+                ol.order_line_id)
             from public.store_order_lines ol
             join public.store_slips s
               on s.slip_id = ol.slip_id
-            left join public.store_order_line_cast_backs ob
-              on ob.order_line_id = ol.order_line_id
-             and ob.status = 'active'
-            left join public.cast_master cm
-              on cm.cast_id = ob.cast_id
+            left join public.store_slip_casts sc
+              on sc.slip_cast_id = ol.source_id
+             and sc.slip_id = ol.slip_id
+            left join public.cast_master nomination_cast
+              on nomination_cast.cast_id = sc.cast_id
+            left join lateral (
+                select nullif(trim(cm.display_name), '') as display_name
+                from public.store_order_line_cast_backs ob
+                join public.cast_master cm
+                  on cm.cast_id = ob.cast_id
+                where ob.order_line_id = ol.order_line_id
+                  and ob.status = 'active'
+                order by ob.order_line_cast_back_id asc
+                limit 1
+            ) back_cast on true
             where ol.slip_id = p_slip_id
               and ol.status = 'active'
               and s.department_id = p_department_id
@@ -268,10 +315,14 @@ set search_path = public
 as $$
 declare
     v_checkout public.store_checkouts%rowtype;
+    v_business_date date;
 begin
     select c.*
       into v_checkout
       from public.store_checkouts c
+      join public.store_slips s
+        on s.slip_id = c.slip_id
+       and s.department_id = c.department_id
      where c.department_id = p_department_id
        and c.checkout_id = p_checkout_id
        and c.status = 'confirmed';
@@ -280,9 +331,16 @@ begin
         raise exception 'checkout_not_found';
     end if;
 
+    select s.business_date
+      into v_business_date
+      from public.store_slips s
+     where s.department_id = p_department_id
+       and s.slip_id = v_checkout.slip_id;
+
     return jsonb_build_object(
         'schema_version', 'checkout-receipt-v2',
         'issued_at', v_checkout.checkout_at,
+        'business_date', v_business_date,
         'particulars', 'ご飲食代として',
         'total_amount', v_checkout.total_amount,
         'taxable_amount_including_tax', v_checkout.total_amount,

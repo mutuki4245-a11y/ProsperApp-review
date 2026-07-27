@@ -136,9 +136,15 @@
             const groups = new Map();
             (Array.isArray(lines) ? lines : []).forEach((line) => {
                 const name = line?.name || '-';
+                const backCastName = String(line?.back_cast_display_name || '').trim();
                 const unitPrice = Math.round(Number(line?.unit_price) || 0);
-                const key = `${name}\u0000${unitPrice}`;
-                const current = groups.get(key) || { name, unit_price: unitPrice, quantity: 0, amount: 0 };
+                const key = `${name}\u0000${backCastName}\u0000${unitPrice}`;
+                const current = groups.get(key) || {
+                    name: backCastName ? `${name}/${backCastName}` : name,
+                    unit_price: unitPrice,
+                    quantity: 0,
+                    amount: 0
+                };
                 current.quantity += Number(line?.quantity) || 0;
                 current.amount += Number(line?.amount) || 0;
                 groups.set(key, current);
@@ -156,7 +162,7 @@
                 target.appendChild(row);
             });
         };
-        lineRows(groupOrders(reviewData.orders || printData.orders), orders, '注文はありません。');
+        lineRows(groupOrders(printData.orders), orders, '注文はありません。');
         lineRows(printData.adjustments, adjustments, '調整はありません。');
         totals.replaceChildren();
         [

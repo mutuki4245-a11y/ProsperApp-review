@@ -52,4 +52,17 @@ for (let offset = 2; offset <= 6; offset += 1) {
 }
 assert.equal(stampLines[stampTitleIndex + 7], stampEdge, '収入印紙欄の下辺を出力すること');
 
+const cappedTimeReceipt = layout.buildReceiptText({
+    issued_at: '2026-07-23T02:10:00+09:00',
+    business_date: '2026-07-22',
+    total_amount: 1000,
+    issuer: {}
+});
+assert.match(cappedTimeReceipt, /発行日\s+2026\/07\/22 25:00/, '25時を超える発行時刻は営業日の25:00で印字すること');
+assert.equal(
+    layout.describeReceipt({ issued_at: '2026-07-23T02:10:00+09:00', business_date: '2026-07-22', total_amount: 1000 }),
+    '2026/07/22 25:00 / 1,000円',
+    '再印刷用の説明も同じ上限時刻で表示すること'
+);
+
 console.log('Receipt layout checks passed.');

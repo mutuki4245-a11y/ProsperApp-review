@@ -9,9 +9,39 @@
         const charWidth = (char) => (char.codePointAt(0) ?? 0) > 0x00ff ? 2 : 1;
         const textWidth = (text) => Array.from(String(text)).reduce((total, char) => total + charWidth(char), 0);
         const spaces = (count) => ' '.repeat(Math.max(0, count));
-        const dateTime = (value) => new Intl.DateTimeFormat('ja-JP', {
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-        }).format(new Date(value));
+        const dateTime = (value, businessDate, capAtBusinessHour25 = false) => {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '-';
+            const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+            const timeParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+            }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+            const businessDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(compact(businessDate));
+            const displayDate = businessDateMatch
+                ? `${businessDateMatch[1]}/${businessDateMatch[2]}/${businessDateMatch[3]}`
+                : `${dateParts.year}/${dateParts.month}/${dateParts.day}`;
+            let hour = Number(timeParts.hour);
+            let minute = Number(timeParts.minute);
+            if (capAtBusinessHour25) {
+                const actualDateValue = Date.UTC(Number(dateParts.year), Number(dateParts.month) - 1, Number(dateParts.day));
+                const businessDateValue = businessDateMatch
+                    ? Date.UTC(Number(businessDateMatch[1]), Number(businessDateMatch[2]) - 1, Number(businessDateMatch[3]))
+                    : null;
+                const elapsedDays = businessDateValue == null
+                    ? (hour < 12 ? 1 : 0)
+                    : Math.max(0, Math.round((actualDateValue - businessDateValue) / 86_400_000));
+                const businessHour = hour + (elapsedDays * 24);
+                if (businessHour > 25 || (businessHour === 25 && minute > 0)) {
+                    hour = 25;
+                    minute = 0;
+                } else {
+                    hour = businessHour;
+                }
+            }
+            return `${displayDate} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        };
         const twoColumn = (left, right) => {
             return `${left}${spaces(Math.max(1, width - textWidth(left) - textWidth(right)))}${right}`;
         };
@@ -21,7 +51,7 @@
             separator,
             twoColumn('卓番', compact(request.table_display_name, '未設定')),
             twoColumn('入店', dateTime(request.opened_at)),
-            twoColumn('退店', dateTime(request.closed_at)),
+            twoColumn('退店', dateTime(request.closed_at, request.business_date, true)),
             twoColumn('客数', `${toAmount(request.customer_count)}人`),
             separator
         ];
@@ -29,17 +59,26 @@
         const orders = new Map();
         (Array.isArray(request.orders) ? request.orders : []).forEach((line) => {
             const name = compact(line.name, '商品');
+            const backCastName = compact(line.back_cast_display_name);
             const unitPrice = toAmount(line.unit_price);
-            const key = `${name}\u0000${unitPrice}`;
-            const current = orders.get(key) ?? { name, unitPrice, quantity: 0, amount: 0 };
+            const key = `${name}\u0000${backCastName}\u0000${unitPrice}`;
+            const current = orders.get(key) ?? {
+                name: backCastName ? `${name}/${backCastName}` : name,
+                unitPrice,
+                isNominationFee: compact(line.source_type) === 'nomination_fee',
+                quantity: 0,
+                amount: 0
+            };
             current.quantity += toAmount(line.quantity);
             current.amount += toAmount(line.amount);
             orders.set(key, current);
         });
-        orders.forEach((line) => {
-            lines.push(line.name);
-            lines.push(twoColumn(`  ${line.unitPrice.toLocaleString('ja-JP')} x ${line.quantity}`, yen(line.amount)));
-        });
+        Array.from(orders.values())
+            .sort((left, right) => Number(right.isNominationFee) - Number(left.isNominationFee))
+            .forEach((line) => {
+                lines.push(line.name);
+                lines.push(twoColumn(`  ${line.unitPrice.toLocaleString('ja-JP')} x ${line.quantity}`, yen(line.amount)));
+            });
         (Array.isArray(request.adjustments) ? request.adjustments : []).forEach((line) => {
             lines.push(twoColumn(compact(line.name, '調整'), yen(line.amount)));
         });
@@ -115,5 +154,5 @@
             : job();
     };
 
-    window.ProsperCheckoutStatementPrinter = { print };
+    window.ProsperCheckoutStatementPrinter = { print, createTextParts };
 })();

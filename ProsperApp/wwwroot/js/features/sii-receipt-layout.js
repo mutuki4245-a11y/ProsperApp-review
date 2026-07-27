@@ -13,9 +13,39 @@
         const separator = () => '-'.repeat(receiptWidth);
         const centerLine = (text) => `${spaces(Math.floor((receiptWidth - textWidth(text)) / 2))}${text}`;
         const twoColumnLine = (left, right) => `${left}${spaces(receiptWidth - textWidth(left) - textWidth(right))}${right}`;
-        const dateTime = (value) => new Intl.DateTimeFormat('ja-JP', {
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-        }).format(new Date(value));
+        const dateTime = (value, businessDate, capAtBusinessHour25 = false) => {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '-';
+            const dateParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+            const timeParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+            }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+            const businessDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(compact(businessDate));
+            const displayDate = businessDateMatch
+                ? `${businessDateMatch[1]}/${businessDateMatch[2]}/${businessDateMatch[3]}`
+                : `${dateParts.year}/${dateParts.month}/${dateParts.day}`;
+            let hour = Number(timeParts.hour);
+            let minute = Number(timeParts.minute);
+            if (capAtBusinessHour25) {
+                const actualDateValue = Date.UTC(Number(dateParts.year), Number(dateParts.month) - 1, Number(dateParts.day));
+                const businessDateValue = businessDateMatch
+                    ? Date.UTC(Number(businessDateMatch[1]), Number(businessDateMatch[2]) - 1, Number(businessDateMatch[3]))
+                    : null;
+                const elapsedDays = businessDateValue == null
+                    ? (hour < 12 ? 1 : 0)
+                    : Math.max(0, Math.round((actualDateValue - businessDateValue) / 86_400_000));
+                const businessHour = hour + (elapsedDays * 24);
+                if (businessHour > 25 || (businessHour === 25 && minute > 0)) {
+                    hour = 25;
+                    minute = 0;
+                } else {
+                    hour = businessHour;
+                }
+            }
+            return `${displayDate} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        };
         const addresseeName = (request) => compact(request.addressee).replace(/\s*様$/, '');
         const addresseeLine = (request) => {
             const name = addresseeName(request);
@@ -50,7 +80,7 @@
             lines.push(addresseeLine(request));
             lines.push(addresseeUnderline());
             lines.push('');
-            lines.push(twoColumnLine('発行日', dateTime(request.issued_at)));
+            lines.push(twoColumnLine('発行日', dateTime(request.issued_at, request.business_date, true)));
             lines.push('');
             lines.push(centerLine(compact(request.particulars, 'ご飲食代として')));
             lines.push('');
@@ -78,7 +108,7 @@
             const { beforeTotal, total, afterTotal } = buildReceiptParts(request);
             return `${beforeTotal}${total}${afterTotal}`;
         };
-        const describeReceipt = (request) => `${dateTime(request.issued_at)} / ${formatYen(request.total_amount)}`;
+        const describeReceipt = (request) => `${dateTime(request.issued_at, request.business_date, true)} / ${formatYen(request.total_amount)}`;
         const receiptKey = (request) => compact(request.checkoutId, 'unknown');
         return { buildReceiptParts, buildReceiptText, describeReceipt, formatYen, receiptKey };
     };
