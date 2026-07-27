@@ -315,14 +315,10 @@ set search_path = public
 as $$
 declare
     v_checkout public.store_checkouts%rowtype;
-    v_business_date date;
 begin
     select c.*
       into v_checkout
       from public.store_checkouts c
-      join public.store_slips s
-        on s.slip_id = c.slip_id
-       and s.department_id = c.department_id
      where c.department_id = p_department_id
        and c.checkout_id = p_checkout_id
        and c.status = 'confirmed';
@@ -331,16 +327,9 @@ begin
         raise exception 'checkout_not_found';
     end if;
 
-    select s.business_date
-      into v_business_date
-      from public.store_slips s
-     where s.department_id = p_department_id
-       and s.slip_id = v_checkout.slip_id;
-
     return jsonb_build_object(
         'schema_version', 'checkout-receipt-v2',
         'issued_at', v_checkout.checkout_at,
-        'business_date', v_business_date,
         'particulars', 'ご飲食代として',
         'total_amount', v_checkout.total_amount,
         'taxable_amount_including_tax', v_checkout.total_amount,

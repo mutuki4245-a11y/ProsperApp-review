@@ -43,6 +43,6 @@ assert.match(rpcSource, /when ol\.source_type = 'nomination_fee' and sc\.nominat
 assert.match(rpcSource, /format\('同伴\(%s\)'/, '同伴指名の会計伝票名を含めること');
 assert.match(rpcSource, /format\('担当\(%s\)'/, 'その他指名の会計伝票名を含めること');
 assert.match(rpcSource, /'back_cast_display_name', coalesce\(back_cast\.display_name, ''\)/, '明細のバック対象を印字データへ含めること');
-assert.match(rpcSource, /'business_date', v_business_date/, '領収書の発行時刻丸め用に営業日を返すこと');
+assert.match(rpcSource, /'business_date', v_slip\.business_date/, '会計伝票の退店時刻丸め用に営業日を返すこと');
 
 console.log('Checkout statement layout checks passed.');
