@@ -29,7 +29,7 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 | `Sql/store_rpc/07_cast_sales_adjustments.sql` | 締め作業のキャスト売上額調整を扱う。 |
 | `Sql/store_rpc/08_checkout_ready.sql` | 会計伝票、会計準備、支払確定、領収書印刷データを扱う。 |
 | `Sql/store_rpc/09_business_home_snapshot.sql` | 営業中トップ向けの営業日全伝票スナップショットと、客・指名・自由明細を一操作ずつ保存して同スナップショットを返すRPCを扱う。 |
-| `Sql/store_rpc/99_grants.sql` | アプリRPCの直接PostgREST実行権限を剥奪する。RPC追加時はこの対象一覧も更新する。 |
+| `Sql/store_rpc/99_grants.sql` | `store` schemaの全関数について、直接PostgREST実行権限を一括剥奪する。 |
 | `Sql/store_table_master_seed.sql` | mieu本店の卓番マスタ初期データ。 |
 | `Sql/quick_entry_account_master_updates.sql` | 領収書簡易入力UIで使う科目・補助科目の追加更新SQL。会計マスタは `accounting` schema、会社マスタは `public` schema を完全修飾し、有効会社だけを対象にする。会計データを変更するため、対象会社・補助科目・マップ件数を確認してから実行する。 |
 | `Sql/agent_schema_reference.sql` | エージェント向けの参照用スキーマ集約ファイル。実行対象ではない。 |
@@ -52,9 +52,9 @@ DB反映時の基本順序は以下。
 14. 必要に応じて `Sql/store_table_master_seed.sql`
 15. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
-## 2.1 会計フロー第1段階の実装状況（2026-07-20）
+## 2.1 会計フロー第1段階の実装状況（2026-07-27）
 
-以下はアプリ、SQL、`prosper-rpc` Edge Function allowlistの**ソース実装済み**であり、リモートDBへのSQL適用とEdge Functionデプロイは未実施である。リモート環境の旧 `store.confirm_checkout` 契約を本書の現在契約として扱わない。
+以下はアプリ、リモートDB、`prosper-rpc` Edge Functionへ適用済みである。P1受入確認とプリンター実機別の印字調整は継続中であり、旧 `store.confirm_checkout` 契約は現在契約として扱わない。
 
 - `store.issue_checkout_statement(p_department_id, p_slip_id, p_closed_at)` は `open -> checkout_ready`、退店時刻固定、未退店客の `left_at_source = 'accounting_slip'` 補完を行い、会計伝票の `print_data` と会計確認用の `review_data` を返す。
 - `store.get_checkout_statement_print_data(p_department_id, p_slip_id)` は `checkout_ready` の会計伝票を再生成し、同じ `print_data` と `review_data` を返す。
@@ -78,16 +78,16 @@ DB反映時の基本順序は以下。
 | マスタ | `payment_method_master` | 支払方法マスタ。今回の会計改修では現金、CAT、PAYPAYの3種類だけを使い、運用上の追加・無効化は別タスクとする。 |
 | 営業日/勤怠 | `store_business_days` | 店舗ごとの営業日。営業開始/締め状態、メモ、酒代などを持つ。 |
 | 営業日/勤怠 | `store_cast_attendance` | 営業日ごとのキャスト出退勤。 |
-| 伝票 | `store_slips` | 卓単位の伝票ヘッダ。会計額列は持たず、会計額はRPCで都度集計する。会計伝票出力後の専用ステータス `checkout_ready` を含む現在定義はソース実装済み（未適用）。 |
-| 伝票 | `store_slip_customers` | 伝票内の客行。入退店状態と表示名、退店時刻の由来 `left_at_source` を持つ。個別退店登録は `manual`、会計伝票出力による補完は `accounting_slip` とする現在定義はソース実装済み（未適用）。 |
+| 伝票 | `store_slips` | 卓単位の伝票ヘッダ。会計額列は持たず、会計額はRPCで都度集計する。会計伝票出力後の専用ステータス `checkout_ready` を含む現在定義は適用済み（受入継続中）。 |
+| 伝票 | `store_slip_customers` | 伝票内の客行。入退店状態と表示名、退店時刻の由来 `left_at_source` を持つ。個別退店登録は `manual`、会計伝票出力による補完は `accounting_slip` とする現在定義は適用済み（受入継続中）。 |
 | 伝票 | `store_slip_casts` | 伝票に紐づく指名。指名種別、同伴時刻区分、指名料金の選択額を持つ。 |
 | 注文/バック | `store_order_lines` | 商品注文行。数量、単価、取消状態を持つ。指名料金は `source_type = 'nomination_fee'` / `source_id = slip_cast_id` で指名行に紐づく。 |
 | 注文/バック | `store_order_line_cast_backs` | 注文行に紐づくバック対象キャスト。通常の商品注文バックはドリンクバック、対象キャストが当該伝票の指名キャストだった場合は担当バックとして扱う。 |
 | 指名バック | `store_slip_cast_backs` | 指名行に紐づくキャストバック実績。指名登録時点の店舗別マスタ単価をスナップショット保存する。 |
 | 自由入力調整 | `store_slip_charge_lines` | 商品マスタとは別枠の伝票調整行。現行運用では `adjustment` を扱い、旧カラオケ別枠行は注文行へ移行してvoid化する。 |
-| 会計 | `store_checkouts` | 会計確定結果。会計時点の小計、サービス料、合計、`issuer_snapshot` を保存する。サービス料列は `service_charge_amount` とし、消費税を意味する名前を使わない現在定義はソース実装済み（未適用）。 |
+| 会計 | `store_checkouts` | 会計確定結果。会計時点の小計、サービス料、合計、`issuer_snapshot` を保存する。サービス料列は `service_charge_amount` とし、消費税を意味する名前を使わない現在定義は適用済み（受入継続中）。 |
 | 会計 | `store_checkout_payments` | 会計に紐づく支払方法別明細。 |
-| 発行者 | `company_master` / `department_master` | 法人名・適格請求書登録番号は `company_master`、店舗表示名・住所・電話番号・ロゴは `department_master` に持たせ、適格簡易請求書の発行元として返す。列追加とサンプルseedはソース実装済み（未適用）。 |
+| 発行者 | `company_master` / `department_master` | 法人名・適格請求書登録番号は `company_master`、店舗表示名・住所・電話番号・ロゴは `department_master` に持たせ、適格簡易請求書の発行元として返す。列追加とサンプルseedは適用済み（受入継続中）。 |
 | 締め調整 | `store_slip_cast_sales_adjustments` | 締め作業で行うキャスト売上額調整。 |
 
 共通設計として、店舗営業系テーブルは `company_id`、`department_id`、必要に応じて `business_day_id` を持つ。主要テーブルはRLSを有効化し、`public.set_updated_at()` による `updated_at` 更新トリガーを持つ。検索頻度が高い有効マスタ、営業日、営業中伝票、伝票明細、会計、締め調整には用途別インデックスを置く。
@@ -96,7 +96,7 @@ DB反映時の基本順序は以下。
 
 `store_slips` に会計額を保持する列はない。営業中一覧の `accounting_amount` は `store.get_business_day_slips` が返す表示用の集計値であり、永続化された確定額ではない。
 
-現行ソースでは、`store.issue_checkout_statement` で会計伝票出力時に退店時刻を選択して `store_slips.closed_at` と未退店客行の退店時刻を固定し、`store_slips.status` を `checkout_ready` へ変更する。`checkout_ready` への変更は物理プリンターの成功ではなく、サーバー側の会計伝票出力RPC成功を基準にする。プリンター失敗時もDB状態は戻さず、`checkout_ready` のまま再印刷または会計準備解除で対応する。`checkout_ready` は `checked_out` と同じように注文追加、指名追加、自由入力明細変更など会計内容が変わるRPCの対象外にする。会計準備解除RPCは `store.release_checkout_ready` とし、`store_slips.status = 'checkout_ready'` の伝票だけを対象にし、`checked_out` 済み伝票には使わない。`checked_out` を戻す場合は `store.cancel_checkout` を使う。解除時は通常の営業中状態へ戻し、`store_slips.closed_at = null` に戻したうえで、`left_at_source = 'accounting_slip'` の退店時刻だけを未確定に戻す。`left_at_source = 'manual'` の個別退店登録は残す。リモートDB適用は未実施である。
+現行実装では、`store.issue_checkout_statement` で会計伝票出力時に退店時刻を選択して `store_slips.closed_at` と未退店客行の退店時刻を固定し、`store_slips.status` を `checkout_ready` へ変更する。`checkout_ready` への変更は物理プリンターの成功ではなく、サーバー側の会計伝票出力RPC成功を基準にする。プリンター失敗時もDB状態は戻さず、`checkout_ready` のまま再印刷または会計準備解除で対応する。`checkout_ready` は `checked_out` と同じように注文追加、指名追加、自由入力明細変更など会計内容が変わるRPCの対象外にする。会計準備解除RPCは `store.release_checkout_ready` とし、`store_slips.status = 'checkout_ready'` の伝票だけを対象にし、`checked_out` 済み伝票には使わない。`checked_out` を戻す場合は `store.cancel_checkout` を使う。解除時は通常の営業中状態へ戻し、`store_slips.closed_at = null` に戻したうえで、`left_at_source = 'accounting_slip'` の退店時刻だけを未確定に戻す。`left_at_source = 'manual'` の個別退店登録は残す。
 
 `checkout_ready` は締め条件や未会計数では会計済みとして扱わない。`store.get_open_slip_count` や締め前検証では `open` と `checkout_ready` を未会計側に含める。一方で営業中一覧や伝票詳細では通常編集中の `open` とは分け、「会計準備中」として編集不可、再印刷、会計準備解除、会計確定へ進む状態を返す。
 
@@ -219,11 +219,11 @@ DB反映時の基本順序は以下。
 | --- | --- |
 | `store.confirm_checkout` | 会計額を再計算し、`checkout_ready` 伝票だけを支払合計検証のうえ確定する。`p_closed_at` と `p_confirmed_snapshot` は受け取らず、固定済みの `store_slips.closed_at` を使う。成功応答は会計ID、釣銭、初回領収書用 `print_data jsonb` を返す。0円会計は支払方法明細なしで確定する。 |
 | `store.cancel_checkout` | 開いている営業日の会計済み伝票を営業中へ戻す。会計と支払明細は `cancelled` にし、客行の退店状態と退店時刻は変更しない。会計に紐づくキャスト売上額調整は削除してリセットする。 |
-| `store.issue_checkout_statement` | ソース実装済み（未適用）。会計伝票をサーバー側で発行し、`checkout_ready` へ状態更新したうえで `print_data jsonb` と `review_data jsonb` を返す。物理印刷成功を意味しない。 |
-| `store.get_checkout_statement_print_data` | ソース実装済み（未適用）。同一端末のlocalStorageが欠落・破損した場合や別ブラウザでの復旧に使う読み取り専用RPC。`checkout_ready` の現在DB状態から `print_data jsonb` と `review_data jsonb` を返す。 |
-| `store.get_checkout_receipt_print_data` | ソース実装済み（未適用）。`checked_out` の確定済み伝票を対象に、会計、決済、会計確定時の発行者スナップショットを領収書用 `print_data jsonb` として返す読み取り専用RPC。会計取消済み伝票は返さない。 |
-| `store.release_checkout_ready` | ソース実装済み（未適用）。`checkout_ready` の伝票だけを通常営業へ戻す。会計済みを戻す場合は `store.cancel_checkout` を使う。 |
-| `store.build_checkout_statement_data` | ソース実装済み（未適用）。会計伝票印字データを生成する内部用SQL関数。公開RPCではなく、アプリから直接呼ばせない。 |
+| `store.issue_checkout_statement` | 適用済み（受入継続中）。会計伝票をサーバー側で発行し、`checkout_ready` へ状態更新したうえで `print_data jsonb` と `review_data jsonb` を返す。物理印刷成功を意味しない。 |
+| `store.get_checkout_statement_print_data` | 適用済み（受入継続中）。同一端末のlocalStorageが欠落・破損した場合や別ブラウザでの復旧に使う読み取り専用RPC。`checkout_ready` の現在DB状態から `print_data jsonb` と `review_data jsonb` を返す。 |
+| `store.get_checkout_receipt_print_data` | 適用済み（受入継続中）。`checked_out` の確定済み伝票を対象に、会計、決済、会計確定時の発行者スナップショットを領収書用 `print_data jsonb` として返す読み取り専用RPC。会計取消済み伝票は返さない。 |
+| `store.release_checkout_ready` | 適用済み（受入継続中）。`checkout_ready` の伝票だけを通常営業へ戻す。会計済みを戻す場合は `store.cancel_checkout` を使う。 |
+| `store.build_checkout_statement_data` | 適用済み（受入継続中）。会計伝票印字データを生成する内部用SQL関数。公開RPCではなく、アプリから直接呼ばせない。 |
 
 領収書の初回印刷が失敗した場合、同一ブラウザの端末内通知から行う最初の再試行は初回印刷として扱い、紙面に追加表記を出さない。会計確定成功後に成功応答が端末へ届かず初回印刷要求を作れなかった場合も、後で営業中トップから行う最初の物理印刷は初回印刷として扱う。`doPrint` 成功時だけ同じ会計端末のlocalStorageへ `checkout_id` ごとの初回成功記録を残し、記録ありで店員が明示的にもう一度出力する場合だけ `再試行` を紙面へ印字する。成功記録がない、または端末内データが消失した場合は初回印刷として扱い、会計取消時は成功記録と失敗通知を削除する。手動再発行は操作上の呼称であり、紙面に `再発行` は印字しない。この判定は端末内の出力操作だけで行い、RPC、DBの印刷状態、印刷履歴を追加しない。
 
@@ -354,7 +354,7 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 
 ## 9. 実装済み変更と残件
 
-この表の「会計伝票出力と会計準備中」「0円会計」「レシートプリンター正式仕様」は、会計フロー第1段階として**ソース実装済み（未適用）**である。表中に残る「後続仕様」は、この文書を先に作成した時点のラベルであり、リモートDBとEdge Functionの適用・実機確認だけが残件である。
+この表の「会計伝票出力と会計準備中」「0円会計」「レシートプリンター正式仕様」は、会計フロー第1段階として**適用済み（受入継続中）**である。表中に残る「後続仕様」は、この文書を先に作成した時点のラベルであり、P1受入確認とプリンター実機別の印字調整が残件である。
 
 | 項目 | 状態 | SQL/RPC上の整理 |
 | --- | --- | --- |

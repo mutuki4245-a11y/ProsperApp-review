@@ -1,6 +1,6 @@
 # サービス料と消費税を同じ名前で扱わない
 
-> 実装状況（2026-07-20）: `service_charge_amount` / `ServiceChargeAmount` への切替はSQL・C#ソースに実装済み。リモートDB適用は未実施。
+> 実装状況（2026-07-27）: `service_charge_amount` / `ServiceChargeAmount` への切替はリモートDBとアプリへ適用済み。P1受入確認は継続中。
 
 商品小計に対する20%のサービス料は、消費税とは別の店舗料金である。DB列、RPC JSON、C#モデルでは `service_charge_amount` / `ServiceChargeAmount` と命名する。`service_tax_amount` / `ServiceTaxAmount` は会計フロー第1段階のソースで置き換え済みであり、テスト段階のため旧契約との互換は実装しない。
 

@@ -1,10 +1,10 @@
 # Domain Context
 
-## 実装状況（2026-07-20）
+## 実装状況（2026-07-27）
 
 この文書の会計伝票、`checkout_ready`、会計確定、領収書印刷に関する記述は、営業中トップ `/` の会計モーダル、`business-checkout.js`、会計伝票・領収書のSII印刷モジュール、Repository、SQLソースとして実装済みである。会計導線は `/Slips/Edit` を使わず、`/` の営業中一覧から完結する。
 
-ただし、`Sql/store_order_accounting_tables.sql` と `Sql/store_rpc/01_business_day.sql`、`03_slips.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`99_grants.sql`、および `prosper-rpc` Edge Function のallowlist変更は、リモート環境へ未適用・未デプロイである。本書の会計仕様はこのソース実装を指し、現行リモートDBの契約を表すものではない。
+会計変更セットはリモートDB、`prosper-rpc` Edge Function、Azure App Serviceへ適用済みである。P1受入確認とプリンター実機別の印字調整は継続中であり、最新の適用状況は `HANDOFF.md` を参照する。
 
 ## Glossary
 

@@ -8,6 +8,8 @@
 
 2026-07-20時点で、会計フロー第1段階は対象環境へ適用済みです。営業中トップ `/` の会計モーダルが会計伝票出力、`checkout_ready`、端末内印刷状態、支払確定、領収書初回印刷・手動再発行、会計取消を扱います。`/Slips/Edit` は会計導線・復旧導線に使いません。Supabaseへ会計変更セットを適用し、`prosper-rpc` Edge Functionをversion 22へ更新、Azure App Serviceへの配備（HTTP 200）まで完了しています。対象環境では0円会計、印刷失敗時の端末内復旧、会計取消RPC、管理者締めを確認済みで、決済種別・金額境界・紙面を含むP1受入確認は継続中です。
 
+2026-07-27時点で、未参照の `store.save_slip_adjustments` と旧 `public.save_quick_entry`、未使用ヘルパー `public.to_base36_3` を削除しました。`store` schemaの全関数は `public`、`anon`、`authenticated`、`service_role` から直接実行できず、`public.set_updated_at` の `search_path` も固定済みです。`prosper-rpc` はversion 27でACTIVE、Supabase Security AdvisorはWARN 0、Azure App ServiceへのZipDeployはHTTP 200、公開URLはGoogle認証へのHTTP 302を確認しています。
+
 ## 重要方針
 
 - DB操作は原則 Supabase RPC 経由で行います。
