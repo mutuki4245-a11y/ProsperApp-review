@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture review - ProsperApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    body { letter-spacing: 0; }
+    .mermaid svg { max-width: 100%; height: auto; }
+    code { font-size: 0.92em; }
+  </style>
+</head>
+<body class="bg-zinc-50 text-zinc-900">
+  <header class="border-b border-zinc-200 bg-white">
+    <div class="mx-auto max-w-7xl px-5 py-8 md:px-8">
+      <div class="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p class="text-sm font-semibold text-emerald-700">ASK MATT / CODE HEALTH</p>
+          <h1 class="mt-2 text-3xl font-bold md:text-4xl">Architecture review - ProsperApp</h1>
+          <p class="mt-3 max-w-3xl text-zinc-600">
+            未参照コードとRPCの除去後に、変更頻度、責務の集中、契約の重複、
+            運用上の不足を調査した結果。
+          </p>
+        </div>
+        <div class="text-sm text-zinc-500">2026-07-27 / revised after Slips/Edit dependency audit</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl space-y-10 px-5 py-8 md:px-8 md:py-12">
+    <section class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <article class="border border-zinc-200 bg-white p-5">
+        <p class="text-sm text-zinc-500">安全に削除</p>
+        <p class="mt-2 text-3xl font-bold">2 RPCs</p>
+        <p class="mt-2 text-sm text-zinc-600"><code>store.save_slip_adjustments</code>、旧 <code>public.save_quick_entry</code>、未使用DBヘルパーを除去。</p>
+      </article>
+      <article class="border border-zinc-200 bg-white p-5">
+        <p class="text-sm text-zinc-500">重複を解消</p>
+        <p class="mt-2 text-3xl font-bold">2 seams</p>
+        <p class="mt-2 text-sm text-zinc-600">Drive取得経路とSupabase設定判定を一本化。</p>
+      </article>
+      <article class="border border-zinc-200 bg-white p-5">
+        <p class="text-sm text-zinc-500">契約を自動検証</p>
+        <p class="mt-2 text-3xl font-bold">3 layers</p>
+        <p class="mt-2 text-sm text-zinc-600">C#、Edge allowlist、SQL定義の一致をNodeテストで固定。</p>
+      </article>
+      <article class="border border-rose-200 bg-rose-50 p-5">
+        <p class="text-sm text-rose-700">追加で判明した未使用module</p>
+        <p class="mt-2 text-3xl font-bold text-rose-950">31 files +</p>
+        <p class="mt-2 text-sm text-rose-900"><code>Pages/Slips/*</code> 26ファイル、専用JavaScript 5ファイルに加え、旧C#メソッドとEdge公開も連鎖して削除可能。</p>
+      </article>
+    </section>
+
+    <section class="border-l-4 border-emerald-600 bg-emerald-50 px-5 py-5">
+      <h2 class="text-xl font-bold">Top recommendation</h2>
+      <p class="mt-2 text-zinc-700">
+        最優先は2段階。まず、現行導線から完全に外れた <code>/Slips/Edit</code> moduleと
+        そこからしか呼ばれないC#・Edge・SQL契約を削除する。次に、新しい層を増やすのではなく、
+        既存の <code>get_business_day_snapshot</code> と <code>flush_business_home_changes</code> を
+        営業中編集moduleの深いinterfaceとして上位層まで貫通させる。
+      </p>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-zinc-500">CANDIDATE 01</p>
+          <h2 class="mt-1 text-2xl font-bold">未使用の /Slips/Edit moduleを削除する</h2>
+        </div>
+        <span class="shrink-0 bg-emerald-700 px-3 py-1 text-sm font-semibold text-white">Strong</span>
+      </div>
+
+      <div class="mt-5 grid gap-5 lg:grid-cols-2">
+        <article class="border border-zinc-200 bg-white p-5">
+          <h3 class="font-bold">Files</h3>
+          <p class="mt-2 text-sm text-zinc-600">
+            <code>Pages/Slips/*</code>（26ファイル）、
+            <code>wwwroot/js/features/slip-adjustments.js</code>、
+            <code>slip-customers.js</code>、<code>slip-nominations.js</code>、
+            <code>slip-orders.js</code>、<code>slip-panels.js</code>
+          </p>
+          <h3 class="mt-5 font-bold">Problem</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            現行の営業中編集は、<code>business-slip-editor.js</code>が営業中スナップショットから
+            UIを構築し、Index PageModelの <code>BusinessSlipEditorOperation</code> handlerへ保存する。
+            <code>/Slips/Edit</code>へのリンク、URL設定、fetchは存在せず、伝票作成後もIndexを再表示する。
+            残ったPageModel、部分Razor、専用JavaScriptは互いにだけ参照し合う孤立moduleであり、
+            URL直打ち以外の入口がない。前回レポートでこれを現役adapterと評価したのは誤り。
+            ただし旧ページの注文数量直接訂正は現行UIへ移っておらず、現行操作は取消 + 再追加である。
+          </p>
+          <h3 class="mt-5 font-bold">Solution</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            <code>Pages/Slips/*</code>と5つの専用JavaScriptを削除し、レイアウトの
+            <code>/Slips</code>判定、旧Editor helper、専用model、文書、テストの旧前提も除去する。
+            <code>IStoreSlipRepository</code>とEdge allowlistから旧ページ専用契約を外し、
+            完全に不要な <code>get_business_day_slips</code> と <code>get_slip_detail</code> を削除する。
+            <code>save_order_line_quantities</code> は、数量訂正を取消 + 再追加へ統一する業務方針を
+            確認できた場合に削除する。共通利用されている
+            <code>cast-select-modal.js</code>と<code>order-back-text.js</code>は残す。
+            個別変更SQLのうちflush内部から呼ばれるものは削除せず、非公開実装として残す。
+          </p>
+          <h3 class="mt-5 font-bold">Benefits</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            31ファイル、旧handler、旧binding、旧部分表示という不要なinterfaceが消え、
+            localityが上がる。以後の調査で現役コードと互換用コードを取り違えず、
+            営業中一覧ハブのdepthとleverageを正しく改善できる。
+          </p>
+        </article>
+
+        <article class="grid gap-4">
+          <div class="border border-rose-200 bg-rose-50 p-4">
+            <h3 class="text-sm font-bold text-rose-900">Before</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  I["Index / business-slip-editor.js"] --> H["Index operation handlers"]
+  H --> R["Repository / RPC"]
+  S["Slips/Edit route"] --> P["26 Razor / C# files"]
+  P --> J["5 page-specific JS files"]
+  N["No inbound link / URL config / fetch"] -.-> S
+            </pre>
+          </div>
+          <div class="border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="text-sm font-bold text-emerald-900">After</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  I["Index / business-slip-editor.js"] --> H["Index operation handlers"]
+  H --> R["Repository / RPC"]
+  Q["Quantity correction: void + re-add"] --> I
+            </pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-zinc-500">CANDIDATE 02</p>
+          <h2 class="mt-1 text-2xl font-bold">既存の営業中編集moduleを深くする</h2>
+        </div>
+        <span class="shrink-0 bg-emerald-700 px-3 py-1 text-sm font-semibold text-white">Strong</span>
+      </div>
+
+      <div class="mt-5 grid gap-5 lg:grid-cols-2">
+        <article class="border border-zinc-200 bg-white p-5">
+          <h3 class="font-bold">Files</h3>
+          <p class="mt-2 text-sm text-zinc-600">
+            <code>business-home.js</code>、<code>business-slip-editor.js</code>、
+            <code>Pages/Index.cshtml.cs</code>、<code>IStoreSlipRepository.cs</code>、
+            <code>SupabaseStoreSlipRepository.cs</code>、
+            <code>09_business_home_snapshot.sql</code>、
+            <code>10_business_home_flush.sql</code>、Edge allowlist
+          </p>
+          <h3 class="mt-5 font-bold">Problem</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            現行UIはスナップショットを取得し、編集操作とカラオケ下書きをキューへ積み、
+            まとめてflushする構造へ移行済みである。一方、C#とEdgeには旧一覧、旧詳細、
+            個別編集、単発operationの浅いinterfaceが残る。ブラウザ側も複数の
+            <code>window.prosperBusinessHome*</code>を公開し、editorとcheckoutが内部状態へ直接触れている。
+          </p>
+          <h3 class="mt-5 font-bold">Solution</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            営業中一覧・編集同期の公開RPCのseamを <code>get_business_day_snapshot</code> と
+            <code>flush_business_home_changes</code>へ縮める。
+            <code>apply_business_slip_editor_operation</code>と個別変更関数はflushの内部実装として残し、
+            Edge allowlistとC#の直接呼び出しから外す。ブラウザではbusiness-home moduleが
+            snapshot、projection、queue、flushを所有し、editorはcommand生成adapter、
+            checkoutは保存待ちと最新化だけを依頼するadapterにする。
+          </p>
+          <h3 class="mt-5 font-bold">Benefits</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            既に実装されている再送防止、伝票ロック、部分失敗、最新snapshot返却を1つの深いmoduleへ隠せる。
+            新しい抽象層を増やさずinterfaceを減らすため、depth、leverage、localityが同時に上がる。
+          </p>
+        </article>
+
+        <article class="grid gap-4">
+          <div class="border border-rose-200 bg-rose-50 p-4">
+            <h3 class="text-sm font-bold text-rose-900">Before</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  E["Editor UI"] --> G["Multiple window globals"]
+  C["Checkout UI"] --> G
+  G --> B["business-home.js"]
+  B --> P["Index handlers"]
+  P --> R["Broad repository interface"]
+  R --> X["Snapshot / flush / direct operation / legacy RPCs"]
+            </pre>
+          </div>
+          <div class="border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="text-sm font-bold text-emerald-900">After</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  E["Editor adapter"] --> B["Deep Business Home module"]
+  C["Checkout adapter"] --> B
+  B --> P["Thin Index adapter"]
+  P --> X["Snapshot + Flush public RPCs"]
+  X --> I["Internal operation helpers"]
+            </pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-zinc-500">CANDIDATE 03</p>
+          <h2 class="mt-1 text-2xl font-bold">SQL配備とRPC契約を1つのmoduleとして扱う</h2>
+        </div>
+        <span class="shrink-0 bg-emerald-700 px-3 py-1 text-sm font-semibold text-white">Strong</span>
+      </div>
+
+      <div class="mt-5 grid gap-5 lg:grid-cols-2">
+        <article class="border border-zinc-200 bg-white p-5">
+          <h3 class="font-bold">Files</h3>
+          <p class="mt-2 text-sm text-zinc-600">
+            <code>Infrastructure/Supabase/*Repository.cs</code>、
+            <code>supabase/functions/prosper-rpc/index.ts</code>、
+            <code>Sql/store_rpc/*.sql</code>、<code>Docs/*.md</code>
+          </p>
+          <h3 class="mt-5 font-bold">Problem</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            RPC名と引数のinterfaceがC#、Edge allowlist、SQL、文書に重複する。
+            調査開始時は、現行DBに会計RPCが適用済みなのに主要文書が「未適用」のままだった。
+            また新しいsecurity definer関数に既定EXECUTE ACLが残り、schema usageの剥奪だけに依存していた。
+            現在のSQL適用順インデックスは <code>09_business_home_snapshot.sql</code> の次を
+            <code>99_grants.sql</code>としており、依存先の <code>10_business_home_flush.sql</code> と
+            料金系の11・12を記載していない。
+          </p>
+          <h3 class="mt-5 font-bold">Solution</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            SQL適用、Edge配備、契約検証、状態記録を1つの配備moduleにまとめる。
+            今回追加した契約テストとschema全関数への権限剥奪を入口にし、
+            SQL依存順も自動検証する。文書の配備状態は自動生成または単一台帳へ寄せる。
+          </p>
+          <h3 class="mt-5 font-bold">Benefits</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            RPC追加・削除のleverageが高まり、allowlist漏れ、旧SQL上書き、権限ドリフトを同じ変更で検知できる。
+            操作のlocalityが上がり、Gitと実DBの差を追跡しやすい。
+          </p>
+        </article>
+
+        <article class="grid gap-4">
+          <div class="border border-rose-200 bg-rose-50 p-4">
+            <h3 class="text-sm font-bold text-rose-900">Before</h3>
+            <pre class="mermaid mt-3">
+flowchart TD
+  C["C# RPC name"] --> X["Manual comparison"]
+  E["Edge allowlist"] --> X
+  Q["SQL definitions"] --> X
+  D["Deployment docs"] --> X
+  X --> DB["Remote DB / Edge"]
+            </pre>
+          </div>
+          <div class="border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="text-sm font-bold text-emerald-900">After</h3>
+            <pre class="mermaid mt-3">
+flowchart TD
+  C["C#"] --> T["Contract test"]
+  E["Edge"] --> T
+  Q["SQL"] --> T
+  T --> P["Versioned deployment module"]
+  P --> V["Remote verification"]
+  V --> D["Single status record"]
+            </pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-zinc-500">CANDIDATE 04</p>
+          <h2 class="mt-1 text-2xl font-bold">会計端末状態を独立した深いmoduleへ寄せる</h2>
+        </div>
+        <span class="shrink-0 bg-amber-500 px-3 py-1 text-sm font-semibold text-zinc-950">Worth exploring</span>
+      </div>
+
+      <div class="mt-5 grid gap-5 lg:grid-cols-2">
+        <article class="border border-zinc-200 bg-white p-5">
+          <h3 class="font-bold">Files</h3>
+          <p class="mt-2 text-sm text-zinc-600">
+            <code>business-checkout.js</code>、<code>sii-checkout-statement-printer.js</code>、
+            <code>sii-receipt-printer.js</code>、<code>sii-receipt-layout.js</code>
+          </p>
+          <h3 class="mt-5 font-bold">Problem</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            DB上の会計状態、localStorage上の印刷状態、モーダル状態、支払計算が同じファイルで調停される。
+            printer adapter自体は分離されているが、端末状態の復旧規則を検証するinterfaceが浅い。
+          </p>
+          <h3 class="mt-5 font-bold">Solution</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            ADR 0001・0006・0008を維持したまま、端末内印刷記録と会計遷移の調停だけを所有するmoduleを抽出する。
+            DBへ印刷状態を追加する案ではない。まずブラウザ状態遷移をテスト可能な純粋ロジックとして分ける。
+          </p>
+          <h3 class="mt-5 font-bold">Benefits</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            印刷失敗、別ブラウザ復旧、0円会計、会計準備解除の組合せをDOMなしで検証できる。
+            interfaceは狭くなり、printer adapterの交換にも耐えやすい。
+          </p>
+        </article>
+
+        <article class="grid gap-4">
+          <div class="border border-rose-200 bg-rose-50 p-4">
+            <h3 class="text-sm font-bold text-rose-900">Before</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  UI["Modal DOM"] <--> B["business-checkout.js"]
+  B <--> LS["localStorage"]
+  B <--> RPC["Checkout RPCs"]
+  B <--> PR["Printer adapters"]
+            </pre>
+          </div>
+          <div class="border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="text-sm font-bold text-emerald-900">After</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  UI["UI adapter"] --> T["Terminal checkout module"]
+  T --> LS["Storage adapter"]
+  T --> RPC["RPC adapter"]
+  T --> PR["Printer adapters"]
+            </pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold text-zinc-500">CANDIDATE 05</p>
+          <h2 class="mt-1 text-2xl font-bold">1実装だけのRepository interfaceを再評価する</h2>
+        </div>
+        <span class="shrink-0 bg-zinc-300 px-3 py-1 text-sm font-semibold text-zinc-800">Speculative</span>
+      </div>
+
+      <div class="mt-5 grid gap-5 lg:grid-cols-2">
+        <article class="border border-zinc-200 bg-white p-5">
+          <h3 class="font-bold">Files</h3>
+          <p class="mt-2 text-sm text-zinc-600">
+            <code>Features/**/I*Repository.cs</code>、
+            <code>Infrastructure/Supabase/Supabase*Repository.cs</code>、
+            DI登録
+          </p>
+          <h3 class="mt-5 font-bold">Problem</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            多くのinterfaceがSupabase実装1つだけを包み、呼び出し元と実装の間に移動コストを増やしている。
+            一方でPageModelのテスト境界として使う余地があり、一括削除は根拠不足。
+          </p>
+          <h3 class="mt-5 font-bold">Solution</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            interfaceごとに代替adapter、テストfake、複数呼び出し元の有無を計測する。
+            仮想的なseamだけなら統合し、業務moduleのinterfaceとして意味があるものは残す。
+          </p>
+          <h3 class="mt-5 font-bold">Benefits</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            不要な薄い層を減らしつつ、テスト可能性に効く境界は保持できる。
+            推測で大量削除せず、depthを上げる対象を選別できる。
+          </p>
+        </article>
+
+        <article class="grid gap-4">
+          <div class="border border-rose-200 bg-rose-50 p-4">
+            <h3 class="text-sm font-bold text-rose-900">Before</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  P1["PageModel"] --> I1["IRepository"]
+  I1 --> S1["SupabaseRepository"]
+  P2["PageModel"] --> I2["IRepository"]
+  I2 --> S2["SupabaseRepository"]
+            </pre>
+          </div>
+          <div class="border border-emerald-200 bg-emerald-50 p-4">
+            <h3 class="text-sm font-bold text-emerald-900">After</h3>
+            <pre class="mermaid mt-3">
+flowchart LR
+  P["PageModel"] --> M["Domain module interface"]
+  M --> S["Supabase adapter"]
+  M --> F["Test fake when needed"]
+            </pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="border border-zinc-200 bg-white p-5 md:p-6">
+      <h2 class="text-2xl font-bold">Functional and operational gaps</h2>
+      <div class="mt-5 grid gap-5 md:grid-cols-2">
+        <div>
+          <h3 class="font-bold">過去営業日の領収書探索</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            現行の手動再発行は営業中トップの伝票に寄っており、営業日締め後の検索・再発行導線は将来候補のまま。
+            税務・店舗運用上の必要期間と検索キーを決める必要がある。
+          </p>
+        </div>
+        <div>
+          <h3 class="font-bold">プロセスローカルキャッシュ</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            MemoryCacheは単一インスタンスでは合理的だが、Azureを複数インスタンス化すると営業日やマスタの
+            無効化が共有されない。スケール方針を明記するか分散無効化が必要。
+          </p>
+        </div>
+        <div>
+          <h3 class="font-bold">配備状態の文書ドリフト</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            調査開始時は、DBに現行会計RPCが存在する一方、CONTEXTと複数仕様書が未適用と記載していた。
+            今回は修正済みだが、手動で複数文書を更新する構造が原因であり、単一状態記録への集約が必要。
+          </p>
+        </div>
+        <div>
+          <h3 class="font-bold">ブラウザ業務状態のテスト深度</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            現在のNodeテストは契約・レイアウト・ソース構造の回帰に強いが、
+            モーダル遷移と失敗復旧の動的な組合せ検証は薄い。Candidate 02と04の後に補強する。
+          </p>
+        </div>
+        <div>
+          <h3 class="font-bold">注文数量訂正の業務方針</h3>
+          <p class="mt-2 text-sm leading-6 text-zinc-700">
+            旧 <code>/Slips/Edit</code> は数量の直接保存を持つが、現行モーダルは注文取消と再追加を使う。
+            監査上も取消 + 再追加へ統一するなら旧RPCを削除できる。直接訂正が必要なら、
+            旧ページを残さず現行operation contractへ明示的に追加する。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-zinc-900 p-6 text-white">
+      <h2 class="text-2xl font-bold">Decision</h2>
+      <p class="mt-3 max-w-4xl text-zinc-300">
+        追加調査で、<code>/Slips/Edit</code>は現行UIのadapterではなく、
+        URL直打ちでのみ到達可能な孤立moduleだと確認した。最初に31ファイルと連鎖する旧契約を削除する。
+        注文数量訂正は、取消 + 再追加へ統一するかを確認して削除範囲を確定する。
+        その後は新しいmoduleを足さず、既存のsnapshot + flush境界を公開interfaceとして深くし、
+        単発operationと個別変更関数を内部実装へ隠す。Checkout Terminalは別moduleのまま保つ。
+      </p>
+      <p class="mt-5 font-semibold">Which of these would you like to explore?</p>
+    </section>
+  </main>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'strict',
+      flowchart: { curve: 'basis', htmlLabels: true }
+    });
+  </script>
+</body>
+</html>
