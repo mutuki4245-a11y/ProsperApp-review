@@ -627,13 +627,15 @@
     };
 
     const customerSummary = (slip) => {
-        const customers = Array.isArray(slip.customers) ? slip.customers.filter((customer) => customer.status === 'active') : [];
+        const customers = Array.isArray(slip.customers) ? slip.customers : [];
         const content = buildElement('div', 'business-slip-detail-summary__content');
         if (customers.length === 0) {
             content.appendChild(buildElement('strong', 'business-slip-detail-summary__empty', '在席客なし'));
         } else {
             customers.forEach((customer) => {
-                content.appendChild(buildElement('strong', 'business-slip-detail-summary__chip', customer.displayName || '客名なし'));
+                const chip = buildElement('strong', 'business-slip-detail-summary__chip', customer.displayName || '客名なし');
+                if (customer.status !== 'active') chip.classList.add('is-departed');
+                content.appendChild(chip);
             });
         }
         return detailSummary('客', 'customers', content, '客を編集');

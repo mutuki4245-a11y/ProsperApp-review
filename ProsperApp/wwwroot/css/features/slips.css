@@ -464,6 +464,12 @@
   padding: 0.24rem 0.45rem;
 }
 
+.business-slip-detail-summary__chip.is-departed {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
 .business-slip-detail-summary__empty {
   color: #64748b;
   font-size: 0.82rem;
