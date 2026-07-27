@@ -14,7 +14,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
 
     public async Task<StoreSettingsLoadResult> GetDepartmentsAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return StoreSettingsLoadResult.Failed("Supabase Edge Function設定が未設定です。Azure App Serviceの環境変数 SUPABASE_RPC_EDGE_FUNCTION_URL と Supabase_Edge_Key を設定してください。");
         }
@@ -38,7 +38,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
 
     public async Task<DebugDeleteNonMasterRecordsResult> DeleteNonMasterRecordsAsync(long departmentId, CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return DebugDeleteNonMasterRecordsResult.Failed(PermissionErrorMessage());
         }

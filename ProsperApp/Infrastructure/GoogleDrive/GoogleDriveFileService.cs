@@ -16,12 +16,6 @@ public class GoogleDriveFileService(
     private readonly IMemoryCache _memoryCache = memoryCache;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
 
-    public async Task<DriveFileContent?> GetFileAsync(string driveFileId, CancellationToken ct)
-    {
-        var result = await GetFileWithDiagnosticsAsync(driveFileId, ct);
-        return result.Content;
-    }
-
     public async Task<DriveFileResult> GetFileWithDiagnosticsAsync(string driveFileId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(driveFileId) ||
@@ -80,11 +74,6 @@ public class GoogleDriveFileService(
         _memoryCache.Set(BuildCacheKey(driveFileId), cached, BuildCacheEntryOptions());
 
         return DriveFileResult.Success(ToDriveFileContent(cached));
-    }
-
-    public Task<DriveFileResult> PrefetchFileAsync(string driveFileId, CancellationToken ct)
-    {
-        return GetFileWithDiagnosticsAsync(driveFileId, ct);
     }
 
     public void RemoveCachedFile(string driveFileId)

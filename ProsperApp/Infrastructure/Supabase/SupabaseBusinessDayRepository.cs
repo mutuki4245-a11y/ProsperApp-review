@@ -22,7 +22,7 @@ public class SupabaseBusinessDayRepository(
 
     public async Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return null;
         }
@@ -113,7 +113,7 @@ public class SupabaseBusinessDayRepository(
         IReadOnlyCollection<BusinessDayAttendanceInput>? attendanceEntries,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
         }
@@ -171,7 +171,7 @@ public class SupabaseBusinessDayRepository(
         bool ignoreClosingRequirements,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
         }
@@ -210,7 +210,7 @@ public class SupabaseBusinessDayRepository(
         IReadOnlyCollection<BusinessDayAttendanceInput> attendanceEntries,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を更新できません。");
         }
@@ -254,7 +254,7 @@ public class SupabaseBusinessDayRepository(
 
     public async Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return 0;
         }
@@ -274,7 +274,7 @@ public class SupabaseBusinessDayRepository(
 
     public async Task<BusinessDayDrinkDeliveryStatus> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return new BusinessDayDrinkDeliveryStatus();
         }
@@ -305,7 +305,7 @@ public class SupabaseBusinessDayRepository(
         decimal amount,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessDayAmountSaveResult.Failed("Supabase Edge Function設定が未設定です。納品額を保存できません。");
         }
@@ -340,7 +340,7 @@ public class SupabaseBusinessDayRepository(
         long businessDayId,
         CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return [];
         }
@@ -365,7 +365,7 @@ public class SupabaseBusinessDayRepository(
         IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessDayAttendanceSaveResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を保存できません。");
         }

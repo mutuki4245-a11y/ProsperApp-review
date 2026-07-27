@@ -11,7 +11,7 @@ public class SupabaseCastSalesAdjustmentRepository(
 {
     public async Task<CastSalesAdjustmentStatus> GetStatusAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasMutationSettings() || businessDayId <= 0)
+        if (!HasRpcAccess() || businessDayId <= 0)
         {
             return new CastSalesAdjustmentStatus { RequiredSlipCount = 1, MissingSlipCount = 1 };
         }
@@ -41,7 +41,7 @@ public class SupabaseCastSalesAdjustmentRepository(
 
     public async Task<IReadOnlyList<CastSalesAdjustmentSlip>> GetSlipsAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasMutationSettings() || businessDayId <= 0)
+        if (!HasRpcAccess() || businessDayId <= 0)
         {
             return [];
         }
@@ -80,7 +80,7 @@ public class SupabaseCastSalesAdjustmentRepository(
 
     public async Task<CastSalesAdjustmentDetail?> GetDetailAsync(long slipId, CancellationToken ct)
     {
-        if (!HasMutationSettings() || slipId <= 0)
+        if (!HasRpcAccess() || slipId <= 0)
         {
             return null;
         }
@@ -144,7 +144,7 @@ public class SupabaseCastSalesAdjustmentRepository(
 
     public async Task<CastSalesAdjustmentSaveResult> SaveAsync(CastSalesAdjustmentSaveInput input, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return CastSalesAdjustmentSaveResult.Failed("Supabase Edge Function設定が未設定です。キャスト売上額調整を保存できません。");
         }

@@ -43,7 +43,7 @@ public class SupabaseStoreOrderRepository(
 
     public async Task<IReadOnlyList<StoreOrderItemOption>> GetItemsAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return [];
         }
@@ -86,7 +86,7 @@ public class SupabaseStoreOrderRepository(
 
     public async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasRequiredSettings() || businessDayId <= 0)
+        if (!HasRpcAccess() || businessDayId <= 0)
         {
             return [];
         }
@@ -129,7 +129,7 @@ public class SupabaseStoreOrderRepository(
 
     public async Task<AddStoreOrderLinesResult> AddOrderLinesAsync(long slipId, IReadOnlyList<OrderQueueInputModel> lines, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return AddStoreOrderLinesResult.Failed("Supabase Edge Function設定が未設定です。注文を登録できません。");
         }

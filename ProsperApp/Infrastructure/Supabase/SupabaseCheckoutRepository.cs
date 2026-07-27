@@ -11,7 +11,7 @@ public class SupabaseCheckoutRepository(
 {
     public async Task<CheckoutStatementResult> IssueCheckoutStatementAsync(long slipId, DateTimeOffset closedAt, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return CheckoutStatementResult.Failed("Supabase Edge Function設定が未設定です。会計伝票を出力できません。");
         }
@@ -36,7 +36,7 @@ public class SupabaseCheckoutRepository(
 
     public async Task<CheckoutStatementResult> GetCheckoutStatementPrintDataAsync(long slipId, CancellationToken ct)
     {
-        if (!HasRequiredSettings() || slipId <= 0)
+        if (!HasRpcAccess() || slipId <= 0)
         {
             return CheckoutStatementResult.Failed("会計伝票を復旧できません。");
         }
@@ -50,7 +50,7 @@ public class SupabaseCheckoutRepository(
 
     public async Task<ReleaseCheckoutReadyResult> ReleaseCheckoutReadyAsync(long slipId, CancellationToken ct)
     {
-        if (!HasMutationSettings() || slipId <= 0)
+        if (!HasRpcAccess() || slipId <= 0)
         {
             return ReleaseCheckoutReadyResult.Failed("会計準備を解除できません。");
         }
@@ -70,7 +70,7 @@ public class SupabaseCheckoutRepository(
         decimal? receivedAmount,
         CancellationToken ct)
     {
-        if (!HasMutationSettings() || slipId <= 0)
+        if (!HasRpcAccess() || slipId <= 0)
         {
             return ConfirmCheckoutResult.Failed("会計対象の伝票を確認してください。");
         }
@@ -107,7 +107,7 @@ public class SupabaseCheckoutRepository(
 
     public async Task<ReceiptPrintDataResult> GetCheckoutReceiptPrintDataAsync(long slipId, CancellationToken ct)
     {
-        if (!HasRequiredSettings() || slipId <= 0)
+        if (!HasRpcAccess() || slipId <= 0)
         {
             return ReceiptPrintDataResult.Failed("領収書を取得できません。");
         }
@@ -130,7 +130,7 @@ public class SupabaseCheckoutRepository(
 
     public async Task<CancelCheckoutResult> CancelCheckoutAsync(long slipId, CancellationToken ct)
     {
-        if (!HasMutationSettings() || slipId <= 0)
+        if (!HasRpcAccess() || slipId <= 0)
         {
             return CancelCheckoutResult.Failed("会計取消する伝票を確認してください。");
         }

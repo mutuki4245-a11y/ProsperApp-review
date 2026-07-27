@@ -14,7 +14,7 @@ public class SupabaseStoreItemAdminRepository(
 
     public async Task<StoreItemAdminCatalog> GetCatalogAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return new StoreItemAdminCatalog();
         }
@@ -77,7 +77,7 @@ public class SupabaseStoreItemAdminRepository(
 
     public async Task<StoreItemAdminSaveResult> SaveCategoryAsync(StoreItemCategoryInputModel input, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品カテゴリを保存できません。");
         }
@@ -113,7 +113,7 @@ public class SupabaseStoreItemAdminRepository(
 
     public async Task<StoreItemAdminSaveResult> SaveItemAsync(StoreItemInputModel input, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品を保存できません。");
         }
@@ -153,7 +153,7 @@ public class SupabaseStoreItemAdminRepository(
 
     public async Task<StoreItemAdminSaveResult> DeleteItemAsync(long itemId, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品を削除できません。");
         }
@@ -190,7 +190,7 @@ public class SupabaseStoreItemAdminRepository(
 
     public async Task<StoreItemAdminSaveResult> ReorderItemsAsync(IReadOnlyList<StoreItemOrderInputModel> items, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。商品の並び順を保存できません。");
         }

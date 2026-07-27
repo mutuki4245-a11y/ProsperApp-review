@@ -10,13 +10,7 @@ public abstract class SupabaseRepositoryBase(
 
     protected long CurrentStoreDepartmentId => localSettingsProvider?.GetCurrent().StoreDepartmentId ?? 0;
 
-    protected bool HasRequiredSettings()
-    {
-        return RpcClient.HasAccess &&
-               (localSettingsProvider is null || CurrentStoreDepartmentId > 0);
-    }
-
-    protected bool HasMutationSettings()
+    protected bool HasRpcAccess()
     {
         return RpcClient.HasAccess &&
                (localSettingsProvider is null || CurrentStoreDepartmentId > 0);
@@ -27,7 +21,7 @@ public abstract class SupabaseRepositoryBase(
         TPayload payload,
         CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return [];
         }

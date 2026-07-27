@@ -19,7 +19,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<StoreContext?> GetStoreContextAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return null;
         }
@@ -57,7 +57,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<IReadOnlyList<StoreTableOption>> GetTablesAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return [];
         }
@@ -100,7 +100,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<CastOptionsLoadResult> GetCastsResultAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return CastOptionsLoadResult.Failed("店舗設定またはSupabase Edge Function設定が未設定です。管理者設定で利用店舗を保存し、RPCキー設定を確認してください。");
         }
@@ -171,7 +171,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasRequiredSettings() || businessDayId <= 0)
+        if (!HasRpcAccess() || businessDayId <= 0)
         {
             return BusinessDaySnapshotResult.Failed("営業日を取得できません。");
         }
@@ -200,7 +200,7 @@ public class SupabaseStoreSlipRepository(
         long businessDayId,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessDaySnapshotResult.Failed("Supabase Edge Function設定が未設定です。営業中の編集を保存できません。");
         }
@@ -238,7 +238,7 @@ public class SupabaseStoreSlipRepository(
         long businessDayId,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return BusinessHomeChangeFlushResult.Failed("Supabase Edge Function設定が未設定です。営業中の変更を保存できません。");
         }
@@ -408,7 +408,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return CreateSlipResult.Failed("Supabase Edge Function設定が未設定です。伝票を作成できません。");
         }
@@ -462,7 +462,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> AddSlipCustomersAsync(long slipId, IReadOnlyList<string?> customerLabels, DateTime enteredAt, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
@@ -498,7 +498,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> AddSlipNominationsAsync(long slipId, IReadOnlyList<CastNominationInputModel> nominations, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
@@ -537,7 +537,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> LeaveSlipCustomerAsync(long slipCustomerId, DateTime leftAt, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
@@ -567,7 +567,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> UpdateSlipCustomerLabelAsync(long slipCustomerId, string? customerLabel, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
@@ -597,7 +597,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> VoidOrderLineAsync(long orderLineId, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。伝票を更新できません。");
         }
@@ -626,7 +626,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> SaveOrderLineQuantitiesAsync(long slipId, IReadOnlyList<OrderLineQuantityInputModel> orderLines, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。注文数量を保存できません。");
         }
@@ -667,7 +667,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> AddSlipAdjustmentAsync(long slipId, SlipAdjustmentInputModel adjustment, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。調整明細を保存できません。");
         }
@@ -704,7 +704,7 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<SlipMutationResult> SaveKaraokeLinesAsync(long businessDayId, IReadOnlyList<KaraokeQuantityInputModel> karaokeLines, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SlipMutationResult.Failed("Supabase Edge Function設定が未設定です。カラオケ回数を保存できません。");
         }

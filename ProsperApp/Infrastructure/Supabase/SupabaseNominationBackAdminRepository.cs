@@ -14,7 +14,7 @@ public class SupabaseNominationBackAdminRepository(
 
     public async Task<IReadOnlyList<NominationBackMasterItem>> GetSettingsAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return [];
         }
@@ -61,7 +61,7 @@ public class SupabaseNominationBackAdminRepository(
         IReadOnlyList<NominationBackMasterInputModel> settings,
         CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return NominationBackMasterSaveResult.Failed("Supabase Edge Function設定が未設定です。指名バック設定を保存できません。");
         }

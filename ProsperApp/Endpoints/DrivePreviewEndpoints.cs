@@ -21,9 +21,7 @@ public static class DrivePreviewEndpoints
         CancellationToken cancellationToken)
     {
         var shouldPrefetch = prefetch == true;
-        var result = shouldPrefetch
-            ? await driveFileService.PrefetchFileAsync(driveFileId, cancellationToken)
-            : await driveFileService.GetFileWithDiagnosticsAsync(driveFileId, cancellationToken);
+        var result = await driveFileService.GetFileWithDiagnosticsAsync(driveFileId, cancellationToken);
 
         if (result.Content is null)
         {

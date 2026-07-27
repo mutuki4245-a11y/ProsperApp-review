@@ -21,11 +21,6 @@ public static class StoreUiText
         return value.ToString("0.##", JapaneseCulture);
     }
 
-    public static string UnitPriceQuantity(decimal unitPrice, decimal quantity)
-    {
-        return $"{Amount(unitPrice)} x {Quantity(quantity)}";
-    }
-
     public static string NumberInputValue(decimal value)
     {
         return value.ToString("0", CultureInfo.InvariantCulture);

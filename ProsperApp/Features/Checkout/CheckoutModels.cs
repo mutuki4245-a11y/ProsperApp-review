@@ -7,8 +7,6 @@ public class CheckoutPaymentInputModel
 {
     public string MethodCode { get; set; } = string.Empty;
 
-    public string MethodName { get; set; } = string.Empty;
-
     public bool IsSelected { get; set; }
 
     [Range(0, 99999999, ErrorMessage = "決済金額を確認してください。")]

@@ -10,7 +10,7 @@ public class SupabaseStorePricingPlanRepository(
 {
     public async Task<StorePricingPlanInputModel> GetAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return new StorePricingPlanInputModel();
         }
@@ -39,7 +39,7 @@ public class SupabaseStorePricingPlanRepository(
 
     public async Task<StorePricingPlanSaveResult> SaveAsync(StorePricingPlanInputModel plan, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StorePricingPlanSaveResult.Failed("Supabase Edge Function設定が未設定です。料金設定を保存できません。");
         }

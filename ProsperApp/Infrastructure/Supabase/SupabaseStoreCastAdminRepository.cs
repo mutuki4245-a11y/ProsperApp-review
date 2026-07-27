@@ -13,7 +13,7 @@ public class SupabaseStoreCastAdminRepository(
 
     public async Task<IReadOnlyList<StoreCastAdminItem>> GetCastsAsync(CancellationToken ct)
     {
-        if (!HasRequiredSettings())
+        if (!HasRpcAccess())
         {
             return [];
         }
@@ -50,7 +50,7 @@ public class SupabaseStoreCastAdminRepository(
 
     public async Task<StoreCastSaveResult> CreateCastAsync(StoreCastCreateInputModel input, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreCastSaveResult.Failed("Supabase Edge Function設定が未設定です。キャストを登録できません。");
         }
@@ -83,7 +83,7 @@ public class SupabaseStoreCastAdminRepository(
 
     public async Task<StoreCastSaveResult> UpdateDrinkMemoAsync(StoreCastDrinkMemoInputModel input, long? currentBusinessDayId, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreCastSaveResult.Failed("Supabase Edge Function設定が未設定です。ドリンクメモを更新できません。");
         }
@@ -122,7 +122,7 @@ public class SupabaseStoreCastAdminRepository(
 
     public async Task<StoreCastSaveResult> DeleteCastAsync(long castId, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return StoreCastSaveResult.Failed("Supabase Edge Function設定が未設定です。キャストを削除できません。");
         }

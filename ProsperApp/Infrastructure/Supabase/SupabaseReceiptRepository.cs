@@ -29,7 +29,7 @@ public class SupabaseReceiptRepository(
 
     public async Task<bool> IsPendingDriveFileAllowedAsync(string driveFileId, CancellationToken ct)
     {
-        if (!HasRequiredSettings() || string.IsNullOrWhiteSpace(driveFileId))
+        if (!HasRpcAccess() || string.IsNullOrWhiteSpace(driveFileId))
         {
             return false;
         }
@@ -40,7 +40,7 @@ public class SupabaseReceiptRepository(
 
     public async Task<SaveReceiptResult> SaveQuickEntryAsync(QuickEntryInputModel input, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SaveReceiptResult.Failed("Supabase Edge Function設定が未設定です。領収書を更新できません。");
         }
@@ -90,7 +90,7 @@ public class SupabaseReceiptRepository(
 
     public async Task<SaveReceiptResult> MarkScanMistakeAsync(string documentId, CancellationToken ct)
     {
-        if (!HasMutationSettings())
+        if (!HasRpcAccess())
         {
             return SaveReceiptResult.Failed("Supabase Edge Function設定が未設定です。領収書を更新できません。");
         }
