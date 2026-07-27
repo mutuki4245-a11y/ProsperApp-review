@@ -56,16 +56,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_casts", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_casts_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
-    "store.get_business_day_slips",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
     "store.get_business_day_snapshot",
     {
       result: "rows",
@@ -111,16 +101,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_settings", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.get_slip_detail",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
       ],
     },
   ],
@@ -372,55 +352,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.add_slip_customers",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_customer_labels", type: "text[]" },
-        { name: "p_entered_at", type: "timestamp with time zone" },
-      ],
-    },
-  ],
-  [
-    "store.add_slip_nominations",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_cast_nominations", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.add_slip_adjustment",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_line_name", type: "text" },
-        { name: "p_amount", type: "numeric" },
-      ],
-    },
-  ],
-  [
-    "store.apply_business_slip_editor_operation",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_operation_type", type: "text" },
-        { name: "p_operation_id", type: "text" },
-        { name: "p_payload", type: "jsonb" },
-      ],
-    },
-  ],
-  [
     "store.flush_business_home_changes",
     {
       result: "rows",
@@ -430,60 +361,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_client_batch_id", type: "text" },
         { name: "p_operations", type: "jsonb" },
         { name: "p_karaoke_lines", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.save_karaoke_lines",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_karaoke_lines", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.save_order_line_quantities",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_order_lines", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.leave_slip_customer",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_customer_id", type: "bigint" },
-        { name: "p_left_at", type: "timestamp with time zone" },
-      ],
-    },
-  ],
-  [
-    "store.update_slip_customer_label",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_customer_id", type: "bigint" },
-        { name: "p_customer_label", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.void_order_line",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_order_line_id", type: "bigint" },
       ],
     },
   ],

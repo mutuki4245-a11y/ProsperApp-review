@@ -1,5 +1,5 @@
 (() => {
-    const config = window.prosperBusinessHome ?? {};
+    const config = window.ProsperBusinessHomeConfig ?? {};
     const editorOptions = config.editorOptions ?? {};
     const modalElement = document.querySelector('[data-business-slip-editor-modal]');
     const content = modalElement?.querySelector('[data-business-slip-editor-content]');
@@ -34,7 +34,8 @@
     const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
     const backTargetModal = backTargetModalElement ? bootstrap.Modal.getOrCreateInstance(backTargetModalElement) : null;
     const attendingCastModal = attendingCastModalElement ? bootstrap.Modal.getOrCreateInstance(attendingCastModalElement) : null;
-    const currentSlip = (slipId) => (window.prosperBusinessHomeSlips || []).find((slip) => String(slip.id) === String(slipId));
+    const businessHome = () => window.ProsperBusinessHome;
+    const currentSlip = (slipId) => businessHome()?.getSlip?.(slipId);
     const formatYen = window.MoneyText?.yen ?? ((amount) => `${Number(amount || 0).toLocaleString('ja-JP')}円`);
     const actionTemplates = new Set(['customer_add', 'customer_rename', 'customer_leave', 'nomination_add', 'adjustment_add', 'order_add']);
     const deleteActions = {
@@ -923,7 +924,8 @@
         }
         const operation = buildOperation(form);
         const operations = (Array.isArray(operation) ? operation : [operation]).filter(Boolean);
-        if (operations.length === 0 || !window.prosperBusinessHomeEnqueueEditorOperation) {
+        const home = businessHome();
+        if (operations.length === 0 || !home?.enqueueEditorOperation) {
             const queueError = form.querySelector('[data-business-order-queue-error]');
             if (queueError) {
                 queueError.textContent = '商品を選択してください。';
@@ -933,7 +935,7 @@
             return;
         }
         state.isSubmitting = true;
-        operations.forEach((nextOperation) => window.prosperBusinessHomeEnqueueEditorOperation(nextOperation));
+        operations.forEach((nextOperation) => home.enqueueEditorOperation(nextOperation));
         modal.hide();
         state.isSubmitting = false;
     };

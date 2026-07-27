@@ -10,6 +10,8 @@
 
 2026-07-27時点で、未参照の `store.save_slip_adjustments` と旧 `public.save_quick_entry`、未使用ヘルパー `public.to_base36_3` を削除しました。`store` schemaの全関数は `public`、`anon`、`authenticated`、`service_role` から直接実行できず、`public.set_updated_at` の `search_path` も固定済みです。`prosper-rpc` はversion 27でACTIVE、Supabase Security AdvisorはWARN 0、Azure App ServiceへのZipDeployはHTTP 200、公開URLはGoogle認証へのHTTP 302を確認しています。
 
+2026-07-28時点で、旧 `/Slips/Edit` moduleは削除済みです。営業中の編集と会計は営業中トップ `/` の営業中一覧ハブに集約し、公開RPC境界は `store.get_business_day_snapshot` と `store.flush_business_home_changes` を正とします。`store.apply_business_slip_editor_operation` と個別編集関数はSQL内部実装として残しますが、Repositoryと `prosper-rpc` allowlistから直接呼ばない方針です。
+
 ## 重要方針
 
 - DB操作は原則 Supabase RPC 経由で行います。
@@ -21,14 +23,14 @@
 - `prosper-rpc` で `json` / `jsonb` 引数をSQLへ渡すときは、JSの配列/オブジェクトをそのまま `postgres.js` に渡します。Edge Function側で先に `JSON.stringify` すると二重エンコードされ、Postgres側ではJSON配列ではなくJSON文字列になり、指名追加や注文追加が0件登録になるため避けます。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
 - 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。指名バック設定は店舗別マスタDBですが当日の指名入力に使うため現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
-- 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。未送信の注文キューと営業中カラオケ数量は、店舗・営業日・伝票に紐付けた端末ごとのlocalStorage下書きとして画面再読込後も復元します。DB最新状態で対象伝票が `open` でない場合、保存成功時、または利用者が明示破棄した場合は削除します。端末間では直接同期せず、共有状態はDB/RPC保存後のデータを基準にします。
+- 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。`/Orders` の未送信注文キューは店舗・営業日・伝票に紐付けた端末ごとのlocalStorage下書きとして扱います。営業中トップの編集操作とカラオケ数量は画面操作中のメモリ下書きであり、画面終了・再読み込み後には復元しません。アプリ内遷移、他フォーム送信、会計前には `store.flush_business_home_changes` で保存完了を待ちます。端末間では直接同期せず、共有状態はDB/RPC保存後のデータを基準にします。
 - 出勤キャスト候補の `store.get_order_attending_casts` は、店舗別・営業日別に `IMemoryCache` へ初回成功時だけ保持します。勤怠保存、退勤情報保存、営業日開始、営業日締め、またはキャストのドリンクメモ保存の成功時に対象営業日のキャッシュを破棄します。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
 - 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は端末設定ではなく、`department_master` の店舗別運用設定として管理します。アプリ側では `store.get_context` から取得し、店舗コンテキストキャッシュに載せます。
 - 管理者モードでは営業日締め条件を無視できます。画面POSTの `Readiness` ブロックと `store.close_business_day` RPCの条件検証は、同じ管理者モードフラグで迂回します。営業日が存在することと、画面の営業日IDが現在営業日と一致することは引き続き確認します。
 - 指名・バックまわりの用語は、会計額へ加算する料金を `指名料金`、指名時にキャストへ支払うバックを `指名バック`、商品注文時にキャストへ支払う通常バックを `ドリンクバック`、その商品注文バック対象が当該伝票の指名キャストだった場合のバックを `担当バック` と呼び分けます。UI文言とドキュメントではこの4語を混同しないでください。
-- 営業中トップは営業中操作に必要な一覧だけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` の各パネル用GET handlerで初期表示後に取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ保存は `businessDayId`、`slipId`、`quantity` を `store.save_karaoke_lines` へ送るだけにし、店舗コンテキスト、卓、伝票一覧は再取得しません。数量変更直後は保存状態を「未保存」にし、アプリ内遷移や他フォーム送信の前に未保存分をDB上書き保存します。保存成功後だけ遷移または送信を続行し、保存失敗時は操作を止めて「保存失敗」と表示します。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、保存RPCは同一伝票内のカラオケ注文行を1行に集約します。
-- 営業中一覧の `store.get_business_day_slips` と `/Orders` の `store.get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、10秒ごとの表示中自動更新で再取得し、保存成功POST直後のサーバー側再ロードは行いません。営業中一覧と `/Orders` の注文対象伝票はどちらも `slipId` 単位で差分反映し、同期のたびに一覧全体を作り直さないでください。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
-- 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `store.get_business_day_slips` と `store.get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
+- 営業中トップは営業中操作に必要なスナップショットだけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` の各パネル用GET handlerで初期表示後に取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ保存は `store.flush_business_home_changes` の `p_karaoke_lines` に含め、客・指名・注文・自由入力明細の未送信操作と同じバッチで確定します。保存成功後だけ遷移または送信を続行し、保存失敗時は操作を止めて「保存失敗」と表示します。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、SQL内部で同一伝票内のカラオケ注文行を1行に集約します。
+- 営業中一覧の `store.get_business_day_snapshot` と `/Orders` の `store.get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、10秒ごとの表示中自動更新で再取得し、営業中トップの保存成功時は `store.flush_business_home_changes` の応答スナップショットで反映します。営業中一覧と `/Orders` の注文対象伝票はどちらも `slipId` 単位で差分反映し、同期のたびに一覧全体を作り直さないでください。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
+- 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `store.get_business_day_snapshot`、`store.get_order_entry_slips`、`store.get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。
@@ -116,13 +118,13 @@
 - 営業中画面では会計額を固定オーバーレイ操作中だけ表示し、カラオケ数量は画面内で即時反映して、アプリ内遷移や他フォーム送信の前に保存します。
 - マスタ系候補、現在営業日、当日出勤キャスト候補は `IMemoryCache` 対象です。対象は店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、現在営業日、指名バック設定、`store.get_order_attending_casts` の店舗別・営業日別結果です。指名バック設定は現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。
 - 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は店舗別マスター値です。`/Settings` には表示せず、`store.get_context` の店舗コンテキストとして利用します。
-- 営業中一覧と注文対象伝票は初期表示後のAjax取得と10秒自動更新で扱います。`store.get_business_day_slips` と `store.get_order_entry_slips` はキャッシュせず、保存成功POST直後の再取得を削ります。営業中一覧と `/Orders` の注文対象伝票DOMは `slipId` 単位の差分更新にし、同期のたびに全行を再作成しません。
+- 営業中一覧と注文対象伝票は初期表示後のAjax取得と10秒自動更新で扱います。`store.get_business_day_snapshot` と `store.get_order_entry_slips` はキャッシュせず、営業中トップの保存成功時は `store.flush_business_home_changes` の応答スナップショットで更新します。営業中一覧と `/Orders` の注文対象伝票DOMは `slipId` 単位の差分更新にし、同期のたびに全行を再作成しません。
 - 営業中一覧ハブの要約行は、状態を列に出さず `open` を緑、その他を灰色の行枠で区別する。卓番は2.5rem、入店は3.75rem、客・指名は残りを均等に配る可変列とし、メモ列は表示しない。カラオケは＋／－と数だけを出し、行・操作の余白を詰めて一覧性を優先する。展開詳細の客行は在席人数を出さず、指名行は指名料金を出さない。どちらも同じ文字サイズ・太さで、客名または「キャスト — 指名区分」を表示する。メモの再表示場所は別途決める。
 - `/Settings` の管理者解除後に、デバッグ用の「マスタ以外のテーブルのレコードを削除する」操作を表示します。`store.delete_non_master_records` は選択店舗の営業日、出勤、伝票、注文、会計、バック集計の営業データだけを削除し、`company_master`、`department_master`、`cast_master`、卓、商品、指名バック、支払方法などのマスタ表は削除しません。成功時は現在営業日と指名バック設定のruntimeキャッシュを破棄します。
 - 伝票追加モーダルは、時刻/卓番/メモ、客、指名の3カラム構成です。入店時刻を左列上端、メモを下端に固定し、卓番・客・指名の各リストへモーダル本文の残り高を配分します。入り切らない行だけを各リスト内でスクロールし、客・指名行はリスト上端から詰めます。指名は既定の先頭区分を初期選択し、空の「指名区分」は置きません。種別・料金・キャスト選択を1行で扱い、指名区分は0.6fr、料金は7.5rem、残りをキャスト選択へ配分して長いキャスト名だけを省略表示します。説明文や補助文言、客・指名の行番号は出さず、同伴系の指名種別を選ぶと指名料金の初期値を3000円にします。伝票作成は作成ボタンの明示クリックだけで送信し、入力・選択欄でのEnterは送信しません。
 - 卓番カテゴリは `store_table_master.table_category_no` の1桁数値（`0`〜`9`）で持ちます。伝票作成モーダルだけでカテゴリ間に細い区切り線を表示し、カテゴリ名・見出し・管理UIは置きません。`store.get_tables` はカテゴリ番号、既存の表示順、卓番順で返します。卓マスタをSQLで更新した後は、`store.get_tables` のプロセス内キャッシュを更新するためアプリ再起動または再配備が必要です。
-- 伝票詳細の客、指名、注文、自由入力明細は、初期表示後にパネルHTMLを非同期取得し、保存後も対象パネルのPartialだけをAjaxで差し替えます。このPartial化の主目的は、各操作をできるだけ1RPCで完結させてレスポンスを改善することです。詳細ページ全体の再描画は、会計確定/取消など伝票状態が変わる操作に限定する方針です。
-- 営業中トップの対象別編集モーダルは、旧 `/Slips/Edit` の客追加・指名追加・自由入力明細追加・注文キューのフォーム部品を共用する。客・指名・自由明細は一覧から選んだ1操作だけを保存し、注文は旧詳細と同じ商品カテゴリ、バック先選択、注文キュー、クリア、合計を使う。注文キューの保存時は各キュー行を同一伝票の注文レーンへ順に積み、失敗行だけを通知・ロールバックして後続行の送信は継続する。モーダルを閉じた未送信キューは端末に保持しない。
+- 旧 `/Slips/Edit` の詳細ページ、部分HTML、専用JavaScript、旧editor helperは削除済みです。営業中の客、指名、注文、自由入力明細、カラオケは営業中トップの `business-home.js` を唯一の状態所有者とし、editor/checkout JavaScriptは `window.ProsperBusinessHome` の公開メソッドだけを使います。
+- 営業中トップの対象別編集モーダルは、保存済み一覧を現在スナップショットから描画し、追加・変更・取消などの一操作だけをキューへ積みます。注文は営業中トップ内の注文キューで扱い、保存時は `store.flush_business_home_changes` にまとめます。失敗行だけを通知・ロールバックし、同じバッチの他行は保存を継続します。モーダルを閉じた未送信キューは端末に保持しません。
 - 営業中トップの会計モーダルは、0円会計で決済方法なしの確定を許容し、`請求なし 0円` として扱います。現金0円やカード0円の支払明細は作りません。現金決済額は、他の決済方法を併用した場合に会計額から非現金決済額を引いた残額へ初期表示しますが、利用者の入力後は自動上書きしません。選択できる決済方法は現金、CAT、PAYPAYの3種類に固定し、決済方法マスタを運用可能にする画面・取得RPCは別タスクとします。
 
 ### 会計フロー第1段階の実装状況と後続候補
@@ -154,6 +156,8 @@
 - 2026-07-21: 営業中一覧ハブの対象別編集は台帳型UIを正式採用した。展開行は「客」「指名」「注文」の左見出しを揃え、指名は `キャスト — 指名区分 / 指名料金` の組で表示する。客・指名・注文・自由入力明細のモーダルは、最初に保存済み一覧だけを示し、追加・名前変更・退店・削除のいずれかを選んだ時だけ同じモーダル枠を一操作フォームへ切り替える。送信後はP8の操作キューへ渡して直ちに閉じ、同じ種別だけを直列、別種別を並列で保存する。注文は1通常商品ずつ追加でき、対象商品のときだけバック先を選べる。指名削除は指名・指名バックを`cancelled`、紐付く指名料金を`voided`、自由入力明細と通常注文の削除は`voided`にして監査行を残す。`store.apply_business_slip_editor_operation` に追加/取消操作を集約し、全伝票スナップショットは注文の`sourceType`/`sourceId`も返す。対象Supabaseへ `business_home_editor_ledger_actions` と `business_home_order_quantity_limit` を適用済みで、関数の`security definer`と`search_path=public`、新操作、注文数量1〜999、スナップショット応答を確認した。commit `75825c7` をpushし、Azure App ServiceへZipDeploy HTTP 200で反映した。認証済みAzure画面でA1の台帳表示、客・指名・注文・自由明細の各一覧→一操作フォーム遷移、注文フォームの初期バック先無効、コンソールエラーなしを確認した。保存操作は実データに対して実行していない。
 
 - 2026-07-22: 営業中トップの仮行同期を `store.flush_business_home_changes` へ集約した。1回の送信で客・指名・注文・自由明細・カラオケの未送信行を送るが、各行は独立に成否を返すため、失敗した行だけを通知・ロールバックし、他行の保存は継続する。`client_batch_id` と7日保持の結果表により、応答未達時は同じバッチを安全に再送でき、追加行を二重登録しない。応答には最終の全伝票スナップショットを含めるので、成功後の余分な一覧RPCは不要である。画面終了・再読み込みでは下書きを復元せず、アプリ内遷移・他フォーム送信・会計前だけ保存完了を待つ。各編集モーダルは現在のスナップショットから即座に一覧を表示し、追加など実操作のフォームだけ既存部分表示を遅延取得する。注文のバック対象は専用モーダルでキャスト別の＋／－数量を決め、一括で注文キューへ入れる。Supabaseには関数・結果表・RLS・直接RPC revokeを適用済み、`prosper-rpc` version 25へallowlistを配備済み。空バッチ、失敗行の個別結果、同一バッチIDの再実行、検証行がロールバックされることをSQLで確認した。commit `da3a8b1` はAzure App ServiceへZipDeploy HTTP 200で反映し、公開URLが認証リダイレクトのHTTP 302を返すことを確認した。認証済みAzure画面の保存受入は未実施。
+
+- 2026-07-28: `Docs/architecture-review-20260727.html` のcandidate 1/2を実装し、旧 `/Slips/Edit` module、`Pages/Slips/*`、5つの `slip-*` JavaScript、旧editor helper、Repositoryの直接編集メソッドを削除した。C#/Edgeの営業中公開面は `store.get_business_day_snapshot` と `store.flush_business_home_changes` に絞り、`store.apply_business_slip_editor_operation` と個別編集関数はflush内部用に戻した。`store.get_business_day_slips` と `store.get_slip_detail` はSQLソースでdrop対象にし、`prosper-rpc` allowlistから削除する。
 
 - 2026-07-18 決定記録: 会計・領収書・伝票詳細まわり（2026-07-19にソース実装済み）
   - 領収書印刷:
@@ -325,7 +329,8 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - ヘルプ対応のため、現在店舗所属キャストだけに限定しません。
 - `store.get_casts_admin(p_department_id)`
   - キャスト管理画面用に、現在店舗所属キャストだけを返します。
-- `store.get_business_day_slips(p_department_id, p_business_day_id)`
+- `store.get_business_day_snapshot(p_department_id, p_business_day_id)`
+- `store.flush_business_home_changes(p_department_id, p_business_day_id, p_client_batch_id, p_operations, p_karaoke_lines)`
 - `store.get_order_entry_slips(p_department_id, p_business_day_id)`
 - `store.get_order_items(p_department_id)`
 - `store.get_item_admin_catalog(p_department_id)`
@@ -335,21 +340,20 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 - `store.upsert_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price, p_is_active, p_is_cast_back_target, p_cast_back_regular_unit_amount, p_cast_back_nomination_unit_amount, p_cast_back_type)`
 - `store.delete_item(p_department_id, p_item_id)`
 - `store.add_order_lines(p_department_id, p_slip_id, p_order_lines)`
-  - 注文端末/オーダー追加から登録できるのは `store_item_master.item_type = 'standard'` の標準商品だけです。カラオケなどのシステム商品は `store.save_karaoke_lines` など専用RPCで扱います。
+  - 注文端末から登録できるのは `store_item_master.item_type = 'standard'` の標準商品だけです。営業中トップの注文追加は `store.flush_business_home_changes` 経由で同じ標準商品制約を使います。カラオケなどのシステム商品は同flushのカラオケpayloadとして扱います。
 - `store.create_slip(p_department_id, p_table_id, p_opened_at, p_customer_labels, p_cast_nominations, p_memo)`
   - `p_cast_nominations` は `cast_id`, `nomination_kind`, `nomination_price` を持つJSON配列です。`nomination_kind` から店舗別マスタの基本種別と同伴時刻を解決します。
   - `nomination_price` はUI/ドキュメント上の指名料金です。1000円から20000円まで1000円刻みで、`item_type = 'nomination_fee'` のシステム商品として注文行へ自動追加し、会計額へ加算します。
   - 有効な指名バック設定がありバック単価が0円より大きい場合、`store_slip_cast_backs` に現在単価の実績を作成します。
 - `store.add_slip_adjustment(p_department_id, p_slip_id, p_line_name, p_amount)`
-  - 伝票詳細の自由入力明細モーダルから1件追加します。商品マスタへは登録せず、負値も許容します。
+  - `store.flush_business_home_changes` 内部から自由入力明細を1件追加します。商品マスタへは登録せず、負値も許容します。
   - `amount` は負値を許容し、会計合計額へ直接加減します。
 - `store.save_karaoke_lines(p_department_id, p_business_day_id, p_karaoke_lines)`
-  - カラオケ商品の注文行を伝票単位で一括保存します。
+  - `store.flush_business_home_changes` 内部からカラオケ商品の注文行を伝票単位で一括保存します。
   - カラオケは `store_item_master.item_type = 'karaoke'`、1回200円固定、サービス料対象です。
   - 同一伝票内ではカラオケ注文行を1行に集約し、`ordered_at` は入店時刻に合わせます。数量0はアクティブ行を残しません。
 - `store.save_order_line_quantities(p_department_id, p_slip_id, p_order_lines)`
-  - 伝票詳細の訂正モードから通常注文行の数量だけを訂正します。
-  - カラオケなどのシステム商品は対象外です。数量0は注文取消と同じく対象注文行と紐づくバック実績を `voided` にします。
+  - 旧詳細画面の数量訂正用SQLです。現行UI/C#/Edgeから直接呼ばず、数量訂正を復活させる場合は取消+再追加に統一するか業務方針を確認します。
 - `store.confirm_checkout(p_department_id, p_slip_id, p_payments, p_received_amount)`
   - `checkout_ready` の伝票だけを会計確定対象にします。`open` 伝票からの直接確定は禁止し、会計伝票出力を通して会計内容を固定した後に実行します。
   - 状態が `checkout_ready` でない場合は会計確定せず、画面側は会計伝票の出力または最新状態の再確認へ戻します。
@@ -423,7 +427,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - 客、指名、自由入力明細などの編集は専用モーダルで完結させ、展開行内に直接フォームを増やしません。
   - 展開行には注文の全行を常時表示せず、客、指名、注文合計、注文件数、自由入力明細合計、会計伝票出力を優先します。注文時刻一覧や同一商品内訳は、必要時にアコーディオンまたはモーダルで開きます。
   - 伝票一覧の会計額は常に隠し、右下寄りの固定オーバーレイボタンに触れている間だけ表示します。
-  - 営業中カラオケは伝票行の `+` / `-` で画面内ドラフトを即時更新し、保存状態を「未保存」にします。短周期の自動保存は行わず、アプリ内遷移や他フォーム送信の前に、現在表示している数量を `store.save_karaoke_lines` へ送ってDB上書き保存します。保存成功後だけ遷移または送信を続行し、失敗時は操作を止めて `localStorage` の未送信ドラフトを残します。
+  - 営業中カラオケは伝票行の `+` / `-` で画面内ドラフトを即時更新し、保存状態を「未保存」にします。短周期の自動保存は行わず、アプリ内遷移や他フォーム送信の前に、現在表示している数量を `store.flush_business_home_changes` へ含めてDB保存します。保存成功後だけ遷移または送信を続行し、失敗時は操作を止めます。未送信ドラフトは画面終了・再読み込み後に復元しません。
 
 - `/Management`
   - 上部タブの `マスタ設定` 入口です。
@@ -451,13 +455,9 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - 店舗別DBマスタに定義された指名種別についてバック単価と有効/無効を保存します。初期値は本指名、場内指名、同伴4区分で、バック単価はいずれも1000円です。
   - 保存成功時は指名バック設定キャッシュだけを破棄します。商品候補やキャスト候補のキャッシュは破棄しません。指名バック設定キャッシュは営業日開始、営業日締めの成功時にも破棄します。
 
-- `/Slips/Edit`
-  - 伝票詳細、客追加、指名追加、オーダー追加、自由入力明細を扱う補助編集画面。
-  - 会計画面、会計伝票の再印刷、会計準備解除、会計確定、領収書再発行の導線は持たない。会計関連の復旧も営業中トップ `/` の会計モーダルで行う。
-  - 指名追加は当日出勤キャストをコンボボックスから選択し、店舗別DBマスタの有効な指名種別と1000円から20000円までの指名料金を選択します。初期定義では本指名が先頭です。
-  - 自由入力明細は通常商品とは別枠で、専用モーダルから1件ずつ追加し、伝票/会計に表示します。
-  - 会計伝票では自由入力明細を通常オーダーに混ぜず、摘要と符号付き金額だけの個別行として出します。
-  - カラオケは商品としてオーダー一覧に表示し、時刻列は入店時刻に固定します。異なるタイミングで追加したカラオケも同一伝票内では1行に集約します。伝票詳細では自動システム商品として表示するだけにし、数量変更や保存操作は営業中トップに集約します。
+- 旧 `/Slips/Edit`（削除済み）
+  - 伝票詳細、客追加、指名追加、オーダー追加、自由入力明細を扱っていた補助編集画面は削除済みです。
+  - 現行の営業中編集、会計伝票、会計準備解除、会計確定、領収書再発行は営業中トップ `/` の営業中一覧ハブと会計モーダルで行います。
   - 指名料金は指名登録時にシステム商品としてオーダー一覧へ自動表示します。通常注文行は訂正モードで数量のみ変更できます。数量0は注文取消扱いです。カラオケや指名料金などのシステム商品は通常注文の訂正・削除対象に含めません。
 
 - `/Orders`

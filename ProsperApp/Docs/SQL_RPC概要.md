@@ -21,14 +21,15 @@ DB操作は原則Supabase RPC経由で行う。アプリからのRPC呼び出し
 | `Sql/store_rpc_functions.sql` | 分割済みRPCファイルの実行順を示す非実行インデックス。実行対象ではない。 |
 | `Sql/store_rpc/00_schema.sql` | `store` schemaを作成し、旧 `public.*` RPCを削除する。 |
 | `Sql/store_rpc/01_business_day.sql` | 店舗コンテキスト、営業日開始/取得/締め、勤怠、酒代、未会計伝票数を扱う。 |
-| `Sql/store_rpc/02_store_masters.sql` | 卓、キャスト、商品、商品管理、指名バック設定、営業中/注文入力向け伝票一覧を扱う。 |
-| `Sql/store_rpc/03_slips.sql` | 伝票詳細、客追加/退店、指名追加、自由入力調整、カラオケ商品数量、通常注文数量訂正、客名更新、注文取消を扱う。 |
+| `Sql/store_rpc/02_store_masters.sql` | 卓、キャスト、商品、商品管理、指名バック設定、注文入力向け伝票一覧を扱う。旧営業中一覧RPCは削除済みである。 |
+| `Sql/store_rpc/03_slips.sql` | 伝票作成後の編集操作で使う内部RPC、カラオケ商品数量、通常注文数量訂正、客名更新、注文取消を扱う。旧伝票詳細RPCは削除済みである。 |
 | `Sql/store_rpc/04_orders.sql` | 注文登録と、バックキャスト候補用の当日出勤キャスト取得を扱う。 |
 | `Sql/store_rpc/05_checkout.sql` | 会計確定、会計取消、伝票作成を扱う。 |
 | `Sql/store_rpc/06_receipts.sql` | 領収書入力、簡易入力、スキャンミス除外を扱う。 |
 | `Sql/store_rpc/07_cast_sales_adjustments.sql` | 締め作業のキャスト売上額調整を扱う。 |
 | `Sql/store_rpc/08_checkout_ready.sql` | 会計伝票、会計準備、支払確定、領収書印刷データを扱う。 |
-| `Sql/store_rpc/09_business_home_snapshot.sql` | 営業中トップ向けの営業日全伝票スナップショットと、客・指名・自由明細を一操作ずつ保存して同スナップショットを返すRPCを扱う。 |
+| `Sql/store_rpc/09_business_home_snapshot.sql` | 営業中トップ向けの営業日全伝票スナップショットと、flush内部で使う一操作編集RPCを扱う。 |
+| `Sql/store_rpc/10_business_home_flush.sql` | 営業中トップの未送信編集・カラオケ下書きを1バッチで保存し、行別結果と最新スナップショットを返す公開RPCを扱う。 |
 | `Sql/store_rpc/99_grants.sql` | `store` schemaの全関数について、直接PostgREST実行権限を一括剥奪する。 |
 | `Sql/store_table_master_seed.sql` | mieu本店の卓番マスタ初期データ。 |
 | `Sql/quick_entry_account_master_updates.sql` | 領収書簡易入力UIで使う科目・補助科目の追加更新SQL。会計マスタは `accounting` schema、会社マスタは `public` schema を完全修飾し、有効会社だけを対象にする。会計データを変更するため、対象会社・補助科目・マップ件数を確認してから実行する。 |
@@ -48,11 +49,12 @@ DB反映時の基本順序は以下。
 10. `Sql/store_rpc/07_cast_sales_adjustments.sql`
 11. `Sql/store_rpc/08_checkout_ready.sql`
 12. `Sql/store_rpc/09_business_home_snapshot.sql`
-13. `Sql/store_rpc/99_grants.sql`
-14. 必要に応じて `Sql/store_table_master_seed.sql`
-15. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+13. `Sql/store_rpc/10_business_home_flush.sql`
+14. `Sql/store_rpc/99_grants.sql`
+15. 必要に応じて `Sql/store_table_master_seed.sql`
+16. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
-## 2.1 会計フロー第1段階の実装状況（2026-07-27）
+## 2.1 会計フロー第1段階の実装状況（2026-07-28）
 
 以下はアプリ、リモートDB、`prosper-rpc` Edge Functionへ適用済みである。P1受入確認とプリンター実機別の印字調整は継続中であり、旧 `store.confirm_checkout` 契約は現在契約として扱わない。
 
@@ -64,6 +66,8 @@ DB反映時の基本順序は以下。
 - これら5 RPCは `prosper-rpc` のallowlistへ追加・更新済みで、公開しない `store.build_checkout_statement_data`、`store.build_checkout_review_data`、`store.build_checkout_receipt_data` は直接実行権限を持たない。
 
 会計伝票の端末内印刷状態と領収書の初回印刷成功記録はlocalStorageだけで管理し、DBの伝票状態・印刷ジョブ・印刷履歴へ保存しない。領収書の `再試行` 表記は、同じ端末で初回印刷成功記録があり、店員が明示的にもう一度出力する場合だけである。
+
+旧 `/Slips/Edit` moduleは削除済みであり、営業中トップ `/` の公開RPC境界は `store.get_business_day_snapshot` と `store.flush_business_home_changes` に集約する。`store.apply_business_slip_editor_operation`、客・指名・自由明細・カラオケなどの個別編集関数はSQL内部実装として残るが、Repositoryと `prosper-rpc` allowlistから直接呼ばない。
 
 ## 3. テーブル概要
 
@@ -94,11 +98,11 @@ DB反映時の基本順序は以下。
 
 ## 4. 会計額の扱い
 
-`store_slips` に会計額を保持する列はない。営業中一覧の `accounting_amount` は `store.get_business_day_slips` が返す表示用の集計値であり、永続化された確定額ではない。
+`store_slips` に会計額を保持する列はない。営業中一覧の `accounting_amount` は `store.get_business_day_snapshot` が返す表示用の集計値であり、永続化された確定額ではない。
 
 現行実装では、`store.issue_checkout_statement` で会計伝票出力時に退店時刻を選択して `store_slips.closed_at` と未退店客行の退店時刻を固定し、`store_slips.status` を `checkout_ready` へ変更する。`checkout_ready` への変更は物理プリンターの成功ではなく、サーバー側の会計伝票出力RPC成功を基準にする。プリンター失敗時もDB状態は戻さず、`checkout_ready` のまま再印刷または会計準備解除で対応する。`checkout_ready` は `checked_out` と同じように注文追加、指名追加、自由入力明細変更など会計内容が変わるRPCの対象外にする。会計準備解除RPCは `store.release_checkout_ready` とし、`store_slips.status = 'checkout_ready'` の伝票だけを対象にし、`checked_out` 済み伝票には使わない。`checked_out` を戻す場合は `store.cancel_checkout` を使う。解除時は通常の営業中状態へ戻し、`store_slips.closed_at = null` に戻したうえで、`left_at_source = 'accounting_slip'` の退店時刻だけを未確定に戻す。`left_at_source = 'manual'` の個別退店登録は残す。
 
-`checkout_ready` は締め条件や未会計数では会計済みとして扱わない。`store.get_open_slip_count` や締め前検証では `open` と `checkout_ready` を未会計側に含める。一方で営業中一覧や伝票詳細では通常編集中の `open` とは分け、「会計準備中」として編集不可、再印刷、会計準備解除、会計確定へ進む状態を返す。
+`checkout_ready` は締め条件や未会計数では会計済みとして扱わない。`store.get_open_slip_count` や締め前検証では `open` と `checkout_ready` を未会計側に含める。一方で営業中一覧では通常編集中の `open` とは分け、「会計準備中」として編集不可、再印刷、会計準備解除、会計確定へ進む状態を返す。
 
 顧客名は注文端末と締め時のキャスト売上額調整一覧で使う伝票内の内部識別であり、領収書宛名には使わない。`store.update_slip_customer_label` は後続では `open` の伝票だけを更新対象にし、`checkout_ready` と `checked_out` では確定値として更新を拒否する。
 
@@ -117,7 +121,7 @@ DB反映時の基本順序は以下。
 
 領収書の最初の印刷要求は `store.confirm_checkout` の成功応答後だけに作る。成功応答は初回印刷用の領収書 `print_data` を含め、その値を直接印刷する。`checkout_id`、`slip_id`、`slip_no` は対象特定の内部識別子であり、領収書の表示項目と紙面へ含めない。直後の印刷失敗を同一ブラウザのlocalStorageで通知・再試行してよいが、`pending`、`sent`、`failed` をDBの伝票状態、印刷ジョブ、印刷履歴として保存しない。`checked_out` の伝票は営業中トップからいつでも手動再発行でき、確定済み伝票と会計・決済の保存データから印刷データを読み取り専用で再生成する。紙面に `再試行` を印字するのは、同じ端末に初回印刷成功記録があり、店員が明示的に再出力する場合だけである。会計取消済み伝票は対象外とする。宛名は任意入力で会計データに保存しない。本番化までに、適格簡易請求書の必要事項である発行者名・登録番号、取引日、取引内容、税率ごとの対価額、税率ごとの消費税額または適用税率を、確定済み会計・決済・明細と会計確定時の発行者スナップショットから再現できるようにする。商品、自由入力明細、サービス料を含む課税対象は10%固定であり、税込会計額を10%対象額として扱う。複数税率の税区分・集計は別仕様とする。
 
-後続の `store.get_checkout_receipt_print_data(p_department_id, p_slip_id)` は、`checked_out` かつ有効な確定会計がある伝票だけを対象に、確定済み伝票、会計、決済、明細、会計確定時の発行者スナップショットを領収書用 `print_data jsonb` として返す手動再発行用の読み取り専用RPCとする。応答は端末内の初回成功記録キー用に `checkout_id` と `print_data` を別フィールドで返し、IDを紙面用データへ混ぜない。`store.confirm_checkout` の初回印刷用 `print_data` と同じ内部SQLヘルパーを使う。通常の `store.get_slip_detail` へ会計・決済情報を追加せず、領収書画面が複数RPCを呼んだり、C#やJavaScriptで領収書の構成を再実装したりしないようにする。
+後続の `store.get_checkout_receipt_print_data(p_department_id, p_slip_id)` は、`checked_out` かつ有効な確定会計がある伝票だけを対象に、確定済み伝票、会計、決済、明細、会計確定時の発行者スナップショットを領収書用 `print_data jsonb` として返す手動再発行用の読み取り専用RPCとする。応答は端末内の初回成功記録キー用に `checkout_id` と `print_data` を別フィールドで返し、IDを紙面用データへ混ぜない。`store.confirm_checkout` の初回印刷用 `print_data` と同じ内部SQLヘルパーを使う。営業中スナップショットへ会計・決済情報を追加せず、C#やJavaScriptで領収書の構成を再実装したりしないようにする。
 
 会計伝票印字データの生成は、公開RPCごとに再実装しない。後続実装では `store.build_checkout_statement_data(...)` のような内部用SQL関数を作り、`store.issue_checkout_statement` と `store.get_checkout_statement_print_data` は同じヘルパー結果を使う。この内部関数はアプリから直接呼ばせず、`99_grants.sql` でもexecute権限を付与しない。
 
@@ -180,7 +184,7 @@ DB反映時の基本順序は以下。
 | `store.create_cast` | キャストを作成する。任意のドリンクメモは空欄なら `null` として保存する。 |
 | `store.update_cast_drink_memo` | 現在店舗の有効キャストに限り、任意のドリンクメモを更新する。 |
 | `store.delete_cast` | キャストを論理削除する。`cast_master.status = 'inactive'`、`is_active = false` に更新する。 |
-| `store.get_business_day_slips` | 営業中画面向けの伝票一覧、客・指名、注文件数・注文合計、自由入力明細合計、会計表示額を返す。 |
+| `store.get_business_day_snapshot` | 営業中画面向けに、営業日全伝票の客・指名・注文・自由入力明細・カラオケ・会計表示額と単調増加リビジョンを返す。 |
 | `store.get_order_entry_slips` | `/Orders` 向けの注文入力対象伝票一覧を返す。卓番、客数、客名、指名キャストを含み、注文端末の卓番選択には客名と指名キャストを表示する。 |
 | `store.get_order_items` | 注文入力用の商品一覧を返す。標準商品だけを返し、カラオケなどのシステム商品は返さない。 |
 | `store.get_item_admin_catalog` | 商品管理画面用のカテゴリ/商品一覧を返す。 |
@@ -195,16 +199,11 @@ DB反映時の基本順序は以下。
 
 | RPC | 主な用途 |
 | --- | --- |
-| `store.get_slip_detail` | 伝票詳細、客行、指名、注文、自由入力調整、会計候補を返す。カラオケは注文行の `item_type = 'karaoke'`、指名料金は `item_type = 'nomination_fee'` で判定する。注文バック実績がある注文行は `order_back_cast_*` 列でバック対象キャスト名も返す。 |
 | `store.create_slip` | 伝票を作成する。初期指名がある場合は指名料金のシステム注文行と、指名バック設定に基づく `store_slip_cast_backs` を作成する。 |
-| `store.add_slip_customers` | 既存伝票へ客行を追加する。 |
-| `store.add_slip_nominations` | 既存伝票へ指名を追加する。指名料金のシステム注文行と、指名バック設定が有効かつ0円より大きい場合は `store_slip_cast_backs` を作成する。 |
-| `store.leave_slip_customer` | 客行を退店扱いにする。 |
-| `store.add_slip_adjustment` | 伝票詳細の自由入力明細モーダルから調整行を1件追加する。 |
-| `store.save_karaoke_lines` | 営業中トップの遷移時保存で、営業日内のカラオケ商品数量を伝票単位のJSON payloadで保存する。同一伝票のカラオケ注文行は1行に集約する。 |
-| `store.save_order_line_quantities` | 伝票詳細の訂正モードから通常注文行の数量を保存する。数量0は対象注文行と紐づくバック実績を取消扱いにする。 |
-| `store.update_slip_customer_label` | 客行の表示名を更新する。現行は `open` と `checked_out` を許可するが、後続では `open` だけを許可し、会計準備中・会計済み後の客名は確定値として更新しない。 |
-| `store.void_order_line` | 注文行を取消する。 |
+| `store.flush_business_home_changes` | 営業中トップの客・指名・注文・自由入力明細・カラオケの未送信行を1バッチで保存し、行別結果と最新スナップショットを返す。 |
+| `store.apply_business_slip_editor_operation` | flush内部で1操作を適用するSQL関数。Repositoryと `prosper-rpc` から直接公開しない。 |
+| `store.add_slip_customers` / `store.add_slip_nominations` / `store.leave_slip_customer` / `store.add_slip_adjustment` / `store.update_slip_customer_label` / `store.void_order_line` / `store.save_karaoke_lines` | 旧直接呼び出し用の個別編集関数。現行UIでは `store.flush_business_home_changes` の内部実装として扱い、Repositoryと `prosper-rpc` から直接公開しない。 |
+| `store.save_order_line_quantities` | 旧詳細画面の通常注文数量訂正用SQL関数。現行UIは取消と再追加を使うため直接公開しない。数量訂正を復活する場合は業務方針を確認してから契約を再定義する。 |
 
 ### 注文
 
@@ -285,13 +284,13 @@ RPCを追加/変更するときは、以下を同じタスク内で揃える。
 5. アプリ側Repository、DTO、JSONパース処理
 6. 必要に応じて `HANDOFF.md`、`Docs/システム仕様書.md`、本書
 
-一覧RPCは対象営業日や対象伝票を先に絞ってから関連行を集計する。特に `store.get_business_day_slips` と `store.get_cast_sales_adjustment_slips` は、全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さない。
+一覧RPCは対象営業日や対象伝票を先に絞ってから関連行を集計する。特に `store.get_business_day_snapshot`、`store.get_order_entry_slips`、`store.get_cast_sales_adjustment_slips` は、全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さない。
 
 アプリ側では、店舗一覧、店舗コンテキスト、卓、キャストマスタ候補、商品候補、商品管理カタログ、キャスト管理一覧、指名バック設定、現在営業日、当日出勤キャスト候補を `IMemoryCache` の対象として扱う。RPC失敗や設定未完了の結果はキャッシュしない。指名バック設定は店舗別マスタDBだが、当日の指名入力に使うため現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄する。商品/カテゴリ保存、商品削除、商品並び順保存、キャスト登録/削除などその他の破棄契機は `HANDOFF.md` の重要方針に従う。
 
 `store.get_order_attending_casts` は店舗別・営業日別にアプリ側でキャッシュする。勤怠保存、退勤情報保存、営業日開始、営業日締め、キャストのドリンクメモ保存の成功時に対象営業日のキャッシュを破棄する。
 
-`store.get_business_day_slips` と `store.get_order_entry_slips` はキャッシュ対象にしない。アプリ側ではRazor初期表示をブロックせず、ページ用JSON handlerから初回Ajax、フォーカス復帰、10秒ごとの表示中自動更新で取得する。保存成功POST直後の同期再取得は行わない。
+`store.get_business_day_snapshot` と `store.get_order_entry_slips` はキャッシュ対象にしない。アプリ側ではRazor初期表示をブロックせず、ページ用JSON handlerから初回Ajax、フォーカス復帰、10秒ごとの表示中自動更新で取得する。営業中トップの保存は `store.flush_business_home_changes` の応答スナップショットで反映し、保存成功POST直後の同期再取得は行わない。
 
 注文端末キューと伝票詳細のオーダー追加モーダル内キューは、DB保存前の端末内または画面内状態である。RPC概要では保存後のDB状態だけを共有状態として扱い、会計前の未保存ブロック対象には、会計端末がDBまたは自画面状態から直接確認できるものだけを含める。
 
@@ -333,19 +332,11 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | `store.get_cast_sales_adjustment_slips` | キャスト売上額調整対象の動的一覧。 | キャッシュしない。会計や調整保存で変わるため専用画面表示時に最新取得する。 |
 | `store.get_cast_sales_adjustment_detail` | 伝票単位の調整詳細と、販売イベント時点の指名キャストで算出する小計・合計別の初期配分案。 | キャッシュしない。対象伝票の調整モーダル表示や保存検証の元データとして最新取得する。開始時刻や会計スナップショットに不足・不整合がある場合は、理由コードとともに均等配分へフォールバックする。 |
 | `store.save_cast_sales_adjustment` | 保存結果のみ。 | 戻り値の保存件数を画面結果判定に使い、キャッシュしない。調整状態や対象一覧は次回表示で最新取得する。 |
-| `store.get_business_day_slips` | 営業中一覧の動的結果。 | キャッシュしない。営業中トップのJSON handlerから初回表示後、フォーカス復帰、10秒ごとの表示中自動更新で取得する。後続では営業中トップに見込み売上を参考表示する。見込み売上は取消以外の伝票の会計額合計のみとし、会計額はその時点で計算できる税込・サービス料込みの最終請求額とする。更新は営業中一覧ハブと同じ10秒ポーリング/フォーカス復帰で行う。集計を同RPCに含めるか、専用軽量RPCに分けるかは実装時に決める。 |
+| `store.get_business_day_snapshot` | 営業中一覧の動的スナップショット。 | キャッシュしない。営業中トップのJSON handlerから初回表示後、フォーカス復帰、10秒ごとの表示中自動更新で取得する。見込み売上は取消以外の伝票の会計額合計のみとし、会計額はその時点で計算できる税込・サービス料込みの最終請求額とする。 |
 | `store.get_order_entry_slips` | 注文端末の対象伝票動的結果。 | キャッシュしない。`/Orders` のJSON handlerから初回表示後、フォーカス復帰、10秒ごとの表示中自動更新で取得する。 |
-| `store.get_slip_detail` | 伝票詳細の動的結果。 | キャッシュしない。客、指名、注文、調整、カラオケ、会計状態を含むため詳細画面や保存後再表示で最新取得する。 |
 | `store.create_slip` | 保存結果のみ。 | 戻り値の `slip_id` を画面結果判定に使い、キャッシュしない。営業日が未作成の場合は事前の `EnsureCurrentAsync` が現在営業日キャッシュを作る。営業中一覧は次回JSON取得で反映する。 |
-| `store.add_slip_customers` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。伝票詳細は次回表示で最新取得する。 |
-| `store.leave_slip_customer` | 保存結果のみ。 | 戻り値は成功判定に使い、キャッシュしない。伝票詳細と営業中一覧は次回取得で反映する。 |
-| `store.update_slip_customer_label` | 保存結果のみ。 | 戻り値は成功判定に使い、キャッシュしない。伝票詳細と営業中一覧は次回取得で反映する。 |
-| `store.add_slip_nominations` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。指名種別はキャッシュ済みマスタを検証に使い、実績はRPC側で現在DBマスタからスナップショット保存する。 |
+| `store.flush_business_home_changes` | 保存結果、行別結果、最新スナップショット。 | キャッシュしない。成功応答のスナップショットを営業中一覧へ直接反映する。同じ `client_batch_id` の再送はDB側の保存済み結果を返し、追加行を二重登録しない。 |
 | `store.add_order_lines` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。注文対象伝票や伝票詳細は次回取得で反映する。 |
-| `store.void_order_line` | 保存結果のみ。 | 戻り値は成功判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
-| `store.add_slip_adjustment` | 保存結果のみ。 | 戻り値の `inserted_count` を画面結果判定に使い、キャッシュしない。伝票詳細は次回取得で反映する。 |
-| `store.save_karaoke_lines` | 保存結果のみ。 | 戻り値の `saved_count` をAjax結果判定に使い、キャッシュしない。営業中一覧や伝票詳細は次回取得で反映する。 |
-| `store.save_order_line_quantities` | 保存結果のみ。 | 戻り値の `saved_count` を画面結果判定に使い、キャッシュしない。通常注文数量、バック実績、伝票詳細、営業中一覧は次回取得で反映する。 |
 | `store.confirm_checkout` | 保存結果のみ。 | 戻り値の `checkout_id` と `change_amount` を会計結果判定に使い、キャッシュしない。会計後の営業中一覧、注文対象伝票、締め可否は次回取得で反映する。 |
 | `store.cancel_checkout` | 保存結果のみ。 | 戻り値の `checkout_id` を画面結果判定に使い、キャッシュしない。会計取消後の営業中一覧、注文対象伝票、締め可否、キャスト売上額調整状態は次回取得で反映する。客行の退店時刻は変更せず、キャスト売上額調整はリセットする。取消成功時は、この `checkout_id` の同一端末にある領収書再印刷待ちをlocalStorageから削除する。 |
 | `store.get_pending_receipts` | 未処理領収書の動的一覧。 | キャッシュしない。領収書入力や締め可否に直結するため、領収書画面、Driveプレビュー許可判定、`/Closing` のパネル状態JSON handler、締めPOST検証で最新取得する。 |
@@ -360,14 +351,15 @@ Repositoryが受け取ったRPC結果は、以下のライフサイクルで扱�
 | --- | --- | --- |
 | カラオケ商品化 | 実装済み | `store_item_master.item_type = 'karaoke'` のシステム商品を使い、`store_order_lines` に1伝票1行で集約する。旧 `store_slip_charge_lines.charge_type = 'karaoke'` のアクティブ行は注文行へ移行してvoid化する。 |
 | システム商品の注文端末除外 | 実装済み | `store.get_order_items` は標準商品だけを返し、`store.add_order_lines` も標準商品以外を拒否する。カラオケなどのシステム商品は専用RPCで保存する。 |
-| カラオケ/指名料金のサービス料対象化 | 実装済み | `store.get_business_day_slips` と `store.confirm_checkout` は、カラオケや指名料金を含む全注文行の小計に20%サービス料を掛ける。システム商品も自由入力調整ではなく注文小計に含める。 |
-| 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。伝票詳細では `store.add_slip_adjustment` で1件ずつ追加し、会計額へ直接加減する。商品マスタには登録しない。後続の会計伝票では通常オーダーとは別枠で、摘要と符号付き金額だけを個別行として返す。 |
+| カラオケ/指名料金のサービス料対象化 | 実装済み | `store.get_business_day_snapshot` と `store.confirm_checkout` は、カラオケや指名料金を含む全注文行の小計に20%サービス料を掛ける。システム商品も自由入力調整ではなく注文小計に含める。 |
+| 自由入力調整 | 実装済み | `store_slip_charge_lines` は現行運用では `charge_type = 'adjustment'` を扱う。営業中トップでは `store.flush_business_home_changes` 経由で追加し、会計額へ直接加減する。商品マスタには登録しない。会計伝票では通常オーダーとは別枠で、摘要と符号付き金額だけを個別行として返す。 |
 | 指名料金のシステム商品化 | 実装済み | 指名登録時に `store_item_master.item_type = 'nomination_fee'` のシステム商品を使って `store_order_lines` へ1指名1行を作成する。`store_slip_casts.nomination_price` は入力値の保持と表示に使い、会計集計は指名料金の注文行を商品小計として参照する。 |
-| 指名種別別キャストバック | 実装済み | `store_nomination_back_master` で店舗別の指名種別候補と単価を管理し、`store.create_slip` / `store.add_slip_nominations` が `nomination_kind` から基本種別と同伴時刻を解決して `store_slip_cast_backs` へ営業実績を作成する。 |
+| 指名種別別キャストバック | 実装済み | `store_nomination_back_master` で店舗別の指名種別候補と単価を管理し、`store.create_slip` / `store.flush_business_home_changes` が `nomination_kind` から基本種別と同伴時刻を解決して `store_slip_cast_backs` へ営業実績を作成する。 |
 | 店舗別運用設定 | 実装済み | `department_master.attendance_minute_step`, `cast_sales_amount_basis`, `cast_sales_split_mode` を `store.get_context` で返し、勤怠時刻選択とキャスト売上額調整の初期配分に使う。 |
 | 管理者モード締め | 実装済み | `store.close_business_day` は `p_ignore_closing_requirements = true` の場合、未会計伝票、酒代、勤怠、退勤、キャスト売上額調整、未入力領収書の条件検証を無視して営業日を締める。営業日IDと店舗IDの一致確認は維持する。 |
 | 当日出勤キャスト候補キャッシュ | 実装済み | RPC定義変更は不要。アプリ側に店舗別・営業日別キャッシュキーを持ち、勤怠保存/退勤情報保存/営業日開始/営業日締め時に破棄する。 |
-| 営業中一覧と注文対象伝票の再取得削減 | 実装済み | RPC定義変更は不要。`store.get_business_day_slips` と `store.get_order_entry_slips` はページ用JSON handlerから非同期取得し、初期表示や保存成功POSTをブロックしない。 |
+| 営業中一覧と注文対象伝票の再取得削減 | 実装済み | 営業中トップは `store.get_business_day_snapshot` をページ用JSON handlerから非同期取得し、保存は `store.flush_business_home_changes` の応答スナップショットで反映する。`/Orders` は `store.get_order_entry_slips` を非同期取得し、初期表示や保存成功POSTをブロックしない。 |
+| 旧 `/Slips/Edit` 削除 | 実装済み | `Pages/Slips/*`、専用JavaScript、旧Repository公開メソッド、`store.get_business_day_slips`、`store.get_slip_detail` の公開面を削除した。個別編集関数は必要なものだけflush内部実装として残し、直接Edge公開しない。 |
 | 会計伝票出力と会計準備中 | 実装済み | `store.issue_checkout_statement`、`store.get_checkout_statement_print_data`、`store.release_checkout_ready` を使い、`store_slips.status` を `checkout_ready` にする。`store.issue_checkout_statement` は退店時刻固定、`checkout_ready` 化、未退店客行補完、印刷用データ返却までを1RPCで完結させ、画面は成功後に直ちに物理印刷を開始する。返却された印刷用データは物理印刷前に営業中端末の会計伝票用localStorageへ保存し、同一端末の再印刷では追加RPCを呼ばず再利用する。印刷待ち、印刷中、印刷失敗、印刷済みはDB状態にせず、この端末内記録で表す。端末内印刷状態は会計確定の条件にせず、会計準備中のモーダルで再印刷、会計準備解除、決済への移行を選べる。端末記録は会計確定の成功応答時に削除し、記録がない `checkout_ready` は再印刷用に復旧用RPCで会計伝票を再取得する。`store.confirm_checkout` は `checkout_ready` 伝票だけを対象にし、`open` からの直接確定を禁止する。会計確定自体は `checkout_ready` から `checked_out` へ遷移するDB操作である。`store.confirm_checkout` は会計伝票出力時に固定済みの `store_slips.closed_at` と支払入力を使う。`store_slip_customers.left_at_source` は、個別退店登録を `manual`、会計伝票出力補完を `accounting_slip` として記録する。出力前には対象伝票の最新保存状態を1RPCで取得し、営業中一覧の表示状態だけを根拠にしない。物理印刷失敗ではDB状態を戻さず、再印刷または解除で戻す。`store.release_checkout_ready` は `checkout_ready` だけを対象にし、`checked_out` は既存の会計取消へ分ける。再印刷は専用スナップショットを作らず、会計準備中でロックされた現在DB状態から復旧時だけ再生成する。解除RPCでは `store_slips.closed_at = null` に戻し、`accounting_slip` 由来の退店時刻だけを未確定に戻し、個別退店登録済みの退店時刻は残す。`store.add_order_lines` など会計内容を変えるRPCは `checkout_ready` を対象外にする。営業中一覧の定期更新では印刷用JSONを返さない。 |
 | 0円会計 | 後続仕様 | `store.confirm_checkout` は会計額0円の場合、支払方法明細なしで会計確定できるようにする。`store_checkout_payments` に0円の現金/CAT/その他行を作らず、表示上は `請求なし 0円` として扱う。 |
 | レシートプリンター正式仕様 | 後続仕様 | SII Web SDK Server経由で80mm紙向けに店舗名、宛名、会計確定の実日付、「ご飲食代として」、会計額、支払い方法、内消費税額を印字し、宛名は会計処理で入力した値に `様` を付けて表示する。未入力の場合も `様` のみ表示する。支払方法の `CAT` は「クレジット」として表示する。`checkout_id`、`slip_id`、`slip_no` は内部管理用であり紙面に印字しない。営業日は内部管理用に留める。収入印紙欄は税込み55,000円以上とし、日本の収入印紙を貼る前提のサイズに合わせて枠、余白、担当者印欄との位置関係を調整する。最初の印刷失敗通知と即時再試行は同じブラウザのlocalStorageで扱うが、DBには印刷状態、印刷ジョブ、印刷履歴を保存しない。`checked_out` の伝票はいつでも手動再発行でき、紙面には `再試行` を印字する。会計取消済み伝票は再発行できない。 |

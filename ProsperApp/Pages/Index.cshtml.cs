@@ -32,16 +32,11 @@ public class IndexModel(
     [BindProperty]
     public CreateSlipInputModel CreateSlipInput { get; set; } = new();
 
-    [BindProperty]
-    public List<KaraokeQuantityInputModel> KaraokeLines { get; set; } = [];
-
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
     public DateOnly CurrentBusinessDate { get; private set; }
 
     public StoreContext? StoreContext { get; set; }
-
-    public IReadOnlyList<BusinessSlipListItem> Slips { get; set; } = [];
 
     public IReadOnlyList<StoreTableOption> Tables { get; set; } = [];
 
@@ -53,7 +48,7 @@ public class IndexModel(
 
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
 
-    private static readonly JsonSerializerOptions KaraokeJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
     public const string AttendanceRequiredMessage = CreateSlipEditor.AttendanceRequiredMessage;
     public const string PreviousBusinessDayOpenMessage = "未締めの前営業日があります。締め作業を完了してから新しい伝票を追加してください。";
 
@@ -84,15 +79,7 @@ public class IndexModel(
 
     public bool CheckoutEnabled => _featureGate.IsEnabled(FeatureNames.Checkout);
 
-    public int OpenSlipCount => Slips.Count(x => x.Status is "open" or "checkout_ready");
-
-    public int CheckedOutSlipCount => Slips.Count(x => x.Status == "checked_out");
-
-    public decimal EstimatedSalesAmount => Slips
-        .Where(x => !string.Equals(x.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
-        .Sum(x => x.AccountingAmount);
-
-    public bool HasAnySlip => Slips.Count > 0;
+    public decimal EstimatedSalesAmount => 0;
 
     public bool HasCurrentBusinessDay => HasValidBusinessDate(CurrentBusinessDay);
 
@@ -207,42 +194,6 @@ public class IndexModel(
         return new JsonResult(new { succeeded = true, snapshot = snapshot.Snapshot });
     }
 
-    public async Task<IActionResult> OnPostBusinessSlipEditorOperationAsync(CancellationToken cancellationToken)
-    {
-        if (!SlipsEnabled)
-        {
-            return NotFound();
-        }
-
-        var input = await ReadCheckoutRequestAsync<BusinessSlipEditorOperationInput>(cancellationToken);
-        if (input is null || input.SlipId <= 0 || string.IsNullOrWhiteSpace(input.OperationId) ||
-            input.OperationType is not (
-                "add_customer" or "update_customer" or "leave_customer" or
-                "add_nomination" or "cancel_nomination" or
-                "add_adjustment" or "void_adjustment" or
-                "add_order" or "void_order"))
-        {
-            return BadRequest(new { succeeded = false, message = "編集内容を確認してください。" });
-        }
-
-        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (currentBusinessDay is null)
-        {
-            return BadRequest(new { succeeded = false, message = "営業中の営業日がありません。" });
-        }
-
-        var result = await _slipRepository.ApplyBusinessSlipEditorOperationAsync(
-            input,
-            currentBusinessDay.BusinessDayId,
-            cancellationToken);
-        if (!result.Succeeded)
-        {
-            return BadRequest(new { succeeded = false, operationId = input.OperationId, message = result.ErrorMessage });
-        }
-
-        return new JsonResult(new { succeeded = true, operationId = input.OperationId, snapshot = result.Snapshot });
-    }
-
     public async Task<IActionResult> OnPostFlushBusinessHomeChangesAsync(CancellationToken cancellationToken)
     {
         if (!SlipsEnabled)
@@ -325,94 +276,6 @@ public class IndexModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnPostSaveKaraokeAsync(CancellationToken cancellationToken)
-    {
-        var isAsyncRequest = IsAsyncKaraokeRequest();
-        if (!SlipsEnabled)
-        {
-            return isAsyncRequest ? KaraokeJsonError("カラオケ入力は利用できません。", 404) : NotFound();
-        }
-
-        var saveRequest = isAsyncRequest
-            ? await ReadKaraokeSaveRequestAsync(cancellationToken)
-            : null;
-        if (isAsyncRequest && saveRequest is null)
-        {
-            return KaraokeJsonError("カラオケ回数を保存できませんでした。");
-        }
-
-        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (currentBusinessDay is null)
-        {
-            ModelState.AddModelError(string.Empty, "営業中の営業日がありません。");
-            if (isAsyncRequest)
-            {
-                return KaraokeJsonError(GetFirstModelError("営業中の営業日がありません。"));
-            }
-
-            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-            SetDefaultCreateSlipInput();
-            return Page();
-        }
-
-        if (saveRequest?.BusinessDayId is > 0 &&
-            saveRequest.BusinessDayId.Value != currentBusinessDay.BusinessDayId)
-        {
-            ModelState.AddModelError(string.Empty, "営業日が更新されています。画面を再読み込みしてください。");
-            if (isAsyncRequest)
-            {
-                return KaraokeJsonError(GetFirstModelError("営業日が更新されています。画面を再読み込みしてください。"));
-            }
-
-            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-            SetDefaultCreateSlipInput();
-            return Page();
-        }
-
-        var submittedLines = saveRequest?.KaraokeLines ?? KaraokeLines;
-        KaraokeLines = NormalizeKaraokeLines(submittedLines);
-        var validationError = GetKaraokeValidationError(KaraokeLines);
-        if (!string.IsNullOrWhiteSpace(validationError))
-        {
-            if (isAsyncRequest)
-            {
-                return KaraokeJsonError(validationError);
-            }
-
-            RemoveModelStateEntries(nameof(CreateSlipInput));
-            ValidateKaraokeLines(KaraokeLines);
-            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-            SetDefaultCreateSlipInput();
-            return Page();
-        }
-
-        var result = await _slipRepository.SaveKaraokeLinesAsync(
-            currentBusinessDay.BusinessDayId,
-            KaraokeLines,
-            cancellationToken);
-        if (!result.Succeeded)
-        {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "カラオケ回数を保存できませんでした。");
-            if (isAsyncRequest)
-            {
-                return KaraokeJsonError(GetFirstModelError("カラオケ回数を保存できませんでした。"));
-            }
-
-            await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-            SetDefaultCreateSlipInput();
-            return Page();
-        }
-
-        if (isAsyncRequest)
-        {
-            ModelState.Clear();
-            return new JsonResult(new { succeeded = true, savedCount = KaraokeLines.Count });
-        }
-
-        TempData["SuccessMessage"] = "カラオケ回数を保存しました。";
-        ModelState.Clear();
-        return RedirectToPage();
-    }
 
     public async Task<IActionResult> OnPostIssueCheckoutStatementAsync(CancellationToken cancellationToken)
     {
@@ -569,7 +432,6 @@ public class IndexModel(
         if (CurrentBusinessDay is null)
         {
             AttendanceCasts = [];
-            Slips = [];
             return;
         }
 
@@ -583,7 +445,6 @@ public class IndexModel(
             AttendanceCasts = [];
         }
 
-        Slips = [];
     }
 
     private void SetDefaultCreateSlipInput()
@@ -627,78 +488,6 @@ public class IndexModel(
         }
     }
 
-    private static List<KaraokeQuantityInputModel> NormalizeKaraokeLines(IEnumerable<KaraokeQuantityInputModel>? lines)
-    {
-        return (lines ?? [])
-            .Where(x => x.SlipId > 0)
-            .GroupBy(x => x.SlipId)
-            .Select(x => new KaraokeQuantityInputModel
-            {
-                SlipId = x.Key,
-                Quantity = x.Last().Quantity
-            })
-            .ToList();
-    }
-
-    private static string? GetKaraokeValidationError(IReadOnlyList<KaraokeQuantityInputModel> lines)
-    {
-        if (lines.Count == 0)
-        {
-            return "保存するカラオケ回数がありません。";
-        }
-
-        if (lines.Any(line => line.SlipId <= 0))
-        {
-            return "営業中の卓を確認してください。";
-        }
-
-        return lines.Any(line => line.Quantity < 0 || line.Quantity > 999 || line.Quantity != decimal.Truncate(line.Quantity))
-            ? "カラオケ回数を確認してください。"
-            : null;
-    }
-
-    private void ValidateKaraokeLines(IReadOnlyList<KaraokeQuantityInputModel> lines)
-    {
-        if (lines.Count == 0)
-        {
-            ModelState.AddModelError(nameof(KaraokeLines), "保存するカラオケ回数がありません。");
-            return;
-        }
-
-        for (var i = 0; i < lines.Count; i++)
-        {
-            var line = lines[i];
-            if (line.SlipId <= 0)
-            {
-                ModelState.AddModelError($"KaraokeLines[{i}].SlipId", "営業中の卓を確認してください。");
-            }
-
-            if (line.Quantity < 0 || line.Quantity > 999 || line.Quantity != decimal.Truncate(line.Quantity))
-            {
-                ModelState.AddModelError($"KaraokeLines[{i}].Quantity", "カラオケ回数を確認してください。");
-            }
-        }
-    }
-
-    private async Task<KaraokeSaveRequest?> ReadKaraokeSaveRequestAsync(CancellationToken cancellationToken)
-    {
-        if (!Request.HasJsonContentType())
-        {
-            return new KaraokeSaveRequest(null, KaraokeLines);
-        }
-
-        try
-        {
-            return await JsonSerializer.DeserializeAsync<KaraokeSaveRequest>(
-                Request.Body,
-                KaraokeJsonOptions,
-                cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 
     private async Task<T?> ReadCheckoutRequestAsync<T>(CancellationToken cancellationToken)
     {
@@ -709,7 +498,7 @@ public class IndexModel(
 
         try
         {
-            return await JsonSerializer.DeserializeAsync<T>(Request.Body, KaraokeJsonOptions, cancellationToken);
+            return await JsonSerializer.DeserializeAsync<T>(Request.Body, RequestJsonOptions, cancellationToken);
         }
         catch (JsonException)
         {
@@ -717,36 +506,8 @@ public class IndexModel(
         }
     }
 
-    private void RemoveModelStateEntries(string prefix)
-    {
-        var keys = ModelState.Keys
-            .Where(key => string.Equals(key, prefix, StringComparison.Ordinal) ||
-                          key.StartsWith($"{prefix}.", StringComparison.Ordinal) ||
-                          key.StartsWith($"{prefix}[", StringComparison.Ordinal))
-            .ToArray();
-
-        foreach (var key in keys)
-        {
-            ModelState.Remove(key);
-        }
-    }
-
-    private bool IsAsyncKaraokeRequest()
-    {
-        return string.Equals(Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private IActionResult KaraokeJsonError(string message, int statusCode = 400)
-    {
-        return new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
-    }
-
     private IActionResult CheckoutJsonError(string message, int statusCode = 400) =>
         new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
-
-    private sealed record KaraokeSaveRequest(
-        long? BusinessDayId,
-        List<KaraokeQuantityInputModel>? KaraokeLines);
 
     private sealed record CheckoutSlipRequest(long SlipId);
     private sealed record CheckoutStatementIssueRequest(long SlipId, DateTimeOffset? ClosedAt);
@@ -754,14 +515,6 @@ public class IndexModel(
         long SlipId,
         List<CheckoutPaymentInputModel>? Payments,
         decimal? ReceivedAmount);
-
-    private string GetFirstModelError(string fallback)
-    {
-        return ModelState.Values
-            .SelectMany(x => x.Errors)
-            .Select(x => x.ErrorMessage)
-            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? fallback;
-    }
 
     public static string ToSlipStatusDisplay(string status)
     {

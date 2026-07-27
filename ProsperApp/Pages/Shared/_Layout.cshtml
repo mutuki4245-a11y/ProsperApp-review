@@ -5,9 +5,7 @@
     var isOrdersPage = currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase);
     var isSalesAttendance = currentPath.StartsWith("/Attendance", StringComparison.OrdinalIgnoreCase);
     var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase);
-    var isSalesActive = currentPath == "/" ||
-        currentPath.StartsWith("/Slips", StringComparison.OrdinalIgnoreCase) ||
-        isSalesAttendance;
+    var isSalesActive = currentPath == "/" || isSalesAttendance;
     var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
     var bodyClass = isOrdersPage
         ? "order-terminal"

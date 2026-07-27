@@ -164,11 +164,14 @@ const context = {
         })
     }),
     window: {
-        prosperBusinessHome: { getCheckoutStatementPrintDataUrl: '/checkout', receiptPrinterEnabled: false },
-        prosperBusinessHomeSlips: [{ id: 1, status: 'checkout_ready', tableDisplay: 'A1' }],
-        prosperBusinessHomeWaitForOperations: async () => true,
-        prosperBusinessHomeSetCheckoutLock: () => {},
-        prosperBusinessHomeReload: async () => true,
+        ProsperBusinessHomeConfig: { getCheckoutStatementPrintDataUrl: '/checkout', receiptPrinterEnabled: false },
+        ProsperBusinessHome: {
+            getSlip: () => ({ id: 1, status: 'checkout_ready', tableDisplay: 'A1' }),
+            waitForOperations: async () => true,
+            setCheckoutLock: () => {},
+            reload: async () => true,
+            flush: async () => true
+        },
         AppLoading: { show() {}, hide() {} },
         bootstrap: { Modal: { getOrCreateInstance: (target) => target === paymentModalElement ? paymentModal : modal } },
         addEventListener() {},

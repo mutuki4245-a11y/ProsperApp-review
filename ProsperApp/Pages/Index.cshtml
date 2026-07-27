@@ -89,7 +89,7 @@
                 }
             </div>
             <section class="slip-list-section" id="slipListPanel">
-                <form method="post" asp-page-handler="SaveKaraoke" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
+                <form method="post" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
                     <div class="slip-list-section__statusbar">
                         <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>
                     </div>
@@ -465,7 +465,7 @@
         <script src="~/js/features/sii-checkout-statement-printer.js" asp-append-version="true"></script>
     }
     <script>
-        window.prosperBusinessHome = @Json.Serialize(new
+        window.ProsperBusinessHomeConfig = @Json.Serialize(new
         {
             businessSlipsUrl = Url.Page("/Index", "BusinessSlips"),
             flushBusinessHomeChangesUrl = Url.Page("/Index", "FlushBusinessHomeChanges"),

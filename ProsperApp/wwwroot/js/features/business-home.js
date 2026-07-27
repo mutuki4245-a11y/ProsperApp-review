@@ -1,5 +1,5 @@
 (() => {
-    const config = window.prosperBusinessHome ?? {};
+    const config = window.ProsperBusinessHomeConfig ?? {};
     const form = document.querySelector('[data-business-karaoke-form]');
     const list = document.querySelector('[data-business-slip-list]');
     if (!form || !list) {
@@ -260,8 +260,6 @@
         const projected = projectSnapshot();
         if (!projected) return;
         slips = Array.isArray(projected.slips) ? projected.slips : [];
-        window.prosperBusinessHomeSlips = slips;
-        window.prosperBusinessHomeSnapshot = projected;
         updateSummary(projected);
         renderSlips();
         document.dispatchEvent(new CustomEvent('prosper:business-slips-updated', { detail: { slips, snapshot: projected } }));
@@ -1353,11 +1351,14 @@
         }
     }, refreshIntervalMs);
 
+    window.ProsperBusinessHome = Object.freeze({
+        reload: loadSlips,
+        flush: flushBusinessHomeChanges,
+        enqueueEditorOperation,
+        setCheckoutLock,
+        getPendingForSlip: pendingForSlip,
+        waitForOperations: waitForBusinessOperations,
+        getSlip
+    });
     void loadSlips();
-    window.prosperBusinessHomeReload = loadSlips;
-    window.prosperBusinessHomeFlushKaraoke = flushBusinessHomeChanges;
-    window.prosperBusinessHomeEnqueueEditorOperation = enqueueEditorOperation;
-    window.prosperBusinessHomeSetCheckoutLock = setCheckoutLock;
-    window.prosperBusinessHomeGetPendingForSlip = pendingForSlip;
-    window.prosperBusinessHomeWaitForOperations = waitForBusinessOperations;
 })();
