@@ -34,6 +34,7 @@ as $$
             t.table_code,
             t.table_name,
             s.opened_at,
+            s.closed_at,
             s.status,
             s.customer_count,
             s.memo
@@ -93,6 +94,67 @@ as $$
         join target_slips s on s.slip_id = cl.slip_id
         group by cl.slip_id
     ),
+    pricing_lines as (
+        select
+            s.slip_id,
+            calculated.pricing_code,
+            calculated.line_name,
+            calculated.occurred_at,
+            calculated.customer_count,
+            calculated.quantity,
+            calculated.unit_price,
+            calculated.amount,
+            calculated.pricing_plan_version
+        from target_slips s
+        cross join lateral (
+            select
+                calculated.pricing_code,
+                calculated.line_name,
+                calculated.occurred_at,
+                calculated.customer_count,
+                calculated.quantity,
+                calculated.unit_price,
+                calculated.amount,
+                calculated.pricing_plan_version
+            from store.calculate_slip_pricing(s.department_id, s.slip_id, now()) calculated
+            where s.status = 'open'
+
+            union all
+
+            select
+                pl.pricing_code,
+                pl.line_name,
+                pl.occurred_at,
+                pl.customer_count,
+                pl.quantity,
+                pl.unit_price,
+                pl.amount,
+                pl.pricing_plan_version
+            from public.store_slip_pricing_lines pl
+            where pl.slip_id = s.slip_id
+              and s.status <> 'open'
+              and pl.status = 'active'
+        ) calculated
+    ),
+    pricing_summary as (
+        select
+            pl.slip_id,
+            coalesce(sum(pl.amount), 0) as pricing_subtotal_amount,
+            coalesce(jsonb_agg(jsonb_build_object(
+                'pricingCode', pl.pricing_code,
+                'lineName', pl.line_name,
+                'occurredAt', pl.occurred_at,
+                'occurredTime', to_char(pl.occurred_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                'customerCount', pl.customer_count,
+                'quantity', pl.quantity,
+                'unitPrice', pl.unit_price,
+                'amount', pl.amount,
+                'pricingPlanVersion', pl.pricing_plan_version,
+                'status', 'active'
+            ) order by pl.occurred_at, pl.pricing_code), '[]'::jsonb) as pricing_lines
+        from pricing_lines pl
+        group by pl.slip_id
+    ),
     summaries as (
         select
             s.*,
@@ -101,10 +163,12 @@ as $$
             coalesce(casts.cast_names, '') as cast_names,
             coalesce(os.order_count, 0)::integer as order_count,
             coalesce(os.order_subtotal_amount, 0) as order_subtotal_amount,
+            coalesce(pricing.pricing_subtotal_amount, 0) as pricing_subtotal_amount,
             coalesce(charges.adjustment_amount, 0) as adjustment_amount,
             greatest(
                 coalesce(os.order_subtotal_amount, 0) +
-                round(coalesce(os.order_subtotal_amount, 0) * 0.20, 0) +
+                coalesce(pricing.pricing_subtotal_amount, 0) +
+                round((coalesce(os.order_subtotal_amount, 0) + coalesce(pricing.pricing_subtotal_amount, 0)) * 0.20, 0) +
                 coalesce(charges.adjustment_amount, 0),
                 0
             ) as accounting_amount,
@@ -114,6 +178,7 @@ as $$
         left join cast_summary casts on casts.slip_id = s.slip_id
         left join order_summary os on os.slip_id = s.slip_id
         left join charge_summary charges on charges.slip_id = s.slip_id
+        left join pricing_summary pricing on pricing.slip_id = s.slip_id
     ),
     slip_payloads as (
         select
@@ -143,6 +208,7 @@ as $$
                 'castNames', coalesce(nullif(s.cast_names, ''), '指名なし'),
                 'orderCount', s.order_count,
                 'orderSubtotalAmount', s.order_subtotal_amount,
+                'pricingSubtotalAmount', s.pricing_subtotal_amount,
                 'adjustmentAmount', s.adjustment_amount,
                 'memo', coalesce(nullif(s.memo, ''), '-'),
                 'accountingAmount', s.accounting_amount,
@@ -231,6 +297,11 @@ as $$
                     from public.store_slip_charge_lines cl
                     where cl.slip_id = s.slip_id
                       and cl.charge_type = 'adjustment'
+                ), '[]'::jsonb),
+                'pricingLines', coalesce((
+                    select ps.pricing_lines
+                    from pricing_summary ps
+                    where ps.slip_id = s.slip_id
                 ), '[]'::jsonb)
             ) as slip
         from summaries s

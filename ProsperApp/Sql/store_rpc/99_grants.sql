@@ -19,6 +19,8 @@ declare
         'store.get_order_items',
         'store.get_item_admin_catalog',
         'store.get_nomination_back_master',
+        'store.get_pricing_plan',
+        'store.save_pricing_plan',
         'store.save_nomination_back_master',
         'store.get_order_attending_casts',
         'store.get_slip_detail',

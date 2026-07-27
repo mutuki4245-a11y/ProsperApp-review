@@ -20,11 +20,17 @@ const statement = context.window.ProsperCheckoutStatementPrinter.createTextParts
         { name: 'ドリンク', back_cast_display_name: '田中', quantity: 2, unit_price: 1000, amount: 2000 },
         { name: 'ドリンク', back_cast_display_name: '佐藤', quantity: 1, unit_price: 1000, amount: 1000 }
     ],
+    pricing_lines: [
+        { name: 'セット料金', customer_count: 2, quantity: 2, unit_price: 3000, amount: 6000 },
+        { name: '延長料金', customer_count: 1, quantity: 1, unit_price: 2000, amount: 2000 }
+    ],
     adjustments: [],
-    subtotal_amount: 9000,
-    service_charge_amount: 1800,
-    consumption_tax_amount: 982,
-    total_amount: 10800
+    order_subtotal_amount: 9000,
+    pricing_subtotal_amount: 8000,
+    subtotal_amount: 17000,
+    service_charge_amount: 3400,
+    consumption_tax_amount: 1855,
+    total_amount: 20400
 }, 48).beforeTotal.split('\n');
 
 assert.match(statement.find((line) => line.startsWith('退店')) || '', /2026\/07\/22 25:00$/, '退店時刻は25:00を上限に印字すること');
@@ -37,6 +43,8 @@ assert.ok(statement.includes('ドリンク/田中'), 'バック対象キャス�
 assert.ok(statement.includes('ドリンク/佐藤'), '別のバック対象キャストは別明細にすること');
 assert.equal(statement.filter((line) => line === 'ドリンク/田中').length, 1, '同じバック対象キャストの明細だけを集約すること');
 assert.ok(statement.some((line) => /1,000 x 3/.test(line)), '同じバック対象キャストの数量を合算すること');
+assert.ok(statement.includes('時間料金'), '自動料金を通常注文と分けて印字すること');
+assert.ok(statement.includes('セット料金') && statement.includes('延長料金'), 'セット料金と延長料金を印字すること');
 
 const rpcSource = await readFile(new URL('../Sql/store_rpc/08_checkout_ready.sql', import.meta.url), 'utf8');
 assert.match(rpcSource, /when ol\.source_type = 'nomination_fee' and sc\.nomination_type = 'companion'/, '同伴指名の名称をRPCで決めること');
@@ -44,5 +52,7 @@ assert.match(rpcSource, /format\('同伴\(%s\)'/, '同伴指名の会計伝票�
 assert.match(rpcSource, /format\('担当\(%s\)'/, 'その他指名の会計伝票名を含めること');
 assert.match(rpcSource, /'back_cast_display_name', coalesce\(back_cast\.display_name, ''\)/, '明細のバック対象を印字データへ含めること');
 assert.match(rpcSource, /'business_date', v_slip\.business_date/, '会計伝票の退店時刻丸め用に営業日を返すこと');
+assert.match(rpcSource, /from public\.store_slip_pricing_lines pl/, '固定済み自動料金を会計伝票へ含めること');
+assert.match(rpcSource, /store\.calculate_slip_pricing\(p_department_id, p_slip_id, p_closed_at\)/, '会計伝票出力時に選択退店時刻で自動料金を固定すること');
 
 console.log('Checkout statement layout checks passed.');

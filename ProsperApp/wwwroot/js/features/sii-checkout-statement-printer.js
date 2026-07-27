@@ -79,6 +79,17 @@
                 lines.push(line.name);
                 lines.push(twoColumn(`  ${line.unitPrice.toLocaleString('ja-JP')} x ${line.quantity}`, yen(line.amount)));
             });
+        const pricingLines = Array.isArray(request.pricing_lines) ? request.pricing_lines : [];
+        if (pricingLines.length > 0) {
+            lines.push('時間料金');
+            pricingLines.forEach((line) => {
+                const name = compact(line.name, '時間料金');
+                const people = toAmount(line.customer_count);
+                const quantity = toAmount(line.quantity);
+                lines.push(name);
+                lines.push(twoColumn(`  ${people}人 / ${toAmount(line.unit_price).toLocaleString('ja-JP')} x ${quantity}`, yen(line.amount)));
+            });
+        }
         (Array.isArray(request.adjustments) ? request.adjustments : []).forEach((line) => {
             lines.push(twoColumn(compact(line.name, '調整'), yen(line.amount)));
         });

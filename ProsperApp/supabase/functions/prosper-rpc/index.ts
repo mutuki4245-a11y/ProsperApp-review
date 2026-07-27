@@ -88,6 +88,22 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_order_items", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_item_admin_catalog", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_nomination_back_master", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_pricing_plan", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  [
+    "store.save_pricing_plan",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_set_minutes", type: "integer" },
+        { name: "p_set_unit_price_single", type: "numeric" },
+        { name: "p_set_unit_price_per_customer", type: "numeric" },
+        { name: "p_extension_unit_price_single", type: "numeric" },
+        { name: "p_extension_unit_price_per_customer", type: "numeric" },
+        { name: "p_is_active", type: "boolean" },
+      ],
+    },
+  ],
   [
     "store.save_nomination_back_master",
     {

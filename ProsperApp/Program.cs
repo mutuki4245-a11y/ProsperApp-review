@@ -39,6 +39,7 @@ builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();
 builder.Services.AddScoped<IStoreItemAdminRepository, SupabaseStoreItemAdminRepository>();
 builder.Services.AddScoped<IStoreCastAdminRepository, SupabaseStoreCastAdminRepository>();
 builder.Services.AddScoped<INominationBackAdminRepository, SupabaseNominationBackAdminRepository>();
+builder.Services.AddScoped<IStorePricingPlanRepository, SupabaseStorePricingPlanRepository>();
 builder.Services.AddHttpClient<IDriveFileService, GoogleDriveFileService>();
 
 var googleDriveOptions = builder.Configuration.GetSection("GoogleDrive").Get<GoogleDriveOptions>() ?? new();

@@ -20,6 +20,8 @@ declare
     v_slip public.store_slips%rowtype;
     v_store_name text;
     v_table_display_name text;
+    v_order_subtotal_amount numeric(12, 0);
+    v_pricing_subtotal_amount numeric(12, 0);
     v_subtotal_amount numeric(12, 0);
     v_service_charge_amount numeric(12, 0);
     v_adjustment_amount numeric(12, 0);
@@ -47,10 +49,16 @@ begin
      where d.department_id = v_slip.department_id;
 
     select coalesce(sum(ol.amount), 0)
-      into v_subtotal_amount
+      into v_order_subtotal_amount
       from public.store_order_lines ol
      where ol.slip_id = p_slip_id
        and ol.status = 'active';
+
+    select coalesce(sum(pl.amount), 0)
+      into v_pricing_subtotal_amount
+      from public.store_slip_pricing_lines pl
+     where pl.slip_id = p_slip_id
+       and pl.status = 'active';
 
     select coalesce(sum(cl.amount), 0)
       into v_adjustment_amount
@@ -59,6 +67,7 @@ begin
        and cl.charge_type = 'adjustment'
        and cl.status = 'active';
 
+    v_subtotal_amount := v_order_subtotal_amount + v_pricing_subtotal_amount;
     v_service_charge_amount := round(v_subtotal_amount * 0.20, 0);
     v_applied_adjustment_amount := greatest(v_adjustment_amount, -(v_subtotal_amount + v_service_charge_amount));
     v_total_amount := v_subtotal_amount + v_service_charge_amount + v_applied_adjustment_amount;
@@ -113,6 +122,21 @@ begin
             where ol.slip_id = p_slip_id
               and ol.status = 'active'
         ), '[]'::jsonb),
+        'pricing_lines', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'pricing_code', pl.pricing_code,
+                'name', pl.line_name,
+                'occurred_at', pl.occurred_at,
+                'customer_count', pl.customer_count,
+                'quantity', pl.quantity,
+                'unit_price', pl.unit_price,
+                'amount', pl.amount,
+                'pricing_plan_version', pl.pricing_plan_version
+            ) order by pl.occurred_at, pl.line_no, pl.pricing_line_id)
+            from public.store_slip_pricing_lines pl
+            where pl.slip_id = p_slip_id
+              and pl.status = 'active'
+        ), '[]'::jsonb),
         'adjustments', coalesce((
             select jsonb_agg(jsonb_build_object(
                 'name', cl.line_name,
@@ -124,6 +148,8 @@ begin
               and cl.status = 'active'
               and v_adjustment_amount >= -(v_subtotal_amount + v_service_charge_amount)
         ), '[]'::jsonb),
+        'order_subtotal_amount', v_order_subtotal_amount,
+        'pricing_subtotal_amount', v_pricing_subtotal_amount,
         'subtotal_amount', v_subtotal_amount,
         'service_charge_amount', v_service_charge_amount,
         'consumption_tax_amount', round(v_total_amount * 10 / 110, 0),
@@ -182,6 +208,24 @@ as $$
               and ol.status = 'active'
               and s.department_id = p_department_id
               and s.status = 'checkout_ready'
+        ), '[]'::jsonb),
+        'pricing_lines', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'pricing_code', pl.pricing_code,
+                'name', pl.line_name,
+                'occurred_at', pl.occurred_at,
+                'customer_count', pl.customer_count,
+                'quantity', pl.quantity,
+                'unit_price', pl.unit_price,
+                'amount', pl.amount
+            ) order by pl.occurred_at, pl.line_no, pl.pricing_line_id)
+            from public.store_slip_pricing_lines pl
+            join public.store_slips s
+              on s.slip_id = pl.slip_id
+            where pl.slip_id = p_slip_id
+              and pl.status = 'active'
+              and s.department_id = p_department_id
+              and s.status = 'checkout_ready'
         ), '[]'::jsonb)
     );
 $$;
@@ -220,6 +264,45 @@ begin
     ) then
         raise exception 'invalid_closed_at';
     end if;
+
+    -- 会計伝票を出す時点で料金案を固定します。退店時刻は境界を含み、
+    -- 各客の退店時刻は境界を含まないため、先に計算してから未退店客を退店にします。
+    update public.store_slip_pricing_lines pl
+       set status = 'voided',
+           updated_at = now()
+     where pl.slip_id = p_slip_id
+       and pl.status = 'active';
+
+    insert into public.store_slip_pricing_lines (
+        slip_id, business_day_id, business_date, company_id, department_id,
+        pricing_plan_id, pricing_plan_version, pricing_mode, line_no,
+        pricing_code, line_name, occurred_at, customer_count, quantity,
+        unit_price, amount, slip_cast_id, status
+    )
+    select
+        v_slip.slip_id,
+        v_slip.business_day_id,
+        v_slip.business_date,
+        v_slip.company_id,
+        v_slip.department_id,
+        calculated.pricing_plan_id,
+        calculated.pricing_plan_version,
+        calculated.pricing_mode,
+        coalesce((
+            select max(existing.line_no)
+            from public.store_slip_pricing_lines existing
+            where existing.slip_id = p_slip_id
+        ), 0) + row_number() over (order by calculated.occurred_at, calculated.pricing_code)::integer,
+        calculated.pricing_code,
+        calculated.line_name,
+        calculated.occurred_at,
+        calculated.customer_count,
+        calculated.quantity,
+        calculated.unit_price,
+        calculated.amount,
+        calculated.slip_cast_id,
+        'active'
+    from store.calculate_slip_pricing(p_department_id, p_slip_id, p_closed_at) calculated;
 
     update public.store_slip_customers c
        set left_at = p_closed_at,
@@ -276,6 +359,14 @@ begin
     ) then
         raise exception 'checkout_ready_not_found';
     end if;
+
+    -- 固定済みの自動料金は会計準備を解除した時点で無効にし、
+    -- 次回の会計伝票出力でその時点の料金プラン・退店時刻から作り直します。
+    update public.store_slip_pricing_lines pl
+       set status = 'voided',
+           updated_at = now()
+     where pl.slip_id = p_slip_id
+       and pl.status = 'active';
 
     update public.store_slip_customers c
        set left_at = null,
@@ -370,6 +461,8 @@ declare
     v_method_code text;
     v_amount numeric(12, 0);
     v_payment_method public.payment_method_master%rowtype;
+    v_order_subtotal_amount numeric(12, 0);
+    v_pricing_subtotal_amount numeric(12, 0);
     v_subtotal_amount numeric(12, 0);
     v_service_charge_amount numeric(12, 0);
     v_adjustment_amount numeric(12, 0);
@@ -414,10 +507,16 @@ begin
     end if;
 
     select coalesce(sum(ol.amount), 0)
-      into v_subtotal_amount
+      into v_order_subtotal_amount
       from public.store_order_lines ol
      where ol.slip_id = p_slip_id
        and ol.status = 'active';
+
+    select coalesce(sum(pl.amount), 0)
+      into v_pricing_subtotal_amount
+      from public.store_slip_pricing_lines pl
+     where pl.slip_id = p_slip_id
+       and pl.status = 'active';
 
     select coalesce(sum(cl.amount), 0)
       into v_adjustment_amount
@@ -426,6 +525,7 @@ begin
        and cl.charge_type = 'adjustment'
        and cl.status = 'active';
 
+    v_subtotal_amount := v_order_subtotal_amount + v_pricing_subtotal_amount;
     v_service_charge_amount := round(v_subtotal_amount * 0.20, 0);
     v_applied_adjustment_amount := greatest(v_adjustment_amount, -(v_subtotal_amount + v_service_charge_amount));
     v_total_amount := v_subtotal_amount + v_service_charge_amount + v_applied_adjustment_amount;

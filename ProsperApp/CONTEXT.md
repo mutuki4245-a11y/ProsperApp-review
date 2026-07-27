@@ -90,7 +90,13 @@
 
 ### サービス料の計算対象
 
-サービス料は、有効な `store_order_lines` 全体の小計に20%を掛け、`round(order_subtotal_amount * 0.20)` で円単位へ丸める。標準商品、カラオケ、指名料金を含み、自由入力明細の加算・値引きだけはサービス料の計算対象に含めず、サービス料計算後にそのまま加減する。`base_amount = order_subtotal_amount + service_charge_amount`、`applied_adjustment_amount = max(adjustment_amount, -base_amount)`、`total_amount = base_amount + applied_adjustment_amount` とする。超過した値引きは繰越さず、会計伝票・領収書の印字データへ含めない。
+サービス料は、有効な `store_order_lines` と自動料金明細の合計に20%を掛け、`round((order_subtotal_amount + pricing_subtotal_amount) * 0.20)` で円単位へ丸める。標準商品、カラオケ、指名料金、セット料金、延長料金を含み、自由入力明細の加算・値引きだけはサービス料の計算対象に含めず、サービス料計算後にそのまま加減する。`base_amount = order_subtotal_amount + pricing_subtotal_amount + service_charge_amount`、`applied_adjustment_amount = max(adjustment_amount, -base_amount)`、`total_amount = base_amount + applied_adjustment_amount` とする。超過した値引きは繰越さず、会計伝票・領収書の印字データへ含めない。
+
+### 料金プラン・自動料金明細
+
+店舗ごとのセット・延長料金を決める設定を料金プランと呼ぶ。標準プラン `set_extension_v1` は、セット時間、1人時のセット・延長単価、複数人時の1人あたりセット・延長単価を持つ。入店時点の人数でセット料金を1回計算し、セット終了ちょうどから同じ間隔で延長料金を発生させる。各料金イベントでは入店時刻を含み、退店時刻を含まない在席人数を使う。自由数式や動的SQLは料金プランに含めず、店舗固有の料金制度は同じ入力・出力契約を満たす名前付き料金実装として追加する。
+
+料金計算モジュールは「伝票・計算基準時刻」から自動料金明細案、適用料金プラン版、小計を返すサーバー側の唯一の計算口である。営業中一覧では現在時刻までの案だけを全伝票スナップショットに含め、ブラウザ側で時間料金を再計算しない。会計伝票出力時には選択した退店時刻で計算した自動料金明細とプラン版を固定保存する。会計準備中の再印刷・決済は固定済み明細を使い、会計準備解除後に再出力した場合だけ、その時点の料金プランで改めて計算する。自動料金明細は注文、カラオケ、自由入力明細とは別に保存し、将来のキャスト帰属に備えて任意の `slip_cast` 紐付け先を持てるが、標準プランではキャストへ帰属させない。
 
 ### サービス料
 

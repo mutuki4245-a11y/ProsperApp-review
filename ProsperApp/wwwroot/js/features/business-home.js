@@ -80,6 +80,7 @@
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((item) => item.status !== 'cancelled') : [];
         const orders = Array.isArray(slip.orders) ? slip.orders.filter((item) => item.status === 'active') : [];
         const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
+        const pricingLines = Array.isArray(slip.pricingLines) ? slip.pricingLines.filter((item) => item.status === 'active') : null;
         const names = customers.map((item) => item.displayName || `客${item.lineNo || ''}`).filter(Boolean);
         const castNames = [];
         nominations.forEach((item) => {
@@ -90,11 +91,17 @@
         slip.castNames = castNames.join('、') || '指名なし';
         slip.orderCount = orders.length;
         slip.orderSubtotalAmount = orders.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        // 時間料金そのものはサーバー側の料金計算モジュールだけが決めます。
+        // 楽観表示では直前スナップショットの料金案を保ったまま、通常注文だけを反映します。
+        if (pricingLines) {
+            slip.pricingSubtotalAmount = pricingLines.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        }
         slip.adjustmentAmount = adjustments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         slip.karaokeQuantity = orders
             .filter((item) => item.itemType === 'karaoke')
             .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-        slip.accountingAmount = Math.max(0, slip.orderSubtotalAmount + Math.round(slip.orderSubtotalAmount * 0.20) + slip.adjustmentAmount);
+        const billableSubtotal = slip.orderSubtotalAmount + (Number(slip.pricingSubtotalAmount) || 0);
+        slip.accountingAmount = Math.max(0, billableSubtotal + Math.round(billableSubtotal * 0.20) + slip.adjustmentAmount);
     };
 
     const projectOperation = (snapshot, operation) => {
@@ -589,6 +596,7 @@
         section.setAttribute('aria-label', '注文と自由明細');
         const body = buildElement('div', 'business-slip-detail-orders__body');
         renderOrders(body, slip);
+        renderPricingLines(body, slip);
         renderAdjustments(body, slip);
         section.append(body, buildSlipDetailActions());
         return section;
@@ -710,14 +718,31 @@
         });
     };
 
+    const renderPricingLines = (target, slip) => {
+        const lines = Array.isArray(slip.pricingLines) ? slip.pricingLines.filter((line) => line.status === 'active') : [];
+        lines.forEach((line) => {
+            const people = Number(line.customerCount) || 0;
+            const quantity = Number(line.quantity) || 0;
+            target.append(detailLine(
+                `${line.occurredTime || '-'} / ${line.lineName || '時間料金'}`,
+                `${people}人 / ${formatYen(line.unitPrice)} × ${quantity}`,
+                formatYen(line.amount)
+            ));
+        });
+    };
+
     const buildAccountingTotals = (slip) => {
-        const subtotal = Math.round(Number(slip.orderSubtotalAmount) || 0);
+        const orderSubtotal = Math.round(Number(slip.orderSubtotalAmount) || 0);
+        const pricingSubtotal = Math.round(Number(slip.pricingSubtotalAmount) || 0);
+        const subtotal = orderSubtotal + pricingSubtotal;
         const serviceCharge = Math.round(subtotal * 0.20);
         const total = Math.round(Number(slip.accountingAmount) || 0);
         const totals = buildElement('section', 'business-slip-detail-totals');
         totals.setAttribute('aria-label', '会計内訳');
 
         [
+            ['商品小計', orderSubtotal, false],
+            ['時間料金', pricingSubtotal, false],
             ['小計', subtotal, false],
             ['サービス料', serviceCharge, false],
             ['合計', total, true]
