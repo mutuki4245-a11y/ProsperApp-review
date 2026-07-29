@@ -932,6 +932,10 @@
   min-height: 3rem;
 }
 
+.checkout-payment-summary__warning {
+  color: #9f1239;
+}
+
 .slip-list__action-buttons {
   align-items: center;
   display: flex;

@@ -276,6 +276,16 @@ body.order-terminal .order-entry__queue {
   border-color: #0891b2;
 }
 
+.order-item-button.is-disabled {
+  background: #f8fafc;
+  border-color: #d8e0e8;
+  color: #7b8794;
+}
+
+.order-item-button.is-disabled span {
+  color: #7b8794;
+}
+
 .order-item-button span {
   color: #0f766e;
   font-weight: 800;

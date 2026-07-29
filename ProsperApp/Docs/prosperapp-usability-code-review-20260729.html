@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProsperApp 操作性・設計・コード調査 2026-07-29</title>
+  <style>
+    :root {
+      --bg: #f6f7f8;
+      --panel: #ffffff;
+      --ink: #172026;
+      --muted: #5f6f78;
+      --line: #d8e0e4;
+      --strong: #0b6b63;
+      --strong-soft: #e6f4f1;
+      --warn: #936400;
+      --warn-soft: #fff4d8;
+      --risk: #b42318;
+      --risk-soft: #fff0ee;
+      --ok: #137333;
+      --ok-soft: #e8f5ec;
+      --info: #2f5f9f;
+      --info-soft: #eaf2ff;
+      --code: #f1f4f6;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.7;
+      letter-spacing: 0;
+    }
+
+    a { color: var(--strong); }
+    code {
+      border: 1px solid #dbe3e7;
+      border-radius: 4px;
+      background: var(--code);
+      padding: 0.08rem 0.32rem;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      padding: 42px 0 36px;
+      align-items: end;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--strong);
+      font-size: 0.82rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 { line-height: 1.25; }
+    h1 {
+      margin: 8px 0 12px;
+      font-size: clamp(2rem, 4vw, 3.4rem);
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: clamp(1.45rem, 2.3vw, 2rem);
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+    }
+
+    p { margin: 0; }
+    .lead {
+      max-width: 850px;
+      color: var(--muted);
+      font-size: 1.02rem;
+    }
+
+    .meta {
+      min-width: 220px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfc;
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    main {
+      display: grid;
+      gap: 28px;
+      padding: 30px 0 50px;
+    }
+
+    section {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      padding: 24px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px;
+      background: #fbfcfc;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.65rem;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .verdict {
+      border-left: 5px solid var(--strong);
+      background: var(--strong-soft);
+    }
+
+    .score {
+      display: grid;
+      grid-template-columns: 10rem minmax(0, 1fr) 5rem;
+      gap: 14px;
+      align-items: center;
+      border-top: 1px solid var(--line);
+      padding: 14px 0;
+    }
+
+    .score:first-child { border-top: 0; padding-top: 0; }
+    .score:last-child { padding-bottom: 0; }
+
+    .score .bar {
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e3e9ec;
+    }
+
+    .score .bar > span {
+      display: block;
+      height: 100%;
+      background: var(--strong);
+    }
+
+    .score .label { font-weight: 750; }
+    .score .note {
+      grid-column: 2 / 4;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.94rem;
+    }
+
+    th, td {
+      border-top: 1px solid var(--line);
+      padding: 12px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #40515a;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+    }
+
+    tbody tr:first-child td { border-top-color: #c6d1d6; }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 0.12rem 0.55rem;
+      font-size: 0.78rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill.high { background: var(--risk-soft); color: var(--risk); }
+    .pill.medium { background: var(--warn-soft); color: var(--warn); }
+    .pill.good { background: var(--ok-soft); color: var(--ok); }
+    .pill.info { background: var(--info-soft); color: var(--info); }
+
+    .finding {
+      display: grid;
+      gap: 12px;
+      border-top: 1px solid var(--line);
+      padding: 18px 0;
+    }
+
+    .finding:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .finding-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .finding-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .evidence {
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 1.2rem;
+    }
+
+    li + li { margin-top: 6px; }
+
+    .callout {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+      background: #fbfcfc;
+    }
+
+    .callout.good { border-color: #b7dfc3; background: var(--ok-soft); }
+    .callout.warn { border-color: #eed08b; background: var(--warn-soft); }
+    .callout.risk { border-color: #f0bab4; background: var(--risk-soft); }
+
+    .commands {
+      display: grid;
+      gap: 10px;
+    }
+
+    .command {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfc;
+      padding: 12px 14px;
+    }
+
+    .status-ok { color: var(--ok); font-weight: 800; }
+    .status-warn { color: var(--warn); font-weight: 800; }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 22px 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 980px) {
+      .hero { grid-template-columns: minmax(0, 1fr); }
+      .grid.cols-4, .grid.cols-3, .grid.cols-2 { grid-template-columns: minmax(0, 1fr); }
+      .score { grid-template-columns: minmax(0, 1fr); }
+      .score .note { grid-column: auto; }
+      .command { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap hero">
+      <div>
+        <p class="eyebrow">ProsperApp / Design, Code, UI, Operability</p>
+        <h1>操作性・設計・コード調査</h1>
+        <p class="lead">
+          営業中トップ、注文端末、締め作業、Supabase RPC境界、画面更新・保存待ちの扱いを中心に、
+          設計、コード、UIの見やすさ、導線、機能、待ち時間を調査したHTMLレポート。
+        </p>
+      </div>
+      <aside class="meta">
+        <div><strong>調査日</strong> 2026-07-29</div>
+        <div><strong>対象</strong> C# Razor Pages / JS / CSS / SQLソース / Docs</div>
+        <div><strong>変更</strong> レポート追加のみ。コミットなし。</div>
+      </aside>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="verdict">
+      <h2>結論</h2>
+      <p>
+        現行アプリは「営業中一覧ハブ」に業務導線を集約し、会計前後の事故防止、対象伝票ロック、
+        保存待ち、締め条件確認をかなり丁寧に扱っている。特に
+        <code>Repository → prosper-rpc Edge Function → store.* RPC</code> の境界と契約テストは強い。
+        一方で、営業中トップのフロント状態管理が大きく、注文端末・営業中トップの未送信キュー復元、
+        決済確定ボタンの有効条件、初期表示の見込み売上に、仕様・コード・ドキュメントのずれが残っていた。
+        2026-07-30に主要なUI/JS項目はローカル実装し、残りはデプロイ後の実端末受入と環境依存E2Eで確認する。
+      </p>
+    </section>
+
+    <section>
+      <h2>2026-07-30 実装反映</h2>
+      <div class="grid cols-3">
+        <article class="callout good">
+          <h3>実装済み</h3>
+          <ul>
+            <li>注文端末・営業中トップの未送信キューをlocalStorage復元。</li>
+            <li>決済確定ボタンを差額0円・現金預りOKまで無効化。</li>
+            <li>見込み売上の初期表示を0円ではなく取得中へ変更。</li>
+            <li>注文端末の件数表示、再取得、卓未選択警告を追加。</li>
+          </ul>
+        </article>
+        <article class="callout good">
+          <h3>契約化</h3>
+          <ul>
+            <li>注文端末・営業中トップの下書き復元契約テストを追加。</li>
+            <li>営業中operationType一覧をJS契約表として固定。</li>
+            <li>会計まわりの確認・通知を共通モーダルへ寄せた。</li>
+          </ul>
+        </article>
+        <article class="callout warn">
+          <h3>残確認</h3>
+          <ul>
+            <li>Azure未デプロイのため公開URLでは未反映。</li>
+            <li>実端末の再読み込み復元、会計取消、印刷導線は受入待ち。</li>
+            <li>SII Web SDK Serverと低速回線・応答未達の注入は未計測。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>調査方法</h2>
+      <div class="grid cols-4">
+        <article class="metric">
+          <span>ビルド</span>
+          <strong>Pass</strong>
+          <p><code>dotnet build --no-restore</code> は警告0・エラー0。</p>
+        </article>
+        <article class="metric">
+          <span>契約テスト</span>
+          <strong>11件</strong>
+          <p><code>Tests/*.mjs</code> を全件実行し、すべて成功。</p>
+        </article>
+        <article class="metric">
+          <span>主な調査範囲</span>
+          <strong>UI + RPC</strong>
+          <p>Razor、PageModel、JS、CSS、SQL、既存ADR/HANDOFFを照合。</p>
+        </article>
+        <article class="metric">
+          <span>実ブラウザ</span>
+          <strong>Auth OK</strong>
+          <p>公開URLを認証済みChromeで開き、営業中・注文端末・締め作業を非破壊確認。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>評価サマリー</h2>
+      <div class="score">
+        <div class="label">業務設計</div>
+        <div class="bar"><span style="width: 82%"></span></div>
+        <strong>8.2</strong>
+        <p class="note">営業中一覧ハブ、会計準備中、端末内印刷状態、締め条件など、事故防止の概念が明確。</p>
+      </div>
+      <div class="score">
+        <div class="label">コード境界</div>
+        <div class="bar"><span style="width: 74%"></span></div>
+        <strong>7.4</strong>
+        <p class="note">RPC境界は良いが、引数・戻り値・操作種別の契約は手動同期が多く、営業中JSにも責務が集中している。</p>
+      </div>
+      <div class="score">
+        <div class="label">UIの見やすさ</div>
+        <div class="bar"><span style="width: 78%"></span></div>
+        <strong>7.8</strong>
+        <p class="note">状態色、カード、固定フッター、レスポンシブは整っている。会計まわりのalert/confirmは共通モーダルへ寄せた。</p>
+      </div>
+      <div class="score">
+        <div class="label">導線</div>
+        <div class="bar"><span style="width: 80%"></span></div>
+        <strong>8.0</strong>
+        <p class="note">営業中、注文端末、締め作業の役割分離は分かりやすい。注文端末は管理者設定以外のノイズを抑えている。</p>
+      </div>
+      <div class="score">
+        <div class="label">待ち時間・操作性</div>
+        <div class="bar"><span style="width: 72%"></span></div>
+        <strong>7.2</strong>
+        <p class="note">並列取得と部分更新は良い。未送信キュー復元、手動再取得、失敗時の初期表示、実ブラウザ計測が弱い。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>良い点</h2>
+      <div class="grid cols-2">
+        <article class="callout good">
+          <h3>営業中トップの事故防止が強い</h3>
+          <p>
+            営業中トップは未保存操作を <code>flushBusinessHomeChanges</code> でまとめ、会計前や画面遷移前に
+            <code>waitForBusinessOperations</code> を通す。会計発行中は対象伝票だけをロックし、発行後の
+            スナップショット取得失敗時も編集不能側へ倒している。
+          </p>
+          <p class="evidence">
+            根拠: <code>wwwroot/js/features/business-home.js:1527</code>、
+            <code>wwwroot/js/features/business-home.js:1627</code>、
+            <code>wwwroot/js/features/business-checkout.js:282</code>。
+          </p>
+        </article>
+
+        <article class="callout good">
+          <h3>締め作業の待ち時間設計が良い</h3>
+          <p>
+            締め画面は営業日shellを先に確認し、その後の会計、酒代、勤怠、キャスト売上、領収書の各パネルを
+            <code>Promise.all</code> で並列取得する。30秒更新とフォーカス復帰更新もあり、現場で状態が古くなりにくい。
+          </p>
+          <p class="evidence">
+            根拠: <code>Pages/Closing/Index.cshtml:489</code>、<code>Pages/Closing/Index.cshtml:501</code>、
+            <code>Pages/Closing/Index.cshtml:523</code>。
+          </p>
+        </article>
+
+        <article class="callout good">
+          <h3>RPC境界と検証が一貫している</h3>
+          <p>
+            C#からは <code>ISupabaseRpcClient</code> を通じて Edge Function に投げ、直接PostgREST RPC fallbackを持たない。
+            <code>rpc-contract.test.mjs</code> はC#呼び出し、Edge allowlist、SQL定義、<code>security definer</code>、
+            <code>search_path</code> を照合している。
+          </p>
+          <p class="evidence">
+            根拠: <code>Infrastructure/Supabase/SupabaseRpcClient.cs</code>、
+            <code>Tests/rpc-contract.test.mjs</code>。
+          </p>
+        </article>
+
+        <article class="callout good">
+          <h3>運用端末向けの画面密度が作られている</h3>
+          <p>
+            営業中カードは状態別ヘッダー、客・指名チップ、会計額トグル、4列から1列へのレスポンシブ、
+            操作ボタンの固定高さを持つ。注文端末は卓番、商品、キューの3パネルで、管理者設定以外の導線を抑えている。
+          </p>
+          <p class="evidence">
+            根拠: <code>Pages/Index.cshtml:38</code>、<code>Pages/Orders/Index.cshtml:40</code>、
+            <code>wwwroot/css/features/slips.css:2279</code>。
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>優先課題</h2>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill high">High</span>
+            <h3>注文端末・営業中トップの未送信キュー復元はローカル実装済み</h3>
+          </div>
+        </div>
+        <p>
+          更新後の <code>HANDOFF.md</code> は、注文端末と営業中トップの両方で、未送信キューを
+          店舗・営業日・伝票に紐付けたlocalStorage下書きとして復元する方針を正としている。
+          2026-07-30のローカル実装で、<code>order-entry.js</code> と <code>business-home.js</code> に
+          店舗・営業日単位のlocalStorage保存キー、復元処理、DB最新状態と合わない行の破棄を追加した。
+          営業中トップは復元後に既存の <code>store.flush_business_home_changes</code> 再送へ戻す。
+          残りはデプロイ後の実端末再読み込み受入である。
+        </p>
+        <div class="evidence">
+          <div>正仕様: <code>HANDOFF.md:28</code>、<code>HANDOFF.md:115</code>、<code>HANDOFF.md:129</code>。</div>
+          <div>実装確認: <code>wwwroot/js/features/order-entry.js</code>、<code>wwwroot/js/features/business-home.js</code>。</div>
+          <div>契約テスト: <code>Tests/order-entry-draft-contract.test.mjs</code>、<code>Tests/business-home-draft-contract.test.mjs</code>。</div>
+        </div>
+        <p>
+          残確認: Azureへ反映後、注文端末と営業中トップで未送信入力を作り、ブラウザ再読み込み後に復元・保存・破棄が
+          実端末で成立することを見る。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill high">High</span>
+            <h3>見込み売上の初期0円表示はローカル修正済み</h3>
+          </div>
+        </div>
+        <p>
+          <code>Pages/Index.cshtml</code> は初期HTMLで <code>Model.EstimatedSalesAmount</code> を表示するが、
+          PageModelのプロパティは常に0を返す。非同期の <code>BusinessSlips</code> 取得が成功すれば
+          スナップショットの値に更新されるが、初回取得が遅い、失敗する、通信断になる場合は、
+          実際に会計額があっても0円に見えていた。2026-07-30のローカル実装で、現在営業日がある場合の初期表示は
+          <code>取得中</code> に変更した。認証済み実画面では修正前に初期0円が見え、その後
+          約4.1秒で <code>4,105,320 円</code> へ更新されていた。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>Pages/Index.cshtml.cs:81</code>、<code>Pages/Index.cshtml:54</code>。</div>
+          <div>根拠: <code>Sql/store_rpc/09_business_home_snapshot.sql:376</code>、<code>wwwroot/js/features/business-home.js:562</code>。</div>
+          <div>実画面: <code>/</code> は読み込み表示消失まで約4.1秒、コンソール警告・エラーなし。</div>
+        </div>
+        <p>
+          残確認: デプロイ後の公開URLで、営業中画面の初期表示が0円ではなく <code>取得中</code> になり、
+          スナップショット取得後に正しい見込み売上へ更新されることを見る。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill high">High</span>
+            <h3>決済確定ボタンの有効条件はローカル修正済み</h3>
+          </div>
+        </div>
+        <p>
+          決済モーダルは会計額、決済合計、差額を表示するが、修正前は <code>会計を確定</code> ボタンが
+          決済モーダルへ進んだ時点で有効になっていた。2026-07-30のローカル実装で、差額0円、
+          選択済み決済の正値、現金預り額が現金決済額以上、という条件を満たすまでボタンを無効にした。
+          サーバー側の <code>invalid_checkout_total</code> と <code>invalid_received_amount</code> によるDB保護も残している。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>wwwroot/js/features/business-checkout.js:258</code>、<code>wwwroot/js/features/business-checkout.js:405</code>、<code>wwwroot/js/features/business-checkout.js:413</code>。</div>
+          <div>根拠: <code>Infrastructure/Supabase/SupabaseCheckoutRepository.cs:186</code>、<code>Infrastructure/Supabase/SupabaseCheckoutRepository.cs:187</code>。</div>
+        </div>
+        <p>
+          残確認: 実端末で複数決済、現金預り不足、0円会計、会計取消前後のボタン状態を受入確認する。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>営業中トップのPageModelとJSが大きく、変更時の確認コストが高い</h3>
+          </div>
+        </div>
+        <p>
+          <code>IndexModel</code> は伝票一覧、編集flush、伝票作成、会計伝票、決済、領収書、会計取消の
+          JSON endpointをまとめて持つ。フロントも <code>business-home.js</code>、<code>business-slip-editor.js</code>、
+          <code>business-checkout.js</code> の公開APIで密に協調する。現行の集約自体は業務導線に合っているが、
+          型付きDTOが薄く、JSON契約のズレは契約テストと手動確認に寄りやすい。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>Pages/Index.cshtml.cs:158</code>、<code>Pages/Index.cshtml.cs:196</code>、<code>Pages/Index.cshtml.cs:279</code>、<code>Pages/Index.cshtml.cs:336</code>。</div>
+          <div>根拠: <code>wwwroot/js/features/business-home.js:1859</code>、<code>wwwroot/js/features/business-slip-editor.js:1075</code>、<code>wwwroot/js/features/business-checkout.js:509</code>。</div>
+        </div>
+        <p>
+          改善案: 画面を分割するより先に、<code>BusinessDaySnapshotDto</code>、<code>FlushResultDto</code>、
+          <code>CheckoutStatementDto</code> をC#側に置き、JSON契約をPageModel外で組み立てる。
+          そのうえで会計JSON handlerだけ専用endpoint classへ逃がす。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>operationType契約はJS/C#一致テストを追加済み</h3>
+          </div>
+        </div>
+        <p>
+          RPC名については <code>rpc-contract.test.mjs</code> がC#、Edge allowlist、SQL定義の一致を見ている。
+          引数、戻り値JSON、エラーコード、営業中編集の <code>operationType</code> は、
+          JS、PageModel、Repository payload、SQL dispatcher に重複している。2026-07-30のローカル実装で、
+          JS側に <code>editorOperationTypes</code> 契約表を追加し、PageModelの許可リストと一致することを
+          <code>Tests/business-home-draft-contract.test.mjs</code> で確認するようにした。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>Tests/rpc-contract.test.mjs:26</code>、<code>supabase/functions/prosper-rpc/index.ts:41</code>。</div>
+          <div>根拠: <code>Pages/Index.cshtml.cs:203</code>、<code>wwwroot/js/features/business-slip-editor.js:815</code>、<code>Infrastructure/Supabase/SupabaseStoreSlipRepository.cs:189</code>、<code>Sql/store_rpc/09_business_home_snapshot.sql:419</code>。</div>
+        </div>
+        <p>
+          残確認: JSON戻り値DTO、主要エラーコード、payloadキーまではまだ完全な型契約にしていない。
+          次に <code>BusinessDaySnapshotDto</code> と <code>FlushResultDto</code> を導入する。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>金額の楽観表示がサーバー計算の近似を持っている</h3>
+          </div>
+        </div>
+        <p>
+          正式な料金計算はSQL/RPC側にあり、営業中スナップショットはサーバー計算値を返す。
+          一方で、営業中トップの楽観表示は通常注文・自由明細・直前スナップショットの料金案を使い、
+          <code>Math.round(billableSubtotal * 0.20)</code> で会計額を再投影している。
+          これは体感速度には効くが、将来サービス料率や計算対象が変わると、サーバーと一時表示の差が出やすい。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>CONTEXT.md:91</code>、<code>Sql/store_rpc/09_business_home_snapshot.sql:224</code>、<code>Sql/store_rpc/08_checkout_ready.sql:80</code>。</div>
+          <div>根拠: <code>wwwroot/js/features/business-home.js:121</code>、<code>wwwroot/js/features/business-home.js:135</code>、<code>wwwroot/js/features/business-home.js:136</code>。</div>
+        </div>
+        <p>
+          改善案: JSの再投影は「直前サーバー値 + 追加/取消した明細差分」までに寄せ、
+          サービス料・下限固定・税などの計算ルールはサーバー提供値またはサーバーから返る投影APIに集約する。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>会計まわりのalert/confirmは共通モーダルへ寄せた</h3>
+          </div>
+        </div>
+        <p>
+          会計準備解除、会計取消、保存結果不明、印刷失敗などの重要操作で <code>window.alert</code> と
+          <code>window.confirm</code> が使われていた。2026-07-30のローカル実装で、会計まわりは
+          <code>window.AppConfirm</code> のBootstrapモーダルを優先し、Bootstrapが使えない場合だけ
+          ブラウザ標準ダイアログへフォールバックする形にした。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>wwwroot/js/features/business-checkout.js:290</code>、<code>wwwroot/js/features/business-checkout.js:382</code>、<code>wwwroot/js/features/business-checkout.js:439</code>。</div>
+          <div>根拠: <code>wwwroot/js/features/business-slip-editor.js:1044</code>、<code>Tests/checkout-payment-ui.test.mjs</code> のコメントにも自動確認しづらい領域が残る。</div>
+        </div>
+        <p>
+          残確認: 会計以外の管理画面やマスタ削除フォームには標準confirmがまだ残る。対象を広げる場合は別タスクで統一する。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>注文端末の件数表示と卓未選択警告はローカル修正済み</h3>
+          </div>
+        </div>
+        <p>
+          注文端末は「1. 卓番選択 → 2. 商品一覧 → 3. 注文キュー」という良い構成だが、
+          認証済み実画面では修正前に <code>注文対象のopen伝票 0 件</code> と表示しながら、実際には多数の伝票ボタンが並んでいた。
+          2026-07-30のローカル実装で、件数は初期 <code>取得中</code>、Ajax取得後に実件数へ更新する形にした。
+          さらに手動の「再取得」ボタンと、卓未選択中の商品パネル警告を追加した。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>Pages/Orders/Index.cshtml:40</code>、<code>Pages/Orders/Index.cshtml:69</code>、<code>wwwroot/js/features/order-entry.js:432</code>。</div>
+          <div>実画面: <code>/Orders</code> は読み込み表示消失まで約3.2秒、コンソール警告・エラーなし。</div>
+        </div>
+        <p>
+          残確認: 公開URLへデプロイ後、件数更新、再取得、卓未選択警告を実端末で確認する。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>文書整理はHANDOFFを正として進める必要がある</h3>
+          </div>
+        </div>
+        <p>
+          現在の正本は <code>HANDOFF.md</code> であり、その他の文書は履歴・下書きとして削除対象にできる。
+          ただし、業務用語、画面導線、RPC境界、端末内下書き、会計・領収書、UI密度など、一貫性に関わる
+          方針は削除前に <code>HANDOFF.md</code> へ移す必要がある。端末内下書きについては、
+          「注文端末、営業中トップともにキューをlocalStorage復元する」が正しい。
+        </p>
+        <div class="evidence">
+          <div>正仕様: <code>HANDOFF.md:21</code>、<code>HANDOFF.md:28</code>。</div>
+          <div>実装確認: <code>wwwroot/js/features/business-home.js:52</code>、<code>wwwroot/js/features/order-entry.js:27</code>。</div>
+        </div>
+        <p>
+          状態: <code>HANDOFF.md</code> に正本方針と今回の実装内容を追記済み。その他文書の削除は未実施。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>非同期取得失敗時の手動復旧導線が薄い</h3>
+          </div>
+        </div>
+        <p>
+          営業中一覧の初回取得に失敗した場合は「次の自動更新で再取得します」と表示されるが、
+          利用者が即時に押せる再取得ボタンや最終更新時刻は見当たらない。
+          締め画面も各パネルを「未取得」にするが、主な復旧案は時間をおいて再表示することになる。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>wwwroot/js/features/business-home.js:1441</code>、<code>Pages/Closing/Index.cshtml:237</code>、<code>Pages/Closing/Index.cshtml:489</code>。</div>
+        </div>
+        <p>
+          改善案: 営業中一覧と締めパネルに「再取得」ボタンと最終更新時刻を置く。
+          取得中は対象パネルだけスピナー表示にし、全画面ロックは避ける。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>管理者設定のデバッグ削除が同一画面内で強い</h3>
+          </div>
+        </div>
+        <p>
+          管理者設定には、選択店舗の営業日、出勤、伝票、注文、会計、バック集計を削除するデバッグ操作がある。
+          現在は危険パネルとconfirmだけで実行可能になっており、同じ設定保存フォーム上に並ぶ操作としては強い。
+        </p>
+        <div class="evidence">
+          <div>根拠: <code>Pages/Settings/Index.cshtml:129</code>、<code>Pages/Settings/Index.cshtml:149</code>、<code>Pages/Settings/Index.cshtml:180</code>。</div>
+        </div>
+        <p>
+          改善案: 折りたたみ、再認証、確認語入力、対象店舗名の再表示を組み合わせる。
+          さらにデバッグ削除を通常設定保存とは別フォームに分ける。
+        </p>
+      </article>
+
+      <article class="finding">
+        <div class="finding-head">
+          <div class="finding-title">
+            <span class="pill medium">Medium</span>
+            <h3>認証済み実画面スモークで待ち時間と表示不一致を確認した</h3>
+          </div>
+        </div>
+        <p>
+          正しい公開URLは <code>https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/</code> で、
+          未認証GETはHTTP 302でGoogle認証へ遷移する。Chromeの認証済みセッションでは、
+          営業中、注文端末、締め作業の3画面が表示でき、読み込み表示は数秒で解消した。
+          一方で、注文端末のopen件数表示不一致と、締め作業の初期「確認中」が数秒続く体験は実画面で確認できた。
+        </p>
+        <div class="evidence">
+          <div>確認: <code>HttpClient GET</code>、リダイレクト無効、HTTP 302 Found、Google OAuth。</div>
+          <div>実測: <code>/</code> 約4.1秒、<code>/Orders</code> 約3.2秒、<code>/Closing</code> 約5.2秒で読み込み表示が消えた。</div>
+          <div>ログ: 3画面ともコンソール警告・エラーなし。正URL: <code>HANDOFF.md:15</code>。</div>
+        </div>
+        <p>
+          改善案: この3画面スモークを継続テストにし、次に会計伝票復旧、会計取消、領収書再印刷、
+          SII Web SDK Server接続時の印刷待ち時間、ネットワーク遅延・応答未達注入を追加する。
+        </p>
+      </article>
+    </section>
+
+    <section>
+      <h2>機能・導線別メモ</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>領域</th>
+            <th>評価</th>
+            <th>根拠</th>
+            <th>次の一手</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>営業中トップ</td>
+            <td><span class="pill good">Good</span> 一覧、詳細、編集、会計まで一画面で完結。未送信キュー復元はローカル実装済み。</td>
+            <td><code>Pages/Index.cshtml:38</code>、<code>business-home.js:1527</code></td>
+            <td>JSON DTO化と実端末復元受入を残す。</td>
+          </tr>
+          <tr>
+            <td>注文端末</td>
+            <td><span class="pill good">Good</span> 3パネル構成、未送信キュー復元、件数更新、再取得、卓未選択警告をローカル実装済み。</td>
+            <td><code>Pages/Orders/Index.cshtml:40</code>、<code>order-entry.js:27</code></td>
+            <td>実端末復元受入を残す。</td>
+          </tr>
+          <tr>
+            <td>締め作業</td>
+            <td><span class="pill good">Good</span> 段階表示と並列取得で、未完了理由が見えやすい。実画面は約5.2秒で確認中が解消。</td>
+            <td><code>Pages/Closing/Index.cshtml:501</code></td>
+            <td>遅延時の最終更新時刻と手動再取得を追加する。</td>
+          </tr>
+          <tr>
+            <td>RPC契約</td>
+            <td><span class="pill info">OK/Risk</span> 境界は明確。operationType一致テストは追加済みだが、JSON DTO化は残る。</td>
+            <td><code>Tests/rpc-contract.test.mjs</code>、<code>Sql/store_rpc/09_business_home_snapshot.sql:419</code></td>
+            <td>戻り値DTOとpayloadキー契約を追加する。</td>
+          </tr>
+          <tr>
+            <td>会計・印刷</td>
+            <td><span class="pill good">Good</span> 会計伝票、印刷失敗、復旧、決済、領収書を分けて扱う設計は堅い。</td>
+            <td><code>business-checkout.js:349</code>、<code>CONTEXT.md:71</code></td>
+            <td>会計以外の危険操作にも共通確認UIを広げる。</td>
+          </tr>
+          <tr>
+            <td>マスタ・設定</td>
+            <td><span class="pill info">OK/Risk</span> 端末設定はCookieとlocalStorageに同期。デバッグ削除は通常設定画面内では強い。</td>
+            <td><code>Pages/Shared/_Layout.cshtml</code>、<code>Services/LocalSettingsProvider.cs</code></td>
+            <td>デバッグ削除の確認導線を強め、端末モード切替後の復帰導線を実端末で見る。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>待ち時間・操作性</h2>
+      <div class="grid cols-3">
+        <article class="callout good">
+          <h3>良い</h3>
+          <ul>
+            <li>営業中一覧は10秒ポーリング、フォーカス復帰、オンライン復帰で更新する。</li>
+            <li>締め画面は各パネルを並列取得し、確認中・未取得・要入力・入力済を分ける。</li>
+            <li>会計伝票発行前に未保存操作を待ち、通信不明時は会計へ進めない。</li>
+            <li>認証済み実画面では営業中、注文端末、締め作業の3画面でコンソール警告・エラーは出なかった。</li>
+          </ul>
+        </article>
+        <article class="callout warn">
+          <h3>気になる</h3>
+          <ul>
+            <li>営業中の初期サマリーは一部が非同期取得前提で、失敗時の表示が弱い。</li>
+            <li>localStorage復元、件数更新、卓未選択警告はローカル実装済みだが、公開URLでの受入は未実施。</li>
+            <li>非同期取得失敗時に、利用者が押せる再取得と最終更新時刻が薄い。</li>
+            <li>会計以外のネイティブダイアログは固定フッターやロック状態と体験が揃わない。</li>
+          </ul>
+        </article>
+        <article class="callout">
+          <h3>未計測</h3>
+          <ul>
+            <li>会計伝票復旧、会計取消、領収書再印刷の認証済みE2E。</li>
+            <li>SII Web SDK Server接続時の印刷待ち時間。</li>
+            <li>低速回線、通信遮断、応答未達の自動注入テスト。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>推奨順</h2>
+      <ol>
+        <li><strong>実装済み:</strong> 注文端末・営業中トップのキューlocalStorage復元と契約テスト。</li>
+        <li><strong>実装済み:</strong> 決済確定ボタンの有効条件固定。</li>
+        <li><strong>実装済み:</strong> 見込み売上の初期「取得中」表示。</li>
+        <li><strong>実装済み:</strong> HANDOFF正本方針と今回実装内容の追記。その他文書の削除は未実施。</li>
+        <li><strong>実装済み:</strong> 注文端末の件数表示、卓未選択フィードバック、手動再取得。</li>
+        <li><strong>一部実装済み:</strong> 会計まわりのalert/confirmを共通確認UIへ寄せた。会計以外は残る。</li>
+        <li><strong>一部実装済み:</strong> operationType契約テストを追加。JSON DTO化は残る。</li>
+        <li><strong>残:</strong> 認証済みPlaywrightスモークの自動化、実端末再読み込み復元、SII印刷、低速・応答未達注入。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>検証結果</h2>
+      <div class="commands">
+        <div class="command">
+          <code>dotnet build --no-restore</code>
+          <span class="status-ok">成功 / 警告0 / エラー0</span>
+        </div>
+        <div class="command">
+          <code>Get-ChildItem Tests -Filter *.mjs | Sort-Object Name | ForEach-Object { node $_.FullName }</code>
+          <span class="status-ok">成功 / 11件</span>
+        </div>
+        <div class="command">
+          <code>HttpClient GET https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/</code>
+          <span class="status-ok">HTTP 302 / Google認証</span>
+        </div>
+        <div class="command">
+          <code>Chrome authenticated smoke: /, /Orders, /Closing</code>
+          <span class="status-ok">4.1s / 3.2s / 5.2s、警告・エラーなし</span>
+        </div>
+      </div>
+      <p style="margin-top: 14px; color: var(--muted);">
+        2026-07-30の実装ではSQL実行とデプロイは実施していない。
+        ローカル開発サーバーも起動していない。公開URLの実画面スモークは修正前の状態確認であり、今回のローカル変更は未反映。
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      Generated in repository under <code>Docs/prosperapp-usability-code-review-20260729.html</code>.
+    </div>
+  </footer>
+</body>
+</html>

@@ -41,6 +41,21 @@
     const businessHome = () => window.ProsperBusinessHome;
     const yen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
     const token = () => sourceForm.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    const showDialogAlert = async (value) => {
+        if (window.AppConfirm?.alert) {
+            await window.AppConfirm.alert(value);
+            return;
+        }
+
+        window.alert(value);
+    };
+    const showDialogConfirm = async (value) => {
+        if (window.AppConfirm?.confirm) {
+            return window.AppConfirm.confirm(value);
+        }
+
+        return window.confirm(value);
+    };
     const setMessage = (value = '') => {
         message.hidden = !value;
         message.textContent = value;
@@ -246,20 +261,64 @@
         const input = paymentRows.querySelector(`[data-payment-amount="${code}"]`);
         return { methodCode: code, isSelected: button.classList.contains('btn-primary'), amount: Math.round(Number(input?.value) || 0) };
     }).filter((payment) => payment.isSelected);
-    const renderPaymentSummary = () => {
+    const paymentValidation = () => {
         const total = Math.round(Number(current?.queue?.printData?.total_amount) || 0);
         const payments = selectedPayments();
         const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
         const cash = payments.find((payment) => payment.methodCode === 'cash');
+        const receivedEntered = receivedAmount.value !== '';
+        const received = Math.round(Number(receivedAmount.value) || 0);
+
+        if (total === 0) {
+            return {
+                total,
+                payments,
+                paid,
+                cash,
+                received,
+                canConfirm: payments.length === 0,
+                message: payments.length === 0 ? '' : '0円会計では決済方法を選択しません。'
+            };
+        }
+
+        if (payments.length === 0) {
+            return { total, payments, paid, cash, received, canConfirm: false, message: '決済方法を選択してください。' };
+        }
+
+        if (payments.some((payment) => payment.amount <= 0)) {
+            return { total, payments, paid, cash, received, canConfirm: false, message: '決済金額は1円以上で入力してください。' };
+        }
+
+        if (paid !== total) {
+            return { total, payments, paid, cash, received, canConfirm: false, message: '決済合計を会計額に合わせてください。' };
+        }
+
+        if (cash && (!receivedEntered || received < cash.amount)) {
+            return { total, payments, paid, cash, received, canConfirm: false, message: '現金の受取額を確認してください。' };
+        }
+
+        return { total, payments, paid, cash, received, canConfirm: true, message: '' };
+    };
+    const renderPaymentSummary = () => {
+        const validation = paymentValidation();
+        const { total, payments, paid, cash, received } = validation;
         receivedRow.hidden = !cash;
         if (!cash) receivedAmount.value = '';
-        const received = Math.round(Number(receivedAmount.value) || 0);
         paymentSummary.replaceChildren();
         [['会計額', yen(total)], ['決済合計', yen(paid)], ['差額', yen(total - paid)]].forEach(([label, value]) => {
             const item = document.createElement('div'); item.append(Object.assign(document.createElement('span'), { textContent: label }), Object.assign(document.createElement('strong'), { textContent: value })); paymentSummary.appendChild(item);
         });
         if (cash && received >= cash.amount) {
             const item = document.createElement('div'); item.append(Object.assign(document.createElement('span'), { textContent: '釣銭' }), Object.assign(document.createElement('strong'), { textContent: yen(received - cash.amount) })); paymentSummary.appendChild(item);
+        }
+        if (!validation.canConfirm && validation.message) {
+            const item = document.createElement('div');
+            item.className = 'checkout-payment-summary__warning';
+            item.append(Object.assign(document.createElement('span'), { textContent: '確認' }), Object.assign(document.createElement('strong'), { textContent: validation.message }));
+            paymentSummary.appendChild(item);
+        }
+        if (confirmButton) {
+            confirmButton.disabled = !validation.canConfirm || isActionInFlight;
         }
     };
     const showCurrent = () => {
@@ -287,13 +346,13 @@
             const synchronized = await businessHome()?.waitForOperations?.();
             if (synchronized === false) {
                 businessHome()?.setCheckoutLock?.(requestedSlipId, false);
-                window.alert('保存結果を確認できない変更があります。営業中一覧の同期後に会計してください。');
+                await showDialogAlert('保存結果を確認できない変更があります。営業中一覧の同期後に会計してください。');
                 return;
             }
             const latestSlip = businessHome()?.getSlip?.(requestedSlipId);
             if (!latestSlip || !['open', 'checkout_ready'].includes(latestSlip.status)) {
                 businessHome()?.setCheckoutLock?.(requestedSlipId, false);
-                window.alert('対象伝票の状態が変わりました。営業中一覧を確認してください。');
+                await showDialogAlert('対象伝票の状態が変わりました。営業中一覧を確認してください。');
                 return;
             }
 
@@ -379,7 +438,7 @@
         const slipId = Number(slip?.id || current?.slipId || 0);
         const tableDisplay = slip?.tableDisplay || current?.tableDisplay || 'この伝票';
         if (isActionInFlight || !slipId || (!slip && current?.statementPrintTask)
-            || !window.confirm(`${tableDisplay} の会計準備を解除して編集可能に戻しますか？`)) return;
+            || !(await showDialogConfirm(`${tableDisplay} の会計準備を解除して編集可能に戻しますか？`))) return;
         await runExclusive(async () => {
             try {
                 await post(config.releaseCheckoutReadyUrl, { slipId });
@@ -388,7 +447,7 @@
                 window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
             } catch (error) {
                 if (slip) {
-                    window.alert(error.message);
+                    await showDialogAlert(error.message);
                 } else {
                     setMessage(error.message);
                 }
@@ -402,18 +461,22 @@
         setPaymentMessage();
         renderPayments();
         renderPaymentDetail();
-        confirmButton.disabled = false;
         modalTransition = 'to-payment';
         modal?.hide();
     };
     const confirm = async () => {
         if (!current || current.step !== 'payment') return;
-        const payments = selectedPayments();
-        const total = Math.round(Number(current.queue.printData.total_amount) || 0);
-        if ((total === 0 && payments.length > 0) || (total > 0 && payments.length === 0)) { setPaymentMessage('決済方法を確認してください。'); return; }
+        const validation = paymentValidation();
+        if (!validation.canConfirm) {
+            setPaymentMessage(validation.message || '決済内容を確認してください。');
+            renderPaymentSummary();
+            return;
+        }
+
+        const payments = validation.payments;
         await runExclusive(async () => {
             try {
-                const data = await post(config.confirmCheckoutUrl, { slipId: current.slipId, payments, receivedAmount: receivedAmount.value === '' ? null : Math.round(Number(receivedAmount.value) || 0) });
+                const data = await post(config.confirmCheckoutUrl, { slipId: current.slipId, payments, receivedAmount: receivedAmount.value === '' ? null : validation.received });
                 current.queueDiscarded = true;
                 removeQueue(current.slipId);
                 paymentModalCloseIsProgrammatic = true;
@@ -432,17 +495,17 @@
             try {
                 const data = await post(config.getCheckoutReceiptPrintDataUrl, { slipId: Number(slip.id) });
                 await window.ProsperSiiReceiptPrinterApi?.print({ ...data.printData, checkoutId: data.checkoutId, addressee: '' });
-            } catch (error) { window.alert(error.message); }
+            } catch (error) { await showDialogAlert(error.message); }
         });
     };
     const cancelCheckout = async (slip) => {
-        if (isActionInFlight || !window.confirm(`${slip.tableDisplay || 'この伝票'} の会計を取消しますか？`)) return;
+        if (isActionInFlight || !(await showDialogConfirm(`${slip.tableDisplay || 'この伝票'} の会計を取消しますか？`))) return;
         await runExclusive(async () => {
             try {
                 const data = await post(config.cancelCheckoutUrl, { slipId: Number(slip.id) });
                 window.ProsperSiiReceiptPrinterApi?.clearReceiptTerminalState(data.checkoutId);
                 window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-            } catch (error) { window.alert(error.message); }
+            } catch (error) { await showDialogAlert(error.message); }
         });
     };
 

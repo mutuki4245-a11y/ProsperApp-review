@@ -43,6 +43,9 @@
     const tableCollator = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
     const businessSlipsUrl = config.businessSlipsUrl || '';
     const flushBusinessHomeChangesUrl = config.flushBusinessHomeChangesUrl || '';
+    const draftStorageKey = config.departmentId && config.businessDayId
+        ? `prosper:business-home-draft:v1:${config.departmentId}:${config.businessDayId}`
+        : '';
     const refreshIntervalMs = 10000;
     const elapsedRefreshIntervalMs = 15000;
     const accountingUnit = 240;
@@ -61,6 +64,19 @@
     let flushTimer = null;
     let navigationInFlight = false;
     let activeSlipFilter = 'all';
+    let karaokeDraft = null;
+    let draftRestored = false;
+    const editorOperationTypes = new Set([
+        'add_customer',
+        'update_customer',
+        'leave_customer',
+        'add_nomination',
+        'cancel_nomination',
+        'add_adjustment',
+        'void_adjustment',
+        'add_order',
+        'void_order'
+    ]);
 
     const formatYen = window.MoneyText.yen;
     const formatSignedYen = (value) => {
@@ -72,6 +88,69 @@
     const setText = (element, text) => {
         if (element && element.textContent !== String(text)) {
             element.textContent = String(text);
+        }
+    };
+
+    const readBusinessHomeDraft = () => {
+        if (!draftStorageKey) {
+            return null;
+        }
+
+        try {
+            const draft = JSON.parse(localStorage.getItem(draftStorageKey) || 'null');
+            return draft && typeof draft === 'object' ? draft : null;
+        } catch {
+            try {
+                localStorage.removeItem(draftStorageKey);
+            } catch {
+                // 読み書きできない端末では、画面内キューだけで続行する。
+            }
+            return null;
+        }
+    };
+
+    const clearBusinessHomeDraft = () => {
+        if (!draftStorageKey) {
+            return;
+        }
+
+        try {
+            localStorage.removeItem(draftStorageKey);
+        } catch {
+            // localStorageが使えない端末では、画面内キューだけで処理を続ける。
+        }
+    };
+
+    const persistBusinessHomeDraft = () => {
+        if (!draftStorageKey) {
+            return;
+        }
+
+        const operations = Array.from(pendingOperations.values())
+            .filter((operation) => editorOperationTypes.has(operation.operationType))
+            .map((operation) => ({
+                operationId: operation.operationId,
+                slipId: Number(operation.slipId),
+                operationType: operation.operationType,
+                payload: operation.payload || {}
+            }));
+        const karaokeLines = karaokeDraft?.snapshot?.() || [];
+
+        if (operations.length === 0 && karaokeLines.length === 0) {
+            clearBusinessHomeDraft();
+            return;
+        }
+
+        try {
+            localStorage.setItem(draftStorageKey, JSON.stringify({
+                version: 1,
+                departmentId: config.departmentId,
+                businessDayId: config.businessDayId,
+                operations,
+                karaokeLines
+            }));
+        } catch {
+            // 保存できなくても営業中画面の操作自体は継続する。
         }
     };
 
@@ -305,6 +384,8 @@
         if (Number.isFinite(revision)) snapshotRevision = revision;
         serverSnapshot = snapshot;
         hasLoaded = true;
+        slips = Array.isArray(snapshot.slips) ? snapshot.slips : [];
+        restoreBusinessHomeDraft();
         renderProjectedSnapshot();
         return true;
     };
@@ -379,11 +460,53 @@
     const isValidBusinessDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && value !== '0001-01-01';
 
     const getSlip = (slipId) => slips.find((slip) => String(slip.id) === String(slipId));
+    const isDraftRestorableSlip = (slipId) => getSlip(slipId)?.status === 'open';
+    const restoreBusinessHomeDraft = () => {
+        if (draftRestored) {
+            return;
+        }
+
+        draftRestored = true;
+        const draft = readBusinessHomeDraft();
+        if (!draft) {
+            return;
+        }
+
+        let restored = 0;
+        (Array.isArray(draft.operations) ? draft.operations : []).forEach((operation) => {
+            if (
+                !operation?.operationId ||
+                !editorOperationTypes.has(operation.operationType) ||
+                !isDraftRestorableSlip(operation.slipId)
+            ) {
+                return;
+            }
+
+            pendingOperations.set(String(operation.operationId), {
+                operationId: String(operation.operationId),
+                slipId: String(operation.slipId),
+                operationType: operation.operationType,
+                payload: operation.payload || {},
+                state: 'queued'
+            });
+            restored += 1;
+        });
+
+        const karaokeRestored = karaokeDraft?.restore?.(draft.karaokeLines) ?? 0;
+        restored += karaokeRestored;
+
+        if (restored > 0) {
+            showOperationNotice('端末内の未送信キューを復元しました。');
+            persistBusinessHomeDraft();
+            scheduleFlush();
+        } else {
+            clearBusinessHomeDraft();
+        }
+    };
     const getInitialQuantity = (slip) => toQuantity(slip?.karaokeQuantity);
     const createKaraokeDraftState = () => {
-        // 終了・再読み込み後に未送信行を復元しない。営業中の操作中だけメモリに保持する。
         const draft = {};
-        const write = () => {};
+        const write = () => persistBusinessHomeDraft();
         const cleanup = () => {
             let changed = false;
             Object.keys(draft).forEach((slipId) => {
@@ -406,6 +529,31 @@
         };
 
         return {
+            snapshot() {
+                return Object.keys(draft).map((slipId) => ({
+                    slipId: Number(slipId),
+                    quantity: toQuantity(draft[slipId])
+                })).filter((line) => line.slipId > 0);
+            },
+            restore(lines) {
+                let restored = 0;
+                (Array.isArray(lines) ? lines : []).forEach((line) => {
+                    if (!isDraftRestorableSlip(line?.slipId)) {
+                        return;
+                    }
+
+                    const quantity = toQuantity(line.quantity);
+                    const slip = getSlip(line.slipId);
+                    if (quantity === getInitialQuantity(slip)) {
+                        return;
+                    }
+
+                    draft[String(line.slipId)] = quantity;
+                    restored += 1;
+                });
+                cleanup();
+                return restored;
+            },
             getDisplayQuantity(slip) {
                 const key = String(slip.id);
                 return Object.prototype.hasOwnProperty.call(draft, key)
@@ -462,7 +610,7 @@
             write
         };
     };
-    const karaokeDraft = createKaraokeDraftState();
+    karaokeDraft = createKaraokeDraftState();
     const getDisplayQuantity = (slip) => karaokeDraft.getDisplayQuantity(slip);
     const cleanupDraft = () => karaokeDraft.cleanup();
     const collectDirtyPayload = () => karaokeDraft.collectDirtyPayload();
@@ -1520,6 +1668,7 @@
             if (line) karaokeDraft.markRejected([line]);
         });
         applySnapshot(result.snapshot);
+        persistBusinessHomeDraft();
         queueNoticeForFailedRows(operationResults, karaokeResults);
         return true;
     };
@@ -1604,12 +1753,18 @@
     };
 
     const enqueueEditorOperation = (operation) => {
+        if (!editorOperationTypes.has(operation?.operationType)) {
+            showOperationNotice('編集操作の種類を確認してください。');
+            return null;
+        }
+
         const normalized = {
             ...operation,
             operationId: operation.operationId || createClientId(),
             state: 'queued'
         };
         pendingOperations.set(normalized.operationId, normalized);
+        persistBusinessHomeDraft();
         renderProjectedSnapshot();
         scheduleFlush();
         return normalized.operationId;

@@ -24,8 +24,14 @@
     const submitOrderButton = document.getElementById('submitOrderButton');
     const clearQueueButton = document.getElementById('clearQueueButton');
     const queueStatus = document.getElementById('queueStatus');
+    const slipCountBadge = document.getElementById('orderSlipCountBadge');
+    const refreshSlipOptionsButton = document.getElementById('refreshSlipOptionsButton');
+    const itemSelectionWarning = document.getElementById('orderItemSelectionWarning');
     const queue = new Map();
     const submitBaseDisabled = submitOrderButton?.disabled ?? false;
+    const draftStorageKey = pageData.departmentId && pageData.businessDayId
+        ? `prosper:order-entry-draft:v1:${pageData.departmentId}:${pageData.businessDayId}`
+        : '';
     let pendingBackItemId = null;
     let pendingBackCastSelection = new Map();
     let slipOptionsLoaded = slips.length > 0;
@@ -46,6 +52,109 @@
             });
         }
     });
+
+    const safeJsonParse = (value) => {
+        try {
+            return JSON.parse(value || 'null');
+        } catch {
+            return null;
+        }
+    };
+
+    const readStoredDraft = () => {
+        if (!draftStorageKey) {
+            return null;
+        }
+
+        let draft = null;
+        try {
+            draft = safeJsonParse(localStorage.getItem(draftStorageKey));
+        } catch {
+            return null;
+        }
+        if (!draft || !Array.isArray(draft.lines)) {
+            return null;
+        }
+
+        return draft;
+    };
+
+    const clearStoredDraft = () => {
+        try {
+            if (draftStorageKey) {
+                localStorage.removeItem(draftStorageKey);
+            }
+        } catch {
+            // 端末設定でlocalStorageが無効な場合は、画面内キューだけで続行する。
+        }
+    };
+
+    const persistDraft = () => {
+        if (!draftStorageKey) {
+            return;
+        }
+
+        const lines = Array.from(queue.values())
+            .map((line) => ({
+                slipId: Number(line.slipId),
+                itemId: Number(line.itemId),
+                castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null,
+                quantity: Math.max(0, Math.trunc(Number(line.quantity) || 0))
+            }))
+            .filter((line) => line.slipId > 0 && line.itemId > 0 && line.quantity > 0);
+
+        if (lines.length === 0) {
+            clearStoredDraft();
+            return;
+        }
+
+        try {
+            localStorage.setItem(draftStorageKey, JSON.stringify({
+                version: 1,
+                departmentId: pageData.departmentId,
+                businessDayId: pageData.businessDayId,
+                selectedSlipId: selectedSlipInput?.value || null,
+                lines
+            }));
+        } catch {
+            // 保存できなくても注文入力自体は継続する。
+        }
+    };
+
+    const hydrateQueueLines = (lines) => {
+        (Array.isArray(lines) ? lines : []).forEach((line) => {
+            if (line.slipId > 0 && line.itemId > 0 && line.quantity > 0) {
+                const key = makeQueueKey(line.slipId, line.itemId, line.castBackCastId);
+                queue.set(key, {
+                    slipId: String(line.slipId),
+                    itemId: String(line.itemId),
+                    castBackCastId: line.castBackCastId ? String(line.castBackCastId) : null,
+                    quantity: Math.max(1, Math.trunc(Number(line.quantity) || 0))
+                });
+            }
+        });
+    };
+
+    const restoreStoredDraft = () => {
+        if (pageData.discardStoredQueue) {
+            clearStoredDraft();
+            return;
+        }
+
+        if (queue.size > 0) {
+            return;
+        }
+
+        const draft = readStoredDraft();
+        if (!draft) {
+            return;
+        }
+
+        hydrateQueueLines(draft.lines);
+        if (selectedSlipInput && !selectedSlipInput.value && draft.selectedSlipId) {
+            selectedSlipInput.value = String(draft.selectedSlipId);
+        }
+    };
 
     function makeQueueKey(slipId, itemId, castBackCastId) {
         return `${slipId}:${itemId}:${castBackCastId ?? ''}`;
@@ -88,6 +197,8 @@
         if (!slipPicker) {
             return;
         }
+
+        setText(slipCountBadge, slipOptionsLoaded ? `${slips.length} 件` : '取得中');
 
         const removeSlipButtons = () => {
             slipPicker.querySelectorAll('[data-slip-id]').forEach((button) => button.remove());
@@ -175,7 +286,7 @@
 
     const removeUnavailableSlipLines = () => {
         if (!slipOptionsLoaded) {
-            return;
+            return false;
         }
 
         let removed = false;
@@ -193,15 +304,22 @@
 
         if (removed) {
             setSlipWarning('会計済みまたは利用できなくなった卓番をキューから外しました。');
+            persistDraft();
         }
+
+        return removed;
     };
 
-    const loadSlipOptions = async () => {
+    const loadSlipOptions = async (manual = false) => {
         if (slipOptionsLoading || !slipOptionsUrl) {
             return;
         }
 
         slipOptionsLoading = true;
+        refreshSlipOptionsButton && (refreshSlipOptionsButton.disabled = true);
+        if (manual) {
+            setSlipWarning('最新の卓番を取得しています。');
+        }
         try {
             const response = await fetch(slipOptionsUrl, {
                 headers: {
@@ -215,9 +333,15 @@
             const result = await response.json();
             slips = Array.isArray(result.slips) ? result.slips : [];
             slipOptionsLoaded = true;
-            removeUnavailableSlipLines();
+            const removedUnavailableLines = removeUnavailableSlipLines();
+            if (!removedUnavailableLines) {
+                setSlipWarning(null);
+            }
             render();
         } catch {
+            setSlipWarning(slipOptionsLoaded
+                ? '注文対象の卓番を取得できませんでした。前回の一覧を表示しています。'
+                : '注文対象の卓番を取得できませんでした。');
             if (!slipOptionsLoaded && slipPicker) {
                 slipPicker.querySelectorAll('[data-slip-id]').forEach((button) => button.remove());
                 slipPicker.querySelector('[data-order-slip-loading]')?.remove();
@@ -233,6 +357,12 @@
             }
         } finally {
             slipOptionsLoading = false;
+            refreshSlipOptionsButton && (refreshSlipOptionsButton.disabled = false);
+            if (slipOptionsLoaded) {
+                renderSlipPicker();
+            } else {
+                setText(slipCountBadge, '未取得');
+            }
         }
     };
 
@@ -277,6 +407,15 @@
         }
 
         renderSlipPicker();
+
+        const hasSelectedSlip = Boolean(currentSlip);
+        if (itemSelectionWarning) {
+            itemSelectionWarning.hidden = hasSelectedSlip;
+        }
+        document.querySelectorAll('[data-item-id]').forEach((button) => {
+            button.classList.toggle('is-disabled', !hasSelectedSlip);
+            button.setAttribute('aria-disabled', hasSelectedSlip ? 'false' : 'true');
+        });
 
         if (queueFields) {
             queueFields.innerHTML = '';
@@ -406,6 +545,9 @@
         const hasQueue = serializedLines.length > 0;
         if (queueEmpty) {
             queueEmpty.hidden = hasQueue;
+            if (!hasQueue) {
+                queueEmpty.textContent = currentSlip ? '商品を選択してください。' : '先に卓番を選択してください。';
+            }
         }
         window.TerminalSaveStatus.set(queueStatus, hasQueue ? 'dirty' : 'saved', hasQueue ? '未送信' : '空');
         if (queueTotal) {
@@ -414,6 +556,7 @@
         if (submitOrderButton) {
             submitOrderButton.disabled = submitBaseDisabled || !hasQueue;
         }
+        persistDraft();
     };
 
     slipPicker?.addEventListener('click', (event) => {
@@ -432,6 +575,10 @@
     document.querySelectorAll('[data-item-id]').forEach((button) => {
         button.addEventListener('click', () => {
             if (!selectedSlipInput?.value) {
+                if (itemSelectionWarning) {
+                    itemSelectionWarning.hidden = false;
+                    itemSelectionWarning.focus?.();
+                }
                 return;
             }
 
@@ -636,10 +783,14 @@
     if (selectedSlipInput && initialSlipId) {
         selectedSlipInput.value = initialSlipId;
     }
+    restoreStoredDraft();
 
     renderSlipPicker();
     render();
     void loadSlipOptions();
+    refreshSlipOptionsButton?.addEventListener('click', () => {
+        void loadSlipOptions(true);
+    });
     window.setInterval(() => {
         if (document.visibilityState === 'visible') {
             void loadSlipOptions();

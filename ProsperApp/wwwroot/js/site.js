@@ -238,7 +238,66 @@
         }
     };
 
+    const showAppDialog = ({ message, title = '確認', confirm = false, confirmText = 'OK', cancelText = 'キャンセル' }) => {
+        if (!window.bootstrap?.Modal) {
+            return Promise.resolve(confirm ? window.confirm(message) : (window.alert(message), true));
+        }
+
+        return new Promise((resolve) => {
+            const modalElement = document.createElement('div');
+            modalElement.className = 'modal fade';
+            modalElement.tabIndex = -1;
+            modalElement.setAttribute('aria-hidden', 'true');
+            modalElement.setAttribute('data-bs-backdrop', 'static');
+            modalElement.setAttribute('data-bs-keyboard', 'false');
+            modalElement.innerHTML = `
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title fs-5"></h2>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0" data-app-dialog-message></p>
+                        </div>
+                        <div class="modal-footer">
+                            ${confirm ? '<button class="btn btn-outline-secondary" type="button" data-app-dialog-cancel></button>' : ''}
+                            <button class="btn btn-primary" type="button" data-app-dialog-ok></button>
+                        </div>
+                    </div>
+                </div>`;
+
+            modalElement.querySelector('.modal-title').textContent = title;
+            modalElement.querySelector('[data-app-dialog-message]').textContent = message;
+            modalElement.querySelector('[data-app-dialog-ok]').textContent = confirmText;
+            modalElement.querySelector('[data-app-dialog-cancel]')?.replaceChildren(cancelText);
+
+            document.body.appendChild(modalElement);
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            let settled = false;
+            const finish = (value) => {
+                settled = true;
+                resolve(value);
+                modal.hide();
+            };
+            modalElement.querySelector('[data-app-dialog-ok]').addEventListener('click', () => finish(true), { once: true });
+            modalElement.querySelector('[data-app-dialog-cancel]')?.addEventListener('click', () => finish(false), { once: true });
+            modalElement.addEventListener('hidden.bs.modal', () => {
+                modal.dispose?.();
+                modalElement.remove();
+                if (!settled) {
+                    resolve(false);
+                }
+            }, { once: true });
+            modal.show();
+        });
+    };
+
     window.AppLoading = { show, hide };
+    window.AppConfirm = {
+        alert: (message, title = '確認') => showAppDialog({ message, title, confirm: false }),
+        confirm: (message, title = '確認') => showAppDialog({ message, title, confirm: true, confirmText: '実行', cancelText: '戻る' })
+    };
     window.MoneyText = {
         amount: formatMoneyAmount,
         yen: formatMoneyYen

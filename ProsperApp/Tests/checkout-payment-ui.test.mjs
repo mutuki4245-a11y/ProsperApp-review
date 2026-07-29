@@ -224,12 +224,21 @@ assert.equal(
 const paymentRows = paymentElements['[data-business-payment-rows]'];
 const cashButton = paymentRows.querySelector('[data-payment-code]');
 const cashAmount = paymentRows.querySelector('[data-payment-amount="cash"]');
+const confirmButton = paymentElements['[data-business-confirm-checkout]'];
 assert.ok(cashButton, '現金の選択ボタンを描画すること');
 assert.ok(cashAmount, '現金の金額欄を描画すること');
+assert.equal(confirmButton.disabled, true, '決済方法未選択では会計確定できないこと');
 
 paymentRows.dispatch('click', { target: cashButton });
 assert.equal(cashAmount.value, 4080, '初回選択時は残額を入力すること');
 assert.equal(cashButton.closest('.checkout-payment-row').classList.contains('checkout-payment-row--selected'), true, '選択中だけ行を強調すること');
+assert.equal(confirmButton.disabled, true, '現金の受取額が未入力なら会計確定できないこと');
+paymentElements['[data-business-received-amount]'].value = '3000';
+paymentElements['[data-business-received-amount]'].dispatch('input');
+assert.equal(confirmButton.disabled, true, '現金の受取額が不足している場合は会計確定できないこと');
+paymentElements['[data-business-received-amount]'].value = '4080';
+paymentElements['[data-business-received-amount]'].dispatch('input');
+assert.equal(confirmButton.disabled, false, '決済合計一致かつ現金受取額が足りる場合だけ会計確定できること');
 cashAmount.value = '3000';
 paymentElements['[data-business-received-amount]'].value = '5000';
 paymentRows.dispatch('click', { target: cashButton });

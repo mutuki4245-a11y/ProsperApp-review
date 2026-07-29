@@ -48,7 +48,10 @@
                             <h2>1. 卓番選択</h2>
                             <small>注文対象のopen伝票</small>
                         </div>
-                        <span class="terminal-count-badge">@Model.Slips.Count 件</span>
+                        <div class="slip-create__panel-title-actions">
+                            <span class="terminal-count-badge" id="orderSlipCountBadge">取得中</span>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" id="refreshSlipOptionsButton">再取得</button>
+                        </div>
                     </div>
                     <div class="order-entry__panel-body">
                         <span asp-validation-for="SelectedSlipId" class="text-danger"></span>
@@ -76,6 +79,9 @@
                         }
                         else
                         {
+                            <div class="alert alert-warning mb-2" role="alert" id="orderItemSelectionWarning" tabindex="-1" hidden>
+                                先に卓番を選択してください。
+                            </div>
                             <div class="order-category-tabs" role="tablist" aria-label="商品カテゴリ">
                                 @for (var i = 0; i < itemGroups.Count; i++)
                                 {
@@ -175,6 +181,9 @@
             castOptions = Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, drinkMemo = x.DrinkMemo, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true }),
             initialQueue = Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
             initialSlipId = Model.SelectedSlipId,
+            departmentId = Model.StoreContext?.DepartmentId,
+            businessDayId = Model.CurrentBusinessDay?.BusinessDayId,
+            discardStoredQueue = !string.IsNullOrWhiteSpace(Model.SuccessMessage),
             slipOptionsUrl = Url.Page("/Orders/Index", "SlipOptions"),
             refreshIntervalMs = 10000
         }))

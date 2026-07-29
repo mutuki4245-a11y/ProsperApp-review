@@ -51,7 +51,7 @@
                 <div class="sales-summary__items business-floor__summary">
                     <span class="sales-summary__item sales-summary__item--estimated business-floor__summary-item business-floor__summary-item--sales">
                         <strong>見込み売上</strong>
-                        <span data-business-estimated-sales-amount>@StoreUiText.Yen(Model.EstimatedSalesAmount)</span>
+                        <span data-business-estimated-sales-amount>@(Model.HasCurrentBusinessDay ? "取得中" : StoreUiText.Yen(0))</span>
                     </span>
                     <span class="sales-summary__item business-floor__summary-item">
                         <strong>未会計伝票</strong>
@@ -512,6 +512,8 @@
             getCheckoutReceiptPrintDataUrl = Url.Page("/Index", "GetCheckoutReceiptPrintData"),
             cancelCheckoutUrl = Url.Page("/Index", "CancelCheckout"),
             businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
+            departmentId = Model.StoreContext?.DepartmentId,
+            businessDayId = Model.CurrentBusinessDayId,
             receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
             tableOptions = Model.Tables.Select((table, index) => new
             {
