@@ -12,7 +12,7 @@
 
 2026-07-28時点で、旧 `/Slips/Edit` moduleは削除済みです。営業中の編集と会計は営業中トップ `/` の営業中一覧ハブに集約し、公開RPC境界は `store.get_business_day_snapshot` と `store.flush_business_home_changes` を正とします。`store.apply_business_slip_editor_operation` と個別編集関数はSQL内部実装として残しますが、Repositoryと `prosper-rpc` allowlistから直接呼ばない方針です。
 
-2026-07-30時点で、`Docs/prosperapp-usability-code-review-20260729.html` の推奨順に沿い、注文端末と営業中トップの未送信キューlocalStorage復元、決済確定ボタンのUI有効条件、見込み売上の初期「取得中」表示、注文端末の件数表示・手動再取得・卓未選択警告、会計まわりの共通確認モーダル、営業中operationType契約テストをローカル実装済みです。`dotnet build --no-restore` と `Tests/*.mjs` は成功しています。SQL/RPC変更、Azure App Serviceへのデプロイ、本番受入確認は未実施です。
+2026-07-30時点で、`Docs/prosperapp-usability-code-review-20260729.html` の推奨順に沿い、注文端末と営業中トップの未送信キューlocalStorage復元、決済確定ボタンのUI有効条件、見込み売上の初期「取得中」表示、注文端末の件数表示・手動再取得・卓未選択警告、会計まわりの共通確認モーダル、営業中operationType契約テストを実装済みです。実装コミット `fee7d60` は `origin/main` へpushし、Azure App ServiceへZipDeploy済みです。ZipDeployはHTTP 202で開始し、Kudu status 4 / complete Trueを確認しました。公開URLは未認証HTTP 302でGoogle認証へリダイレクトすることを確認済みです。SQL/RPC変更は未実施で、本番認証後の実端末受入確認は未実施です。
 
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
