@@ -645,6 +645,11 @@
         return Math.max(0, Math.floor((endAt - openedAt) / 60000));
     };
 
+    const formatElapsedMinutes = (minutes) => {
+        const normalized = Math.max(0, Math.trunc(Number(minutes) || 0));
+        return `${Math.floor(normalized / 60)}時間${normalized % 60}分`;
+    };
+
     const syncElapsedTime = (row, slip, now = Date.now()) => {
         const elapsed = row.querySelector('[data-business-slip-elapsed]');
         if (!elapsed) {
@@ -654,7 +659,7 @@
         const minutes = elapsedMinutes(slip, now);
         elapsed.hidden = minutes === null;
         if (minutes !== null) {
-            setText(elapsed, `在席 ${minutes}分`);
+            setText(elapsed, `在席 ${formatElapsedMinutes(minutes)}`);
         }
     };
 
