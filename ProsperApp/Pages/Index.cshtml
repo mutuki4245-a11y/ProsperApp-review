@@ -97,7 +97,7 @@
             <section class="slip-list-section business-floor__panel" id="slipListPanel">
                 <form method="post" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
                     <div class="business-floor__toolbar">
-                        <nav class="business-slip-filter" aria-label="未会計伝票の絞り込み">
+                        <nav class="business-slip-filter" aria-label="伝票の絞り込み">
                             <button class="is-active" type="button" data-business-slip-filter="all" aria-pressed="true">
                                 すべて <span data-business-filter-count="all">0</span>
                             </button>
@@ -107,10 +107,14 @@
                             <button type="button" data-business-slip-filter="checkout_ready" aria-pressed="false">
                                 会計準備 <span data-business-filter-count="checkout_ready">0</span>
                             </button>
+                            <button type="button" data-business-slip-filter="checked_out" aria-pressed="false">
+                                会計済み <span data-business-filter-count="checked_out">0</span>
+                            </button>
                         </nav>
                         <div class="business-floor__legend" aria-label="伝票ステータス">
                             <span class="is-open">接客中</span>
                             <span class="is-checkout-ready">会計準備中</span>
+                            <span class="is-checked-out">会計済み</span>
                         </div>
                         <div class="slip-list-section__statusbar">
                             <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>

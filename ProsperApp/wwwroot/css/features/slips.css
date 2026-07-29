@@ -2458,47 +2458,43 @@
   outline-offset: -3px;
 }
 
-.business-slip-card__summaries {
-  border: 1px solid #e0e8eb;
-  border-radius: 7px;
+.business-slip-card__people {
   display: grid;
+  gap: 0.35rem;
   min-width: 0;
-  overflow: hidden;
 }
 
-.business-slip-card__summary-panel {
-  align-items: center;
-  background: #f8fafb;
-  display: grid;
-  gap: 0.4rem;
-  grid-template-columns: 4.2rem minmax(0, 1fr);
-  min-height: 37px;
-  padding: 0.34rem 0.42rem;
+.business-slip-card__person-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  min-width: 0;
 }
 
-.business-slip-card__summary-panel + .business-slip-card__summary-panel {
-  border-top: 1px solid #e0e8eb;
-}
-
-.business-slip-card__summary-label {
-  color: #73858d;
-  font-size: 0.63rem;
-  font-weight: 900;
-}
-
-.business-slip-card .slip-list__customers,
-.business-slip-card .slip-list__casts {
+.business-slip-card__person {
+  background: #f3f8f8;
+  border: 1px solid #c9dedd;
+  border-radius: 6px;
   color: #173b47;
+  display: block;
   font-size: 0.76rem;
   font-weight: 850;
-  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
+  padding: 0.28rem 0.42rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.business-slip-card .slip-list__casts {
-  color: #31505a;
+.business-slip-card__person--nomination {
+  background: #fff9ec;
+  border-color: #ead8a5;
+  color: #604d1d;
+}
+
+.business-slip-card__person.is-departed {
+  opacity: 0.62;
+  text-decoration: line-through;
 }
 
 .business-slip-card .slip-list__amount {

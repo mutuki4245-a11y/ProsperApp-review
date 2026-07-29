@@ -256,6 +256,7 @@ as $$
                 'tableDisplay', coalesce(nullif(concat_ws(' ', s.table_code, s.table_name), ''), '-'),
                 'openedAt', s.opened_at,
                 'openedTime', to_char(s.opened_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                'closedAt', s.closed_at,
                 'status', s.status,
                 'statusDisplay', case s.status
                     when 'open' then '在席'

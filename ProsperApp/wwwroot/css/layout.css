@@ -601,6 +601,10 @@ body.sales-hub-page {
   background: #2688d8;
 }
 
+.business-floor__legend .is-checked-out::before {
+  background: #78909a;
+}
+
 .business-floor__toolbar .slip-list-section__statusbar {
   margin: 0;
   min-height: 0;
@@ -1256,7 +1260,7 @@ body.sales-hub-page {
 
   .business-slip-filter {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .business-slip-filter button {

@@ -24,8 +24,11 @@ assert.equal(businessHomeSource.includes('組目'), false, '卓番が重複し�
 assert.equal(businessHomeSource.includes('data-business-slip-karaoke-summary'), false, '伝票パネルにカラオケ数量を表示しないこと');
 assert.equal(businessHomeSource.includes('data-business-slip-elapsed'), true, '伝票パネルに在席時間を表示すること');
 assert.match(businessHomeSource, /setInterval\(\(\) => \{[\s\S]*syncElapsedTimes\(\)/, '在席時間を定期更新すること');
-assert.match(businessHomeSource, /business-slip-card__summary-panel--customers/, 'お客様を独立した要約パネルに表示すること');
-assert.match(businessHomeSource, /business-slip-card__summary-panel--nominations/, '指名を独立した要約パネルに表示すること');
+assert.match(businessHomeSource, /\['open', 'checkout_ready', 'checked_out'\]/, '接客中・会計準備中・会計済みで在席時間を表示すること');
+assert.match(snapshotRpc, /'closedAt', s\.closed_at/, '会計後の在席時間を退店時刻で固定できること');
+assert.match(businessHomeSource, /business-slip-card__person--\$\{kind\}/, 'お客様と指名を一人ずつパネル表示すること');
+assert.equal(businessHomeSource.includes('business-slip-card__summary-label'), false, '伝票パネルにお客様・指名の見出しを表示しないこと');
+assert.match(indexMarkup, /data-business-slip-filter="checked_out"/, '会計済みの絞り込みタブを表示すること');
 for (const iconId of ['user-round', 'star', 'clipboard-list', 'badge-japanese-yen']) {
     assert.equal(actionIcons.includes(`id="${iconId}"`), true, `${iconId}アイコンを操作ボタンで利用できること`);
 }

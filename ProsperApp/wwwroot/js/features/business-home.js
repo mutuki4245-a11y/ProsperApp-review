@@ -621,8 +621,15 @@
         setText(amountValue, formatYen(state.accountingAmount));
     };
 
+    const latestCustomerLeftAt = (slip) => {
+        const leftTimes = (Array.isArray(slip?.customers) ? slip.customers : [])
+            .map((customer) => Date.parse(customer.leftAt))
+            .filter(Number.isFinite);
+        return leftTimes.length > 0 ? Math.max(...leftTimes) : null;
+    };
+
     const elapsedMinutes = (slip, now = Date.now()) => {
-        if (slip?.status !== 'open' || slip.checkoutPending) {
+        if (!['open', 'checkout_ready', 'checked_out'].includes(slip?.status)) {
             return null;
         }
 
@@ -631,7 +638,11 @@
             return null;
         }
 
-        return Math.max(0, Math.floor((now - openedAt) / 60000));
+        const closedAt = Date.parse(slip.closedAt);
+        const recordedEndAt = Number.isFinite(closedAt) ? closedAt : latestCustomerLeftAt(slip);
+        const isActivelySeated = slip.status === 'open' && !slip.checkoutPending;
+        const endAt = isActivelySeated || recordedEndAt === null ? now : Math.min(now, recordedEndAt);
+        return Math.max(0, Math.floor((endAt - openedAt) / 60000));
     };
 
     const syncElapsedTime = (row, slip, now = Date.now()) => {
@@ -655,6 +666,40 @@
                 syncElapsedTime(row, slip, now);
             }
         });
+    };
+
+    const buildCardPerson = (text, kind, departed = false) => {
+        const person = buildElement('span', `business-slip-card__person business-slip-card__person--${kind}`, text);
+        person.title = text;
+        person.classList.toggle('is-departed', departed);
+        return person;
+    };
+
+    const syncCardPeople = (row, slip) => {
+        const customerList = row.querySelector('[data-business-slip-customers]');
+        const nominationList = row.querySelector('[data-business-slip-casts]');
+        if (customerList) {
+            const customerPanels = (Array.isArray(slip.customers) ? slip.customers : [])
+                .filter((customer) => customer.status !== 'cancelled')
+                .map((customer) => buildCardPerson(
+                    customer.displayName || defaultCustomerName(customer.lineNo),
+                    'customer',
+                    customer.status !== 'active'
+                ));
+            customerList.replaceChildren(...customerPanels);
+            customerList.hidden = customerPanels.length === 0;
+        }
+        if (nominationList) {
+            const nominationPanels = (Array.isArray(slip.nominations) ? slip.nominations : [])
+                .filter((nomination) => nomination.status === 'active')
+                .map((nomination) => {
+                    const castName = nomination.displayName || 'キャスト';
+                    const kind = nomination.nominationDisplayName || nomination.nominationKind || '指名';
+                    return buildCardPerson(`${castName} — ${kind}`, 'nomination');
+                });
+            nominationList.replaceChildren(...nominationPanels);
+            nominationList.hidden = nominationPanels.length === 0;
+        }
     };
 
     const buildKaraokeEditor = (slip) => {
@@ -979,9 +1024,7 @@
 
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
-        const customerNames = Number(slip.customerCount) > 0 ? slip.customerNames : '';
-        setText(row.querySelector('[data-business-slip-customers]'), customerNames || 'お客様名なし');
-        setText(row.querySelector('[data-business-slip-casts]'), slip.castNames || '指名なし');
+        syncCardPeople(row, slip);
         setText(row.querySelector('[data-business-slip-number]'), `伝票 #${compactSlipNumber(slip)}`);
         setText(row.querySelector('[data-business-slip-status]'), slip.checkoutPending ? '会計準備中' : slip.statusDisplay);
         setText(row.querySelector('[data-business-slip-customer-count]'), `${Number(slip.customerCount) || 0}名`);
@@ -1046,20 +1089,14 @@
         main.dataset.businessSlipOpenDetail = '';
         main.tabIndex = 0;
         main.setAttribute('role', 'button');
-        const summaries = buildElement('div', 'business-slip-card__summaries');
-        const customerPanel = buildElement('section', 'business-slip-card__summary-panel business-slip-card__summary-panel--customers');
-        customerPanel.append(buildElement('span', 'business-slip-card__summary-label', 'お客様'));
-        const customers = buildElement('span', 'slip-list__customers');
+        const people = buildElement('div', 'business-slip-card__people');
+        const customers = buildElement('div', 'business-slip-card__person-list business-slip-card__person-list--customers');
         customers.dataset.businessSlipCustomers = '';
-        customerPanel.appendChild(customers);
-        const nominationPanel = buildElement('section', 'business-slip-card__summary-panel business-slip-card__summary-panel--nominations');
-        nominationPanel.append(buildElement('span', 'business-slip-card__summary-label', '指名'));
-        const casts = buildElement('span', 'slip-list__casts');
+        const casts = buildElement('div', 'business-slip-card__person-list business-slip-card__person-list--nominations');
         casts.dataset.businessSlipCasts = '';
-        nominationPanel.appendChild(casts);
-        summaries.append(customerPanel, nominationPanel);
+        people.append(customers, casts);
 
-        main.append(summaries, buildAmountElement(slip));
+        main.append(people, buildAmountElement(slip));
         const actions = buildElement('div', 'slip-list__actions');
         const actionButtons = buildElement('div', 'slip-list__action-buttons');
         const customerButton = buildActionButton('btn business-slip-card__quick-action', 'お客様', 'user-round');
@@ -1085,12 +1122,13 @@
         return row;
     };
 
-    const updateSlipFilters = (openSlips) => {
+    const updateSlipFilters = (openSlips, paidSlips) => {
         const openCount = openSlips.filter((slip) => !isCheckoutReady(slip)).length;
         const checkoutReadyCount = openSlips.filter(isCheckoutReady).length;
-        setText(filterCountElements.get('all'), openSlips.length);
+        setText(filterCountElements.get('all'), openSlips.length + paidSlips.length);
         setText(filterCountElements.get('open'), openCount);
         setText(filterCountElements.get('checkout_ready'), checkoutReadyCount);
+        setText(filterCountElements.get('checked_out'), paidSlips.length);
         slipFilterButtons.forEach((button) => {
             const isActive = button.dataset.businessSlipFilter === activeSlipFilter;
             button.classList.toggle('is-active', isActive);
@@ -1121,11 +1159,11 @@
         return category;
     };
 
-    const buildPaidSection = (paidSlips, rowsBySlipId, renderedSlipIds, wasExpanded) => {
+    const buildPaidSection = (paidSlips, rowsBySlipId, renderedSlipIds, wasExpanded, forceExpanded = false) => {
         const paidTotal = paidSlips.reduce((sum, slip) => sum + (Number(slip.accountingAmount) || 0), 0);
         const details = buildElement('details', 'business-slip-paid');
         details.dataset.businessPaidSlips = '';
-        details.open = wasExpanded;
+        details.open = forceExpanded || wasExpanded;
         const summary = buildElement('summary');
         summary.append(
             buildElement('span', 'business-slip-paid__chevron', '⌄'),
@@ -1159,16 +1197,25 @@
         const paidExpanded = list.querySelector('[data-business-paid-slips]')?.open ?? false;
         const openSlips = slips.filter((slip) => isOpenSlip(slip)).sort(compareSlipsByTable);
         const paidSlips = slips.filter((slip) => slip.status === 'checked_out').sort(compareSlipsByTable);
-        updateSlipFilters(openSlips);
-        const filteredOpenSlips = openSlips.filter((slip) =>
-            activeSlipFilter === 'all'
-            || (activeSlipFilter === 'checkout_ready' ? isCheckoutReady(slip) : !isCheckoutReady(slip))
-        );
+        updateSlipFilters(openSlips, paidSlips);
+        const filteredOpenSlips = activeSlipFilter === 'checked_out'
+            ? []
+            : openSlips.filter((slip) =>
+                activeSlipFilter === 'all'
+                || (activeSlipFilter === 'checkout_ready' ? isCheckoutReady(slip) : !isCheckoutReady(slip))
+            );
+        const showPaidSlips = activeSlipFilter === 'all' || activeSlipFilter === 'checked_out';
         const renderedSlipIds = new Set();
         const content = document.createDocumentFragment();
-        if (filteredOpenSlips.length === 0) {
+        const hasVisibleSlips = filteredOpenSlips.length > 0 || (showPaidSlips && paidSlips.length > 0);
+        if (!hasVisibleSlips) {
             const empty = buildElement('div', 'business-slip-board__empty');
-            if (openSlips.length === 0) {
+            if (activeSlipFilter === 'checked_out') {
+                empty.append(
+                    buildElement('strong', null, '会計済みの伝票はありません'),
+                    buildElement('span', null, '会計が完了すると、ここに表示されます。')
+                );
+            } else if (openSlips.length === 0) {
                 empty.append(
                     buildElement('strong', null, '未会計の伝票はありません'),
                     buildElement('span', null, '新しい伝票を追加すると、卓番カテゴリごとに表示されます。')
@@ -1180,7 +1227,7 @@
                 );
             }
             content.appendChild(empty);
-        } else {
+        } else if (filteredOpenSlips.length > 0) {
             const categories = new Map();
             filteredOpenSlips.forEach((slip) => {
                 const categoryNo = slipTableMetadata(slip).categoryNo;
@@ -1192,7 +1239,15 @@
                 content.appendChild(buildCategorySection(categorySlips, rowsBySlipId, renderedSlipIds));
             });
         }
-        content.appendChild(buildPaidSection(paidSlips, rowsBySlipId, renderedSlipIds, paidExpanded));
+        if (showPaidSlips && paidSlips.length > 0) {
+            content.appendChild(buildPaidSection(
+                paidSlips,
+                rowsBySlipId,
+                renderedSlipIds,
+                paidExpanded,
+                activeSlipFilter === 'checked_out'
+            ));
+        }
         list.replaceChildren(content);
         if (revealButton) {
             revealButton.hidden = openSlips.length + paidSlips.length === 0;
