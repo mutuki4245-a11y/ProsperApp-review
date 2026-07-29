@@ -2284,7 +2284,7 @@
 }
 
 .business-slip-grid > .business-slip-card.slip-list__row {
-  grid-template-rows: 46px 36px auto 44px;
+  grid-template-rows: minmax(70px, auto) auto 44px;
   inline-size: 100%;
 }
 
@@ -2292,17 +2292,13 @@
   grid-row: 1;
 }
 
-.business-slip-grid > .business-slip-card > .business-slip-card__timing {
-  grid-row: 2;
-}
-
 .business-slip-grid > .business-slip-card > .business-slip-card__body {
-  grid-row: 3;
+  grid-row: 2;
 }
 
 .business-slip-grid > .business-slip-card > .slip-list__actions {
   align-self: end;
-  grid-row: 4;
+  grid-row: 3;
 }
 
 .business-slip-card.slip-list__row {
@@ -2362,18 +2358,27 @@
   align-items: center;
   background: var(--business-slip-header-background);
   border-bottom: 1px solid var(--business-slip-header-border);
-  display: flex;
-  gap: 0.45rem;
-  justify-content: space-between;
-  min-height: 46px;
-  padding: 0.42rem 0.55rem;
+  display: grid;
+  gap: 0.22rem 0.45rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 70px;
+  padding: 0.48rem 0.55rem;
 }
 
-.business-slip-card__identity,
+.business-slip-card__identity {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
 .business-slip-card__header-actions {
   align-items: center;
   display: flex;
   gap: 0.35rem;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -2383,10 +2388,32 @@
   letter-spacing: 0.02em;
 }
 
-.business-slip-card__number {
-  color: #7b8d94;
-  font-size: 0.62rem;
+.business-slip-card__meta {
+  align-items: center;
+  color: #708088;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.68rem;
   font-weight: 850;
+  gap: 0.24rem;
+  min-width: 0;
+}
+
+.business-slip-card__meta-value {
+  color: #36565c;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.business-slip-card__meta-separator {
+  color: #8a999f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.business-slip-card__elapsed {
   white-space: nowrap;
 }
 
@@ -2405,33 +2432,6 @@
   white-space: nowrap;
 }
 
-.business-slip-card__timing {
-  align-items: baseline;
-  background: #f7f9f8;
-  border-bottom: 1px solid #d9e1e2;
-  color: #708088;
-  display: flex;
-  font-size: 0.64rem;
-  font-weight: 800;
-  gap: 0.25rem;
-  min-height: 36px;
-  padding: 0.4rem 0.55rem;
-}
-
-.business-slip-card__timing .slip-list__time,
-.business-slip-card__timing strong {
-  color: #36565c;
-  font-size: 0.88rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.business-slip-card__timing .business-slip-card__elapsed {
-  margin-left: auto;
-  min-width: 5.75rem;
-  text-align: right;
-  white-space: nowrap;
-}
-
 .business-slip-card .slip-list__row-main {
   align-items: stretch;
   cursor: pointer;
@@ -2441,14 +2441,12 @@
   padding: 0.55rem;
 }
 
-.business-slip-card__header[data-business-slip-open-detail],
-.business-slip-card__timing[data-business-slip-open-detail] {
+.business-slip-card__header[data-business-slip-open-detail] {
   cursor: pointer;
 }
 
 .business-slip-card .slip-list__row-main:hover,
-.business-slip-card .slip-list__row-main:focus-visible,
-.business-slip-card__timing[data-business-slip-open-detail]:hover {
+.business-slip-card .slip-list__row-main:focus-visible {
   background: #fff;
   border-color: transparent;
 }
@@ -2527,9 +2525,9 @@
 }
 
 .business-slip-card__person--nomination {
-  background: #f7f9f8;
-  border-color: #aeb9bd;
-  color: #40535a;
+  background: #faf4f3;
+  border-color: #dbc1bd;
+  color: #724942;
 }
 
 .business-slip-card__person--overflow {
@@ -2788,16 +2786,19 @@
   }
 
   .business-slip-grid > .business-slip-card.slip-list__row {
-    grid-template-rows: minmax(46px, auto) 36px auto 44px;
+    grid-template-rows: minmax(70px, auto) auto 44px;
   }
 
   .business-slip-card__header {
     align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .business-slip-card__header-actions {
+    grid-column: 1;
+    grid-row: auto;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   .business-slip-paid__body {

@@ -656,7 +656,11 @@
         }
 
         const minutes = elapsedMinutes(slip, now);
+        const separator = row.querySelector('[data-business-slip-elapsed-separator]');
         elapsed.hidden = minutes === null;
+        if (separator) {
+            separator.hidden = minutes === null;
+        }
         if (minutes !== null) {
             setText(elapsed, formatElapsedMinutes(minutes));
         }
@@ -1166,7 +1170,6 @@
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
         syncCardPeople(row, slip);
-        setText(row.querySelector('[data-business-slip-number]'), `伝票 #${compactSlipNumber(slip)}`);
         setText(row.querySelector('[data-business-slip-status]'), slip.checkoutPending ? '会計準備中' : slip.statusDisplay);
         setText(row.querySelector('[data-business-slip-customer-count]'), `${Number(slip.customerCount) || 0}名`);
         syncElapsedTime(row, slip);
@@ -1206,9 +1209,25 @@
         const identity = buildElement('div', 'business-slip-card__identity');
         const table = buildElement('strong', 'slip-list__table');
         table.dataset.businessSlipTable = '';
-        const slipNumber = buildElement('span', 'business-slip-card__number');
-        slipNumber.dataset.businessSlipNumber = '';
-        identity.append(table, slipNumber);
+        identity.appendChild(table);
+        const meta = buildElement('div', 'business-slip-card__meta');
+        const openedTime = buildElement('span', 'slip-list__time business-slip-card__meta-value');
+        openedTime.dataset.businessSlipTime = '';
+        const customerCount = buildElement('strong', 'business-slip-card__meta-value');
+        customerCount.dataset.businessSlipCustomerCount = '';
+        const elapsed = buildElement('strong', 'business-slip-card__elapsed business-slip-card__meta-value');
+        elapsed.dataset.businessSlipElapsed = '';
+        elapsed.hidden = true;
+        const elapsedSeparator = buildElement('span', 'business-slip-card__meta-separator', '・');
+        elapsedSeparator.dataset.businessSlipElapsedSeparator = '';
+        elapsedSeparator.hidden = true;
+        meta.append(
+            openedTime,
+            buildElement('span', 'business-slip-card__meta-separator', '・'),
+            customerCount,
+            elapsedSeparator,
+            elapsed
+        );
         const headerActions = buildElement('div', 'business-slip-card__header-actions');
         const syncState = buildElement('span', 'slip-list__sync-state');
         syncState.dataset.businessSlipSyncState = '';
@@ -1217,19 +1236,7 @@
         statusBadge.dataset.businessSlipStatus = '';
         headerActions.append(syncState, statusBadge);
         header.dataset.businessSlipOpenDetail = '';
-        header.append(identity, headerActions);
-
-        const timing = buildElement('div', 'business-slip-card__timing');
-        timing.dataset.businessSlipOpenDetail = '';
-        timing.append(buildElement('span', null, '入店'));
-        const openedTime = buildElement('span', 'slip-list__time');
-        openedTime.dataset.businessSlipTime = '';
-        const customerCount = buildElement('strong');
-        customerCount.dataset.businessSlipCustomerCount = '';
-        const elapsed = buildElement('strong', 'business-slip-card__elapsed');
-        elapsed.dataset.businessSlipElapsed = '';
-        elapsed.hidden = true;
-        timing.append(openedTime, buildElement('span', null, '・'), customerCount, elapsed);
+        header.append(identity, meta, headerActions);
 
         const main = buildElement('div', 'slip-list__row-main business-slip-card__body');
         main.dataset.businessSlipOpenDetail = '';
@@ -1261,9 +1268,9 @@
         const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger slip-list__checkout-action', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
-        actionButtons.append(customerButton, nominationButton, orderButton, checkoutButton, releaseCheckoutButton, receiptButton, cancelButton);
+        actionButtons.append(customerButton, nominationButton, orderButton, releaseCheckoutButton, checkoutButton, receiptButton, cancelButton);
         actions.appendChild(actionButtons);
-        row.append(header, timing, main, actions);
+        row.append(header, main, actions);
 
         syncSlipRow(row, slip);
 

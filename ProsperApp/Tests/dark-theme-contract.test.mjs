@@ -73,11 +73,11 @@ test("the theme covers shared controls and every operational surface", async () 
 
   assert.match(
     theme,
-    /\.business-slip-card__timing\s*\{[^}]*background:\s*var\(--app-surface-soft\);[^}]*border-color:\s*var\(--app-border\)/s,
+    /\.business-slip-card__meta\s*,\s*\.business-slip-card__meta-separator\s*\{[^}]*color:\s*var\(--app-text-muted\)/s,
   );
   assert.match(
     theme,
-    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*transparent;[^}]*border-color:\s*var\(--app-border-strong\);[^}]*color:\s*var\(--app-text-muted\)/s,
+    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#2f2426;[^}]*border-color:\s*#62494c;[^}]*color:\s*#e6c9c4/s,
   );
   assert.match(
     theme,

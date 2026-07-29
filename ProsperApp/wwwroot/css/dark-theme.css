@@ -691,9 +691,13 @@
     color: var(--app-text);
   }
 
-  .business-slip-card__number,
-  .business-slip-card__timing {
+  .business-slip-card__meta,
+  .business-slip-card__meta-separator {
     color: var(--app-text-muted);
+  }
+
+  .business-slip-card__meta-value {
+    color: var(--app-text);
   }
 
   .business-slip-card__status {
@@ -702,19 +706,8 @@
     color: var(--business-slip-status-color);
   }
 
-  .business-slip-card__timing {
-    background: var(--app-surface-soft);
-    border-color: var(--app-border);
-  }
-
-  .business-slip-card__timing .slip-list__time,
-  .business-slip-card__timing strong {
-    color: var(--app-text);
-  }
-
   .business-slip-card .slip-list__row-main:hover,
-  .business-slip-card .slip-list__row-main:focus-visible,
-  .business-slip-card__timing[data-business-slip-open-detail]:hover {
+  .business-slip-card .slip-list__row-main:focus-visible {
     background: var(--app-surface-hover);
   }
 
@@ -728,9 +721,9 @@
   }
 
   .business-slip-card__person--nomination {
-    background: transparent;
-    border-color: var(--app-border-strong);
-    color: var(--app-text-muted);
+    background: #2f2426;
+    border-color: #62494c;
+    color: #e6c9c4;
   }
 
   .business-slip-card .slip-list__action-buttons .btn {
