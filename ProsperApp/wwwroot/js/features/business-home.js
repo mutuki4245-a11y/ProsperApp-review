@@ -336,6 +336,11 @@
     };
     const isCheckoutReady = (slip) => slip?.status === 'checkout_ready' || Boolean(slip?.checkoutPending);
     const isOpenSlip = (slip) => ['open', 'checkout_ready'].includes(slip?.status);
+    const compactSlipNumber = (slip) => {
+        const value = String(slip?.slipNo || slip?.id || '');
+        const segments = value.split('-');
+        return segments.length > 2 ? segments.slice(-2).join('-') : value;
+    };
     const tableCategoryLabel = (slip) => {
         const table = slipTableMetadata(slip);
         const prefix = table.tableCode.match(/^[^\d\s]+/)?.[0];
@@ -871,7 +876,7 @@
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
         setText(row.querySelector('[data-business-slip-customers]'), slip.customerNames || '客名なし');
         setText(row.querySelector('[data-business-slip-casts]'), slip.castNames || '指名なし');
-        setText(row.querySelector('[data-business-slip-number]'), `伝票 #${slip.slipNo || slip.id}`);
+        setText(row.querySelector('[data-business-slip-number]'), `伝票 #${compactSlipNumber(slip)}`);
         setText(row.querySelector('[data-business-slip-status]'), slip.checkoutPending ? '会計準備中' : slip.statusDisplay);
         setText(row.querySelector('[data-business-slip-customer-count]'), `${Number(slip.customerCount) || 0}名`);
         setText(row.querySelector('[data-business-slip-karaoke-summary]'), `${toQuantity(slip.karaokeQuantity)}回`);
