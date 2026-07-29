@@ -2341,12 +2341,13 @@
 }
 
 .business-slip-card.slip-list__row {
-  --business-slip-accent: #4c7777;
-  --business-slip-header-background: #edf3f2;
-  --business-slip-header-border: #d3dfde;
-  --business-slip-header-hover: #e3eeec;
-  --business-slip-status-border: #bccacc;
-  --business-slip-status-color: #456168;
+  --business-slip-accent: #4d827c;
+  --business-slip-header-background: #dcebea;
+  --business-slip-header-border: #a9c4c1;
+  --business-slip-header-hover: #d1e3e1;
+  --business-slip-money-color: #806000;
+  --business-slip-status-border: #83aaa5;
+  --business-slip-status-color: #2f625d;
   align-items: stretch;
   background: #fff;
   border: 1px solid #bccacc;
@@ -2365,20 +2366,20 @@
 
 .business-slip-card.slip-list__row--checkout-ready {
   --business-slip-accent: #267fc1;
-  --business-slip-header-background: #edf4f9;
-  --business-slip-header-border: #d5e3ed;
-  --business-slip-header-hover: #e2eef6;
-  --business-slip-status-border: #9fc4dd;
-  --business-slip-status-color: #1e699d;
+  --business-slip-header-background: #dbeaf5;
+  --business-slip-header-border: #a7c9df;
+  --business-slip-header-hover: #cfe2f0;
+  --business-slip-status-border: #78acd1;
+  --business-slip-status-color: #175f91;
 }
 
 .business-slip-card.slip-list__row--checked-out {
   --business-slip-accent: #78909a;
-  --business-slip-header-background: #f0f3f4;
-  --business-slip-header-border: #dce3e5;
-  --business-slip-header-hover: #e7ecee;
-  --business-slip-status-border: #c3ced1;
-  --business-slip-status-color: #60747a;
+  --business-slip-header-background: #e5e9eb;
+  --business-slip-header-border: #bdc7cc;
+  --business-slip-header-hover: #dce2e5;
+  --business-slip-status-border: #a5b3ba;
+  --business-slip-status-color: #52666f;
 }
 
 .business-slip-card:hover,
@@ -2561,9 +2562,9 @@
 }
 
 .business-slip-card__person--nomination {
-  background: #fff;
-  border-color: #d8c99d;
-  color: #665420;
+  background: #f7f9f8;
+  border-color: #aeb9bd;
+  color: #40535a;
 }
 
 .business-slip-card__person--overflow {
@@ -2578,7 +2579,7 @@
 }
 
 .business-slip-card .slip-list__amount {
-  color: #174d51;
+  color: var(--business-slip-money-color);
   font-size: 1.08rem;
   font-variant-numeric: tabular-nums;
   justify-self: end;

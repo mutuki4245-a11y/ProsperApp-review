@@ -646,34 +646,36 @@
   }
 
   .business-slip-card.slip-list__row {
-    --business-slip-accent: #6f9292;
-    --business-slip-header-background: #263536;
-    --business-slip-header-border: #3a4c4d;
-    --business-slip-header-hover: #2d4040;
-    --business-slip-status-border: var(--app-border-strong);
-    --business-slip-status-color: var(--app-text-muted);
+    --business-slip-accent: #72aaa3;
+    --business-slip-header-background: #244441;
+    --business-slip-header-border: #48706c;
+    --business-slip-header-hover: #2b504d;
+    --business-slip-money-color: var(--app-money);
+    --business-slip-status-border: #668f8b;
+    --business-slip-status-color: #d8eeeb;
     background: var(--app-surface);
     border-color: var(--app-border);
+    border-top-color: var(--business-slip-accent);
     border-radius: 6px;
     box-shadow: 0 5px 16px rgb(0 0 0 / 0.22);
   }
 
   .business-slip-card.slip-list__row--checkout-ready {
-    --business-slip-accent: var(--app-info);
-    --business-slip-header-background: #243345;
-    --business-slip-header-border: #3e5369;
-    --business-slip-header-hover: #2b4056;
-    --business-slip-status-border: #51769e;
+    --business-slip-accent: #78afe0;
+    --business-slip-header-background: #253f5b;
+    --business-slip-header-border: #4e7195;
+    --business-slip-header-hover: #2c4b6b;
+    --business-slip-status-border: #5e83a8;
     --business-slip-status-color: #d8e8ff;
   }
 
   .business-slip-card.slip-list__row--checked-out {
-    --business-slip-accent: var(--app-text-subtle);
-    --business-slip-header-background: #292e33;
-    --business-slip-header-border: #3d454b;
-    --business-slip-header-hover: #323940;
-    --business-slip-status-border: var(--app-border);
-    --business-slip-status-color: var(--app-text-subtle);
+    --business-slip-accent: #8795a2;
+    --business-slip-header-background: #343b42;
+    --business-slip-header-border: #59636d;
+    --business-slip-header-hover: #3d464f;
+    --business-slip-status-border: #66717c;
+    --business-slip-status-color: #bbc5ce;
   }
 
   .business-slip-card__header {
@@ -687,8 +689,7 @@
   }
 
   .business-slip-card .slip-list__table,
-  .business-slip-card__person,
-  .business-slip-card .slip-list__amount {
+  .business-slip-card__person {
     color: var(--app-text);
   }
 
@@ -730,8 +731,8 @@
 
   .business-slip-card__person--nomination {
     background: transparent;
-    border-color: #8b6a32;
-    color: #f1d49b;
+    border-color: var(--app-border-strong);
+    color: var(--app-text-muted);
   }
 
   .business-slip-card .slip-list__action-buttons .btn {
@@ -1045,8 +1046,7 @@
     color: var(--app-text);
   }
 
-  .business-floor__summary-item--sales.sales-summary__item span,
-  .business-slip-card .slip-list__amount {
+  .business-floor__summary-item--sales.sales-summary__item span {
     color: var(--app-money);
   }
 

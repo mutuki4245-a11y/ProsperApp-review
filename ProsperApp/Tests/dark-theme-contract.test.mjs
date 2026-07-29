@@ -77,11 +77,19 @@ test("the theme covers shared controls and every operational surface", async () 
   );
   assert.match(
     theme,
-    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*transparent;[^}]*border-color:\s*#8b6a32/s,
+    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*transparent;[^}]*border-color:\s*var\(--app-border-strong\);[^}]*color:\s*var\(--app-text-muted\)/s,
   );
   assert.match(
     theme,
-    /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-header-background:\s*#263536;[^}]*--business-slip-header-hover:\s*#2d4040/s,
+    /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-accent:\s*#72aaa3;[^}]*--business-slip-header-background:\s*#244441;[^}]*--business-slip-header-hover:\s*#2b504d;[^}]*--business-slip-money-color:\s*var\(--app-money\);[^}]*border-top-color:\s*var\(--business-slip-accent\)/s,
+  );
+  assert.match(
+    theme,
+    /\.business-slip-card\.slip-list__row--checkout-ready\s*\{[^}]*--business-slip-header-background:\s*#253f5b/s,
+  );
+  assert.match(
+    theme,
+    /\.business-slip-card\.slip-list__row--checked-out\s*\{[^}]*--business-slip-header-background:\s*#343b42/s,
   );
   assert.match(
     theme,
