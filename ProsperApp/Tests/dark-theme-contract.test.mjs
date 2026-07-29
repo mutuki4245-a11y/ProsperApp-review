@@ -79,6 +79,14 @@ test("the theme covers shared controls and every operational surface", async () 
     theme,
     /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*transparent;[^}]*border-color:\s*#8b6a32/s,
   );
+  assert.match(
+    theme,
+    /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-header-background:\s*#263536;[^}]*--business-slip-header-hover:\s*#2d4040/s,
+  );
+  assert.match(
+    theme,
+    /\.business-slip-card__header\s*\{[^}]*background:\s*var\(--business-slip-header-background\);[^}]*border-color:\s*var\(--business-slip-header-border\)/s,
+  );
   assert.match(theme, /@media print\s*\{/);
   assert.doesNotMatch(theme, /(?:linear|radial)-gradient\(/);
   assert.equal(

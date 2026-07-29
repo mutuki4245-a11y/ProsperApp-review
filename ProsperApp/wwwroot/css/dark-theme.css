@@ -571,14 +571,6 @@
     color: var(--app-text);
   }
 
-  .business-floor__title > span {
-    color: var(--app-accent);
-  }
-
-  .business-floor__title p {
-    color: var(--app-text-muted);
-  }
-
   .business-floor__summary.sales-summary__items {
     background: rgb(16 28 42 / 0.56);
     border-color: rgb(154 176 201 / 0.28);
@@ -655,6 +647,9 @@
 
   .business-slip-card.slip-list__row {
     --business-slip-accent: #6f9292;
+    --business-slip-header-background: #263536;
+    --business-slip-header-border: #3a4c4d;
+    --business-slip-header-hover: #2d4040;
     --business-slip-status-border: var(--app-border-strong);
     --business-slip-status-color: var(--app-text-muted);
     background: var(--app-surface);
@@ -665,17 +660,27 @@
 
   .business-slip-card.slip-list__row--checkout-ready {
     --business-slip-accent: var(--app-info);
+    --business-slip-header-background: #243345;
+    --business-slip-header-border: #3e5369;
+    --business-slip-header-hover: #2b4056;
     --business-slip-status-border: #51769e;
     --business-slip-status-color: #d8e8ff;
   }
 
   .business-slip-card.slip-list__row--checked-out {
     --business-slip-accent: var(--app-text-subtle);
+    --business-slip-header-background: #292e33;
+    --business-slip-header-border: #3d454b;
+    --business-slip-header-hover: #323940;
     --business-slip-status-border: var(--app-border);
     --business-slip-status-color: var(--app-text-subtle);
   }
 
-  .business-slip-card__header,
+  .business-slip-card__header {
+    background: var(--business-slip-header-background);
+    border-color: var(--business-slip-header-border);
+  }
+
   .business-slip-card .slip-list__action-buttons .btn {
     background: var(--app-surface-elevated);
     border-color: var(--app-border);
@@ -710,9 +715,12 @@
 
   .business-slip-card .slip-list__row-main:hover,
   .business-slip-card .slip-list__row-main:focus-visible,
-  .business-slip-card__header[data-business-slip-open-detail]:hover,
   .business-slip-card__timing[data-business-slip-open-detail]:hover {
     background: var(--app-surface-hover);
+  }
+
+  .business-slip-card__header[data-business-slip-open-detail]:hover {
+    background: var(--business-slip-header-hover);
   }
 
   .business-slip-card__person {

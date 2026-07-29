@@ -2342,6 +2342,9 @@
 
 .business-slip-card.slip-list__row {
   --business-slip-accent: #4c7777;
+  --business-slip-header-background: #edf3f2;
+  --business-slip-header-border: #d3dfde;
+  --business-slip-header-hover: #e3eeec;
   --business-slip-status-border: #bccacc;
   --business-slip-status-color: #456168;
   align-items: stretch;
@@ -2362,12 +2365,18 @@
 
 .business-slip-card.slip-list__row--checkout-ready {
   --business-slip-accent: #267fc1;
+  --business-slip-header-background: #edf4f9;
+  --business-slip-header-border: #d5e3ed;
+  --business-slip-header-hover: #e2eef6;
   --business-slip-status-border: #9fc4dd;
   --business-slip-status-color: #1e699d;
 }
 
 .business-slip-card.slip-list__row--checked-out {
   --business-slip-accent: #78909a;
+  --business-slip-header-background: #f0f3f4;
+  --business-slip-header-border: #dce3e5;
+  --business-slip-header-hover: #e7ecee;
   --business-slip-status-border: #c3ced1;
   --business-slip-status-color: #60747a;
 }
@@ -2385,8 +2394,8 @@
 
 .business-slip-card__header {
   align-items: center;
-  background: #fbfcfd;
-  border-bottom: 1px solid #e3eaed;
+  background: var(--business-slip-header-background);
+  border-bottom: 1px solid var(--business-slip-header-border);
   display: flex;
   gap: 0.45rem;
   justify-content: space-between;
@@ -2473,10 +2482,13 @@
 
 .business-slip-card .slip-list__row-main:hover,
 .business-slip-card .slip-list__row-main:focus-visible,
-.business-slip-card__header[data-business-slip-open-detail]:hover,
 .business-slip-card__timing[data-business-slip-open-detail]:hover {
   background: #fff;
   border-color: transparent;
+}
+
+.business-slip-card__header[data-business-slip-open-detail]:hover {
+  background: var(--business-slip-header-hover);
 }
 
 .business-slip-card .slip-list__row-main:focus-visible {

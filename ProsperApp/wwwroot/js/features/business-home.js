@@ -659,7 +659,7 @@
         const minutes = elapsedMinutes(slip, now);
         elapsed.hidden = minutes === null;
         if (minutes !== null) {
-            setText(elapsed, `在席 ${formatElapsedMinutes(minutes)}`);
+            setText(elapsed, formatElapsedMinutes(minutes));
         }
     };
 

@@ -26,7 +26,8 @@ assert.equal(businessHomeSource.includes('data-business-slip-karaoke-summary'), 
 assert.equal(businessHomeSource.includes('data-business-slip-elapsed'), true, '伝票パネルに在席時間を表示すること');
 assert.match(businessHomeSource, /setInterval\(\(\) => \{[\s\S]*syncElapsedTimes\(\)/, '在席時間を定期更新すること');
 assert.match(businessHomeSource, /\['open', 'checkout_ready', 'checked_out'\]/, '接客中・会計準備中・会計済みで在席時間を表示すること');
-assert.match(businessHomeSource, /`在席 \$\{formatElapsedMinutes\(minutes\)\}`/, '在席時間をn時間n分で表示すること');
+assert.match(businessHomeSource, /setText\(elapsed, formatElapsedMinutes\(minutes\)\)/, '在席ラベルを付けずに経過時間だけを表示すること');
+assert.equal(businessHomeSource.includes('`在席 ${formatElapsedMinutes(minutes)}`'), false, '経過時間へ在席ラベルを重ねないこと');
 assert.match(snapshotRpc, /'closedAt', s\.closed_at/, '会計後の在席時間を退店時刻で固定できること');
 assert.match(businessHomeSource, /business-slip-card__person--\$\{kind\}/, 'お客様と指名を一人ずつパネル表示すること');
 assert.equal(businessHomeSource.includes('CARD_PERSON_PANEL_LIMIT'), false, '一覧の客・指名を固定件数で打ち切らないこと');
@@ -46,11 +47,18 @@ assert.match(slipsCss, /\.business-slip-grid\s+\.business-slip-card__people\[dat
 assert.match(slipsCss, /\.business-slip-grid\s+\.business-slip-card__people\[data-business-slip-nomination-lines="2"\]\s*\{[^}]*--business-slip-nomination-size:\s*3\.44rem/s, '指名枠は必要時だけ最大2行にすること');
 assert.match(slipsCss, /@media \(max-width: 575\.98px\)[\s\S]*?\.business-slip-grid\s*>\s*\.business-slip-card\.slip-list__row\s*\{[^}]*grid-template-rows:\s*minmax\(46px,\s*auto\) 36px auto 44px/s, '1列表示では卓番ヘッダーの折り返しを許容すること');
 assert.match(slipsCss, /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-accent:\s*#4c7777;[^}]*border-radius:\s*6px;[^}]*border-top:\s*4px solid var\(--business-slip-accent\)/s, 'A案の静かな上端色とカード形状を使うこと');
-assert.match(slipsCss, /\.business-slip-card__status\s*\{[^}]*background:\s*#fff;[^}]*border:\s*1px solid var\(--business-slip-status-border\);[^}]*color:\s*var\(--business-slip-status-color\)/s, '状態色はステータス表示へ限定すること');
+assert.match(slipsCss, /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-header-background:\s*#edf3f2;[^}]*--business-slip-header-hover:\s*#e3eeec/s, '接客中ヘッダーに落ち着いた状態色を使うこと');
+assert.match(slipsCss, /\.business-slip-card\.slip-list__row--checkout-ready\s*\{[^}]*--business-slip-header-background:\s*#edf4f9/s, '会計準備中ヘッダーに落ち着いた状態色を使うこと');
+assert.match(slipsCss, /\.business-slip-card\.slip-list__row--checked-out\s*\{[^}]*--business-slip-header-background:\s*#f0f3f4/s, '会計済みヘッダーに落ち着いた状態色を使うこと');
+assert.match(slipsCss, /\.business-slip-card__header\s*\{[^}]*background:\s*var\(--business-slip-header-background\);[^}]*border-bottom:\s*1px solid var\(--business-slip-header-border\)/s, '伝票ヘッダーへ状態別背景色を適用すること');
+assert.match(slipsCss, /\.business-slip-card__status\s*\{[^}]*background:\s*#fff;[^}]*border:\s*1px solid var\(--business-slip-status-border\);[^}]*color:\s*var\(--business-slip-status-color\)/s, '状態表示はヘッダーと調和する輪郭色を使うこと');
 assert.match(slipsCss, /\.business-slip-card__timing\s*\{[^}]*background:\s*#f7f9f8;[^}]*border-bottom:\s*1px solid #d9e1e2/s, '時間欄を無彩色にすること');
 assert.match(slipsCss, /\.business-slip-card__person\s*\{[^}]*background:\s*#f7f9f8;[^}]*border:\s*1px solid #cdd7d8/s, 'お客様チップをニュートラル配色にすること');
 assert.match(slipsCss, /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#fff;[^}]*border-color:\s*#d8c99d/s, '指名は白地と細い黄枠だけで区別すること');
 assert.equal(businessHomeSource.includes('business-slip-card__summary-label'), false, '伝票パネルにお客様・指名の見出しを表示しないこと');
+assert.equal(indexMarkup.includes('business-floor__title'), false, '営業中画面に重複タイトル領域を置かないこと');
+assert.equal(indexMarkup.includes('BUSINESS FLOOR'), false, '営業中画面に英字ラベルを表示しないこと');
+assert.equal(indexMarkup.includes('伝票単位で、接客・注文・会計をまとめて操作'), false, '営業中画面に操作説明ラベルを表示しないこと');
 assert.match(indexMarkup, /data-business-slip-filter="checked_out"/, '会計済みの絞り込みタブを表示すること');
 for (const iconId of ['user-round', 'star', 'clipboard-list', 'badge-japanese-yen']) {
     assert.equal(actionIcons.includes(`id="${iconId}"`), true, `${iconId}アイコンを操作ボタンで利用できること`);
