@@ -10,8 +10,8 @@
     "standalone"
   ],
   "orientation": "landscape-primary",
-  "background_color": "#102a43",
-  "theme_color": "#102a43",
+  "background_color": "#0d1210",
+  "theme_color": "#0d1210",
   "icons": [
     {
       "src": "/icons/store-app-icon.svg",
