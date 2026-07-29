@@ -654,21 +654,25 @@
   }
 
   .business-slip-card.slip-list__row {
-    --business-slip-soft: var(--app-success-soft);
+    --business-slip-accent: #6f9292;
+    --business-slip-status-border: var(--app-border-strong);
+    --business-slip-status-color: var(--app-text-muted);
     background: var(--app-surface);
     border-color: var(--app-border);
-    border-radius: 8px;
+    border-radius: 6px;
     box-shadow: 0 5px 16px rgb(0 0 0 / 0.22);
   }
 
   .business-slip-card.slip-list__row--checkout-ready {
     --business-slip-accent: var(--app-info);
-    --business-slip-soft: var(--app-info-soft);
+    --business-slip-status-border: #51769e;
+    --business-slip-status-color: #d8e8ff;
   }
 
   .business-slip-card.slip-list__row--checked-out {
     --business-slip-accent: var(--app-text-subtle);
-    --business-slip-soft: var(--app-surface-soft);
+    --business-slip-status-border: var(--app-border);
+    --business-slip-status-color: var(--app-text-subtle);
   }
 
   .business-slip-card__header,
@@ -689,17 +693,19 @@
   }
 
   .business-slip-card__status {
-    border-color: color-mix(in srgb, var(--business-slip-accent) 58%, var(--app-border));
-    color: color-mix(in srgb, var(--business-slip-accent) 82%, white);
+    background: transparent;
+    border-color: var(--business-slip-status-border);
+    color: var(--business-slip-status-color);
   }
 
   .business-slip-card__timing {
-    border-color: color-mix(in srgb, var(--business-slip-accent) 34%, var(--app-border));
+    background: var(--app-surface-soft);
+    border-color: var(--app-border);
   }
 
   .business-slip-card__timing .slip-list__time,
   .business-slip-card__timing strong {
-    color: color-mix(in srgb, var(--business-slip-accent) 78%, white);
+    color: var(--app-text);
   }
 
   .business-slip-card .slip-list__row-main:hover,
@@ -715,9 +721,9 @@
   }
 
   .business-slip-card__person--nomination {
-    background: var(--app-warning-soft);
+    background: transparent;
     border-color: #8b6a32;
-    color: #f7d596;
+    color: #f1d49b;
   }
 
   .business-slip-card .slip-list__action-buttons .btn {

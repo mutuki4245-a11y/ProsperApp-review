@@ -71,6 +71,14 @@ test("the theme covers shared controls and every operational surface", async () 
     assert.ok(theme.includes(selector), `missing dark theme selector: ${selector}`);
   }
 
+  assert.match(
+    theme,
+    /\.business-slip-card__timing\s*\{[^}]*background:\s*var\(--app-surface-soft\);[^}]*border-color:\s*var\(--app-border\)/s,
+  );
+  assert.match(
+    theme,
+    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*transparent;[^}]*border-color:\s*#8b6a32/s,
+  );
   assert.match(theme, /@media print\s*\{/);
   assert.doesNotMatch(theme, /(?:linear|radial)-gradient\(/);
   assert.equal(

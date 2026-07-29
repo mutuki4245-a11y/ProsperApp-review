@@ -2341,13 +2341,14 @@
 }
 
 .business-slip-card.slip-list__row {
-  --business-slip-accent: #18a879;
-  --business-slip-soft: #e8f8f2;
+  --business-slip-accent: #4c7777;
+  --business-slip-status-border: #bccacc;
+  --business-slip-status-color: #456168;
   align-items: stretch;
   background: #fff;
-  border: 1px solid #cddade;
-  border-radius: 13px;
-  border-top: 5px solid var(--business-slip-accent);
+  border: 1px solid #bccacc;
+  border-radius: 6px;
+  border-top: 4px solid var(--business-slip-accent);
   box-shadow: 0 5px 14px rgb(30 62 70 / 0.085);
   display: grid;
   gap: 0;
@@ -2360,13 +2361,15 @@
 }
 
 .business-slip-card.slip-list__row--checkout-ready {
-  --business-slip-accent: #2688d8;
-  --business-slip-soft: #eaf5ff;
+  --business-slip-accent: #267fc1;
+  --business-slip-status-border: #9fc4dd;
+  --business-slip-status-color: #1e699d;
 }
 
 .business-slip-card.slip-list__row--checked-out {
   --business-slip-accent: #78909a;
-  --business-slip-soft: #eef3f5;
+  --business-slip-status-border: #c3ced1;
+  --business-slip-status-color: #60747a;
 }
 
 .business-slip-card:hover,
@@ -2417,10 +2420,10 @@
 }
 
 .business-slip-card__status {
-  background: var(--business-slip-soft);
-  border: 1px solid color-mix(in srgb, var(--business-slip-accent) 48%, white);
+  background: #fff;
+  border: 1px solid var(--business-slip-status-border);
   border-radius: 999px;
-  color: color-mix(in srgb, var(--business-slip-accent) 78%, black);
+  color: var(--business-slip-status-color);
   font-size: 0.62rem;
   font-weight: 950;
   padding: 0.2rem 0.42rem;
@@ -2429,8 +2432,8 @@
 
 .business-slip-card__timing {
   align-items: baseline;
-  background: var(--business-slip-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--business-slip-accent) 18%, white);
+  background: #f7f9f8;
+  border-bottom: 1px solid #d9e1e2;
   color: #708088;
   display: flex;
   font-size: 0.64rem;
@@ -2442,7 +2445,7 @@
 
 .business-slip-card__timing .slip-list__time,
 .business-slip-card__timing strong {
-  color: color-mix(in srgb, var(--business-slip-accent) 76%, black);
+  color: #36565c;
   font-size: 0.88rem;
   font-variant-numeric: tabular-nums;
 }
@@ -2523,10 +2526,10 @@
 }
 
 .business-slip-card__person {
-  background: #f3f8f8;
-  border: 1px solid #c9dedd;
+  background: #f7f9f8;
+  border: 1px solid #cdd7d8;
   border-radius: 6px;
-  color: #173b47;
+  color: #29464c;
   display: block;
   font-size: 0.76rem;
   font-weight: 850;
@@ -2546,9 +2549,9 @@
 }
 
 .business-slip-card__person--nomination {
-  background: #fff9ec;
-  border-color: #ead8a5;
-  color: #604d1d;
+  background: #fff;
+  border-color: #d8c99d;
+  color: #665420;
 }
 
 .business-slip-card__person--overflow {
@@ -2563,7 +2566,7 @@
 }
 
 .business-slip-card .slip-list__amount {
-  color: #0c5558;
+  color: #174d51;
   font-size: 1.08rem;
   font-variant-numeric: tabular-nums;
   justify-self: end;

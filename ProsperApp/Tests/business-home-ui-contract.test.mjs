@@ -45,6 +45,11 @@ assert.match(slipsCss, /\.business-slip-grid\s+\.business-slip-card__people\s*\{
 assert.match(slipsCss, /\.business-slip-grid\s+\.business-slip-card__people\[data-business-slip-customer-lines="2"\]\s*\{[^}]*--business-slip-customer-size:\s*3\.44rem/s, '客枠は必要時だけ最大2行にすること');
 assert.match(slipsCss, /\.business-slip-grid\s+\.business-slip-card__people\[data-business-slip-nomination-lines="2"\]\s*\{[^}]*--business-slip-nomination-size:\s*3\.44rem/s, '指名枠は必要時だけ最大2行にすること');
 assert.match(slipsCss, /@media \(max-width: 575\.98px\)[\s\S]*?\.business-slip-grid\s*>\s*\.business-slip-card\.slip-list__row\s*\{[^}]*grid-template-rows:\s*minmax\(46px,\s*auto\) 36px auto 44px/s, '1列表示では卓番ヘッダーの折り返しを許容すること');
+assert.match(slipsCss, /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-accent:\s*#4c7777;[^}]*border-radius:\s*6px;[^}]*border-top:\s*4px solid var\(--business-slip-accent\)/s, 'A案の静かな上端色とカード形状を使うこと');
+assert.match(slipsCss, /\.business-slip-card__status\s*\{[^}]*background:\s*#fff;[^}]*border:\s*1px solid var\(--business-slip-status-border\);[^}]*color:\s*var\(--business-slip-status-color\)/s, '状態色はステータス表示へ限定すること');
+assert.match(slipsCss, /\.business-slip-card__timing\s*\{[^}]*background:\s*#f7f9f8;[^}]*border-bottom:\s*1px solid #d9e1e2/s, '時間欄を無彩色にすること');
+assert.match(slipsCss, /\.business-slip-card__person\s*\{[^}]*background:\s*#f7f9f8;[^}]*border:\s*1px solid #cdd7d8/s, 'お客様チップをニュートラル配色にすること');
+assert.match(slipsCss, /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#fff;[^}]*border-color:\s*#d8c99d/s, '指名は白地と細い黄枠だけで区別すること');
 assert.equal(businessHomeSource.includes('business-slip-card__summary-label'), false, '伝票パネルにお客様・指名の見出しを表示しないこと');
 assert.match(indexMarkup, /data-business-slip-filter="checked_out"/, '会計済みの絞り込みタブを表示すること');
 for (const iconId of ['user-round', 'star', 'clipboard-list', 'badge-japanese-yen']) {
