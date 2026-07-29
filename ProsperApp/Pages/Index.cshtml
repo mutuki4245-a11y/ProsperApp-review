@@ -46,40 +46,46 @@
 
     @if (Model.HasCurrentBusinessDay || Model.CanCreateSalesInput)
     {
-        <section class="home-workspace" aria-label="営業中の操作">
-            <div class="sales-summary" aria-label="営業中サマリー">
-                <div class="sales-summary__items">
-                    <span class="sales-summary__item">
-                        <strong>営業日</strong>
-                        <span data-business-date-display>@Model.DisplayBusinessDateText</span>
-                    </span>
-                    <span class="sales-summary__item">
-                        <strong>未会計</strong>
-                        <span data-business-open-slip-count>取得中</span>
-                    </span>
-                    <span class="sales-summary__item">
-                        <strong>会計済</strong>
-                        <span data-business-checked-out-slip-count>取得中</span>
-                    </span>
-                    <span class="sales-summary__item sales-summary__item--estimated">
+        <section class="home-workspace business-floor" aria-label="営業中の操作">
+            <header class="sales-summary business-floor__header" aria-label="営業中サマリー">
+                <div class="business-floor__title">
+                    <span>BUSINESS FLOOR</span>
+                    <h1>営業中</h1>
+                    <p>伝票単位で、接客・注文・会計をまとめて操作</p>
+                </div>
+                <div class="sales-summary__items business-floor__summary">
+                    <span class="sales-summary__item sales-summary__item--estimated business-floor__summary-item business-floor__summary-item--sales">
                         <strong>見込み売上</strong>
                         <span data-business-estimated-sales-amount>@StoreUiText.Yen(Model.EstimatedSalesAmount)</span>
                     </span>
+                    <span class="sales-summary__item business-floor__summary-item">
+                        <strong>未会計伝票</strong>
+                        <span data-business-open-slip-count>取得中</span>
+                    </span>
+                    <span class="sales-summary__item business-floor__summary-item">
+                        <strong>会計済み</strong>
+                        <span data-business-checked-out-slip-count>取得中</span>
+                    </span>
+                    <span class="sales-summary__item business-floor__summary-item">
+                        <strong>営業日</strong>
+                        <span data-business-date-display>@Model.DisplayBusinessDateText</span>
+                    </span>
                 </div>
-                <div class="sales-summary__actions">
+                <div class="sales-summary__actions business-floor__header-actions">
                     @if (Model.ShouldShowCreateSlipButton)
                     {
                         <button
-                            class="btn btn-primary sales-summary__create"
+                            class="btn sales-summary__create business-floor__create"
                             type="button"
                             data-bs-toggle="modal"
                             data-bs-target="#createSlipModal"
                             data-business-create-slip-button
                             @(Model.CanCreateSlip ? null : "disabled")>
-                            伝票を追加
+                            <span aria-hidden="true">＋</span>
+                            新しい伝票
                         </button>
                     }
-                    <a class="btn btn-outline-primary sales-summary__attendance" asp-page="/Attendance">勤怠管理</a>
+                    <a class="btn sales-summary__attendance business-floor__attendance" asp-page="/Attendance">勤怠管理</a>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(Model.CreateSlipDisabledMessage))
                 {
@@ -87,22 +93,30 @@
                         @Model.CreateSlipDisabledMessage
                     </div>
                 }
-            </div>
-            <section class="slip-list-section" id="slipListPanel">
+            </header>
+            <section class="slip-list-section business-floor__panel" id="slipListPanel">
                 <form method="post" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
-                    <div class="slip-list-section__statusbar">
-                        <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>
+                    <div class="business-floor__toolbar">
+                        <nav class="business-slip-filter" aria-label="未会計伝票の絞り込み">
+                            <button class="is-active" type="button" data-business-slip-filter="all" aria-pressed="true">
+                                すべて <span data-business-filter-count="all">0</span>
+                            </button>
+                            <button type="button" data-business-slip-filter="open" aria-pressed="false">
+                                接客中 <span data-business-filter-count="open">0</span>
+                            </button>
+                            <button type="button" data-business-slip-filter="checkout_ready" aria-pressed="false">
+                                会計準備 <span data-business-filter-count="checkout_ready">0</span>
+                            </button>
+                        </nav>
+                        <div class="business-floor__legend" aria-label="伝票ステータス">
+                            <span class="is-open">接客中</span>
+                            <span class="is-checkout-ready">会計準備中</span>
+                        </div>
+                        <div class="slip-list-section__statusbar">
+                            <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>
+                        </div>
                     </div>
-                    <div class="slip-list__header" aria-hidden="true">
-                        <span>卓</span>
-                        <span>入店</span>
-                        <span>客</span>
-                        <span>指名</span>
-                        <span>会計</span>
-                        <span>カラオケ</span>
-                        <span>操作</span>
-                    </div>
-                    <div class="slip-list" data-business-slip-list>
+                    <div class="slip-list business-slip-board" data-business-slip-list>
                         <article class="slip-list__row slip-list__row--add" data-business-slip-loading>
                             <div class="slip-list__main">
                                 <strong>伝票を読み込み中</strong>
@@ -477,6 +491,13 @@
             cancelCheckoutUrl = Url.Page("/Index", "CancelCheckout"),
             businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
             receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
+            tableOptions = Model.Tables.Select((table, index) => new
+            {
+                displayName = table.DisplayName,
+                tableCode = table.TableCode,
+                categoryNo = table.TableCategoryNo,
+                sortOrder = index
+            }),
             editorOptions = new
             {
                 timeOptions = Model.TimeOptions.Select(time => new
