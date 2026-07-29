@@ -12,6 +12,8 @@ const [indexMarkup, createSlipSource, editorSource, slipsStyles, nominationsRpc,
 
 assert.equal(indexMarkup.includes('placeholder="お客様名"'), true, '初期のお客様名欄をお客様名と表示すること');
 assert.equal(createSlipSource.includes('placeholder="お客様名"'), true, '追加したお客様名欄をお客様名と表示すること');
+assert.equal(editorSource.includes("placeholder = 'お客様名';"), true, '編集モーダルのお客様名欄をお客様名と表示すること');
+assert.equal(editorSource.includes('お客様名・特徴など'), false, '編集モーダルに古いお客様名補助表記を残さないこと');
 assert.equal(editorSource.includes('data-business-editor-allow-nomination-duplicates'), true, '指名追加に重複ありのチェックを置くこと');
 assert.equal(slipsStyles.includes('.business-slip-editor-action-field--nomination-duplicate'), true, '重複ありのチェックを指名入力の下段に配置すること');
 assert.equal(editorSource.includes('availableNominationCasts(allowsDuplicateNominations(form))'), true, '重複ありでは指名済みキャストも候補にすること');

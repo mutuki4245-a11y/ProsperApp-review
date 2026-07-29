@@ -672,7 +672,7 @@
             name.className = 'form-control form-control-lg';
             name.name = 'AddCustomersInput.CustomerLabels[0]';
             name.maxLength = 100;
-            name.placeholder = 'お客様名・特徴など';
+            name.placeholder = 'お客様名';
             appendField(actionForm.fields, 'お客様名', name).appendChild(Object.assign(document.createElement('div'), { className: 'form-text', textContent: '名前は空欄でも登録できます。' }));
             appendField(actionForm.fields, '入店時刻', createTimeSelect('AddCustomersInput.EnteredTime'));
             form = actionForm.form;
