@@ -688,17 +688,22 @@
         );
     };
 
-    const compactCardPersonList = (personList) => {
-        if (!personList?.isConnected || personList.hidden || personList.clientHeight === 0) {
-            return;
-        }
-
+    const resetCardPersonList = (personList) => {
         const panels = Array.from(personList.children)
             .filter((panel) => !panel.classList.contains('business-slip-card__person--overflow'));
         panels.forEach((panel) => {
             panel.hidden = false;
         });
         personList.querySelector('.business-slip-card__person--overflow')?.remove();
+        return panels;
+    };
+
+    const compactCardPersonList = (personList) => {
+        if (!personList?.isConnected || personList.hidden || personList.clientHeight === 0) {
+            return;
+        }
+
+        const panels = resetCardPersonList(personList);
 
         if (personList.scrollHeight <= personList.clientHeight + 1) {
             return;
@@ -721,8 +726,69 @@
         overflow.setAttribute('aria-label', `他${hiddenCount}名。詳細を開いて確認`);
     };
 
+    const requiredCardPersonLines = (personList) => {
+        if (!personList || personList.hidden) {
+            return 1;
+        }
+
+        const panels = resetCardPersonList(personList);
+        const firstPanel = panels[0];
+        if (!firstPanel) {
+            return 1;
+        }
+
+        const firstPanelTop = firstPanel.getBoundingClientRect().top;
+        const hasWrappedPanel = panels.some((panel) =>
+            panel.getBoundingClientRect().top > firstPanelTop + 1);
+        return hasWrappedPanel ? 2 : 1;
+    };
+
+    const setCardPeopleLines = (people, customerLines, nominationLines) => {
+        people.dataset.businessSlipCustomerLines = String(customerLines);
+        people.dataset.businessSlipNominationLines = String(nominationLines);
+    };
+
+    const compactCardPersonGrid = (grid) => {
+        const measuredCards = Array.from(grid.children)
+            .filter((card) => card.classList.contains('business-slip-card'))
+            .map((card) => {
+                const people = card.querySelector('.business-slip-card__people');
+                const customerList = card.querySelector('[data-business-slip-customers]');
+                const nominationList = card.querySelector('[data-business-slip-casts]');
+                if (!people || !customerList || !nominationList) {
+                    return null;
+                }
+
+                setCardPeopleLines(people, 2, 2);
+                return { card, people, customerList, nominationList };
+            })
+            .filter(Boolean)
+            .map((entry) => ({
+                ...entry,
+                customerLines: requiredCardPersonLines(entry.customerList),
+                nominationLines: requiredCardPersonLines(entry.nominationList)
+            }));
+
+        const cardsByRow = new Map();
+        measuredCards.forEach((entry) => {
+            const rowCards = cardsByRow.get(entry.card.offsetTop) ?? [];
+            rowCards.push(entry);
+            cardsByRow.set(entry.card.offsetTop, rowCards);
+        });
+
+        cardsByRow.forEach((rowCards) => {
+            const maximumCustomerLines = Math.max(...rowCards.map(({ customerLines }) => customerLines));
+            const maximumNominationLines = Math.max(...rowCards.map(({ nominationLines }) => nominationLines));
+            rowCards.forEach(({ people, customerList, nominationList }) => {
+                setCardPeopleLines(people, maximumCustomerLines, maximumNominationLines);
+                compactCardPersonList(customerList);
+                compactCardPersonList(nominationList);
+            });
+        });
+    };
+
     const compactCardPersonLists = () => {
-        list.querySelectorAll('.business-slip-grid .business-slip-card__person-list').forEach(compactCardPersonList);
+        list.querySelectorAll('.business-slip-grid').forEach(compactCardPersonGrid);
     };
 
     let cardPeopleCompactionFrame = null;

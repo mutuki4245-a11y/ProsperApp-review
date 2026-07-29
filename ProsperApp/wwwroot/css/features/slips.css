@@ -2495,12 +2495,22 @@
 }
 
 .business-slip-grid .business-slip-card__people {
-  grid-template-rows: repeat(2, 3.44rem);
+  --business-slip-customer-size: 1.58rem;
+  --business-slip-nomination-size: 1.58rem;
+  grid-template-rows: var(--business-slip-customer-size) var(--business-slip-nomination-size);
+}
+
+.business-slip-grid .business-slip-card__people[data-business-slip-customer-lines="2"] {
+  --business-slip-customer-size: 3.44rem;
+}
+
+.business-slip-grid .business-slip-card__people[data-business-slip-nomination-lines="2"] {
+  --business-slip-nomination-size: 3.44rem;
 }
 
 .business-slip-grid .business-slip-card__person-list {
   align-content: flex-start;
-  block-size: 3.44rem;
+  block-size: 100%;
   overflow: hidden;
 }
 
