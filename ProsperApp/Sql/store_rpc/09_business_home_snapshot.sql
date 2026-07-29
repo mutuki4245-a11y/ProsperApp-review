@@ -49,7 +49,7 @@ as $$
             c.slip_id,
             count(*) filter (where c.status = 'active')::integer as customer_count,
             string_agg(
-                coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
                 '、' order by c.line_no
             ) filter (where c.status = 'active') as customer_names
         from public.store_slip_customers c
@@ -283,7 +283,7 @@ as $$
                     select jsonb_agg(jsonb_build_object(
                         'id', c.slip_customer_id,
                         'lineNo', c.line_no,
-                        'displayName', coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                        'displayName', coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
                         'customerLabel', c.customer_label,
                         'enteredAt', c.entered_at,
                         'enteredTime', to_char(c.entered_at at time zone 'Asia/Tokyo', 'HH24:MI'),

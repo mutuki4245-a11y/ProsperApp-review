@@ -101,7 +101,7 @@ as $$
         select
             c.slip_id,
             string_agg(
-                coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
                 '、'
                 order by c.line_no
             ) filter (where c.status <> 'cancelled') as customer_names

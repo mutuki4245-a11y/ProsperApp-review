@@ -36,6 +36,7 @@
     const attendingCastModal = attendingCastModalElement ? bootstrap.Modal.getOrCreateInstance(attendingCastModalElement) : null;
     const businessHome = () => window.ProsperBusinessHome;
     const currentSlip = (slipId) => businessHome()?.getSlip?.(slipId);
+    const defaultCustomerName = (lineNo) => `ご新規様${lineNo || ''}`;
     const formatYen = window.MoneyText?.yen ?? ((amount) => `${Number(amount || 0).toLocaleString('ja-JP')}円`);
     const actionTemplates = new Set(['customer_add', 'customer_rename', 'customer_leave', 'nomination_add', 'adjustment_add', 'order_add']);
     const deleteActions = {
@@ -142,12 +143,13 @@
         if (section === 'customers') {
             (slip.customers || []).filter((item) => item.status === 'active').forEach((customer) => {
                 const enteredTime = customer.enteredTime || '-';
-                const row = createLocalEditorRow(`${customer.displayName || '客名なし'}（${enteredTime}）`);
+                const displayName = customer.displayName || defaultCustomerName(customer.lineNo);
+                const row = createLocalEditorRow(`${displayName}（${enteredTime}）`);
                 row.classList.add('business-slip-editor-list__row--customer');
                 row.dataset.businessCustomerRow = '';
                 row.dataset.businessCustomerId = String(customer.id);
-                appendEditorAction(row, 'customer_rename', '名前変更', { id: customer.id, label: customer.customerLabel, display: customer.displayName });
-                appendEditorAction(row, 'customer_leave', '退店', { id: customer.id, display: customer.displayName });
+                appendEditorAction(row, 'customer_rename', '名前変更', { id: customer.id, label: customer.customerLabel, display: displayName });
+                appendEditorAction(row, 'customer_leave', '退店', { id: customer.id, display: displayName });
                 rows.appendChild(row);
             });
         } else if (section === 'nominations') {
@@ -1059,5 +1061,9 @@
         if (!refreshedSlip || refreshedSlip.status !== 'open') {
             renderUnavailable('この伝票は会計準備中または会計済みのため編集できません。営業中一覧を再表示してください。');
         }
+    });
+
+    window.ProsperBusinessSlipEditor = Object.freeze({
+        open: openEditor
     });
 })();

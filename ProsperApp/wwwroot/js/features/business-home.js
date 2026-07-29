@@ -17,6 +17,13 @@
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
     const slipFilterButtons = Array.from(form.querySelectorAll('[data-business-slip-filter]'));
+    const detailModalElement = document.querySelector('[data-business-slip-detail-modal]');
+    const detailModalTitle = detailModalElement?.querySelector('[data-business-slip-detail-title]');
+    const detailModalSubtitle = detailModalElement?.querySelector('[data-business-slip-detail-subtitle]');
+    const detailModalContent = detailModalElement?.querySelector('[data-business-slip-detail-content]');
+    const detailModal = detailModalElement && window.bootstrap?.Modal
+        ? bootstrap.Modal.getOrCreateInstance(detailModalElement)
+        : null;
     const filterCountElements = new Map(
         Array.from(form.querySelectorAll('[data-business-filter-count]'))
             .map((element) => [element.dataset.businessFilterCount, element])
@@ -42,8 +49,8 @@
     let snapshotRevision = -1;
     const pendingOperations = new Map();
     const checkoutLockSlipIds = new Set();
-    const expandedSlipIds = new Set();
     const expandedOrderGroupKeys = new Set();
+    let activeDetailSlipId = null;
     let hasLoaded = false;
     let refreshPromise = null;
     let isSaving = false;
@@ -59,6 +66,7 @@
         return amount < 0 ? `-${formatYen(Math.abs(amount))}` : formatYen(amount);
     };
     const toQuantity = (value) => Math.max(0, Math.trunc(Number(value) || 0));
+    const defaultCustomerName = (lineNo) => `ご新規様${lineNo || ''}`;
     const setText = (element, text) => {
         if (element && element.textContent !== String(text)) {
             element.textContent = String(text);
@@ -99,7 +107,7 @@
         const orders = Array.isArray(slip.orders) ? slip.orders.filter((item) => item.status === 'active') : [];
         const adjustments = Array.isArray(slip.adjustments) ? slip.adjustments.filter((item) => item.status === 'active') : [];
         const pricingLines = Array.isArray(slip.pricingLines) ? slip.pricingLines.filter((item) => item.status === 'active') : null;
-        const names = customers.map((item) => item.displayName || `客${item.lineNo || ''}`).filter(Boolean);
+        const names = customers.map((item) => item.displayName || defaultCustomerName(item.lineNo)).filter(Boolean);
         const castNames = [];
         nominations.forEach((item) => {
             if (item.displayName && !castNames.includes(item.displayName)) castNames.push(item.displayName);
@@ -144,7 +152,7 @@
                 id: temporaryId,
                 lineNo,
                 customerLabel: label || null,
-                displayName: label || `客${lineNo}`,
+                displayName: label || defaultCustomerName(lineNo),
                 enteredTime: payload.entered_time || '',
                 enteredAt: now,
                 leftAt: null,
@@ -157,7 +165,7 @@
             if (customer) {
                 const label = String(payload.customer_label || '').trim();
                 customer.customerLabel = label || null;
-                customer.displayName = label || `客${customer.lineNo || ''}`;
+                customer.displayName = label || defaultCustomerName(customer.lineNo);
                 customer.pending = true;
             }
         } else if (operation.operationType === 'leave_customer') {
@@ -573,60 +581,66 @@
         return amount;
     };
 
-    const syncKaraokeControl = (row, slip) => {
-        const amountValue = row.querySelector('[data-business-slip-amount-value]');
-        const karaokeSummary = row.querySelector('[data-business-slip-karaoke-summary]');
-        let karaoke = row.querySelector('[data-business-karaoke-row]');
-        if (slip.status !== 'open' || slip.checkoutPending) {
-            karaoke?.remove();
-            setText(amountValue, formatYen(slip.accountingAmount));
-            setText(karaokeSummary, `${getInitialQuantity(slip)}回`);
-            return;
-        }
-
+    const karaokeState = (slip) => {
         const initialQuantity = getInitialQuantity(slip);
-        const displayQuantity = getDisplayQuantity(slip);
+        const editable = slip.status === 'open' && !slip.checkoutPending;
+        const displayQuantity = editable ? getDisplayQuantity(slip) : initialQuantity;
         const baseAmount = Number(slip.accountingAmount || 0) - initialQuantity * accountingUnit;
-        if (!karaoke) {
-            karaoke = buildElement('div', 'slip-list__karaoke');
-            karaoke.dataset.businessKaraokeRow = '';
-
-            const decrement = buildElement('button', 'btn btn-outline-secondary', '-');
-            decrement.type = 'button';
-            decrement.setAttribute('aria-label', 'カラオケを減らす');
-            decrement.dataset.businessKaraokeDecrement = '';
-            const increment = buildElement('button', 'btn btn-outline-primary', '+');
-            increment.type = 'button';
-            increment.setAttribute('aria-label', 'カラオケを増やす');
-            increment.dataset.businessKaraokeIncrement = '';
-            const quantity = buildElement('strong', null, displayQuantity);
-            quantity.dataset.businessKaraokeDisplay = '';
-            karaoke.append(decrement, quantity, increment);
-        }
-
-        const actions = row.querySelector('.slip-list__actions');
-        if (actions && karaoke.parentElement !== actions) {
-            actions.prepend(karaoke);
-        }
-
-        karaoke.dataset.slipId = String(slip.id);
-        karaoke.dataset.initialQuantity = String(initialQuantity);
-        karaoke.dataset.quantity = String(displayQuantity);
-        karaoke.dataset.accountingBaseAmount = String(baseAmount);
-        karaoke.dataset.karaokeAccountingUnit = String(accountingUnit);
-        karaoke.classList.toggle('is-dirty', displayQuantity !== initialQuantity);
-        setText(karaoke.querySelector('[data-business-karaoke-display]'), displayQuantity);
-        setText(karaokeSummary, `${displayQuantity}回`);
-        setText(amountValue, formatYen(baseAmount + displayQuantity * accountingUnit));
+        return {
+            editable,
+            initialQuantity,
+            displayQuantity,
+            baseAmount,
+            accountingAmount: baseAmount + displayQuantity * accountingUnit,
+            dirty: displayQuantity !== initialQuantity
+        };
     };
 
-    const buildSlipDetails = () => {
-        const panel = buildElement('section', 'slip-list__details');
-        panel.dataset.businessSlipDetails = '';
-        const fields = buildElement('div', 'slip-list__details-content');
-        fields.dataset.businessSlipDetailsContent = '';
-        panel.appendChild(fields);
-        return panel;
+    const syncKaraokeSummary = (row, slip) => {
+        const amountValue = row.querySelector('[data-business-slip-amount-value]');
+        const karaokeSummary = row.querySelector('[data-business-slip-karaoke-summary]');
+        const state = karaokeState(slip);
+        row.querySelector('[data-business-karaoke-row]')?.remove();
+        setText(karaokeSummary, `${state.displayQuantity}回`);
+        setText(amountValue, formatYen(state.accountingAmount));
+    };
+
+    const buildKaraokeEditor = (slip) => {
+        const state = karaokeState(slip);
+        const section = buildElement('section', 'business-slip-detail-karaoke');
+        section.append(
+            buildElement('strong', 'business-slip-detail-karaoke__label', 'カラオケ'),
+            buildElement('span', 'business-slip-detail-karaoke__amount', `会計額 ${formatYen(state.accountingAmount)}`)
+        );
+
+        if (!state.editable) {
+            section.appendChild(buildElement('span', 'business-slip-detail-karaoke__readonly', `${state.displayQuantity}回`));
+            return section;
+        }
+
+        const control = buildElement('div', 'slip-list__karaoke business-slip-detail-karaoke__control');
+        control.dataset.businessKaraokeRow = '';
+        control.dataset.slipId = String(slip.id);
+        control.dataset.initialQuantity = String(state.initialQuantity);
+        control.dataset.quantity = String(state.displayQuantity);
+        control.dataset.accountingBaseAmount = String(state.baseAmount);
+        control.dataset.karaokeAccountingUnit = String(accountingUnit);
+        control.classList.toggle('is-dirty', state.dirty);
+
+        const decrement = buildElement('button', 'btn btn-outline-secondary', '-');
+        decrement.type = 'button';
+        decrement.setAttribute('aria-label', 'カラオケを減らす');
+        decrement.disabled = state.displayQuantity <= 0;
+        decrement.dataset.businessKaraokeDecrement = '';
+        const increment = buildElement('button', 'btn btn-outline-primary', '+');
+        increment.type = 'button';
+        increment.setAttribute('aria-label', 'カラオケを増やす');
+        increment.dataset.businessKaraokeIncrement = '';
+        const quantity = buildElement('strong', null, state.displayQuantity);
+        quantity.dataset.businessKaraokeDisplay = '';
+        control.append(decrement, quantity, increment);
+        section.appendChild(control);
+        return section;
     };
 
     const buildSlipDetailActions = () => {
@@ -679,7 +693,7 @@
             content.appendChild(buildElement('strong', 'business-slip-detail-summary__empty', '在席客なし'));
         } else {
             customers.forEach((customer) => {
-                const chip = buildElement('strong', 'business-slip-detail-summary__chip', customer.displayName || '客名なし');
+                const chip = buildElement('strong', 'business-slip-detail-summary__chip', customer.displayName || defaultCustomerName(customer.lineNo));
                 if (customer.status !== 'active') chip.classList.add('is-departed');
                 content.appendChild(chip);
             });
@@ -788,11 +802,13 @@
     };
 
     const buildAccountingTotals = (slip) => {
-        const orderSubtotal = Math.round(Number(slip.orderSubtotalAmount) || 0);
+        const karaoke = karaokeState(slip);
+        const karaokeNetUnit = Math.round(accountingUnit / 1.2);
+        const orderSubtotal = Math.round((Number(slip.orderSubtotalAmount) || 0) + (karaoke.displayQuantity - karaoke.initialQuantity) * karaokeNetUnit);
         const pricingSubtotal = Math.round(Number(slip.pricingSubtotalAmount) || 0);
         const subtotal = orderSubtotal + pricingSubtotal;
         const serviceCharge = Math.round(subtotal * 0.20);
-        const total = Math.round(Number(slip.accountingAmount) || 0);
+        const total = Math.round(karaoke.accountingAmount);
         const totals = buildElement('section', 'business-slip-detail-totals');
         totals.setAttribute('aria-label', '会計内訳');
 
@@ -810,38 +826,9 @@
         return totals;
     };
 
-    const syncSlipDetails = (row, slip) => {
-        const panel = row.querySelector('[data-business-slip-details]');
-        const toggle = row.querySelector('[data-business-slip-details-toggle]');
-        if (!panel || !toggle) {
-            return;
-        }
-
-        const isExpanded = expandedSlipIds.has(String(slip.id));
-        const panelId = `business-slip-details-${slip.id}`;
-        panel.id = panelId;
-        panel.setAttribute('aria-label', `卓 ${slip.tableDisplay} の詳細`);
-        panel.hidden = !isExpanded;
-        row.classList.toggle('slip-list__row--expanded', isExpanded);
-        toggle.dataset.businessSlipDetailsToggle = String(slip.id);
-        toggle.setAttribute('aria-controls', panelId);
-        toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-        toggle.setAttribute('aria-label', isExpanded ? '詳細を閉じる' : '詳細を開く');
-        toggle.textContent = isExpanded ? '詳細 ∧' : '詳細 ∨';
-        const content = panel.querySelector('[data-business-slip-details-content]');
-        if (content) {
-            content.replaceChildren();
-            const layout = buildElement('div', 'business-slip-detail-layout');
-            const activity = buildElement('div', 'business-slip-detail-layout__activity');
-            const accounting = buildElement('aside', 'business-slip-detail-layout__accounting');
-            accounting.setAttribute('aria-label', '注文と会計');
-            activity.append(customerSummary(slip), nominationSummary(slip));
-            accounting.append(orderSection(slip), buildAccountingTotals(slip));
-            layout.append(activity, accounting);
-            content.appendChild(layout);
-        }
+    const syncEditorButtons = (container, slip) => {
         const canEdit = slip.status === 'open' && !slip.checkoutPending;
-        row.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
+        container.querySelectorAll('[data-business-slip-editor]').forEach((button) => {
             button.hidden = !canEdit;
             if (canEdit) {
                 button.dataset.businessSlipId = String(slip.id);
@@ -849,6 +836,9 @@
                 delete button.dataset.businessSlipId;
             }
         });
+    };
+
+    const syncPendingState = (row, slip) => {
         const pending = pendingForSlip(slip.id);
         const pendingState = row.querySelector('[data-business-slip-sync-state]');
         if (pendingState) {
@@ -863,6 +853,65 @@
         }
     };
 
+    const detailHeroItem = (label, value) => {
+        const item = buildElement('div');
+        item.append(buildElement('span', null, label), buildElement('strong', null, value));
+        return item;
+    };
+
+    const buildSlipDetailContent = (slip) => {
+        const wrapper = buildElement('div', 'business-slip-detail-modal');
+        const stateLabel = slip.checkoutPending ? '会計準備中' : slip.statusDisplay;
+        const hero = buildElement('section', 'slip-detail-hero business-slip-detail-modal__hero');
+        const heroItems = buildElement('div', 'slip-detail-hero__items');
+        heroItems.append(
+            detailHeroItem('卓番', slip.tableDisplay || '-'),
+            detailHeroItem('入店', slip.openedTime || '-'),
+            detailHeroItem('客数', `${Number(slip.customerCount) || 0}名`),
+            detailHeroItem('状態', stateLabel),
+            detailHeroItem('会計額', formatYen(karaokeState(slip).accountingAmount))
+        );
+        hero.appendChild(heroItems);
+
+        const layout = buildElement('div', 'business-slip-detail-layout');
+        const activity = buildElement('div', 'business-slip-detail-layout__activity');
+        const accounting = buildElement('aside', 'business-slip-detail-layout__accounting');
+        accounting.setAttribute('aria-label', '注文と会計');
+        activity.append(customerSummary(slip), nominationSummary(slip));
+        accounting.append(buildKaraokeEditor(slip), orderSection(slip), buildAccountingTotals(slip));
+        layout.append(activity, accounting);
+        wrapper.append(hero, layout);
+        syncEditorButtons(wrapper, slip);
+        return wrapper;
+    };
+
+    const syncDetailModal = () => {
+        if (!activeDetailSlipId || !detailModalContent) {
+            return;
+        }
+
+        const slip = getSlip(activeDetailSlipId);
+        if (!slip) {
+            detailModal?.hide();
+            return;
+        }
+
+        const stateLabel = slip.checkoutPending ? '会計準備中' : slip.statusDisplay;
+        setText(detailModalTitle, `卓 ${slip.tableDisplay || '-'}`);
+        setText(detailModalSubtitle, `${stateLabel} / 伝票 #${compactSlipNumber(slip)}`);
+        detailModalContent.replaceChildren(buildSlipDetailContent(slip));
+    };
+
+    const openSlipDetail = (slipId) => {
+        if (!detailModal || !detailModalContent) {
+            return;
+        }
+
+        activeDetailSlipId = String(slipId || '');
+        syncDetailModal();
+        detailModal.show();
+    };
+
     const syncSlipRow = (row, slip) => {
         row.dataset.slipId = String(slip.id);
         const isOpen = slip.status === 'open' && !slip.checkoutPending;
@@ -871,6 +920,10 @@
         row.classList.toggle('slip-list__row--checkout-ready', slip.status === 'checkout_ready' || Boolean(slip.checkoutPending));
         row.classList.toggle('slip-list__row--checked-out', slip.status === 'checked_out');
         row.setAttribute('aria-label', `${slip.tableDisplay} ${slip.checkoutPending ? '会計準備中' : slip.statusDisplay}`);
+        row.querySelectorAll('[data-business-slip-open-detail]').forEach((target) => {
+            target.dataset.businessSlipOpenDetail = String(slip.id);
+            target.setAttribute('aria-label', `卓 ${slip.tableDisplay || '-'} の詳細を開く`);
+        });
 
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
@@ -912,8 +965,9 @@
             cancelButton.hidden = slip.status !== 'checked_out';
             cancelButton.dataset.businessCancelCheckout = String(slip.id);
         }
-        syncKaraokeControl(row, slip);
-        syncSlipDetails(row, slip);
+        syncKaraokeSummary(row, slip);
+        syncEditorButtons(row, slip);
+        syncPendingState(row, slip);
     };
 
     const buildSlipRow = (slip) => {
@@ -935,14 +989,12 @@
         syncState.hidden = true;
         const statusBadge = buildElement('span', 'business-slip-card__status');
         statusBadge.dataset.businessSlipStatus = '';
-        const detailsToggle = buildElement('button', 'btn business-slip-card__details-toggle', '詳細 ∨');
-        detailsToggle.type = 'button';
-        detailsToggle.setAttribute('aria-label', '詳細を開く');
-        detailsToggle.dataset.businessSlipDetailsToggle = '';
-        headerActions.append(syncState, statusBadge, detailsToggle);
+        headerActions.append(syncState, statusBadge);
+        header.dataset.businessSlipOpenDetail = '';
         header.append(identity, headerActions);
 
         const timing = buildElement('div', 'business-slip-card__timing');
+        timing.dataset.businessSlipOpenDetail = '';
         timing.append(buildElement('span', null, '入店'));
         const openedTime = buildElement('span', 'slip-list__time');
         openedTime.dataset.businessSlipTime = '';
@@ -951,6 +1003,9 @@
         timing.append(openedTime, buildElement('span', null, '・'), customerCount);
 
         const main = buildElement('div', 'slip-list__row-main business-slip-card__body');
+        main.dataset.businessSlipOpenDetail = '';
+        main.tabIndex = 0;
+        main.setAttribute('role', 'button');
         const guest = buildElement('div', 'business-slip-card__guest');
         guest.append(buildElement('span', null, 'お客様'));
         const customers = buildElement('span', 'slip-list__customers');
@@ -994,7 +1049,7 @@
         cancelButton.dataset.businessCancelCheckout = '';
         actionButtons.append(customerButton, nominationButton, orderButton, checkoutButton, receiptButton, cancelButton);
         actions.appendChild(actionButtons);
-        row.append(header, timing, main, actions, buildSlipDetails());
+        row.append(header, timing, main, actions);
 
         syncSlipRow(row, slip);
 
@@ -1068,11 +1123,6 @@
 
     const renderSlips = () => {
         cleanupDraft();
-        expandedSlipIds.forEach((slipId) => {
-            if (!getSlip(slipId)) {
-                expandedSlipIds.delete(slipId);
-            }
-        });
         const rowsBySlipId = new Map(
             Array.from(list.querySelectorAll('[data-business-slip-row]'))
                 .map((row) => [row.dataset.slipId, row])
@@ -1118,6 +1168,7 @@
         if (revealButton) {
             revealButton.hidden = openSlips.length + paidSlips.length === 0;
         }
+        syncDetailModal();
     };
 
     const loadSlips = () => {
@@ -1357,6 +1408,24 @@
         }
     };
 
+    const changeKaraokeQuantity = (target, delta) => {
+        const row = target.closest('[data-business-karaoke-row]');
+        if (!row) {
+            return false;
+        }
+
+        const slip = getSlip(row.dataset.slipId);
+        if (!slip || slip.status !== 'open' || slip.checkoutPending) {
+            return false;
+        }
+
+        const nextQuantity = toQuantity(row.dataset.quantity) + delta;
+        karaokeDraft.setQuantity(slip, nextQuantity);
+        renderProjectedSnapshot();
+        markDirtyStatus();
+        return true;
+    };
+
     form.addEventListener('click', (event) => {
         const filterButton = event.target.closest('[data-business-slip-filter]');
         if (filterButton) {
@@ -1365,62 +1434,87 @@
             return;
         }
 
-        const orderGroupToggle = event.target.closest('[data-business-order-group-toggle]');
-        if (orderGroupToggle) {
-            const groupKey = orderGroupToggle.dataset.businessOrderGroupToggle;
-            if (expandedOrderGroupKeys.has(groupKey)) {
-                expandedOrderGroupKeys.delete(groupKey);
-            } else {
-                expandedOrderGroupKeys.add(groupKey);
-            }
-
-            const row = orderGroupToggle.closest('[data-business-slip-row]');
-            const slip = row ? getSlip(row.dataset.slipId) : null;
-            if (row && slip) {
-                syncSlipDetails(row, slip);
-            }
-            return;
-        }
-
-        const detailsToggle = event.target.closest('[data-business-slip-details-toggle]');
-        if (detailsToggle) {
-            const slip = getSlip(detailsToggle.dataset.businessSlipDetailsToggle);
-            const row = detailsToggle.closest('[data-business-slip-row]');
-            if (!slip || !row) {
+        const detailTarget = event.target.closest('[data-business-slip-open-detail]');
+        if (detailTarget && form.contains(detailTarget)) {
+            if (event.target.closest('button, a, input, select, textarea, label, summary')) {
                 return;
             }
-
-            const slipId = String(slip.id);
-            if (expandedSlipIds.has(slipId)) {
-                expandedSlipIds.delete(slipId);
-            } else {
-                expandedSlipIds.clear();
-                expandedOrderGroupKeys.clear();
-                expandedSlipIds.add(slipId);
+            const row = detailTarget.closest('[data-business-slip-row]');
+            if (row?.dataset.slipId) {
+                openSlipDetail(row.dataset.slipId);
             }
-            renderSlips();
             return;
         }
 
         const decrement = event.target.closest('[data-business-karaoke-decrement]');
         const increment = event.target.closest('[data-business-karaoke-increment]');
         if (decrement || increment) {
-            const row = event.target.closest('[data-business-karaoke-row]');
-            if (!row) {
-                return;
-            }
-
-            const slip = getSlip(row.dataset.slipId);
-            if (!slip) {
-                return;
-            }
-
-            const nextQuantity = toQuantity(row.dataset.quantity) + (increment ? 1 : -1);
-            karaokeDraft.setQuantity(slip, nextQuantity);
-            renderSlips();
-            markDirtyStatus();
+            changeKaraokeQuantity(event.target, increment ? 1 : -1);
             return;
         }
+    });
+
+    form.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+
+        const detailTarget = event.target.closest('[data-business-slip-open-detail]');
+        if (!detailTarget || !form.contains(detailTarget)) {
+            return;
+        }
+
+        event.preventDefault();
+        const row = detailTarget.closest('[data-business-slip-row]');
+        if (row?.dataset.slipId) {
+            openSlipDetail(row.dataset.slipId);
+        }
+    });
+
+    detailModalElement?.addEventListener('click', (event) => {
+        const editorButton = event.target.closest('[data-business-slip-editor]');
+        if (editorButton && detailModalElement.contains(editorButton)) {
+            event.preventDefault();
+            event.stopPropagation();
+            const section = editorButton.dataset.businessSlipEditor;
+            const slipId = editorButton.dataset.businessSlipId;
+            const openEditor = () => window.ProsperBusinessSlipEditor?.open?.(section, slipId);
+            if (detailModalElement.classList.contains('show')) {
+                detailModalElement.addEventListener('hidden.bs.modal', openEditor, { once: true });
+                detailModal?.hide();
+            } else {
+                openEditor();
+            }
+            return;
+        }
+
+        const orderGroupToggle = event.target.closest('[data-business-order-group-toggle]');
+        if (orderGroupToggle && detailModalElement.contains(orderGroupToggle)) {
+            event.preventDefault();
+            const groupKey = orderGroupToggle.dataset.businessOrderGroupToggle;
+            if (expandedOrderGroupKeys.has(groupKey)) {
+                expandedOrderGroupKeys.delete(groupKey);
+            } else {
+                expandedOrderGroupKeys.add(groupKey);
+            }
+            syncDetailModal();
+            return;
+        }
+
+        const decrement = event.target.closest('[data-business-karaoke-decrement]');
+        const increment = event.target.closest('[data-business-karaoke-increment]');
+        if ((decrement || increment) && detailModalElement.contains(event.target)) {
+            event.preventDefault();
+            if (changeKaraokeQuantity(event.target, increment ? 1 : -1)) {
+                syncDetailModal();
+            }
+        }
+    });
+
+    detailModalElement?.addEventListener('hidden.bs.modal', () => {
+        activeDetailSlipId = null;
+        expandedOrderGroupKeys.clear();
+        detailModalContent?.replaceChildren(buildElement('div', 'slip-create__panel slip-detail-panel-loading', '詳細を読み込み中です。'));
     });
 
     form.addEventListener('submit', (event) => {

@@ -414,6 +414,44 @@
   padding-left: 0.9rem;
 }
 
+.business-slip-detail-modal {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.business-slip-detail-modal__hero {
+  margin-bottom: 0;
+}
+
+.business-slip-detail-karaoke {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0.65rem;
+}
+
+.business-slip-detail-karaoke__label {
+  color: #102a43;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.business-slip-detail-karaoke__amount,
+.business-slip-detail-karaoke__readonly {
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.business-slip-detail-karaoke__control {
+  justify-self: end;
+}
+
 .business-slip-detail-summary {
   align-items: center;
   border-bottom: 1px solid #e2e8f0;
@@ -2378,25 +2416,6 @@
   white-space: nowrap;
 }
 
-.business-slip-card__details-toggle {
-  background: #fff;
-  border: 1px solid #c3d0d5;
-  border-radius: 6px;
-  color: #526a73;
-  font-size: 0.62rem;
-  font-weight: 900;
-  min-height: 1.75rem;
-  padding: 0.18rem 0.38rem;
-  white-space: nowrap;
-}
-
-.business-slip-card__details-toggle:hover,
-.business-slip-card__details-toggle:focus-visible {
-  background: #eef7f6;
-  border-color: #7bb7b1;
-  color: #087977;
-}
-
 .business-slip-card__timing {
   align-items: baseline;
   background: var(--business-slip-soft);
@@ -2419,15 +2438,29 @@
 
 .business-slip-card .slip-list__row-main {
   align-items: stretch;
+  cursor: pointer;
   display: grid;
   gap: 0.45rem;
   grid-template-columns: minmax(0, 1fr);
   padding: 0.55rem;
 }
 
-.business-slip-card .slip-list__row-main:hover {
+.business-slip-card__header[data-business-slip-open-detail],
+.business-slip-card__timing[data-business-slip-open-detail] {
+  cursor: pointer;
+}
+
+.business-slip-card .slip-list__row-main:hover,
+.business-slip-card .slip-list__row-main:focus-visible,
+.business-slip-card__header[data-business-slip-open-detail]:hover,
+.business-slip-card__timing[data-business-slip-open-detail]:hover {
   background: #fff;
   border-color: transparent;
+}
+
+.business-slip-card .slip-list__row-main:focus-visible {
+  outline: 3px solid rgb(8 121 119 / 0.26);
+  outline-offset: -3px;
 }
 
 .business-slip-card__guest {
@@ -2750,6 +2783,15 @@
 }
 
 @media (max-width: 575.98px) {
+  .business-slip-detail-karaoke {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .business-slip-detail-karaoke__control {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
   .business-slip-grid {
     grid-template-columns: minmax(0, 1fr);
   }

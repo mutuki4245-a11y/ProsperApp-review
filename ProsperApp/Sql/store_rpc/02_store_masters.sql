@@ -291,7 +291,7 @@ as $$
             c.slip_id,
             count(*) filter (where c.status <> 'cancelled')::integer as customer_count,
             string_agg(
-                coalesce(nullif(c.customer_label, ''), '客' || c.line_no::text),
+                coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
                 '、'
                 order by c.line_no
             ) filter (where c.status <> 'cancelled') as customer_names

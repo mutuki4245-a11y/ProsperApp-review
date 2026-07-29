@@ -414,6 +414,25 @@
 
     @if (Model.SlipsEnabled)
     {
+        <div class="modal fade" id="businessSlipDetailModal" tabindex="-1" aria-labelledby="businessSlipDetailModalLabel" aria-hidden="true" data-business-slip-detail-modal>
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1" data-business-slip-detail-subtitle>伝票詳細</p>
+                            <h2 class="modal-title fs-4" id="businessSlipDetailModalLabel" data-business-slip-detail-title>伝票詳細</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form" data-business-slip-detail-content>
+                        <div class="slip-create__panel slip-detail-panel-loading">詳細を読み込み中です。</div>
+                    </div>
+                    <div class="modal-footer" data-business-slip-detail-footer>
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="modal fade" id="businessSlipEditorModal" tabindex="-1" aria-labelledby="businessSlipEditorModalLabel" aria-hidden="true" data-business-slip-editor-modal>
             <div class="modal-dialog modal-dialog-scrollable">
                 <div class="modal-content">
