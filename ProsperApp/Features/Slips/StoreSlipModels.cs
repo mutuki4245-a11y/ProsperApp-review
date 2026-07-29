@@ -134,10 +134,10 @@ public class CreateSlipInputModel
 
     public DateTime? OpenedAt { get; set; }
 
-    [Display(Name = "客数")]
+    [Display(Name = "お客様数")]
     public int CustomerCount => CustomerLabels.Count;
 
-    [Display(Name = "客情報")]
+    [Display(Name = "お客様情報")]
     public List<string?> CustomerLabels { get; set; } = [null];
 
     [Display(Name = "指名情報")]

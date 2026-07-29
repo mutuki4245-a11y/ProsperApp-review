@@ -13,7 +13,7 @@
     const attendingCastDuplicateFilter = document.getElementById('businessAttendingCastDuplicateFilter');
     const attendingCastAllowDuplicates = document.getElementById('businessAttendingCastAllowNominationDuplicates');
     const labels = {
-        customers: '客を編集',
+        customers: 'お客様を編集',
         nominations: '指名を編集',
         adjustments: '自由明細を編集',
         orders: '注文を編集'
@@ -120,7 +120,7 @@
         const panel = document.createElement('section');
         panel.className = 'slip-create__panel business-slip-editor-list';
         const actionLabel = {
-            customers: '客を追加',
+            customers: 'お客様を追加',
             nominations: '指名を追加',
             adjustments: '明細を追加',
             orders: '注文を追加'
@@ -666,18 +666,18 @@
         let form;
 
         if (action === 'customer_add') {
-            const actionForm = createActionForm('客を追加', '追加');
+            const actionForm = createActionForm('お客様を追加', '追加');
             actionForm.fields.classList.add('business-slip-editor-action-fields--customer');
             const name = document.createElement('input');
             name.className = 'form-control form-control-lg';
             name.name = 'AddCustomersInput.CustomerLabels[0]';
             name.maxLength = 100;
-            name.placeholder = '客名・特徴など';
-            appendField(actionForm.fields, '客名', name).appendChild(Object.assign(document.createElement('div'), { className: 'form-text', textContent: '名前は空欄でも登録できます。' }));
+            name.placeholder = 'お客様名・特徴など';
+            appendField(actionForm.fields, 'お客様名', name).appendChild(Object.assign(document.createElement('div'), { className: 'form-text', textContent: '名前は空欄でも登録できます。' }));
             appendField(actionForm.fields, '入店時刻', createTimeSelect('AddCustomersInput.EnteredTime'));
             form = actionForm.form;
         } else if (action === 'customer_rename') {
-            const actionForm = createActionForm(`${recordDisplay || '客名'}を変更`, '変更を保存');
+            const actionForm = createActionForm(`${recordDisplay || 'お客様名'}を変更`, '変更を保存');
             const customerId = document.createElement('input');
             customerId.type = 'hidden';
             customerId.name = 'UpdateCustomerInput.SlipCustomerId';
@@ -688,10 +688,10 @@
             name.maxLength = 100;
             name.value = recordLabel || recordDisplay;
             actionForm.form.insertBefore(customerId, actionForm.fields);
-            appendField(actionForm.fields, '客名', name);
+            appendField(actionForm.fields, 'お客様名', name);
             form = actionForm.form;
         } else if (action === 'customer_leave') {
-            const actionForm = createActionForm(`${recordDisplay || '客'}を退店`, '退店を保存');
+            const actionForm = createActionForm(`${recordDisplay || 'お客様'}を退店`, '退店を保存');
             actionForm.submit.className = 'btn btn-outline-danger btn-lg align-self-end';
             const customerId = document.createElement('input');
             customerId.type = 'hidden';

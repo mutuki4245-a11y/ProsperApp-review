@@ -43,6 +43,7 @@
     const businessSlipsUrl = config.businessSlipsUrl || '';
     const flushBusinessHomeChangesUrl = config.flushBusinessHomeChangesUrl || '';
     const refreshIntervalMs = 10000;
+    const elapsedRefreshIntervalMs = 15000;
     const accountingUnit = 240;
     let slips = [];
     let serverSnapshot = null;
@@ -113,7 +114,7 @@
             if (item.displayName && !castNames.includes(item.displayName)) castNames.push(item.displayName);
         });
         slip.customerCount = customers.filter((item) => item.status === 'active').length;
-        slip.customerNames = names.join('、') || '客名なし';
+        slip.customerNames = names.join('、') || 'お客様名なし';
         slip.castNames = castNames.join('、') || '指名なし';
         slip.orderCount = orders.length;
         // 営業中のセット・延長料金は、明細ではシステム商品として見せますが、
@@ -328,6 +329,24 @@
             element.textContent = String(text);
         }
         return element;
+    };
+    const buildActionIcon = (iconName) => {
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.classList.add('business-slip-card__action-icon');
+        icon.setAttribute('aria-hidden', 'true');
+        icon.setAttribute('focusable', 'false');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', `/icons/lucide-actions.svg#${iconName}`);
+        icon.appendChild(use);
+        return icon;
+    };
+    const buildActionButton = (className, label, iconName) => {
+        const button = buildElement('button', `${className} business-slip-card__action-button`);
+        button.type = 'button';
+        const labelElement = buildElement('span', 'business-slip-card__action-label', label);
+        labelElement.dataset.businessActionLabel = '';
+        button.append(buildActionIcon(iconName), labelElement);
+        return button;
     };
     const slipTableMetadata = (slip) => tableMetadataByDisplay.get(String(slip?.tableDisplay || '').trim()) || {
         tableCode: String(slip?.tableDisplay || '').trim(),
@@ -596,13 +615,46 @@
         };
     };
 
-    const syncKaraokeSummary = (row, slip) => {
+    const syncSlipAccountingAmount = (row, slip) => {
         const amountValue = row.querySelector('[data-business-slip-amount-value]');
-        const karaokeSummary = row.querySelector('[data-business-slip-karaoke-summary]');
         const state = karaokeState(slip);
-        row.querySelector('[data-business-karaoke-row]')?.remove();
-        setText(karaokeSummary, `${state.displayQuantity}回`);
         setText(amountValue, formatYen(state.accountingAmount));
+    };
+
+    const elapsedMinutes = (slip, now = Date.now()) => {
+        if (slip?.status !== 'open' || slip.checkoutPending) {
+            return null;
+        }
+
+        const openedAt = Date.parse(slip.openedAt);
+        if (!Number.isFinite(openedAt)) {
+            return null;
+        }
+
+        return Math.max(0, Math.floor((now - openedAt) / 60000));
+    };
+
+    const syncElapsedTime = (row, slip, now = Date.now()) => {
+        const elapsed = row.querySelector('[data-business-slip-elapsed]');
+        if (!elapsed) {
+            return;
+        }
+
+        const minutes = elapsedMinutes(slip, now);
+        elapsed.hidden = minutes === null;
+        if (minutes !== null) {
+            setText(elapsed, `在席 ${minutes}分`);
+        }
+    };
+
+    const syncElapsedTimes = () => {
+        const now = Date.now();
+        list.querySelectorAll('[data-business-slip-row]').forEach((row) => {
+            const slip = getSlip(row.dataset.slipId);
+            if (slip) {
+                syncElapsedTime(row, slip, now);
+            }
+        });
     };
 
     const buildKaraokeEditor = (slip) => {
@@ -690,7 +742,7 @@
         const customers = Array.isArray(slip.customers) ? slip.customers : [];
         const content = buildElement('div', 'business-slip-detail-summary__content');
         if (customers.length === 0) {
-            content.appendChild(buildElement('strong', 'business-slip-detail-summary__empty', '在席客なし'));
+            content.appendChild(buildElement('strong', 'business-slip-detail-summary__empty', '在席中のお客様なし'));
         } else {
             customers.forEach((customer) => {
                 const chip = buildElement('strong', 'business-slip-detail-summary__chip', customer.displayName || defaultCustomerName(customer.lineNo));
@@ -698,7 +750,7 @@
                 content.appendChild(chip);
             });
         }
-        return detailSummary('客', 'customers', content, '客を編集');
+        return detailSummary('お客様', 'customers', content, 'お客様を編集');
     };
 
     const nominationSummary = (slip) => {
@@ -867,7 +919,7 @@
         heroItems.append(
             detailHeroItem('卓番', slip.tableDisplay || '-'),
             detailHeroItem('入店', slip.openedTime || '-'),
-            detailHeroItem('客数', `${Number(slip.customerCount) || 0}名`),
+            detailHeroItem('お客様数', `${Number(slip.customerCount) || 0}名`),
             detailHeroItem('状態', stateLabel),
             detailHeroItem('会計額', formatYen(karaokeState(slip).accountingAmount))
         );
@@ -927,25 +979,13 @@
 
         setText(row.querySelector('[data-business-slip-table]'), slip.tableDisplay);
         setText(row.querySelector('[data-business-slip-time]'), slip.openedTime);
-        setText(row.querySelector('[data-business-slip-customers]'), slip.customerNames || '客名なし');
+        const customerNames = Number(slip.customerCount) > 0 ? slip.customerNames : '';
+        setText(row.querySelector('[data-business-slip-customers]'), customerNames || 'お客様名なし');
         setText(row.querySelector('[data-business-slip-casts]'), slip.castNames || '指名なし');
         setText(row.querySelector('[data-business-slip-number]'), `伝票 #${compactSlipNumber(slip)}`);
         setText(row.querySelector('[data-business-slip-status]'), slip.checkoutPending ? '会計準備中' : slip.statusDisplay);
         setText(row.querySelector('[data-business-slip-customer-count]'), `${Number(slip.customerCount) || 0}名`);
-        setText(row.querySelector('[data-business-slip-karaoke-summary]'), `${toQuantity(slip.karaokeQuantity)}回`);
-        const groupBadge = row.querySelector('[data-business-slip-group]');
-        if (groupBadge) {
-            const checkedOut = slip.status === 'checked_out';
-            const peerSlips = slips
-                .filter((item) =>
-                    item.status !== 'cancelled'
-                    && (item.status === 'checked_out') === checkedOut
-                    && String(item.tableDisplay || '') === String(slip.tableDisplay || ''))
-                .sort(compareSlipsByTable);
-            const groupIndex = peerSlips.findIndex((item) => String(item.id) === String(slip.id));
-            groupBadge.hidden = peerSlips.length < 2;
-            setText(groupBadge, `${Math.max(0, groupIndex) + 1}組目`);
-        }
+        syncElapsedTime(row, slip);
         const checkoutButton = row.querySelector('[data-business-start-checkout]');
         const receiptButton = row.querySelector('[data-business-print-receipt]');
         const cancelButton = row.querySelector('[data-business-cancel-checkout]');
@@ -953,9 +993,9 @@
             checkoutButton.hidden = !['open', 'checkout_ready'].includes(slip.status);
             checkoutButton.dataset.businessStartCheckout = String(slip.id);
             checkoutButton.disabled = Boolean(slip.checkoutPending);
-            checkoutButton.textContent = slip.checkoutPending
+            setText(checkoutButton.querySelector('[data-business-action-label]'), slip.checkoutPending
                 ? '会計準備中'
-                : slip.status === 'checkout_ready' ? '決済' : '会計';
+                : slip.status === 'checkout_ready' ? '決済' : '会計');
         }
         if (receiptButton) {
             receiptButton.hidden = slip.status !== 'checked_out';
@@ -965,7 +1005,7 @@
             cancelButton.hidden = slip.status !== 'checked_out';
             cancelButton.dataset.businessCancelCheckout = String(slip.id);
         }
-        syncKaraokeSummary(row, slip);
+        syncSlipAccountingAmount(row, slip);
         syncEditorButtons(row, slip);
         syncPendingState(row, slip);
     };
@@ -979,10 +1019,7 @@
         table.dataset.businessSlipTable = '';
         const slipNumber = buildElement('span', 'business-slip-card__number');
         slipNumber.dataset.businessSlipNumber = '';
-        const groupBadge = buildElement('span', 'business-slip-card__group');
-        groupBadge.dataset.businessSlipGroup = '';
-        groupBadge.hidden = true;
-        identity.append(table, slipNumber, groupBadge);
+        identity.append(table, slipNumber);
         const headerActions = buildElement('div', 'business-slip-card__header-actions');
         const syncState = buildElement('span', 'slip-list__sync-state');
         syncState.dataset.businessSlipSyncState = '';
@@ -1000,46 +1037,38 @@
         openedTime.dataset.businessSlipTime = '';
         const customerCount = buildElement('strong');
         customerCount.dataset.businessSlipCustomerCount = '';
-        timing.append(openedTime, buildElement('span', null, '・'), customerCount);
+        const elapsed = buildElement('strong', 'business-slip-card__elapsed');
+        elapsed.dataset.businessSlipElapsed = '';
+        elapsed.hidden = true;
+        timing.append(openedTime, buildElement('span', null, '・'), customerCount, elapsed);
 
         const main = buildElement('div', 'slip-list__row-main business-slip-card__body');
         main.dataset.businessSlipOpenDetail = '';
         main.tabIndex = 0;
         main.setAttribute('role', 'button');
-        const guest = buildElement('div', 'business-slip-card__guest');
-        guest.append(buildElement('span', null, 'お客様'));
+        const summaries = buildElement('div', 'business-slip-card__summaries');
+        const customerPanel = buildElement('section', 'business-slip-card__summary-panel business-slip-card__summary-panel--customers');
+        customerPanel.append(buildElement('span', 'business-slip-card__summary-label', 'お客様'));
         const customers = buildElement('span', 'slip-list__customers');
         customers.dataset.businessSlipCustomers = '';
-        guest.appendChild(customers);
-        const facts = buildElement('dl', 'business-slip-card__facts');
-        const castFact = buildElement('div');
-        castFact.appendChild(buildElement('dt', null, '指名'));
+        customerPanel.appendChild(customers);
+        const nominationPanel = buildElement('section', 'business-slip-card__summary-panel business-slip-card__summary-panel--nominations');
+        nominationPanel.append(buildElement('span', 'business-slip-card__summary-label', '指名'));
         const casts = buildElement('span', 'slip-list__casts');
         casts.dataset.businessSlipCasts = '';
-        const castValue = buildElement('dd');
-        castValue.appendChild(casts);
-        castFact.appendChild(castValue);
-        const karaokeFact = buildElement('div');
-        karaokeFact.appendChild(buildElement('dt', null, 'カラオケ'));
-        const karaokeValue = buildElement('dd');
-        karaokeValue.dataset.businessSlipKaraokeSummary = '';
-        karaokeFact.appendChild(karaokeValue);
-        facts.append(castFact, karaokeFact);
+        nominationPanel.appendChild(casts);
+        summaries.append(customerPanel, nominationPanel);
 
-        main.append(guest, facts, buildAmountElement(slip));
+        main.append(summaries, buildAmountElement(slip));
         const actions = buildElement('div', 'slip-list__actions');
         const actionButtons = buildElement('div', 'slip-list__action-buttons');
-        const customerButton = buildElement('button', 'btn business-slip-card__quick-action', '客');
-        customerButton.type = 'button';
+        const customerButton = buildActionButton('btn business-slip-card__quick-action', 'お客様', 'user-round');
         customerButton.dataset.businessSlipEditor = 'customers';
-        const nominationButton = buildElement('button', 'btn business-slip-card__quick-action', '指名');
-        nominationButton.type = 'button';
+        const nominationButton = buildActionButton('btn business-slip-card__quick-action', '指名', 'star');
         nominationButton.dataset.businessSlipEditor = 'nominations';
-        const orderButton = buildElement('button', 'btn business-slip-card__quick-action', '注文');
-        orderButton.type = 'button';
+        const orderButton = buildActionButton('btn business-slip-card__quick-action', '注文', 'clipboard-list');
         orderButton.dataset.businessSlipEditor = 'orders';
-        const checkoutButton = buildElement('button', 'btn btn-sm btn-primary slip-list__checkout-action');
-        checkoutButton.type = 'button';
+        const checkoutButton = buildActionButton('btn btn-sm btn-primary slip-list__checkout-action', '会計', 'badge-japanese-yen');
         checkoutButton.dataset.businessStartCheckout = '';
         const receiptButton = buildElement('button', 'btn btn-sm btn-outline-primary', '領収書');
         receiptButton.type = 'button';
@@ -1235,11 +1264,11 @@
     const friendlyFlushError = (message, fallback) => {
         const raw = String(message || '');
         if (raw.includes('store_slip_not_found')) return '対象の伝票は編集できません。';
-        if (raw.includes('store_slip_customer_not_found')) return '対象の客を確認してください。';
+        if (raw.includes('store_slip_customer_not_found')) return '対象のお客様を確認してください。';
         if (raw.includes('store_slip_nomination_not_found')) return '対象の指名を確認してください。';
         if (raw.includes('store_slip_adjustment_not_found')) return '対象の自由明細を確認してください。';
         if (raw.includes('store_order_line_not_found')) return '対象の注文を確認してください。';
-        if (raw.includes('invalid_customer_label')) return '客名は100文字以内で入力してください。';
+        if (raw.includes('invalid_customer_label')) return 'お客様名は100文字以内で入力してください。';
         if (raw.includes('invalid_customer_time') || raw.includes('invalid_left_at')) return '入退店時刻を確認してください。';
         if (raw.includes('invalid_karaoke_quantity')) return 'カラオケ回数を確認してください。';
         if (raw.includes('invalid_order_quantity')) return '注文数量を確認してください。';
@@ -1446,12 +1475,6 @@
             return;
         }
 
-        const decrement = event.target.closest('[data-business-karaoke-decrement]');
-        const increment = event.target.closest('[data-business-karaoke-increment]');
-        if (decrement || increment) {
-            changeKaraokeQuantity(event.target, increment ? 1 : -1);
-            return;
-        }
     });
 
     form.addEventListener('keydown', (event) => {
@@ -1629,6 +1652,11 @@
             void loadSlips();
         }
     }, refreshIntervalMs);
+    window.setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            syncElapsedTimes();
+        }
+    }, elapsedRefreshIntervalMs);
 
     window.ProsperBusinessHome = Object.freeze({
         reload: loadSlips,

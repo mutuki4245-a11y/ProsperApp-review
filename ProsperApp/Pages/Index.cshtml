@@ -207,11 +207,11 @@
 
                                 <section class="slip-create__panel slip-create__panel--customers">
                                     <div class="slip-create__panel-title slip-create__panel-title--create-actions slip-create__customer-count">
-                                        <span class="slip-create__customer-count-label">客数</span>
-                                        <div class="slip-create__customer-count-controls" role="group" aria-label="客数">
-                                            <button class="btn btn-outline-primary" type="button" id="businessDecreaseCustomerCount" aria-label="客数を減らす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count <= 1)">－</button>
+                                        <span class="slip-create__customer-count-label">お客様数</span>
+                                        <div class="slip-create__customer-count-controls" role="group" aria-label="お客様数">
+                                            <button class="btn btn-outline-primary" type="button" id="businessDecreaseCustomerCount" aria-label="お客様数を減らす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count <= 1)">－</button>
                                             <output class="slip-create__customer-count-value" id="businessCustomerCount" aria-live="polite" aria-atomic="true">@($"{Model.CreateSlipInput.CustomerLabels.Count}人")</output>
-                                            <button class="btn btn-outline-primary" type="button" id="businessIncreaseCustomerCount" aria-label="客数を増やす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count >= 20)">＋</button>
+                                            <button class="btn btn-outline-primary" type="button" id="businessIncreaseCustomerCount" aria-label="お客様数を増やす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count >= 20)">＋</button>
                                         </div>
                                     </div>
                                     <span asp-validation-for="CreateSlipInput.CustomerLabels" class="text-danger"></span>

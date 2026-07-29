@@ -49,7 +49,7 @@ public static class CreateSlipEditor
         var errors = Validate(prepared, context, storeClock).ToList();
         if (submittedCustomerCount == 0)
         {
-            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "客情報は1人から20人まで登録できます。"));
+            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "お客様情報は1人から20人まで登録できます。"));
         }
 
         return new CreateSlipEdit(prepared, errors);
@@ -341,12 +341,12 @@ public static class CreateSlipEditor
     {
         if (input.CustomerLabels.Count is < 1 or > 20)
         {
-            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "客情報は1人から20人まで登録できます。"));
+            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "お客様情報は1人から20人まで登録できます。"));
         }
 
         if (input.CustomerLabels.Any(x => x is not null && x.Length > 100))
         {
-            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "客名は1人100文字以内で入力してください。"));
+            errors.Add(new CreateSlipValidationError(CustomerLabelsKey, "お客様名は1人100文字以内で入力してください。"));
         }
     }
 }

@@ -50,7 +50,6 @@ public class IndexModel(
 
     private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
     public const string AttendanceRequiredMessage = CreateSlipEditor.AttendanceRequiredMessage;
-    public const string PreviousBusinessDayOpenMessage = "未締めの前営業日があります。締め作業を完了してから新しい伝票を追加してください。";
 
     public bool ShowCreateSlipModal { get; private set; }
 
@@ -113,7 +112,7 @@ public class IndexModel(
     public string? CreateSlipDisabledMessage => !SlipsEnabled
         ? null
         : !CanCreateSalesInput
-        ? PreviousBusinessDayOpenMessage
+        ? null
         : !CanCreateSlip
             ? AttendanceRequiredMessage
             : null;

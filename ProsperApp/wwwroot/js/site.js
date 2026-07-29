@@ -3,10 +3,6 @@
 
 (() => {
     let isLocked = false;
-    let modalLockCount = 0;
-    let modalScrollY = 0;
-    let modalPreviousBodyStyle = null;
-    let modalPreviousHtmlOverflow = '';
 
     const overlay = () => document.getElementById('appLoadingOverlay');
 
@@ -141,50 +137,6 @@
                 modal.setAttribute('data-bs-keyboard', 'false');
             }
         });
-    };
-
-    const lockPageScrollForModal = () => {
-        modalLockCount += 1;
-        if (modalLockCount > 1) {
-            return;
-        }
-
-        modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-        modalPreviousBodyStyle = {
-            position: document.body.style.position,
-            top: document.body.style.top,
-            left: document.body.style.left,
-            right: document.body.style.right,
-            width: document.body.style.width,
-            overflow: document.body.style.overflow
-        };
-        modalPreviousHtmlOverflow = document.documentElement.style.overflow;
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${modalScrollY}px`;
-        document.body.style.left = '0';
-        document.body.style.right = '0';
-        document.body.style.width = '100%';
-        document.body.style.overflow = 'hidden';
-    };
-
-    const unlockPageScrollForModal = () => {
-        modalLockCount = Math.max(0, modalLockCount - 1);
-        if (modalLockCount > 0 || document.querySelector('.modal.show')) {
-            return;
-        }
-
-        if (modalPreviousBodyStyle) {
-            document.body.style.position = modalPreviousBodyStyle.position;
-            document.body.style.top = modalPreviousBodyStyle.top;
-            document.body.style.left = modalPreviousBodyStyle.left;
-            document.body.style.right = modalPreviousBodyStyle.right;
-            document.body.style.width = modalPreviousBodyStyle.width;
-            document.body.style.overflow = modalPreviousBodyStyle.overflow;
-        }
-        document.documentElement.style.overflow = modalPreviousHtmlOverflow;
-        window.scrollTo(0, modalScrollY);
-        modalPreviousBodyStyle = null;
     };
 
     const terminalSaveStatusMessages = {
@@ -354,6 +306,4 @@
 
     window.addEventListener('pageshow', () => hide());
     configureStaticModals();
-    document.addEventListener('show.bs.modal', lockPageScrollForModal);
-    document.addEventListener('hidden.bs.modal', unlockPageScrollForModal);
 })();

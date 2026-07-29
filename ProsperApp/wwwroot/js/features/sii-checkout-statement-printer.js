@@ -64,7 +64,7 @@
             twoColumn('卓番', compact(request.table_display_name, '未設定')),
             twoColumn('入店', dateTime(request.opened_at)),
             twoColumn('退店', dateTime(request.closed_at, request.business_date, true)),
-            twoColumn('客数', `${toAmount(request.customer_count)}人`),
+            twoColumn('お客様数', `${toAmount(request.customer_count)}人`),
             separator
         ];
 

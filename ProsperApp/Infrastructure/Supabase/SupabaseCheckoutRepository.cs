@@ -182,7 +182,7 @@ public class SupabaseCheckoutRepository(
         if (rawError.Contains("checkout_ready_not_found", StringComparison.OrdinalIgnoreCase)) return "会計準備中の伝票を確認してください。";
         if (rawError.Contains("checkout_statement_slip_not_found", StringComparison.OrdinalIgnoreCase)) return "会計伝票を出力できる伝票を確認してください。";
         if (rawError.Contains("checkout_already_exists", StringComparison.OrdinalIgnoreCase)) return "この伝票はすでに会計済みです。";
-        if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase)) return "退店時刻は伝票とすべての客の入店時刻より後にしてください。";
+        if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase)) return "退店時刻は伝票とすべてのお客様の入店時刻より後にしてください。";
         if (rawError.Contains("invalid_checkout_total", StringComparison.OrdinalIgnoreCase)) return "決済金額の合計が会計額と一致しません。";
         if (rawError.Contains("invalid_received_amount", StringComparison.OrdinalIgnoreCase)) return "受取額を確認してください。";
         if (rawError.Contains("duplicate_checkout_payment_method", StringComparison.OrdinalIgnoreCase)) return "同じ決済方法を重複して入力できません。";

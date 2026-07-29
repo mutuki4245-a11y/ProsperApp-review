@@ -126,7 +126,7 @@
         summary.replaceChildren();
         [
             ['卓番', printData.table_display_name], ['入店', formatTime(printData.opened_at)],
-            ['退店', formatTime(printData.closed_at)], ['客数', `${printData.customer_count}人`], ['合計', yen(printData.total_amount)]
+            ['退店', formatTime(printData.closed_at)], ['お客様数', `${printData.customer_count}人`], ['合計', yen(printData.total_amount)]
         ].forEach(([label, value]) => {
             const item = document.createElement('div');
             const labelElement = document.createElement('span'); labelElement.textContent = label;

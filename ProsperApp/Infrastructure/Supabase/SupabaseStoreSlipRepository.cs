@@ -335,7 +335,7 @@ public class SupabaseStoreSlipRepository(
 
         if (rawError.Contains("store_slip_customer_not_found", StringComparison.OrdinalIgnoreCase))
         {
-            return "退店する客を確認してください。";
+            return "退店するお客様を確認してください。";
         }
 
         if (rawError.Contains("store_order_line_not_found", StringComparison.OrdinalIgnoreCase))
@@ -411,12 +411,12 @@ public class SupabaseStoreSlipRepository(
 
         if (rawError.Contains("invalid_customer_count", StringComparison.OrdinalIgnoreCase))
         {
-            return "追加する客情報を確認してください。";
+            return "追加するお客様情報を確認してください。";
         }
 
         if (rawError.Contains("invalid_customer_label", StringComparison.OrdinalIgnoreCase))
         {
-            return "客名は100文字以内で入力してください。";
+            return "お客様名は100文字以内で入力してください。";
         }
 
         if (rawError.Contains("invalid_customer_time", StringComparison.OrdinalIgnoreCase))

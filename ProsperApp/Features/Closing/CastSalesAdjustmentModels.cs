@@ -62,7 +62,7 @@ public class CastSalesAdjustmentSlip
     }
 
     public string CustomerDisplayNames => string.IsNullOrWhiteSpace(CustomerNames)
-        ? "客名なし"
+        ? "お客様名なし"
         : CustomerNames;
 }
 

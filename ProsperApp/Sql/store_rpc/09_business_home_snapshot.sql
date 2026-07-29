@@ -270,7 +270,7 @@ as $$
                     when 'cancelled' then 'text-bg-danger'
                     else 'text-bg-secondary' end,
                 'customerCount', s.customer_count_display,
-                'customerNames', coalesce(nullif(s.customer_names, ''), '客名なし'),
+                'customerNames', coalesce(nullif(s.customer_names, ''), 'お客様名なし'),
                 'castNames', coalesce(nullif(s.cast_names, ''), '指名なし'),
                 'orderCount', s.order_count,
                 'orderSubtotalAmount', s.order_subtotal_amount,
