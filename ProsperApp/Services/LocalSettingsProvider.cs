@@ -51,11 +51,16 @@ public class LocalSettingsProvider(
             ? settings.ScreenMode
             : "sales-management";
 
+        var themeMode = settings.ThemeMode is LocalSettings.ThemeModeQuietNavy or LocalSettings.ThemeModeWhite
+            ? settings.ThemeMode
+            : LocalSettings.ThemeModeQuietNavy;
+
         return new LocalSettings
         {
             StoreName = string.IsNullOrWhiteSpace(settings.StoreName) ? "店舗" : settings.StoreName.Trim(),
             StoreDepartmentId = storeDepartmentId,
             ScreenMode = screenMode,
+            ThemeMode = themeMode,
             IsAdminMode = settings.IsAdminMode
         };
     }

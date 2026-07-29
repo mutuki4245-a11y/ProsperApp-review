@@ -120,6 +120,7 @@ public class SettingsModel(
             StoreName = selectedDepartment.DisplayName,
             StoreDepartmentId = selectedDepartment.DepartmentId,
             ScreenMode = Input.ScreenMode,
+            ThemeMode = Input.ThemeMode,
             IsAdminMode = Input.IsAdminMode
         };
 
@@ -210,6 +211,7 @@ public class SettingsModel(
             StoreName = settings.StoreName,
             StoreDepartmentId = settings.StoreDepartmentId,
             ScreenMode = settings.ScreenMode,
+            ThemeMode = settings.ThemeMode,
             IsAdminMode = settings.IsAdminMode
         };
     }
@@ -261,6 +263,7 @@ public class SettingsModel(
     private DepartmentOption? ValidateSettings()
     {
         Input.ScreenMode = Input.ScreenMode?.Trim() ?? string.Empty;
+        Input.ThemeMode = Input.ThemeMode?.Trim() ?? string.Empty;
 
         if (Departments.Count == 0)
         {
@@ -279,6 +282,11 @@ public class SettingsModel(
             ModelState.AddModelError("Input.ScreenMode", "機能設定を選択してください。");
         }
 
+        if (Input.ThemeMode is not LocalSettings.ThemeModeQuietNavy and not LocalSettings.ThemeModeWhite)
+        {
+            ModelState.AddModelError("Input.ThemeMode", "配色を選択してください。");
+        }
+
         return selectedDepartment;
     }
 }
@@ -292,6 +300,9 @@ public class SettingsInputModel
 
     [Display(Name = "機能設定")]
     public string ScreenMode { get; set; } = "sales-management";
+
+    [Display(Name = "配色")]
+    public string ThemeMode { get; set; } = LocalSettings.ThemeModeQuietNavy;
 
     [Display(Name = "管理者モード")]
     public bool IsAdminMode { get; set; }
