@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [layoutMarkup, indexMarkup, businessHomeSource, editorSource, actionIcons, mastersRpc, castSalesRpc, snapshotRpc] = await Promise.all([
+const [layoutMarkup, indexMarkup, businessHomeSource, slipsCss, editorSource, actionIcons, mastersRpc, castSalesRpc, snapshotRpc] = await Promise.all([
     readFile(new URL('../Pages/Shared/_Layout.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../Pages/Index.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/business-home.js', import.meta.url), 'utf8'),
+    readFile(new URL('../wwwroot/css/features/slips.css', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/business-slip-editor.js', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/icons/lucide-actions.svg', import.meta.url), 'utf8'),
     readFile(new URL('../Sql/store_rpc/02_store_masters.sql', import.meta.url), 'utf8'),
@@ -28,6 +29,16 @@ assert.match(businessHomeSource, /\['open', 'checkout_ready', 'checked_out'\]/, 
 assert.match(businessHomeSource, /`在席 \$\{formatElapsedMinutes\(minutes\)\}`/, '在席時間をn時間n分で表示すること');
 assert.match(snapshotRpc, /'closedAt', s\.closed_at/, '会計後の在席時間を退店時刻で固定できること');
 assert.match(businessHomeSource, /business-slip-card__person--\$\{kind\}/, 'お客様と指名を一人ずつパネル表示すること');
+assert.equal(businessHomeSource.includes('CARD_PERSON_PANEL_LIMIT'), false, '一覧の客・指名を固定件数で打ち切らないこと');
+assert.match(businessHomeSource, /const compactCardPersonList = \(personList\) =>/, '客・指名の実際の折り返しを一覧上で判定すること');
+assert.match(businessHomeSource, /personList\.scrollHeight > personList\.clientHeight \+ 1/, '3行目が発生した時だけ超過扱いにすること');
+assert.match(businessHomeSource, /new ResizeObserver\(/, 'カード幅が変わった時に折り返しを再計算すること');
+assert.match(businessHomeSource, /business-slip-card__person--overflow/, '一覧に入り切らない客・指名を「他」へ畳むこと');
+assert.match(businessHomeSource, /buildElement\(\s*'span',[\s\S]*?'他'\s*\)/, '超過分は「他」と表示して詳細モーダルへ任せること');
+assert.match(slipsCss, /\.business-slip-grid\s*\{[^}]*align-items:\s*start/s, '横並びカードを内容の最小高さで上揃えにすること');
+assert.match(slipsCss, /\.business-slip-grid\s*>\s*\.business-slip-card\.slip-list__row\s*\{[^}]*grid-template-rows:\s*46px 36px auto 44px/s, '卓番を上、操作を下へ固定したカード行構成にすること');
+assert.match(slipsCss, /\.business-slip-grid\s+\.business-slip-card__person-list\s*\{(?=[^}]*block-size:)(?=[^}]*overflow:\s*hidden)[^}]*\}/s, '横並び一覧の客・指名だけを2行の固定枠にすること');
+assert.match(slipsCss, /@media \(max-width: 575\.98px\)[\s\S]*?\.business-slip-grid\s*>\s*\.business-slip-card\.slip-list__row\s*\{[^}]*grid-template-rows:\s*minmax\(46px,\s*auto\) 36px auto 44px/s, '1列表示では卓番ヘッダーの折り返しを許容すること');
 assert.equal(businessHomeSource.includes('business-slip-card__summary-label'), false, '伝票パネルにお客様・指名の見出しを表示しないこと');
 assert.match(indexMarkup, /data-business-slip-filter="checked_out"/, '会計済みの絞り込みタブを表示すること');
 for (const iconId of ['user-round', 'star', 'clipboard-list', 'badge-japanese-yen']) {

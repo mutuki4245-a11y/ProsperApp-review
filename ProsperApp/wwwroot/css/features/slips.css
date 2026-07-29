@@ -2312,9 +2312,32 @@
 }
 
 .business-slip-grid {
+  align-items: start;
   display: grid;
   gap: 0.72rem;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.business-slip-grid > .business-slip-card.slip-list__row {
+  grid-template-rows: 46px 36px auto 44px;
+  inline-size: 100%;
+}
+
+.business-slip-grid > .business-slip-card > .business-slip-card__header {
+  grid-row: 1;
+}
+
+.business-slip-grid > .business-slip-card > .business-slip-card__timing {
+  grid-row: 2;
+}
+
+.business-slip-grid > .business-slip-card > .business-slip-card__body {
+  grid-row: 3;
+}
+
+.business-slip-grid > .business-slip-card > .slip-list__actions {
+  align-self: end;
+  grid-row: 4;
 }
 
 .business-slip-card.slip-list__row {
@@ -2471,6 +2494,24 @@
   min-width: 0;
 }
 
+.business-slip-grid .business-slip-card__people {
+  grid-template-rows: repeat(2, 3.44rem);
+}
+
+.business-slip-grid .business-slip-card__person-list {
+  align-content: flex-start;
+  block-size: 3.44rem;
+  overflow: hidden;
+}
+
+.business-slip-grid .business-slip-card__person-list--customers {
+  grid-row: 1;
+}
+
+.business-slip-grid .business-slip-card__person-list--nominations {
+  grid-row: 2;
+}
+
 .business-slip-card__person {
   background: #f3f8f8;
   border: 1px solid #c9dedd;
@@ -2486,10 +2527,24 @@
   white-space: nowrap;
 }
 
+.business-slip-grid .business-slip-card__person {
+  block-size: 1.58rem;
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  line-height: 1.15;
+  min-width: 0;
+}
+
 .business-slip-card__person--nomination {
   background: #fff9ec;
   border-color: #ead8a5;
   color: #604d1d;
+}
+
+.business-slip-card__person--overflow {
+  border-style: dashed;
+  flex: 0 0 auto;
+  text-align: center;
 }
 
 .business-slip-card__person.is-departed {
@@ -2777,6 +2832,10 @@
 
   .business-slip-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .business-slip-grid > .business-slip-card.slip-list__row {
+    grid-template-rows: minmax(46px, auto) 36px auto 44px;
   }
 
   .business-slip-card__header {

@@ -680,6 +680,67 @@
         return person;
     };
 
+    const buildCardPeopleOverflow = (kind) => {
+        return buildElement(
+            'span',
+            `business-slip-card__person business-slip-card__person--${kind} business-slip-card__person--overflow`,
+            '他'
+        );
+    };
+
+    const compactCardPersonList = (personList) => {
+        if (!personList?.isConnected || personList.hidden || personList.clientHeight === 0) {
+            return;
+        }
+
+        const panels = Array.from(personList.children)
+            .filter((panel) => !panel.classList.contains('business-slip-card__person--overflow'));
+        panels.forEach((panel) => {
+            panel.hidden = false;
+        });
+        personList.querySelector('.business-slip-card__person--overflow')?.remove();
+
+        if (personList.scrollHeight <= personList.clientHeight + 1) {
+            return;
+        }
+
+        const kind = personList.classList.contains('business-slip-card__person-list--nominations')
+            ? 'nomination'
+            : 'customer';
+        const overflow = buildCardPeopleOverflow(kind);
+        personList.appendChild(overflow);
+        let hiddenCount = 0;
+        for (let index = panels.length - 1;
+            index >= 0 && personList.scrollHeight > personList.clientHeight + 1;
+            index -= 1) {
+            panels[index].hidden = true;
+            hiddenCount += 1;
+        }
+
+        overflow.title = `他${hiddenCount}名は詳細で確認`;
+        overflow.setAttribute('aria-label', `他${hiddenCount}名。詳細を開いて確認`);
+    };
+
+    const compactCardPersonLists = () => {
+        list.querySelectorAll('.business-slip-grid .business-slip-card__person-list').forEach(compactCardPersonList);
+    };
+
+    let cardPeopleCompactionFrame = null;
+    const scheduleCardPeopleCompaction = () => {
+        if (cardPeopleCompactionFrame !== null) {
+            return;
+        }
+
+        cardPeopleCompactionFrame = window.requestAnimationFrame(() => {
+            cardPeopleCompactionFrame = null;
+            compactCardPersonLists();
+        });
+    };
+
+    const cardPeopleResizeObserver = typeof ResizeObserver === 'function'
+        ? new ResizeObserver(scheduleCardPeopleCompaction)
+        : null;
+
     const syncCardPeople = (row, slip) => {
         const customerList = row.querySelector('[data-business-slip-customers]');
         const nominationList = row.querySelector('[data-business-slip-casts]');
@@ -1254,6 +1315,11 @@
             ));
         }
         list.replaceChildren(content);
+        compactCardPersonLists();
+        cardPeopleResizeObserver?.disconnect();
+        list.querySelectorAll('.business-slip-grid .business-slip-card__person-list').forEach((personList) => {
+            cardPeopleResizeObserver?.observe(personList);
+        });
         if (revealButton) {
             revealButton.hidden = openSlips.length + paidSlips.length === 0;
         }
@@ -1702,6 +1768,7 @@
             void loadSlips();
         }
     });
+    window.addEventListener('resize', scheduleCardPeopleCompaction);
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
             void loadSlips();
