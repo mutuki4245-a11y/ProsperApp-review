@@ -8,7 +8,8 @@
 
     const saveStatus = window.TerminalSaveStatus;
     const status = form.querySelector('[data-business-karaoke-status]');
-    const revealButton = document.querySelector('[data-slip-amount-reveal]');
+    const amountToggle = document.querySelector('[data-slip-amount-toggle]');
+    const amountToggleContainer = document.querySelector('[data-slip-amount-toggle-container]');
     const businessDateDisplay = document.querySelector('[data-business-date-display]');
     const createDateInput = document.querySelector('[data-business-create-date-input]');
     const createDayIdInput = document.querySelector('[data-business-create-day-id-input]');
@@ -317,7 +318,7 @@
 
     const setAmountVisible = (visible) => {
         document.body.classList.toggle('slip-amounts-visible', visible);
-        revealButton?.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        if (amountToggle) amountToggle.checked = visible;
     };
 
     const buildElement = (tagName, className, text) => {
@@ -583,9 +584,7 @@
 
         setText(row.querySelector('[data-business-empty-title]'), title);
         setText(row.querySelector('[data-business-empty-message]'), message);
-        if (revealButton) {
-            revealButton.hidden = true;
-        }
+        if (amountToggleContainer) amountToggleContainer.hidden = true;
     };
 
     const buildAmountElement = (slip) => {
@@ -678,6 +677,10 @@
         person.title = text;
         person.classList.toggle('is-departed', departed);
         return person;
+    };
+    const cardNominationKind = (value) => {
+        const displayName = String(value || '').trim();
+        return displayName.includes('同伴') ? '同伴' : displayName || '指名';
     };
 
     const buildCardPeopleOverflow = (kind) => {
@@ -826,7 +829,7 @@
                 .filter((nomination) => nomination.status === 'active')
                 .map((nomination) => {
                     const castName = nomination.displayName || 'キャスト';
-                    const kind = nomination.nominationDisplayName || nomination.nominationKind || '指名';
+                    const kind = cardNominationKind(nomination.nominationDisplayName || nomination.nominationKind);
                     return buildCardPerson(`${castName} — ${kind}`, 'nomination');
                 });
             nominationList.replaceChildren(...nominationPanels);
@@ -837,10 +840,7 @@
     const buildKaraokeEditor = (slip) => {
         const state = karaokeState(slip);
         const section = buildElement('section', 'business-slip-detail-karaoke');
-        section.append(
-            buildElement('strong', 'business-slip-detail-karaoke__label', 'カラオケ'),
-            buildElement('span', 'business-slip-detail-karaoke__amount', `会計額 ${formatYen(state.accountingAmount)}`)
-        );
+        section.appendChild(buildElement('strong', 'business-slip-detail-karaoke__label', 'カラオケ'));
 
         if (!state.editable) {
             section.appendChild(buildElement('span', 'business-slip-detail-karaoke__readonly', `${state.displayQuantity}回`));
@@ -884,13 +884,14 @@
         return actions;
     };
 
-    const orderSection = (slip) => {
+    const orderSection = (slip, includeEditorActions = true) => {
         const section = buildElement('section', 'business-slip-detail-orders');
         section.setAttribute('aria-label', '注文と自由明細');
         const body = buildElement('div', 'business-slip-detail-orders__body');
         renderOrders(body, slip);
         renderAdjustments(body, slip);
-        section.append(body, buildSlipDetailActions());
+        section.appendChild(body);
+        if (includeEditorActions) section.appendChild(buildSlipDetailActions());
         return section;
     };
 
@@ -905,17 +906,21 @@
         return line;
     };
 
-    const detailSummary = (heading, kind, content, editorLabel) => {
+    const detailSummary = (heading, kind, content, editorLabel, includeEditorAction = true) => {
         const row = buildElement('div', `business-slip-detail-summary business-slip-detail-summary--${kind}`);
         row.append(buildElement('strong', 'business-slip-detail-summary__heading', heading), content);
-        const button = buildElement('button', 'btn btn-sm btn-outline-primary', editorLabel);
-        button.type = 'button';
-        button.dataset.businessSlipEditor = kind;
-        row.appendChild(button);
+        if (includeEditorAction) {
+            const button = buildElement('button', 'btn btn-sm btn-outline-primary', editorLabel);
+            button.type = 'button';
+            button.dataset.businessSlipEditor = kind;
+            row.appendChild(button);
+        } else {
+            row.classList.add('business-slip-detail-summary--readonly');
+        }
         return row;
     };
 
-    const customerSummary = (slip) => {
+    const customerSummary = (slip, includeEditorAction = true) => {
         const customers = Array.isArray(slip.customers) ? slip.customers : [];
         const content = buildElement('div', 'business-slip-detail-summary__content');
         if (customers.length === 0) {
@@ -927,10 +932,10 @@
                 content.appendChild(chip);
             });
         }
-        return detailSummary('お客様', 'customers', content, 'お客様を編集');
+        return detailSummary('お客様', 'customers', content, 'お客様を編集', includeEditorAction);
     };
 
-    const nominationSummary = (slip) => {
+    const nominationSummary = (slip, includeEditorAction = true) => {
         const nominations = Array.isArray(slip.nominations) ? slip.nominations.filter((nomination) => nomination.status === 'active') : [];
         const content = buildElement('div', 'business-slip-detail-summary__content');
         if (nominations.length === 0) {
@@ -943,7 +948,7 @@
                 content.appendChild(pair);
             });
         }
-        return detailSummary('指名', 'nominations', content, '指名を編集');
+        return detailSummary('指名', 'nominations', content, '指名を編集', includeEditorAction);
     };
 
     const renderOrderGroup = (target, slip, key, label, lines) => {
@@ -1088,7 +1093,7 @@
         return item;
     };
 
-    const buildSlipDetailContent = (slip) => {
+    const buildSlipDetailContent = (slip, { includeEditorActions = true } = {}) => {
         const wrapper = buildElement('div', 'business-slip-detail-modal');
         const stateLabel = slip.checkoutPending ? '会計準備中' : slip.statusDisplay;
         const hero = buildElement('section', 'slip-detail-hero business-slip-detail-modal__hero');
@@ -1106,11 +1111,15 @@
         const activity = buildElement('div', 'business-slip-detail-layout__activity');
         const accounting = buildElement('aside', 'business-slip-detail-layout__accounting');
         accounting.setAttribute('aria-label', '注文と会計');
-        activity.append(customerSummary(slip), nominationSummary(slip));
-        accounting.append(buildKaraokeEditor(slip), orderSection(slip), buildAccountingTotals(slip));
+        activity.append(
+            hero,
+            customerSummary(slip, includeEditorActions),
+            nominationSummary(slip, includeEditorActions)
+        );
+        accounting.append(buildKaraokeEditor(slip), orderSection(slip, includeEditorActions), buildAccountingTotals(slip));
         layout.append(activity, accounting);
-        wrapper.append(hero, layout);
-        syncEditorButtons(wrapper, slip);
+        wrapper.appendChild(layout);
+        if (includeEditorActions) syncEditorButtons(wrapper, slip);
         return wrapper;
     };
 
@@ -1162,6 +1171,7 @@
         setText(row.querySelector('[data-business-slip-customer-count]'), `${Number(slip.customerCount) || 0}名`);
         syncElapsedTime(row, slip);
         const checkoutButton = row.querySelector('[data-business-start-checkout]');
+        const releaseCheckoutButton = row.querySelector('[data-business-release-checkout-ready]');
         const receiptButton = row.querySelector('[data-business-print-receipt]');
         const cancelButton = row.querySelector('[data-business-cancel-checkout]');
         if (checkoutButton) {
@@ -1171,6 +1181,10 @@
             setText(checkoutButton.querySelector('[data-business-action-label]'), slip.checkoutPending
                 ? '会計準備中'
                 : slip.status === 'checkout_ready' ? '決済' : '会計');
+        }
+        if (releaseCheckoutButton) {
+            releaseCheckoutButton.hidden = slip.status !== 'checkout_ready';
+            releaseCheckoutButton.dataset.businessReleaseCheckoutReady = String(slip.id);
         }
         if (receiptButton) {
             receiptButton.hidden = slip.status !== 'checked_out';
@@ -1239,13 +1253,15 @@
         orderButton.dataset.businessSlipEditor = 'orders';
         const checkoutButton = buildActionButton('btn btn-sm btn-primary slip-list__checkout-action', '会計', 'badge-japanese-yen');
         checkoutButton.dataset.businessStartCheckout = '';
+        const releaseCheckoutButton = buildActionButton('btn business-slip-card__quick-action business-slip-card__release-action', '会計準備解除', 'undo-2');
+        releaseCheckoutButton.dataset.businessReleaseCheckoutReady = '';
         const receiptButton = buildElement('button', 'btn btn-sm btn-outline-primary', '領収書');
         receiptButton.type = 'button';
         receiptButton.dataset.businessPrintReceipt = '';
         const cancelButton = buildElement('button', 'btn btn-sm btn-outline-danger slip-list__checkout-action', '会計取消');
         cancelButton.type = 'button';
         cancelButton.dataset.businessCancelCheckout = '';
-        actionButtons.append(customerButton, nominationButton, orderButton, checkoutButton, receiptButton, cancelButton);
+        actionButtons.append(customerButton, nominationButton, orderButton, checkoutButton, releaseCheckoutButton, receiptButton, cancelButton);
         actions.appendChild(actionButtons);
         row.append(header, timing, main, actions);
 
@@ -1275,7 +1291,6 @@
         divider.append(
             buildElement('span'),
             buildElement('strong', null, tableCategoryLabel(firstSlip)),
-            buildElement('small', null, `${categorySlips.length}伝票`),
             buildElement('span')
         );
         const grid = buildElement('div', 'business-slip-grid');
@@ -1303,7 +1318,7 @@
             buildElement('span', 'business-slip-paid__count', `${paidSlips.length}件`),
             buildElement('small', null, formatYen(paidTotal))
         );
-        const body = buildElement('div', 'business-slip-paid__body');
+        const body = buildElement('div', 'business-slip-paid__body business-slip-grid');
         if (paidSlips.length === 0) {
             body.appendChild(buildElement('p', 'business-slip-paid__empty', '会計済みの伝票はありません。'));
         } else {
@@ -1386,9 +1401,7 @@
         list.querySelectorAll('.business-slip-grid .business-slip-card__person-list').forEach((personList) => {
             cardPeopleResizeObserver?.observe(personList);
         });
-        if (revealButton) {
-            revealButton.hidden = openSlips.length + paidSlips.length === 0;
-        }
+        if (amountToggleContainer) amountToggleContainer.hidden = openSlips.length + paidSlips.length === 0;
         syncDetailModal();
     };
 
@@ -1807,22 +1820,7 @@
         markDirtyStatus();
     });
 
-    revealButton?.addEventListener('pointerdown', () => setAmountVisible(true));
-    document.addEventListener('pointerup', () => setAmountVisible(false));
-    document.addEventListener('pointercancel', () => setAmountVisible(false));
-    revealButton?.addEventListener('blur', () => setAmountVisible(false));
-    revealButton?.addEventListener('keydown', (event) => {
-        if (event.key === ' ' || event.key === 'Enter') {
-            event.preventDefault();
-            setAmountVisible(true);
-        }
-    });
-    revealButton?.addEventListener('keyup', (event) => {
-        if (event.key === ' ' || event.key === 'Enter') {
-            event.preventDefault();
-            setAmountVisible(false);
-        }
-    });
+    amountToggle?.addEventListener('change', () => setAmountVisible(amountToggle.checked));
 
     window.addEventListener('online', () => {
         markDirtyStatus();
@@ -1858,7 +1856,8 @@
         setCheckoutLock,
         getPendingForSlip: pendingForSlip,
         waitForOperations: waitForBusinessOperations,
-        getSlip
+        getSlip,
+        buildSlipDetailContent
     });
     void loadSlips();
 })();

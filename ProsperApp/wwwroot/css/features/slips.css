@@ -252,38 +252,6 @@
   visibility: hidden;
 }
 
-.slip-amount-reveal {
-  align-items: center;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  bottom: clamp(4.5rem, 10vh, 7rem);
-  box-shadow: 0 12px 30px rgb(15 23 42 / 0.22);
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 1.45rem;
-  font-weight: 800;
-  height: 4rem;
-  justify-content: center;
-  position: fixed;
-  right: max(1rem, calc((100vw - 1180px) / 2 + 1rem));
-  touch-action: none;
-  width: 4rem;
-  z-index: 1030;
-}
-
-.slip-amount-reveal:active,
-.slip-amount-reveal:focus-visible {
-  background: #0891b2;
-  border-color: #0e7490;
-  outline: 3px solid rgb(14 116 144 / 0.25);
-  outline-offset: 3px;
-}
-
-.slip-amount-reveal__mark {
-  line-height: 1;
-}
-
 .slip-list__row--add {
   background: #f8fafc;
   border-style: dashed;
@@ -397,7 +365,7 @@
   align-items: start;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) minmax(24rem, 31rem);
+  grid-template-columns: minmax(20rem, 0.85fr) minmax(32rem, 1.35fr);
 }
 
 .business-slip-detail-layout__activity,
@@ -430,7 +398,7 @@
   border-radius: 8px;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 0.65rem;
 }
 
@@ -440,7 +408,6 @@
   font-weight: 900;
 }
 
-.business-slip-detail-karaoke__amount,
 .business-slip-detail-karaoke__readonly {
   color: #475569;
   font-size: 0.9rem;
@@ -519,6 +486,18 @@
   justify-content: center;
   white-space: nowrap;
   width: 100%;
+}
+
+.business-slip-detail-summary--readonly {
+  grid-template-columns: minmax(3rem, 5.5rem) minmax(0, 1fr);
+}
+
+.checkout-payment-form {
+  border-top: 1px solid #cbd5e1;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.45rem;
+  padding-top: 0.75rem;
 }
 
 .business-slip-detail-orders {
@@ -1707,7 +1686,7 @@
 }
 
 #businessPaymentModal .modal-dialog {
-  max-width: min(40rem, calc(100vw - 1rem));
+  max-width: min(72rem, calc(100vw - 1rem));
 }
 
 .modal.is-child-modal-active .modal-content {
@@ -2258,10 +2237,6 @@
     justify-content: flex-start;
   }
 
-  .slip-amount-reveal {
-    right: 0.75rem;
-  }
-
 }
 
 .slip-create__actions {
@@ -2285,7 +2260,7 @@
   color: #45606c;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: minmax(1rem, 1fr) auto auto minmax(1rem, 11fr);
+  grid-template-columns: minmax(1rem, 1fr) auto minmax(1rem, 11fr);
   padding: 0.95rem 0 0.7rem;
 }
 
@@ -2298,16 +2273,6 @@
   font-size: 0.78rem;
   font-weight: 900;
   letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-
-.business-slip-category__divider small {
-  background: #e4ecef;
-  border-radius: 999px;
-  color: #60717a;
-  font-size: 0.65rem;
-  font-weight: 900;
-  padding: 0.18rem 0.45rem;
   white-space: nowrap;
 }
 
@@ -2670,6 +2635,16 @@
   color: #b42318;
 }
 
+.business-slip-card .slip-list__action-buttons [data-business-release-checkout-ready] {
+  color: #52666f;
+}
+
+.business-slip-card .slip-list__action-buttons [data-business-release-checkout-ready]:hover,
+.business-slip-card .slip-list__action-buttons [data-business-release-checkout-ready]:focus-visible {
+  background: #eef2f4;
+  color: #344b55;
+}
+
 .business-slip-card .slip-list__action-buttons [data-business-cancel-checkout]:hover,
 .business-slip-card .slip-list__action-buttons [data-business-cancel-checkout]:focus-visible {
   background: #fff1f0;
@@ -2765,7 +2740,7 @@
 .business-slip-paid__body {
   border-top: 1px solid #c6d3d9;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.72rem;
   padding: 0.7rem 1rem 1rem;
 }
 
@@ -2775,47 +2750,9 @@
   margin: 0;
 }
 
-.business-slip-paid__body .business-slip-card {
-  grid-template-columns: minmax(12rem, 1.2fr) 7rem minmax(14rem, 1.5fr) minmax(10rem, auto);
-}
-
-.business-slip-paid__body .business-slip-card__header,
-.business-slip-paid__body .business-slip-card__timing,
-.business-slip-paid__body .business-slip-card__body,
-.business-slip-paid__body .slip-list__actions {
-  border-bottom: 0;
-  border-right: 1px solid #e3eaed;
-}
-
-.business-slip-paid__body .business-slip-card__body {
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) 7rem;
-}
-
-.business-slip-paid__body .slip-list__actions {
-  grid-column: auto;
-}
-
-.business-slip-paid__body .slip-list__action-buttons {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.business-slip-paid__body .business-slip-card .slip-list__details {
-  grid-column: 1 / -1;
-}
-
 @media (max-width: 1199.98px) {
   .business-slip-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .business-slip-paid__body .business-slip-card {
-    grid-template-columns: minmax(12rem, 1fr) 7rem minmax(0, 1.5fr);
-  }
-
-  .business-slip-paid__body .slip-list__actions {
-    border-right: 0;
-    grid-column: 1 / -1;
   }
 }
 
@@ -2824,25 +2761,15 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .business-slip-card .business-slip-detail-layout {
+  .business-slip-detail-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .business-slip-card .business-slip-detail-layout__accounting {
+  .business-slip-detail-layout__accounting {
     border-left: 0;
     border-top: 1px solid #cbd5e1;
     padding-left: 0;
     padding-top: 0.75rem;
-  }
-
-  .business-slip-paid__body .business-slip-card {
-    grid-template-columns: minmax(0, 1fr) 7rem;
-  }
-
-  .business-slip-paid__body .business-slip-card__body,
-  .business-slip-paid__body .slip-list__actions {
-    border-right: 0;
-    grid-column: 1 / -1;
   }
 }
 
@@ -2875,18 +2802,5 @@
 
   .business-slip-paid__body {
     padding: 0.6rem;
-  }
-
-  .business-slip-paid__body .business-slip-card {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .business-slip-paid__body .business-slip-card__header,
-  .business-slip-paid__body .business-slip-card__timing {
-    border-right: 0;
-  }
-
-  .business-slip-paid__body .business-slip-card__timing {
-    grid-column: 1;
   }
 }

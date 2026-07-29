@@ -106,10 +106,16 @@
                                 会計済み <span data-business-filter-count="checked_out">0</span>
                             </button>
                         </nav>
-                        <div class="business-floor__legend" aria-label="伝票ステータス">
-                            <span class="is-open">接客中</span>
-                            <span class="is-checkout-ready">会計準備中</span>
-                            <span class="is-checked-out">会計済み</span>
+                        <div class="business-floor__toolbar-meta">
+                            <div class="business-floor__legend" aria-label="伝票ステータス">
+                                <span class="is-open">接客中</span>
+                                <span class="is-checkout-ready">会計準備中</span>
+                                <span class="is-checked-out">会計済み</span>
+                            </div>
+                            <label class="business-amount-toggle" data-slip-amount-toggle-container hidden>
+                                <span>会計表示</span>
+                                <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額を表示" />
+                            </label>
                         </div>
                         <div class="slip-list-section__statusbar">
                             <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>
@@ -124,10 +130,6 @@
                         </article>
                     </div>
                 </form>
-                <button class="slip-amount-reveal" type="button" data-slip-amount-reveal aria-label="会計額を表示" aria-pressed="false" hidden>
-                    <span class="slip-amount-reveal__mark">¥</span>
-                    <span class="visually-hidden">会計額</span>
-                </button>
             </section>
         </section>
     }
@@ -376,7 +378,7 @@
             </div>
         </div>
         <div class="modal fade" id="businessPaymentModal" tabindex="-1" aria-labelledby="businessPaymentModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
                 <div class="modal-content" data-business-payment-modal>
                     <div class="modal-header">
                         <div>
@@ -387,20 +389,22 @@
                     </div>
                     <div class="modal-body slip-modal-form">
                         <div class="alert alert-warning" role="alert" data-business-payment-message hidden></div>
-                        <section class="checkout-payment-form">
-                            <div class="checkout-payments" data-business-payment-rows></div>
-                            <div class="row g-3 mt-1">
-                                <div class="col-md-6">
-                                    <label class="form-label" for="businessReceiptAddressee">領収書宛名</label>
-                                    <input class="form-control form-control-lg" id="businessReceiptAddressee" maxlength="120" autocomplete="off" data-business-receipt-addressee />
+                        <div data-business-payment-detail>
+                            <section class="checkout-payment-form" data-business-payment-form>
+                                <div class="checkout-payments" data-business-payment-rows></div>
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="businessReceiptAddressee">領収書宛名</label>
+                                        <input class="form-control form-control-lg" id="businessReceiptAddressee" maxlength="120" autocomplete="off" data-business-receipt-addressee />
+                                    </div>
+                                    <div class="col-md-6" data-business-received-row hidden>
+                                        <label class="form-label" for="businessReceivedAmount">受取額</label>
+                                        <input class="form-control form-control-lg" id="businessReceivedAmount" type="number" min="0" step="1" data-business-received-amount />
+                                    </div>
                                 </div>
-                                <div class="col-md-6" data-business-received-row hidden>
-                                    <label class="form-label" for="businessReceivedAmount">受取額</label>
-                                    <input class="form-control form-control-lg" id="businessReceivedAmount" type="number" min="0" step="1" data-business-received-amount />
-                                </div>
-                            </div>
-                            <div class="checkout-final-summary" data-business-payment-summary></div>
-                        </section>
+                                <div class="checkout-final-summary" data-business-payment-summary></div>
+                            </section>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">戻る</button>

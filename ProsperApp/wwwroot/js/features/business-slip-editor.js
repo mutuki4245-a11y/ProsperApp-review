@@ -937,9 +937,18 @@
             return;
         }
         state.isSubmitting = true;
+        const returnsToEditorList = operations.every((nextOperation) =>
+            ['add_customer', 'add_nomination', 'add_adjustment', 'add_order'].includes(nextOperation.operationType));
         operations.forEach((nextOperation) => home.enqueueEditorOperation(nextOperation));
-        modal.hide();
         state.isSubmitting = false;
+        if (returnsToEditorList) {
+            state.orderQueue.clear();
+            state.pendingBackItemId = null;
+            state.pendingBackSelection.clear();
+            renderLocalEditor(state.section, currentSlip(state.slipId));
+            return;
+        }
+        modal.hide();
     };
 
     document.addEventListener('click', (event) => {

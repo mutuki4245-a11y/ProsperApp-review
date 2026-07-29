@@ -429,7 +429,6 @@
   .cast-sales-adjustment-list__cast small,
   .slip-create__header p,
   .slip-create__panel-heading small,
-  .business-slip-detail-karaoke__amount,
   .business-slip-detail-karaoke__readonly,
   .business-slip-detail-summary__heading,
   .business-slip-detail-summary__secondary,
@@ -639,7 +638,6 @@
     background: var(--app-border-strong);
   }
 
-  .business-slip-category__divider small,
   .business-slip-paid__count {
     background: var(--app-surface-soft);
     color: var(--app-text-muted);
@@ -790,15 +788,12 @@
     border-color: var(--app-border-strong);
   }
 
-  .business-slip-paid__body,
-  .business-slip-paid__body .business-slip-card__header,
-  .business-slip-paid__body .business-slip-card__timing,
-  .business-slip-paid__body .business-slip-card__body,
-  .business-slip-paid__body .slip-list__actions {
+  .business-slip-paid__body {
     border-color: var(--app-border);
   }
 
   .business-slip-detail-layout__accounting,
+  .checkout-payment-form,
   .business-slip-detail-summary,
   .business-slip-order-group,
   .business-slip-order-group__events,
@@ -822,6 +817,20 @@
     background: var(--app-surface-soft);
     border-color: var(--app-border);
     color: var(--app-text-muted);
+  }
+
+  .business-amount-toggle {
+    color: var(--app-text-muted);
+  }
+
+  .business-amount-toggle input {
+    background: var(--app-surface-hover);
+    border-color: var(--app-border-strong);
+  }
+
+  .business-amount-toggle input:checked {
+    background: var(--app-accent-strong);
+    border-color: var(--app-accent-strong);
   }
 
   .business-slip-detail-line.is-pending,

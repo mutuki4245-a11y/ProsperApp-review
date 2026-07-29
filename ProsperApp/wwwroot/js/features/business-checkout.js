@@ -19,6 +19,8 @@
     const printState = root.querySelector('[data-business-statement-print-state]');
     const paymentMessage = paymentRoot.querySelector('[data-business-payment-message]');
     const paymentTable = paymentRoot.querySelector('[data-business-payment-table]');
+    const paymentDetail = paymentRoot.querySelector('[data-business-payment-detail]');
+    const paymentForm = paymentRoot.querySelector('[data-business-payment-form]');
     const paymentRows = paymentRoot.querySelector('[data-business-payment-rows]');
     const paymentSummary = paymentRoot.querySelector('[data-business-payment-summary]');
     const receivedRow = paymentRoot.querySelector('[data-business-received-row]');
@@ -221,6 +223,24 @@
         });
         renderPaymentSummary();
     };
+    const renderPaymentDetail = () => {
+        const slip = businessHome()?.getSlip?.(current?.slipId);
+        const buildDetail = businessHome()?.buildSlipDetailContent;
+        if (!paymentDetail || !paymentForm || !slip || typeof buildDetail !== 'function') return;
+        const detail = buildDetail(
+            {
+                ...slip,
+                status: current?.status || slip.status,
+                statusDisplay: current?.status === 'checkout_ready' ? '会計準備中' : slip.statusDisplay,
+                checkoutPending: false
+            },
+            { includeEditorActions: false }
+        );
+        const activity = detail.querySelector('.business-slip-detail-layout__activity');
+        if (!activity) return;
+        activity.appendChild(paymentForm);
+        paymentDetail.replaceChildren(detail);
+    };
     const selectedPayments = () => Array.from(paymentRows.querySelectorAll('[data-payment-code]')).map((button) => {
         const code = button.dataset.paymentCode;
         const input = paymentRows.querySelector(`[data-payment-amount="${code}"]`);
@@ -256,6 +276,7 @@
         }
         current = null; setMessage(); setPaymentMessage(); statement.hidden = true; printPanel.hidden = true; issuePanel.hidden = false;
         receivedAmount.value = ''; addressee.value = ''; paymentRows.replaceChildren(); paymentSummary.replaceChildren();
+        if (paymentDetail && paymentForm) paymentDetail.replaceChildren(paymentForm);
         syncFooterActions();
     };
     const open = async (slip) => {
@@ -354,13 +375,24 @@
         if (!current?.queue || current.statementPrintTask) return;
         void printStatementCore();
     };
-    const release = async () => {
-        if (isActionInFlight || !current || current.statementPrintTask || !window.confirm('会計準備を解除して伝票を編集可能に戻しますか？')) return;
+    const release = async (slip = null) => {
+        const slipId = Number(slip?.id || current?.slipId || 0);
+        const tableDisplay = slip?.tableDisplay || current?.tableDisplay || 'この伝票';
+        if (isActionInFlight || !slipId || (!slip && current?.statementPrintTask)
+            || !window.confirm(`${tableDisplay} の会計準備を解除して編集可能に戻しますか？`)) return;
         await runExclusive(async () => {
             try {
-                await post(config.releaseCheckoutReadyUrl, { slipId: current.slipId });
-                removeQueue(current.slipId); modal?.hide(); window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
-            } catch (error) { setMessage(error.message); }
+                await post(config.releaseCheckoutReadyUrl, { slipId });
+                removeQueue(slipId);
+                if (current && Number(current.slipId) === slipId) modal?.hide();
+                window.dispatchEvent(new CustomEvent('prosper:business-slips-refresh'));
+            } catch (error) {
+                if (slip) {
+                    window.alert(error.message);
+                } else {
+                    setMessage(error.message);
+                }
+            }
         });
     };
     const proceedPayment = () => {
@@ -369,6 +401,7 @@
         paymentTable.textContent = current.tableDisplay || '会計';
         setPaymentMessage();
         renderPayments();
+        renderPaymentDetail();
         confirmButton.disabled = false;
         modalTransition = 'to-payment';
         modal?.hide();
@@ -415,9 +448,11 @@
 
     document.addEventListener('click', (event) => {
         const checkout = event.target.closest('[data-business-start-checkout]');
+        const releaseReady = event.target.closest('[data-business-release-checkout-ready]');
         const receipt = event.target.closest('[data-business-print-receipt]');
         const cancel = event.target.closest('[data-business-cancel-checkout]');
         if (checkout) { const slip = businessHome()?.getSlip?.(checkout.dataset.businessStartCheckout); if (slip) void open(slip); }
+        if (releaseReady) { const slip = businessHome()?.getSlip?.(releaseReady.dataset.businessReleaseCheckoutReady); if (slip) void release(slip); }
         if (receipt) { const slip = businessHome()?.getSlip?.(receipt.dataset.businessPrintReceipt); if (slip) void printReceipt(slip); }
         if (cancel) { const slip = businessHome()?.getSlip?.(cancel.dataset.businessCancelCheckout); if (slip) void cancelCheckout(slip); }
     });

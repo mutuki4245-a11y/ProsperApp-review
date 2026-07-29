@@ -110,6 +110,8 @@ root.querySelector = (selector) => elements[selector] || FakeElement.prototype.q
 const paymentElements = {
     '[data-business-payment-message]': element(),
     '[data-business-payment-table]': element(),
+    '[data-business-payment-detail]': element(),
+    '[data-business-payment-form]': element(),
     '[data-business-payment-rows]': element(),
     '[data-business-payment-summary]': element(),
     '[data-business-received-row]': element(),
@@ -117,6 +119,7 @@ const paymentElements = {
     '[data-business-receipt-addressee]': element(),
     '[data-business-confirm-checkout]': element()
 };
+paymentElements['[data-business-payment-detail]'].appendChild(paymentElements['[data-business-payment-form]']);
 paymentRoot.querySelector = (selector) => paymentElements[selector] || FakeElement.prototype.querySelector.call(paymentRoot, selector);
 paymentModalElement.querySelector = (selector) => selector === '[data-business-payment-modal]'
     ? paymentRoot
@@ -146,6 +149,7 @@ const paymentModal = {
     hide() { paymentModalElement.dispatch('hidden.bs.modal'); }
 };
 const storage = new Map();
+const requests = [];
 const context = {
     console,
     document,
@@ -155,18 +159,32 @@ const context = {
     Promise,
     JSON,
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) },
-    fetch: async () => ({
+    fetch: async (url, options = {}) => {
+        requests.push({ url, body: options.body ? JSON.parse(options.body) : null });
+        return ({
         ok: true,
         json: async () => ({
             succeeded: true,
             printData: { table_display_name: 'A1', total_amount: 4080, opened_at: null, closed_at: null, customer_count: 1, orders: [], adjustments: [] },
             reviewData: { orders: [] }
         })
-    }),
+        });
+    },
     window: {
-        ProsperBusinessHomeConfig: { getCheckoutStatementPrintDataUrl: '/checkout', receiptPrinterEnabled: false },
+        ProsperBusinessHomeConfig: {
+            getCheckoutStatementPrintDataUrl: '/checkout',
+            releaseCheckoutReadyUrl: '/release',
+            receiptPrinterEnabled: false
+        },
         ProsperBusinessHome: {
             getSlip: () => ({ id: 1, status: 'checkout_ready', tableDisplay: 'A1' }),
+            buildSlipDetailContent: () => {
+                const detail = element();
+                const activity = element();
+                activity.className = 'business-slip-detail-layout__activity';
+                detail.appendChild(activity);
+                return detail;
+            },
             waitForOperations: async () => true,
             setCheckoutLock: () => {},
             reload: async () => true,
@@ -197,6 +215,11 @@ document.dispatch('click', { target: checkoutButton });
 await settle();
 elements['[data-business-proceed-payment]'].dispatch('click');
 assert.equal(paymentModal.shown, true, '決済操作は専用モーダルを表示すること');
+assert.equal(
+    paymentElements['[data-business-payment-form]'].parentElement.classList.contains('business-slip-detail-layout__activity'),
+    true,
+    '決済操作を伝票詳細の左カラムへ配置すること'
+);
 
 const paymentRows = paymentElements['[data-business-payment-rows]'];
 const cashButton = paymentRows.querySelector('[data-payment-code]');
@@ -218,5 +241,15 @@ assert.equal(cashButton.closest('.checkout-payment-row').classList.contains('che
 
 paymentModal.hide();
 assert.equal(modal.shown, 2, '決済モーダルを戻ると会計伝票モーダルへ戻ること');
+
+const releaseReadyButton = element();
+releaseReadyButton.dataset.businessReleaseCheckoutReady = '1';
+document.dispatch('click', { target: releaseReadyButton });
+await settle();
+assert.equal(
+    requests.some((request) => request.url === '/release' && request.body?.slipId === 1),
+    true,
+    '伝票パネルから会計準備解除を実行すること'
+);
 
 console.log('Checkout payment selection reset checks passed.');

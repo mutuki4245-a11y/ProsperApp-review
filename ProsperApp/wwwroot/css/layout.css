@@ -580,6 +580,66 @@ body.sales-hub-page {
   background: #78909a;
 }
 
+.business-floor__toolbar-meta {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.business-amount-toggle {
+  align-items: center;
+  color: #52666f;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 900;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.business-amount-toggle input {
+  appearance: none;
+  background: #cbd5db;
+  border: 1px solid #a9b8bf;
+  border-radius: 999px;
+  cursor: pointer;
+  height: 1.3rem;
+  margin: 0;
+  position: relative;
+  transition: background 0.16s ease, border-color 0.16s ease;
+  width: 2.35rem;
+}
+
+.business-amount-toggle input::after {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.28);
+  content: "";
+  height: 0.92rem;
+  left: 0.15rem;
+  position: absolute;
+  top: 0.13rem;
+  transition: transform 0.16s ease;
+  width: 0.92rem;
+}
+
+.business-amount-toggle input:checked {
+  background: #087977;
+  border-color: #087977;
+}
+
+.business-amount-toggle input:checked::after {
+  transform: translateX(1.02rem);
+}
+
+.business-amount-toggle input:focus-visible {
+  outline: 3px solid rgb(8 121 119 / 0.25);
+  outline-offset: 2px;
+}
+
 .business-floor__toolbar .slip-list-section__statusbar {
   margin: 0;
   min-height: 0;
