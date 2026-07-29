@@ -17,11 +17,11 @@ test("the dark theme is enabled at the document and PWA level", async () => {
   const manifest = JSON.parse(manifestSource.replace(/^\uFEFF/, ""));
 
   assert.match(layout, /<html lang="ja" data-bs-theme="dark">/);
-  assert.match(layout, /<meta name="theme-color" content="#0d1210" \/>/);
-  assert.equal(manifest.background_color, "#0d1210");
-  assert.equal(manifest.theme_color, "#0d1210");
-  assert.match(icon, /fill="#0d1210"/);
-  assert.match(icon, /fill="#35c4ae"/);
+  assert.match(layout, /<meta name="theme-color" content="#101318" \/>/);
+  assert.equal(manifest.background_color, "#101318");
+  assert.equal(manifest.theme_color, "#101318");
+  assert.match(icon, /fill="#101318"/);
+  assert.match(icon, /fill="#9cc7ff"/);
 });
 
 test("the dark theme is loaded after all feature styles", async () => {
