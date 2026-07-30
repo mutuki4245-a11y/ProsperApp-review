@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace ProsperApp.Models;
@@ -69,4 +71,17 @@ public sealed class DocumentJournalLinkRecord
 
     [JsonPropertyName("document_id")]
     public string DocumentId { get; init; } = string.Empty;
+}
+
+public static class ReceiptJournalEntryId
+{
+    public static string Create(string documentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(documentId);
+
+        var source = Encoding.UTF8.GetBytes($"prosper-receipt:{documentId.Trim()}");
+        Span<byte> idBytes = stackalloc byte[16];
+        SHA256.HashData(source).AsSpan(0, idBytes.Length).CopyTo(idBytes);
+        return new Guid(idBytes).ToString();
+    }
 }

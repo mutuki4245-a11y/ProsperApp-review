@@ -213,7 +213,7 @@ public class SupabaseReceiptRepository(
     {
         var documentId = input.DocumentId.Trim();
         var amount = input.Amount ?? 0;
-        var memo = input.Description.Trim();
+        var memo = BuildJournalMemo(input.Description, input.GroupCode);
         var journalEntryId = BuildJournalEntryId(documentId);
 
         var payload = new DocumentJournalSavePayload();
@@ -258,7 +258,16 @@ public class SupabaseReceiptRepository(
 
     private static string BuildJournalEntryId(string documentId)
     {
-        return $"prosper-receipt-{documentId}";
+        return ReceiptJournalEntryId.Create(documentId);
+    }
+
+    private static string BuildJournalMemo(string description, string? groupCode)
+    {
+        var memo = description.Trim();
+        var normalizedGroupCode = groupCode?.Trim();
+        return string.IsNullOrWhiteSpace(normalizedGroupCode)
+            ? memo
+            : $"{memo} [G:{normalizedGroupCode}]";
     }
 
     private static string ExtractDebitAccountCode(string accountSubject)
