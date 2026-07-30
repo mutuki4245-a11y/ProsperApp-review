@@ -18,6 +18,8 @@
 
 2026-07-30の技術課題改善では、Cookie由来の管理者モードを廃止し、`/Settings` を開いている間だけセッション内の一時トークンで設定POSTを許可する形へ戻しました。マスタ画面は店舗スタッフが通常運用で変更でき、締め条件を無視する経路は画面・C#・Edge Functionから削除しています。削除だけはパスワード解除に加え、選択店舗名を含む `削除 店舗名` の完全一致入力を必須とします。締め準備状態、キャスト売上額調整の一覧・一括保存、決済方法取得を構造化RPCへ寄せ、業務時刻を `IStoreClock`、営業中操作を型付き契約とApplicationService、勤怠検証を `AttendanceEditor` へ集約しました。C#テストプロジェクトでは営業日跨ぎ、勤怠、営業中操作契約、注文キュー、`Result<T>` を検証します。
 
+この改善はSQL定義コミット `698ed16` とアプリコミット `305d68c` を `origin/main` へpushし、アプリはAzure App ServiceへZipDeploy済みです。KuduはHTTP 202で受理後、status 4 / complete True / active Trueとなり、公開URLは未認証HTTP 302でGoogle認証へ遷移することを確認しました。対象SupabaseはCLIの管理APIアクセストークンがこの端末にないため、`01_business_day.sql`、`08_checkout_ready.sql`、`14_operational_read_models.sql` と `prosper-rpc` の更新を未適用です。適用まではアプリが旧締め判定・旧キャスト売上額調整・固定3決済へ限定フォールバックし、適用後は集約RPCと決済方法マスタへ自動的に切り替わります。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針
