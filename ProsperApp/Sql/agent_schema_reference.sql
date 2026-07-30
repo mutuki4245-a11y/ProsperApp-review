@@ -660,6 +660,8 @@ create table if not exists public.store_business_day_closing_snapshots (
 --     clock_out_at must be strictly later than clock_in_at on the business-date timeline.
 --   store.save_business_day_closing_attendance(p_department_id bigint, p_business_day_id bigint, p_attendance_entries jsonb)
 --     updates registered attendance rows with { attendance_id, clock_in_time, clock_out_time, uses_send_service }.
+--   store.get_business_day_closing_readiness(p_department_id bigint, p_business_day_id bigint, p_pending_receipt_status text default 'unprocessed')
+--     returns all closing counts, structured block reasons, can_close, and checked_at in one read.
 --   store.get_business_day_cast_sales_adjustment_status(p_department_id bigint, p_business_day_id bigint)
 --     returns required_slip_count, completed_slip_count, missing_slip_count.
 --   store.get_cast_sales_adjustment_slips(p_department_id bigint, p_business_day_id bigint)
@@ -669,11 +671,15 @@ create table if not exists public.store_business_day_closing_snapshots (
 --     returns checkout snapshot and nominated cast rows for one checked-out slip.
 --   store.save_cast_sales_adjustment(p_department_id bigint, p_slip_id bigint, p_adjustments jsonb, p_source_amount_type text, p_split_mode text)
 --     replaces the per-slip adjustment rows for all active nominated casts.
+--   store.get_business_day_cast_sales_adjustment_overview(p_department_id bigint, p_business_day_id bigint)
+--     returns status, slips, and all cast detail rows as JSON in one read.
+--   store.save_business_day_cast_sales_adjustments(p_department_id bigint, p_business_day_id bigint, p_slips jsonb)
+--     validates and saves all supplied checked-out slips in one transaction.
 --   store.close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text, p_pending_receipt_status text default 'unprocessed', p_ignore_closing_requirements boolean default false)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo.
 --     rejects closing when open slips, missing drink delivery input, no attendance,
 --     missing clock-out, missing cast sales adjustment, or pending receipt documents remain.
---     p_ignore_closing_requirements skips those close blockers for administrator mode.
+--     p_ignore_closing_requirements is retained only for staged-deploy compatibility; true is rejected.
 
 -- Slip creation and listing:
 --   store.get_tables(p_department_id bigint)

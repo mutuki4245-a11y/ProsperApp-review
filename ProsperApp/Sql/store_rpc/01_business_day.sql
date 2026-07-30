@@ -642,6 +642,144 @@ begin
 end;
 $$;
 
+create or replace function store.get_business_day_closing_readiness(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_pending_receipt_status text default 'unprocessed'
+)
+returns table (
+    business_day_id bigint,
+    open_slip_count integer,
+    drink_delivery_amount numeric,
+    is_drink_delivery_amount_entered boolean,
+    attendance_count integer,
+    missing_clock_out_count integer,
+    cast_sales_required_slip_count integer,
+    cast_sales_completed_slip_count integer,
+    cast_sales_missing_slip_count integer,
+    pending_receipt_count integer,
+    can_close boolean,
+    block_reasons jsonb,
+    checked_at timestamp with time zone
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_business_day public.store_business_days%rowtype;
+    v_open_slip_count integer := 0;
+    v_attendance_count integer := 0;
+    v_missing_clock_out_count integer := 0;
+    v_cast_sales_required_slip_count integer := 0;
+    v_cast_sales_completed_slip_count integer := 0;
+    v_cast_sales_missing_slip_count integer := 0;
+    v_pending_receipt_count integer := 0;
+    v_can_close boolean;
+    v_block_reasons jsonb := '[]'::jsonb;
+begin
+    select b.*
+      into v_business_day
+    from public.store_business_days b
+    where b.department_id = p_department_id
+      and b.business_day_id = p_business_day_id
+      and b.status = 'open'
+    limit 1;
+
+    if v_business_day.business_day_id is null then
+        return;
+    end if;
+
+    select store.get_open_slip_count(p_department_id, p_business_day_id)
+      into v_open_slip_count;
+
+    select
+        count(*)::integer,
+        count(*) filter (where a.clock_out_at is null)::integer
+      into v_attendance_count,
+           v_missing_clock_out_count
+    from public.store_cast_attendance a
+    where a.business_day_id = p_business_day_id
+      and a.department_id = p_department_id
+      and a.attendance_status in ('scheduled', 'checked_in', 'checked_out');
+
+    select
+        coalesce(s.required_slip_count, 0),
+        coalesce(s.completed_slip_count, 0),
+        coalesce(s.missing_slip_count, 0)
+      into v_cast_sales_required_slip_count,
+           v_cast_sales_completed_slip_count,
+           v_cast_sales_missing_slip_count
+    from store.get_business_day_cast_sales_adjustment_status(
+        p_department_id,
+        p_business_day_id
+    ) s;
+
+    if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
+        select count(*)::integer
+          into v_pending_receipt_count
+        from public.documents d
+        where d.department_id = p_department_id
+          and d.status = p_pending_receipt_status;
+    end if;
+
+    if coalesce(v_open_slip_count, 0) > 0 then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array(format('未会計伝票が %s 件あります。', v_open_slip_count));
+    end if;
+
+    if coalesce(v_business_day.drink_delivery_amount_entered, false) = false then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array('酒代が未入力です。酒代がない場合も0円で保存してください。');
+    end if;
+
+    if coalesce(v_attendance_count, 0) = 0 then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array('勤怠入力に出勤キャストが登録されていません。');
+    elsif coalesce(v_missing_clock_out_count, 0) > 0 then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array(format('退勤時刻が未入力のキャストが %s 名います。', v_missing_clock_out_count));
+    end if;
+
+    if coalesce(v_cast_sales_missing_slip_count, 0) > 0 then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array('キャスト売上額調整が未完了です。');
+    end if;
+
+    if coalesce(v_pending_receipt_count, 0) > 0 then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array(format('未入力領収書が %s 件あります。', v_pending_receipt_count));
+    end if;
+
+    v_can_close :=
+        coalesce(v_open_slip_count, 0) = 0 and
+        coalesce(v_business_day.drink_delivery_amount_entered, false) and
+        coalesce(v_attendance_count, 0) > 0 and
+        coalesce(v_missing_clock_out_count, 0) = 0 and
+        coalesce(v_cast_sales_missing_slip_count, 0) = 0 and
+        coalesce(v_pending_receipt_count, 0) = 0;
+
+    return query
+    select
+        v_business_day.business_day_id,
+        coalesce(v_open_slip_count, 0),
+        coalesce(v_business_day.drink_delivery_amount, 0),
+        coalesce(v_business_day.drink_delivery_amount_entered, false),
+        coalesce(v_attendance_count, 0),
+        coalesce(v_missing_clock_out_count, 0),
+        coalesce(v_cast_sales_required_slip_count, 0),
+        coalesce(v_cast_sales_completed_slip_count, 0),
+        coalesce(v_cast_sales_missing_slip_count, 0),
+        coalesce(v_pending_receipt_count, 0),
+        v_can_close,
+        v_block_reasons,
+        clock_timestamp();
+end;
+$$;
+
+revoke all on function store.get_business_day_closing_readiness(bigint, bigint, text)
+    from public, anon, authenticated, service_role;
+
 drop function if exists store.close_business_day(bigint, bigint, text);
 drop function if exists store.close_business_day(bigint, bigint, text, text);
 drop function if exists store.close_business_day(bigint, bigint, text, text, boolean);
@@ -668,12 +806,8 @@ security definer
 set search_path = public
 as $$
 declare
-    v_open_slip_count integer;
     v_business_day public.store_business_days%rowtype;
-    v_attendance_count integer;
-    v_missing_clock_out_count integer;
-    v_cast_sales_adjustment_missing_count integer;
-    v_pending_receipt_count integer;
+    v_readiness record;
     v_closed_at timestamp with time zone;
 begin
     select *
@@ -688,56 +822,40 @@ begin
         raise exception 'business_day_not_open';
     end if;
 
-    if coalesce(p_ignore_closing_requirements, false) = false then
-        select store.get_open_slip_count(p_department_id, p_business_day_id)
-          into v_open_slip_count;
+    if coalesce(p_ignore_closing_requirements, false) then
+        raise exception 'closing_override_disabled';
+    end if;
 
-        if coalesce(v_open_slip_count, 0) > 0 then
-            raise exception 'open_slips_exist:%', v_open_slip_count;
-        end if;
+    select *
+      into v_readiness
+    from store.get_business_day_closing_readiness(
+        p_department_id,
+        p_business_day_id,
+        p_pending_receipt_status
+    );
 
-        if coalesce(v_business_day.drink_delivery_amount_entered, false) = false then
-            raise exception 'drink_delivery_required';
-        end if;
+    if coalesce(v_readiness.open_slip_count, 0) > 0 then
+        raise exception 'open_slips_exist:%', v_readiness.open_slip_count;
+    end if;
 
-        select
-            count(*)::integer,
-            count(*) filter (where a.clock_out_at is null)::integer
-          into v_attendance_count,
-               v_missing_clock_out_count
-        from public.store_cast_attendance a
-        where a.business_day_id = p_business_day_id
-          and a.department_id = p_department_id
-          and a.attendance_status in ('scheduled', 'checked_in', 'checked_out');
+    if coalesce(v_readiness.is_drink_delivery_amount_entered, false) = false then
+        raise exception 'drink_delivery_required';
+    end if;
 
-        if coalesce(v_attendance_count, 0) = 0 then
-            raise exception 'attendance_required';
-        end if;
+    if coalesce(v_readiness.attendance_count, 0) = 0 then
+        raise exception 'attendance_required';
+    end if;
 
-        if coalesce(v_missing_clock_out_count, 0) > 0 then
-            raise exception 'attendance_clock_out_required:%', v_missing_clock_out_count;
-        end if;
+    if coalesce(v_readiness.missing_clock_out_count, 0) > 0 then
+        raise exception 'attendance_clock_out_required:%', v_readiness.missing_clock_out_count;
+    end if;
 
-        select s.missing_slip_count
-          into v_cast_sales_adjustment_missing_count
-        from store.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id) s
-        limit 1;
+    if coalesce(v_readiness.cast_sales_missing_slip_count, 0) > 0 then
+        raise exception 'cast_sales_adjustment_required:%', v_readiness.cast_sales_missing_slip_count;
+    end if;
 
-        if coalesce(v_cast_sales_adjustment_missing_count, 0) > 0 then
-            raise exception 'cast_sales_adjustment_required:%', v_cast_sales_adjustment_missing_count;
-        end if;
-
-        if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
-            select count(*)::integer
-              into v_pending_receipt_count
-            from public.documents d
-            where d.department_id = p_department_id
-              and d.status = p_pending_receipt_status;
-
-            if coalesce(v_pending_receipt_count, 0) > 0 then
-                raise exception 'pending_receipts_exist:%', v_pending_receipt_count;
-            end if;
-        end if;
+    if coalesce(v_readiness.pending_receipt_count, 0) > 0 then
+        raise exception 'pending_receipts_exist:%', v_readiness.pending_receipt_count;
     end if;
 
     v_closed_at := clock_timestamp();

@@ -754,7 +754,8 @@ declare
     v_service_charge_amount numeric(12, 0);
     v_total_amount numeric(12, 0);
     v_payment_total numeric(12, 0) := 0;
-    v_cash_amount numeric(12, 0) := 0;
+    v_received_required_amount numeric(12, 0) := 0;
+    v_received_required_method_count integer := 0;
     v_payment_count integer := 0;
     v_checkout_id bigint;
     v_single_payment_method_id bigint;
@@ -844,8 +845,9 @@ begin
 
         v_payment_count := v_payment_count + 1;
         v_payment_total := v_payment_total + v_amount;
-        if v_method_code = 'cash' then
-            v_cash_amount := v_cash_amount + v_amount;
+        if coalesce(v_payment_method.requires_received_amount, false) then
+            v_received_required_amount := v_received_required_amount + v_amount;
+            v_received_required_method_count := v_received_required_method_count + 1;
         end if;
         if v_payment_count = 1 then
             v_single_payment_method_id := v_payment_method.payment_method_id;
@@ -860,11 +862,15 @@ begin
         raise exception 'invalid_checkout_total';
     end if;
 
-    if v_cash_amount > 0 then
-        if coalesce(p_received_amount, -1) < v_cash_amount then
+    if v_received_required_method_count > 1 then
+        raise exception 'multiple_received_amount_payment_methods';
+    end if;
+
+    if v_received_required_amount > 0 then
+        if coalesce(p_received_amount, -1) < v_received_required_amount then
             raise exception 'invalid_received_amount';
         end if;
-        v_change_amount := p_received_amount - v_cash_amount;
+        v_change_amount := p_received_amount - v_received_required_amount;
     elsif p_received_amount is not null and p_received_amount <> 0 then
         raise exception 'invalid_received_amount';
     end if;
@@ -893,7 +899,7 @@ begin
         p_slip_id, v_company_id, p_department_id, now(),
         v_subtotal_amount, v_service_charge_amount, v_total_amount,
         v_single_payment_method_id,
-        case when v_cash_amount > 0 then p_received_amount else null end,
+        case when v_received_required_amount > 0 then p_received_amount else null end,
         v_change_amount, coalesce(v_issuer_snapshot, '{}'::jsonb), 'confirmed'
     ) returning store_checkouts.checkout_id into v_checkout_id;
 
