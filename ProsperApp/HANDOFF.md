@@ -20,6 +20,8 @@
 
 同日の残課題対応で、読み取り系Repositoryを `Result<T>` へ統一し、主要画面で空データと取得失敗を分離して再試行・最終更新時刻を表示するようにしました。営業中、注文、勤怠、締めのPageModelはApplicationService経由へ整理しています。キャッシュは `IApplicationCache` に集約し、マスタ10分・実行時情報30秒のTTL、明示invalidate、設定画面での状態・最終取得時刻・期限表示と一括クリアを実装しました。Feature/Infrastructureのnamespaceもフォルダ単位へ移行し、fake `ISupabaseRpcClient` を使うRepositoryテスト、伝票作成、締め準備、キャッシュ管理のテストを追加しました。Releaseビルドは警告0、C#テスト34件、JS/SQL契約テスト15件が成功しています。技術レポート内の推奨実装は、利用者指定で置き換えた管理者運用を含めて完了扱いです。
 
+実装コミット `b9a58ba` は `origin/main` へpushし、同一成果物をAzure App ServiceへZipDeployしました。ZipDeployはHTTP 202で開始し、Kudu `status 4 / complete True / active True` を確認しています。公開URL `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net` は未認証HTTP 302でGoogle認証へ遷移します。
+
 この改善はSQL定義コミット `698ed16` とアプリコミット `305d68c` を `origin/main` へpushし、アプリはAzure App ServiceへZipDeploy済みです。KuduはHTTP 202で受理後、status 4 / complete True / active Trueとなり、公開URLは未認証HTTP 302でGoogle認証へ遷移することを確認しました。対象Supabaseには `01_business_day.sql`、`08_checkout_ready.sql`、`14_operational_read_models.sql`、`99_grants.sql` を適用し、`prosper-rpc` をversion 28へ更新済みです。新しい締め準備、決済方法、キャスト売上額調整一覧・一括保存RPCの存在、実データに対する読み取り呼び出し、`anon`、`authenticated`、`service_role` の直接実行禁止を確認しました。
 
 Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出したため、領収書RPCは現行の `accounting.documents`、`accounting.document_journal_links`、`accounting.save_journal_payload` へ移行しました。店舗の未処理領収書は、店舗が既定値として設定されたupload sourceに属する未仕訳 `unlinked` 文書だけを対象にします。クイック入力は店舗・会社・文書・金額を検証して `confirmed` 仕訳を保存し、スキャンミス除外は仕訳未連携文書だけを論理削除します。締め準備、領収書一覧、決済方法、キャスト売上額調整一覧の実呼び出しは成功し、Supabase AdvisorはSecurity/PerformanceともWARN 0、ERROR 0です。
