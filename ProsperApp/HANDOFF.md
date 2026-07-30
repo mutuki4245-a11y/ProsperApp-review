@@ -22,6 +22,8 @@
 
 Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出したため、領収書RPCは現行の `accounting.documents`、`accounting.document_journal_links`、`accounting.save_journal_payload` へ移行しました。店舗の未処理領収書は、店舗が既定値として設定されたupload sourceに属する未仕訳 `unlinked` 文書だけを対象にします。クイック入力は店舗・会社・文書・金額を検証して `confirmed` 仕訳を保存し、スキャンミス除外は仕訳未連携文書だけを論理削除します。締め準備、領収書一覧、決済方法、キャスト売上額調整一覧の実呼び出しは成功し、Supabase AdvisorはSecurity/PerformanceともWARN 0、ERROR 0です。
 
+領収書互換修正コミット `4b19e49` とアプリ側の仕訳UUID修正コミット `bbe44f0` は `origin/main` へpush済みです。Releaseビルドは警告0、C#テストは18件成功しました。アプリはAzure App ServiceへZipDeployし、KuduはHTTP 202で受理後、status 4 / complete True / active True、公開URLは未認証HTTP 302でGoogle認証へ遷移することを確認しました。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針
