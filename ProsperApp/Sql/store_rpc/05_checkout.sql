@@ -22,16 +22,16 @@ declare
     v_slip public.store_slips%rowtype;
     v_business_day_status text;
     v_checkout public.store_checkouts%rowtype;
+    v_cancelled_checkout_id bigint;
+    v_reopened_slip_id bigint;
 begin
     select s.*
       into v_slip
-    from public.store_slips s
-    join public.store_business_days b
-      on b.business_day_id = s.business_day_id
-    where s.slip_id = p_slip_id
-      and s.department_id = p_department_id
-      and s.status = 'checked_out'
-    limit 1;
+      from public.store_slips s
+     where s.slip_id = p_slip_id
+       and s.department_id = p_department_id
+       and s.status = 'checked_out'
+     for update;
 
     if v_slip.slip_id is null then
         raise exception 'store_checkout_not_found';
@@ -41,7 +41,7 @@ begin
       into v_business_day_status
     from public.store_business_days b
     where b.business_day_id = v_slip.business_day_id
-    limit 1;
+    for key share;
 
     if v_business_day_status <> 'open' then
         raise exception 'business_day_not_open';
@@ -54,11 +54,36 @@ begin
       and c.department_id = p_department_id
       and c.status = 'confirmed'
     order by c.checkout_at desc, c.checkout_id desc
-    limit 1;
+    limit 1
+    for update;
 
     if v_checkout.checkout_id is null then
         raise exception 'store_checkout_not_found';
     end if;
+
+    if store.invalidate_slip_accounting_snapshot(
+        p_department_id,
+        p_slip_id,
+        'checkout_cancelled'
+    ) <> 1 then
+        raise exception 'checkout_snapshot_not_found';
+    end if;
+
+    -- 会計準備で固定した料金は取消時に無効化します。
+    -- 再オープン後は現在の料金プランから見積り、次の伝票発行で新しい版を作ります。
+    update public.store_slip_pricing_lines pl
+       set status = 'voided',
+           updated_at = now()
+     where pl.slip_id = p_slip_id
+       and pl.status = 'active';
+
+    update public.store_order_lines ol
+       set status = 'voided',
+           voided_at = coalesce(ol.voided_at, now()),
+           updated_at = now()
+     where ol.slip_id = p_slip_id
+       and ol.source_type = 'automatic_pricing'
+       and ol.status = 'active';
 
     update public.store_checkout_payments p
        set status = 'cancelled',
@@ -66,14 +91,25 @@ begin
      where p.checkout_id = v_checkout.checkout_id
        and p.status = 'confirmed';
 
-    delete from public.store_slip_cast_sales_adjustments a
+    update public.store_slip_cast_sales_adjustments a
+       set status = 'cancelled',
+           updated_at = now()
      where a.department_id = p_department_id
-       and a.slip_id = p_slip_id;
+       and a.slip_id = p_slip_id
+       and a.checkout_id = v_checkout.checkout_id
+       and a.status = 'confirmed';
 
     update public.store_checkouts c
        set status = 'cancelled',
            updated_at = now()
-     where c.checkout_id = v_checkout.checkout_id;
+     where c.checkout_id = v_checkout.checkout_id
+       and c.status = 'confirmed'
+     returning c.checkout_id
+      into v_cancelled_checkout_id;
+
+    if v_cancelled_checkout_id is null then
+        raise exception 'store_checkout_not_found';
+    end if;
 
     update public.store_slip_customers c
        set left_at = null,
@@ -94,9 +130,17 @@ begin
                  and c.status = 'active'
            ),
            updated_at = now()
-     where s.slip_id = p_slip_id;
+     where s.slip_id = p_slip_id
+       and s.department_id = p_department_id
+       and s.status = 'checked_out'
+     returning s.slip_id
+      into v_reopened_slip_id;
 
-    return query select v_checkout.checkout_id;
+    if v_reopened_slip_id is null then
+        raise exception 'store_checkout_not_found';
+    end if;
+
+    return query select v_cancelled_checkout_id;
 end;
 $$;
 

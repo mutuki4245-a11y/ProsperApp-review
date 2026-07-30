@@ -910,14 +910,13 @@ begin
         raise exception 'store_item_not_found';
     end if;
 
-    update public.store_order_lines ol
-       set item_id = null,
+    -- 使用済み商品は伝票の集計軸としてIDを残すため、物理削除しません。
+    update public.store_item_master i
+       set is_active = false,
            updated_at = now()
-     where ol.item_id = p_item_id;
-
-    delete from public.store_item_master i
      where i.department_id = p_department_id
        and i.item_id = p_item_id
+       and i.is_active = true
     returning i.item_id
       into v_deleted_item_id;
 

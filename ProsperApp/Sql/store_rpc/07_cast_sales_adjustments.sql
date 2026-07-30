@@ -534,7 +534,7 @@ begin
     where s.slip_id = p_slip_id
       and s.department_id = p_department_id
       and s.status = 'checked_out'
-    limit 1;
+    for update;
 
     if v_slip.slip_id is null then
         raise exception 'store_slip_not_checked_out';
@@ -546,7 +546,8 @@ begin
     where c.slip_id = p_slip_id
       and c.department_id = p_department_id
       and c.status = 'confirmed'
-    limit 1;
+    limit 1
+    for update;
 
     if v_checkout.checkout_id is null then
         raise exception 'cast_sales_checkout_not_found';
@@ -649,9 +650,12 @@ begin
         raise exception 'invalid_cast_sales_adjustment_payload';
     end if;
 
-    delete from public.store_slip_cast_sales_adjustments a
-    where a.department_id = p_department_id
-      and a.slip_id = p_slip_id;
+    update public.store_slip_cast_sales_adjustments a
+       set status = 'cancelled',
+           updated_at = now()
+     where a.department_id = p_department_id
+       and a.slip_id = p_slip_id
+       and a.status = 'confirmed';
 
     with required as (
         select

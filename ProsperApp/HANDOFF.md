@@ -14,6 +14,8 @@
 
 2026-07-30時点で、`Docs/prosperapp-usability-code-review-20260729.html` の推奨順に沿い、注文端末と営業中トップの未送信キューlocalStorage復元、決済確定ボタンのUI有効条件、見込み売上の初期「取得中」表示、注文端末の件数表示・手動再取得・卓未選択警告、会計まわりの共通確認モーダル、営業中operationType契約テストを実装済みです。実装コミット `fee7d60` は `origin/main` へpushし、Azure App ServiceへZipDeploy済みです。ZipDeployはHTTP 202で開始し、Kudu status 4 / complete Trueを確認しました。公開URLは未認証HTTP 302でGoogle認証へリダイレクトすることを確認済みです。SQL/RPC変更は未実施で、本番認証後の実端末受入確認は未実施です。
 
+2026-07-30時点で、会計・営業日snapshotを対象Supabaseへ適用済みです。`open` 伝票は現在マスタ・現在料金で再計算し、`checkout_ready` への遷移時に会計伝票・確認表示・営業中一覧payloadを版管理して固定します。`checked_out` は固定済み会計額を使って決済・発行者情報を追加固定し、会計準備解除または会計取消では旧版を監査用に残して無効化し、自動料金行をvoid化します。営業日締めでは営業日行を先にロックし、決済、勤怠、キャスト売上額調整を含む日次snapshotを同一トランザクションで保存した後、対象営業日の伝票系テーブルをDBトリガーで更新不能にします。伝票更新側も営業日行を共有ロックするため、締めと会計・取消・配分保存は直列化されます。導入時点で既存の会計済み伝票1件と締め済み営業日1件をbackfillし、確定済み会計金額と締め時刻を正としてpolicy version 2へ固定しました。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針
@@ -36,6 +38,9 @@
 - 営業中一覧の `store.get_business_day_snapshot` と `/Orders` の `store.get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、10秒ごとの表示中自動更新で再取得し、営業中トップの保存成功時は `store.flush_business_home_changes` の応答スナップショットで反映します。営業中一覧と `/Orders` の注文対象伝票はどちらも `slipId` 単位で差分反映し、同期のたびに一覧全体を作り直さないでください。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
 - 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `store.get_business_day_snapshot`、`store.get_order_entry_slips`、`store.get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
+- `department_master.department_id`、`cast_master.cast_id`、`store_table_master.table_id` と各行の所属会社・店舗は不変IDです。名称は変更できます。集計はIDで行い現在マスタの名称を表示し、会計伝票・領収書・締めsnapshotの再表示は保存時点の名称を使います。
+- snapshot境界は `open -> checkout_ready` と営業日 `open -> closed` です。`open` 中のマスタ・料金変更は未会計伝票へ反映して構いません。`checkout_ready` / `checked_out` の表示・会計額は再計算せず、締め済み営業日の伝票、客、指名、注文、バック、自由明細、料金、会計、決済、勤怠、売上額調整、snapshotは更新・削除しません。
+- 標準商品削除は `store_item_master.is_active = false` の論理削除です。使用済み伝票の `item_id` をNULL化せず、集計軸を保持します。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。
 - アプリログインはGoogle認証に統一します。
@@ -96,6 +101,18 @@
 
 - `Sql/store_rpc/09_business_home_snapshot.sql`
   - 営業中トップの全伝票詳細スナップショットと、客・指名・自由明細を一操作ずつ保存するRPCです。
+
+- `Sql/store_rpc/10_business_home_flush.sql`
+  - 営業中トップの未送信操作を冪等な一括保存へ集約するRPCです。
+
+- `Sql/store_rpc/11_pricing.sql`
+  - 店舗別料金プラン、伝票料金行、料金計算のSQLです。
+
+- `Sql/store_rpc/12_pricing_system_items.sql`
+  - 固定料金行を帳票・明細用システム商品へ対応させるSQLです。
+
+- `Sql/store_rpc/13_accounting_snapshot_guards.sql`
+  - 既存データのsnapshot backfill、日次締めsnapshot、締め後不変トリガー、マスタID不変トリガーです。
 
 - `Sql/store_rpc/99_grants.sql`
   - アプリRPCの直接PostgREST実行権限を剥奪する現在定義です。
@@ -293,13 +310,43 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 8. `Sql/store_rpc/05_checkout.sql`
 9. `Sql/store_rpc/06_receipts.sql`
 10. `Sql/store_rpc/07_cast_sales_adjustments.sql`
-11. `Sql/store_rpc/08_checkout_ready.sql`
-12. `Sql/store_rpc/09_business_home_snapshot.sql`
-13. `Sql/store_rpc/99_grants.sql`
-14. 必要に応じて `Sql/store_table_master_seed.sql`
-15. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+11. `Sql/store_rpc/11_pricing.sql`
+12. `Sql/store_rpc/12_pricing_system_items.sql`
+13. `Sql/store_rpc/08_checkout_ready.sql`
+14. `Sql/store_rpc/09_business_home_snapshot.sql`
+15. `Sql/store_rpc/10_business_home_flush.sql`
+16. `Sql/store_rpc/13_accounting_snapshot_guards.sql`
+17. `Sql/store_rpc/99_grants.sql`
+18. 必要に応じて `Sql/store_table_master_seed.sql`
+19. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 `agent_schema_reference.sql` と `store_rpc_functions.sql` は実行対象ではありません。
+
+## 会計snapshot運用と戻し方
+
+- 会計伝票snapshotは `store_slip_accounting_snapshots` に `slip_id + snapshot_version` で保存します。1伝票につき `active` は1件だけです。準備解除は `released`、会計取消は `cancelled` にして旧JSONを残し、次回発行で版を増やします。
+- 会計確定は注文・マスタ・料金プランを再計算せず、activeな `print_data` の小計、サービス料、合計を `store_checkouts` へ保存します。決済名称と発行者情報は従来どおり会計確定時点で固定します。
+- 日次snapshotは `store_business_day_closing_snapshots` に営業日1件を保存します。通常は締め時点の値、`backfilled = true` は導入時点の値です。導入前の名称・計算結果を遡って復元した値ではありません。過去日の未会計伝票を含む強制締め・backfillでも、料金計算の基準は現在時刻ではなく当該締め時刻です。
+- 導入前の `checked_out` は再計算額ではなく既存 `store_checkouts` の小計、サービス料、合計をbackfillの正本にします。日次snapshotの `accounting_snapshot_policy_version = 2` と伝票snapshotの `backfilled` で移行値を識別します。
+- 営業日締めは営業日行を `FOR UPDATE` してから条件確認とsnapshot作成を行います。関連行のINSERT/UPDATE/DELETEはトリガー内で同じ営業日行を `FOR KEY SHARE` し、`business_day_id` と `slip_id` の所属不一致も拒否します。これにより締めと会計準備解除、会計確定、会計取消、勤怠・売上配分保存の競合を直列化します。
+- 会計準備解除、会計取消、キャスト売上額調整保存は対象伝票を `FOR UPDATE` します。キャスト売上額調整の再保存・会計取消は旧行を物理削除せず `cancelled` にし、`confirmed` 行だけを伝票・指名単位で一意にします。
+- 締め後不変トリガーは伝票、客、指名、注文、バック、自由明細、料金、会計、決済、勤怠、キャスト売上額調整、伝票snapshotを対象にします。7日で削除する再送判定用の営業中flush結果は会計正本ではないため対象外です。明示確認文字列が必要な全非マスタデータ削除RPCだけは、同一トランザクション内の管理用フラグでこのガードを迂回します。
+- UI/APIの引数と戻り値は変更していません。締め済み日次snapshotや無効化済み伝票snapshotの閲覧UIは未実装で、DB監査用です。
+- 本番DBではbackfill金額差異0件、締めsnapshot policy version 2、締め後ガード13テーブル、直接 `store` RPC実行権限0件を確認しました。会計発行、準備解除、再発行、確定、売上配分2回保存、取消の通し試験は `integration_ok`、強制締め、締め後更新拒否、日次snapshot更新拒否の通し試験は `close_integration_ok` となり、試験データは全てロールバック済みです。最終件数はopen営業日1件、open伝票2件、伝票snapshot 1件、締めsnapshot 1件で試験前と一致します。
+
+残る境界:
+
+- `documents` は `business_day_id` を持たない別会計領域です。営業日締めの未処理領収書確認は締めトランザクション内のポイントインタイム確認であり、同時刻のDrive取込・領収書状態変更とは営業日行ロックで直列化していません。厳密化する場合は文書へ営業日帰属を追加するか、文書更新も店舗のopen営業日ロックへ参加させます。
+- 導入前backfillの注文・料金・調整明細は導入時点の既存行から再構成した参考情報です。当時の明細を復元した正本ではありません。`store_checkouts` の小計、サービス料、合計と `business_home_data.accountingAmount` を会計集計の正本とし、`backfilled = true` の明細を商品別・カテゴリ別監査へ使いません。
+- 公開RPCに伝票の営業日帰属を変更する経路はなく、`store` schemaとテーブルの直接実行権限も剥奪済みです。ただしpostgres権限の管理SQLまで含めて `store_slips.business_day_id` の変更を拒否する専用トリガーや複合FKは未実装です。管理SQLでは伝票の会社・店舗・営業日・営業日付を変更しない運用とします。
+
+DB変更はGit revertだけでは戻りません。緊急時は新規会計・締めを止め、次の順で戻します。
+
+1. `trg_*_closed_day_guard`、`trg_store_business_days_closed_guard`、3つの `*_identity_immutable`、`trg_store_business_day_closing_snapshots_immutable` を削除する。
+2. `01_business_day.sql`、`02_store_masters.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`09_business_home_snapshot.sql`、`store_settings_functions.sql` を変更前コミットの定義へ戻す。
+3. `store_slip_accounting_snapshots` と `store_business_day_closing_snapshots` は監査データを退避するまで削除しない。削除する場合は依存関数を戻した後に行う。
+4. `store_slip_cast_sales_adjustments` には取消履歴が複数残り得るため、旧unique制約へ直接戻さない。履歴を退避または統合するまで `ux_store_slip_cast_sales_adjustments_confirmed` を維持する。
+5. 戻した関数へ `99_grants.sql` を再適用し、`store` schemaの直接実行権限が復活していないことを確認する。
 
 ## 主要RPC
 
@@ -365,7 +412,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - `p_confirmed_snapshot` を受け取らず、`checkout_ready` と固定済み退店時刻、支払合計、預り金を検証します。
 - `store.cancel_checkout(p_department_id, p_slip_id)`
   - 会計取消は、開いている営業日の会計済み伝票だけを対象にします。
-  - 確定済み会計と支払明細を `cancelled` にし、伝票を `open` へ戻します。客行の退店状態と退店時刻は変更しません。会計に紐づくキャスト売上額調整は削除してリセットし、再会計後に必要なら締め作業で再保存します。取消成功時は返却した `checkout_id` の同一端末にある領収書再印刷待ちをlocalStorageから削除し、取消済み会計の領収書を再印刷させません。再会計できるよう `store_checkouts` は `cancelled` 以外の会計だけが伝票単位で一意です。
+  - 確定済み会計、支払明細、キャスト売上額調整を `cancelled` にし、伝票を `open` へ戻します。取消前の売上配分は監査履歴として残し、再会計後に必要なら締め作業で新しい `confirmed` 版を保存します。取消成功時は返却した `checkout_id` の同一端末にある領収書再印刷待ちをlocalStorageから削除し、取消済み会計の領収書を再印刷させません。再会計できるよう `store_checkouts` は `cancelled` 以外の会計だけが伝票単位で一意です。
 - `store.release_checkout_ready(p_department_id, p_slip_id)`
   - 会計伝票出力後、会計確定前の `checkout_ready` 伝票だけを `open` へ戻します。
   - `store_slips.closed_at` を `null` に戻し、客行は `left_at_source = 'accounting_slip'` の補完分だけ `left_at = null, left_at_source = null` に戻します。`manual` 由来の退店時刻は残します。
@@ -452,7 +499,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
   - カラオケは `item_type = 'karaoke'` のシステム商品として商品マスタに置きます。1回200円固定で、通常の商品小計に含めてサービス料対象にします。通常の商品削除RPCでは削除できません。
   - 指名料金は `item_type = 'nomination_fee'` のシステム商品として商品マスタに置きます。価格は指名登録時の選択額を注文行へスナップショットし、カラオケと同じく商品小計とサービス料20%の対象にします。通常の商品削除RPCでは削除できません。
   - 注文履歴は `item_name_snapshot` / `unit_price` / `amount` を保持するため、商品マスタを再参照しません。
-  - 商品削除は `store.delete_item` で商品マスタ行を削除し、既存注文行の `item_id` は切り離します。
+  - 商品削除は `store.delete_item` で `is_active = false` にする論理削除です。既存注文行の `item_id` は保持します。
 
 - `/Management/NominationBacks`
   - 指名種別別キャストバックの店舗別マスタです。

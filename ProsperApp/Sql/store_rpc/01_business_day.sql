@@ -674,6 +674,7 @@ declare
     v_missing_clock_out_count integer;
     v_cast_sales_adjustment_missing_count integer;
     v_pending_receipt_count integer;
+    v_closed_at timestamp with time zone;
 begin
     select *
       into v_business_day
@@ -681,7 +682,7 @@ begin
     where b.business_day_id = p_business_day_id
       and b.department_id = p_department_id
       and b.status = 'open'
-    limit 1;
+    for update;
 
     if v_business_day.business_day_id is null then
         raise exception 'business_day_not_open';
@@ -739,10 +740,18 @@ begin
         end if;
     end if;
 
+    v_closed_at := clock_timestamp();
+    perform store.capture_business_day_closing_snapshot(
+        p_department_id,
+        p_business_day_id,
+        v_closed_at,
+        false
+    );
+
     return query
     update public.store_business_days b
        set status = 'closed',
-           closed_at = now(),
+           closed_at = v_closed_at,
            memo = coalesce(nullif(trim(coalesce(p_memo, '')), ''), b.memo)
      where b.business_day_id = p_business_day_id
        and b.department_id = p_department_id
@@ -758,3 +767,5 @@ begin
         b.memo;
 end;
 $$;
+
+commit;

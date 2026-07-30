@@ -8,6 +8,131 @@ drop function if exists store.confirm_checkout(bigint, bigint, timestamp with ti
 drop function if exists store.confirm_checkout(bigint, bigint, jsonb, numeric);
 drop function if exists store.get_checkout_receipt_print_data(bigint, bigint);
 
+create or replace function store.capture_slip_accounting_snapshot(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_print_data jsonb,
+    p_review_data jsonb,
+    p_business_home_data jsonb
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_snapshot_version integer;
+    v_snapshot_id bigint;
+begin
+    select s.*
+      into v_slip
+      from public.store_slips s
+      join public.store_business_days b
+        on b.business_day_id = s.business_day_id
+       and b.status = 'open'
+     where s.department_id = p_department_id
+       and s.slip_id = p_slip_id
+       and s.status = 'checkout_ready'
+     for update of s;
+
+    if v_slip.slip_id is null then
+        raise exception 'checkout_ready_not_found';
+    end if;
+
+    if jsonb_typeof(p_print_data) <> 'object' or
+       jsonb_typeof(p_review_data) <> 'object' or
+       jsonb_typeof(p_business_home_data) <> 'object' then
+        raise exception 'invalid_checkout_snapshot';
+    end if;
+
+    update public.store_slip_accounting_snapshots ss
+       set status = 'released',
+           invalidation_reason = 'superseded',
+           invalidated_at = now()
+     where ss.slip_id = p_slip_id
+       and ss.status = 'active';
+
+    select coalesce(max(ss.snapshot_version), 0) + 1
+      into v_snapshot_version
+      from public.store_slip_accounting_snapshots ss
+     where ss.slip_id = p_slip_id;
+
+    insert into public.store_slip_accounting_snapshots (
+        slip_id,
+        business_day_id,
+        business_date,
+        company_id,
+        department_id,
+        snapshot_version,
+        status,
+        checkout_ready_at,
+        print_data,
+        review_data,
+        business_home_data
+    )
+    values (
+        v_slip.slip_id,
+        v_slip.business_day_id,
+        v_slip.business_date,
+        v_slip.company_id,
+        v_slip.department_id,
+        v_snapshot_version,
+        'active',
+        now(),
+        p_print_data,
+        p_review_data,
+        p_business_home_data
+    )
+    returning accounting_snapshot_id into v_snapshot_id;
+
+    return v_snapshot_id;
+end;
+$$;
+
+create or replace function store.invalidate_slip_accounting_snapshot(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_reason text
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_updated_count integer;
+begin
+    if nullif(trim(coalesce(p_reason, '')), '') is null then
+        raise exception 'invalid_checkout_snapshot_reason';
+    end if;
+
+    if not exists (
+        select 1
+          from public.store_slips s
+          join public.store_business_days b
+            on b.business_day_id = s.business_day_id
+           and b.status = 'open'
+         where s.department_id = p_department_id
+           and s.slip_id = p_slip_id
+           and s.status in ('checkout_ready', 'checked_out')
+    ) then
+        raise exception 'checkout_snapshot_not_releasable';
+    end if;
+
+    update public.store_slip_accounting_snapshots ss
+       set status = case when p_reason = 'checkout_cancelled' then 'cancelled' else 'released' end,
+           invalidation_reason = trim(p_reason),
+           invalidated_at = now()
+     where ss.department_id = p_department_id
+       and ss.slip_id = p_slip_id
+       and ss.status = 'active';
+
+    get diagnostics v_updated_count = row_count;
+    return v_updated_count;
+end;
+$$;
+
 create or replace function store.build_checkout_statement_data(
     p_department_id bigint,
     p_slip_id bigint
@@ -34,7 +159,7 @@ begin
       from public.store_slips s
      where s.department_id = p_department_id
        and s.slip_id = p_slip_id
-       and s.status = 'checkout_ready';
+       and s.status in ('checkout_ready', 'checked_out');
 
     if v_slip.slip_id is null then
         raise exception 'checkout_ready_not_found';
@@ -256,7 +381,7 @@ as $$
             where ol.slip_id = p_slip_id
               and ol.status = 'active'
               and s.department_id = p_department_id
-              and s.status = 'checkout_ready'
+              and s.status in ('checkout_ready', 'checked_out')
         ), '[]'::jsonb),
         'pricing_lines', coalesce((
             select jsonb_agg(jsonb_build_object(
@@ -274,7 +399,7 @@ as $$
             where pl.slip_id = p_slip_id
               and pl.status = 'active'
               and s.department_id = p_department_id
-              and s.status = 'checkout_ready'
+              and s.status in ('checkout_ready', 'checked_out')
               and not exists (
                   select 1
                   from public.store_order_lines ol
@@ -298,6 +423,10 @@ set search_path = public
 as $$
 declare
     v_slip public.store_slips%rowtype;
+    v_print_data jsonb;
+    v_review_data jsonb;
+    v_business_day_snapshot jsonb;
+    v_business_home_data jsonb;
 begin
     select s.*
       into v_slip
@@ -414,9 +543,32 @@ begin
      where s.slip_id = p_slip_id
        and s.department_id = p_department_id;
 
-    return query select
-        store.build_checkout_statement_data(p_department_id, p_slip_id),
-        store.build_checkout_review_data(p_department_id, p_slip_id);
+    v_print_data := store.build_checkout_statement_data(p_department_id, p_slip_id);
+    v_review_data := store.build_checkout_review_data(p_department_id, p_slip_id);
+
+    select s.snapshot
+      into v_business_day_snapshot
+      from store.get_business_day_snapshot(p_department_id, v_slip.business_day_id) s;
+
+    select value
+      into v_business_home_data
+      from jsonb_array_elements(coalesce(v_business_day_snapshot->'slips', '[]'::jsonb))
+     where nullif(value->>'id', '')::bigint = p_slip_id
+     limit 1;
+
+    if v_business_home_data is null then
+        raise exception 'checkout_business_snapshot_not_found';
+    end if;
+
+    perform store.capture_slip_accounting_snapshot(
+        p_department_id,
+        p_slip_id,
+        v_print_data,
+        v_review_data,
+        v_business_home_data
+    );
+
+    return query select v_print_data, v_review_data;
 end;
 $$;
 
@@ -425,13 +577,27 @@ create or replace function store.get_checkout_statement_print_data(
     p_slip_id bigint
 )
 returns table (print_data jsonb, review_data jsonb)
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
-    select
-        store.build_checkout_statement_data(p_department_id, p_slip_id),
-        store.build_checkout_review_data(p_department_id, p_slip_id);
+begin
+    return query
+    select ss.print_data, ss.review_data
+      from public.store_slip_accounting_snapshots ss
+      join public.store_slips s
+        on s.slip_id = ss.slip_id
+     where ss.department_id = p_department_id
+       and ss.slip_id = p_slip_id
+       and ss.status = 'active'
+       and s.status in ('checkout_ready', 'checked_out')
+     order by ss.snapshot_version desc
+     limit 1;
+
+    if not found then
+        raise exception 'checkout_snapshot_not_found';
+    end if;
+end;
 $$;
 
 create or replace function store.release_checkout_ready(
@@ -443,15 +609,28 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_released_slip_id bigint;
 begin
-    if not exists (
-        select 1
-        from public.store_slips s
-        where s.department_id = p_department_id
-          and s.slip_id = p_slip_id
-          and s.status = 'checkout_ready'
-    ) then
+    select s.*
+      into v_slip
+      from public.store_slips s
+     where s.department_id = p_department_id
+       and s.slip_id = p_slip_id
+       and s.status = 'checkout_ready'
+     for update;
+
+    if v_slip.slip_id is null then
         raise exception 'checkout_ready_not_found';
+    end if;
+
+    if store.invalidate_slip_accounting_snapshot(
+        p_department_id,
+        p_slip_id,
+        'checkout_ready_released'
+    ) <> 1 then
+        raise exception 'checkout_snapshot_not_found';
     end if;
 
     -- 固定済みの自動料金は会計準備を解除した時点で無効にし、
@@ -479,7 +658,6 @@ begin
        and c.status = 'left'
        and c.left_at_source = 'accounting_slip';
 
-    return query
     update public.store_slips s
        set status = 'open',
            closed_at = null,
@@ -493,7 +671,14 @@ begin
      where s.department_id = p_department_id
        and s.slip_id = p_slip_id
        and s.status = 'checkout_ready'
-     returning s.slip_id;
+     returning s.slip_id
+      into v_released_slip_id;
+
+    if v_released_slip_id is null then
+        raise exception 'checkout_ready_not_found';
+    end if;
+
+    return query select v_released_slip_id;
 end;
 $$;
 
@@ -563,12 +748,10 @@ declare
     v_method_code text;
     v_amount numeric(12, 0);
     v_payment_method public.payment_method_master%rowtype;
+    v_statement_data jsonb;
     v_order_subtotal_amount numeric(12, 0);
-    v_pricing_subtotal_amount numeric(12, 0);
     v_subtotal_amount numeric(12, 0);
     v_service_charge_amount numeric(12, 0);
-    v_adjustment_amount numeric(12, 0);
-    v_applied_adjustment_amount numeric(12, 0);
     v_total_amount numeric(12, 0);
     v_payment_total numeric(12, 0) := 0;
     v_cash_amount numeric(12, 0) := 0;
@@ -581,9 +764,6 @@ begin
     select s.*
       into v_slip
       from public.store_slips s
-      join public.department_master d
-        on d.department_id = s.department_id
-       and d.is_active = true
      where s.department_id = p_department_id
        and s.slip_id = p_slip_id
        and s.status = 'checkout_ready'
@@ -593,11 +773,7 @@ begin
         raise exception 'checkout_ready_not_found';
     end if;
 
-    select d.company_id
-      into v_company_id
-      from public.department_master d
-     where d.department_id = v_slip.department_id
-       and d.is_active = true;
+    v_company_id := v_slip.company_id;
 
     if exists (
         select 1
@@ -608,36 +784,30 @@ begin
         raise exception 'checkout_already_exists';
     end if;
 
-    select coalesce(sum(ol.amount), 0)
-      into v_order_subtotal_amount
-      from public.store_order_lines ol
-     where ol.slip_id = p_slip_id
-       and ol.status = 'active';
+    select ss.print_data
+      into v_statement_data
+      from public.store_slip_accounting_snapshots ss
+     where ss.department_id = p_department_id
+       and ss.slip_id = p_slip_id
+       and ss.status = 'active'
+     order by ss.snapshot_version desc
+     limit 1;
 
-    select coalesce(sum(pl.amount), 0)
-      into v_pricing_subtotal_amount
-      from public.store_slip_pricing_lines pl
-     where pl.slip_id = p_slip_id
-       and pl.status = 'active'
-       and not exists (
-           select 1
-           from public.store_order_lines ol
-           where ol.source_type = 'automatic_pricing'
-             and ol.source_id = pl.pricing_line_id
-             and ol.status = 'active'
-       );
+    if v_statement_data is null then
+        raise exception 'checkout_snapshot_not_found';
+    end if;
 
-    select coalesce(sum(cl.amount), 0)
-      into v_adjustment_amount
-      from public.store_slip_charge_lines cl
-     where cl.slip_id = p_slip_id
-       and cl.charge_type = 'adjustment'
-       and cl.status = 'active';
+    v_order_subtotal_amount := coalesce(nullif(v_statement_data->>'order_subtotal_amount', '')::numeric, 0);
+    v_subtotal_amount := coalesce(nullif(v_statement_data->>'subtotal_amount', '')::numeric, 0);
+    v_service_charge_amount := coalesce(nullif(v_statement_data->>'service_charge_amount', '')::numeric, 0);
+    v_total_amount := coalesce(nullif(v_statement_data->>'total_amount', '')::numeric, 0);
 
-    v_subtotal_amount := v_order_subtotal_amount + v_pricing_subtotal_amount;
-    v_service_charge_amount := round(v_subtotal_amount * 0.20, 0);
-    v_applied_adjustment_amount := greatest(v_adjustment_amount, -(v_subtotal_amount + v_service_charge_amount));
-    v_total_amount := v_subtotal_amount + v_service_charge_amount + v_applied_adjustment_amount;
+    if v_order_subtotal_amount < 0 or
+       v_subtotal_amount < 0 or
+       v_service_charge_amount < 0 or
+       v_total_amount < 0 then
+        raise exception 'invalid_checkout_snapshot';
+    end if;
 
     if jsonb_typeof(coalesce(p_payments, '[]'::jsonb)) <> 'array' then
         raise exception 'invalid_checkout_payment';
@@ -800,3 +970,5 @@ $$;
 revoke execute on function store.build_checkout_statement_data(bigint, bigint) from public, anon, authenticated, service_role;
 revoke execute on function store.build_checkout_review_data(bigint, bigint) from public, anon, authenticated, service_role;
 revoke execute on function store.build_checkout_receipt_data(bigint, bigint) from public, anon, authenticated, service_role;
+revoke execute on function store.capture_slip_accounting_snapshot(bigint, bigint, jsonb, jsonb, jsonb) from public, anon, authenticated, service_role;
+revoke execute on function store.invalidate_slip_accounting_snapshot(bigint, bigint, text) from public, anon, authenticated, service_role;

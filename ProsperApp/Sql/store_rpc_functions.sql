@@ -12,9 +12,13 @@
 --   6. Sql/store_rpc/05_checkout.sql
 --   7. Sql/store_rpc/06_receipts.sql
 --   8. Sql/store_rpc/07_cast_sales_adjustments.sql
---   9. Sql/store_rpc/08_checkout_ready.sql
---  10. Sql/store_rpc/09_business_home_snapshot.sql
---  11. Sql/store_rpc/99_grants.sql
+--   9. Sql/store_rpc/11_pricing.sql
+--  10. Sql/store_rpc/12_pricing_system_items.sql
+--  11. Sql/store_rpc/08_checkout_ready.sql
+--  12. Sql/store_rpc/09_business_home_snapshot.sql
+--  13. Sql/store_rpc/10_business_home_flush.sql
+--  14. Sql/store_rpc/13_accounting_snapshot_guards.sql
+--  15. Sql/store_rpc/99_grants.sql
 --
 -- Keep function names, argument lists, return columns, and direct execute revokes
 -- in the split files aligned with the current C# RPC callers and prosper-rpc allowlist.

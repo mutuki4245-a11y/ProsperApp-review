@@ -2,10 +2,12 @@
 -- このファイルは 00_schema.sql ～ 05_checkout.sql の後、99_grants.sql の前に適用します。
 
 drop function if exists store.get_business_day_snapshot(bigint, bigint);
+drop function if exists store.get_business_day_snapshot_at(bigint, bigint, timestamp with time zone);
 
-create or replace function store.get_business_day_snapshot(
+create or replace function store.get_business_day_snapshot_at(
     p_department_id bigint,
-    p_business_day_id bigint
+    p_business_day_id bigint,
+    p_as_of timestamp with time zone
 )
 returns table (
     business_day_revision bigint,
@@ -37,12 +39,16 @@ as $$
             s.closed_at,
             s.status,
             s.customer_count,
-            s.memo
+            s.memo,
+            ss.business_home_data
         from public.store_slips s
         join target_day d
           on d.business_day_id = s.business_day_id
         left join public.store_table_master t
           on t.table_id = s.table_id
+        left join public.store_slip_accounting_snapshots ss
+          on ss.slip_id = s.slip_id
+         and ss.status = 'active'
     ),
     customer_summary as (
         select
@@ -118,7 +124,7 @@ as $$
                 calculated.amount,
                 calculated.pricing_plan_version,
                 false as is_materialized
-            from store.calculate_slip_pricing(s.department_id, s.slip_id, now()) calculated
+            from store.calculate_slip_pricing(s.department_id, s.slip_id, p_as_of) calculated
             where s.status = 'open'
 
             union all
@@ -224,21 +230,48 @@ as $$
     summaries as (
         select
             s.*,
-            coalesce(cs.customer_count, s.customer_count) as customer_count_display,
-            coalesce(cs.customer_names, '') as customer_names,
-            coalesce(casts.cast_names, '') as cast_names,
-            coalesce(os.order_count, 0)::integer as order_count,
-            coalesce(os.order_subtotal_amount, 0) as order_subtotal_amount,
-            coalesce(pricing.pricing_subtotal_amount, 0) as pricing_subtotal_amount,
-            coalesce(charges.adjustment_amount, 0) as adjustment_amount,
-            greatest(
-                coalesce(os.order_subtotal_amount, 0) +
-                coalesce(pricing.pricing_subtotal_amount, 0) +
-                round((coalesce(os.order_subtotal_amount, 0) + coalesce(pricing.pricing_subtotal_amount, 0)) * 0.20, 0) +
-                coalesce(charges.adjustment_amount, 0),
-                0
-            ) as accounting_amount,
-            coalesce(os.karaoke_quantity, 0) as karaoke_quantity
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'customerCount', '')::integer, 0)
+                else coalesce(cs.customer_count, s.customer_count)
+            end as customer_count_display,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(s.business_home_data->>'customerNames', '')
+                else coalesce(cs.customer_names, '')
+            end as customer_names,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(s.business_home_data->>'castNames', '')
+                else coalesce(casts.cast_names, '')
+            end as cast_names,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'orderCount', '')::integer, 0)
+                else coalesce(os.order_count, 0)::integer
+            end as order_count,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'orderSubtotalAmount', '')::numeric, 0)
+                else coalesce(os.order_subtotal_amount, 0)
+            end as order_subtotal_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'pricingSubtotalAmount', '')::numeric, 0)
+                else coalesce(pricing.pricing_subtotal_amount, 0)
+            end as pricing_subtotal_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'adjustmentAmount', '')::numeric, 0)
+                else coalesce(charges.adjustment_amount, 0)
+            end as adjustment_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'accountingAmount', '')::numeric, 0)
+                else greatest(
+                    coalesce(os.order_subtotal_amount, 0) +
+                    coalesce(pricing.pricing_subtotal_amount, 0) +
+                    round((coalesce(os.order_subtotal_amount, 0) + coalesce(pricing.pricing_subtotal_amount, 0)) * 0.20, 0) +
+                    coalesce(charges.adjustment_amount, 0),
+                    0
+                )
+            end as accounting_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'karaokeQuantity', '')::numeric, 0)
+                else coalesce(os.karaoke_quantity, 0)
+            end as karaoke_quantity
         from target_slips s
         left join customer_summary cs on cs.slip_id = s.slip_id
         left join cast_summary casts on casts.slip_id = s.slip_id
@@ -250,6 +283,8 @@ as $$
         select
             s.slip_id,
             s.opened_at,
+            s.status,
+            s.business_home_data,
             jsonb_build_object(
                 'id', s.slip_id,
                 'slipNo', s.slip_no,
@@ -360,8 +395,42 @@ as $$
                     from pricing_summary ps
                     where ps.slip_id = s.slip_id
                 ), '[]'::jsonb)
-            ) as slip
+            ) as computed_slip
         from summaries s
+    ),
+    resolved_slip_payloads as (
+        select
+            sp.slip_id,
+            sp.opened_at,
+            case
+                when sp.status <> 'open' and sp.business_home_data is not null then
+                    jsonb_set(
+                        jsonb_set(
+                            jsonb_set(
+                                sp.business_home_data,
+                                '{status}',
+                                to_jsonb(sp.status),
+                                true
+                            ),
+                            '{statusDisplay}',
+                            to_jsonb(case sp.status
+                                when 'checkout_ready' then '会計準備中'
+                                when 'checked_out' then '会計済み'
+                                when 'cancelled' then '取消'
+                                else sp.status end),
+                            true
+                        ),
+                        '{statusBadgeClass}',
+                        to_jsonb(case sp.status
+                            when 'checkout_ready' then 'text-bg-warning'
+                            when 'checked_out' then 'text-bg-secondary'
+                            when 'cancelled' then 'text-bg-danger'
+                            else 'text-bg-secondary' end),
+                        true
+                    )
+                else sp.computed_slip
+            end as slip
+        from slip_payloads sp
     )
     select
         d.business_ui_revision,
@@ -374,9 +443,29 @@ as $$
             'openSlipCount', coalesce((select count(*) from summaries where status in ('open', 'checkout_ready')), 0),
             'checkedOutSlipCount', coalesce((select count(*) from summaries where status = 'checked_out'), 0),
             'estimatedSalesAmount', coalesce((select sum(accounting_amount) from summaries where status <> 'cancelled'), 0),
-            'slips', coalesce((select jsonb_agg(sp.slip order by sp.opened_at asc) from slip_payloads sp), '[]'::jsonb)
+            'slips', coalesce((select jsonb_agg(sp.slip order by sp.opened_at asc) from resolved_slip_payloads sp), '[]'::jsonb)
         )
     from target_day d;
+$$;
+
+create or replace function store.get_business_day_snapshot(
+    p_department_id bigint,
+    p_business_day_id bigint
+)
+returns table (
+    business_day_revision bigint,
+    snapshot jsonb
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select s.business_day_revision, s.snapshot
+      from store.get_business_day_snapshot_at(
+          p_department_id,
+          p_business_day_id,
+          now()
+      ) s;
 $$;
 
 drop function if exists store.apply_business_slip_editor_operation(bigint, bigint, bigint, text, text, jsonb);

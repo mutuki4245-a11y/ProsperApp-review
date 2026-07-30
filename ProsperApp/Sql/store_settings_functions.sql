@@ -95,9 +95,46 @@ begin
     where ol.slip_id = any(v_slip_ids);
 
     select coalesce(array_agg(sc.slip_cast_id), array[]::bigint[])
-    into v_slip_cast_ids
+      into v_slip_cast_ids
     from public.store_slip_casts sc
     where sc.slip_id = any(v_slip_ids);
+
+    -- 明示確認済みの全消去だけは、締め後不変トリガーをこのトランザクション内で解除します。
+    perform set_config('store.allow_closed_day_mutation', 'on', true);
+
+    delete from public.store_business_day_closing_snapshots cs
+    where cs.department_id = p_department_id
+       or cs.business_day_id = any(v_business_day_ids);
+    get diagnostics v_deleted = row_count;
+    table_name := 'store_business_day_closing_snapshots';
+    deleted_count := v_deleted;
+    return next;
+
+    delete from public.store_slip_accounting_snapshots ss
+    where ss.department_id = p_department_id
+       or ss.business_day_id = any(v_business_day_ids)
+       or ss.slip_id = any(v_slip_ids);
+    get diagnostics v_deleted = row_count;
+    table_name := 'store_slip_accounting_snapshots';
+    deleted_count := v_deleted;
+    return next;
+
+    delete from public.store_business_home_flush_batches b
+    where b.department_id = p_department_id
+       or b.business_day_id = any(v_business_day_ids);
+    get diagnostics v_deleted = row_count;
+    table_name := 'store_business_home_flush_batches';
+    deleted_count := v_deleted;
+    return next;
+
+    delete from public.store_slip_pricing_lines pl
+    where pl.department_id = p_department_id
+       or pl.business_day_id = any(v_business_day_ids)
+       or pl.slip_id = any(v_slip_ids);
+    get diagnostics v_deleted = row_count;
+    table_name := 'store_slip_pricing_lines';
+    deleted_count := v_deleted;
+    return next;
 
     delete from public.store_checkout_payments p
     where p.department_id = p_department_id

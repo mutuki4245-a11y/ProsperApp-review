@@ -10,7 +10,8 @@ assert.match(pricingSource, /from generate_series\(1, greatest\(v_extension_coun
 assert.match(pricingSource, /c\.entered_at <= e\.occurred_at[\s\S]*c\.left_at > e\.occurred_at/, '入店を含み退店を含まない人数で計算すること');
 assert.match(pricingSource, /store_slip_pricing_lines/, '会計時に固定する自動料金明細テーブルを持つこと');
 assert.match(pricingSource, /slip_cast_id bigint references public\.store_slip_casts/, '将来のキャスト帰属余地を保持すること');
-assert.match(snapshotSource, /store\.calculate_slip_pricing\(s\.department_id, s\.slip_id, now\(\)\)/, '営業中はサーバーで現在時刻の見積りを作ること');
+assert.match(snapshotSource, /store\.calculate_slip_pricing\(s\.department_id, s\.slip_id, p_as_of\)/, '指定した基準時刻で見積りを作ること');
+assert.match(snapshotSource, /store\.get_business_day_snapshot_at\([\s\S]*now\(\)/, '営業中の通常取得はサーバー現在時刻を使うこと');
 assert.match(snapshotSource, /'pricingLines'/, '全伝票スナップショットに自動料金明細を含めること');
 assert.match(snapshotSource, /'automatic_pricing'::text as source_type/, '営業中の見積りもシステム商品形式で明細へ含めること');
 assert.match(snapshotSource, /'isDynamicPricing'/, '楽観更新時に見積りを二重計上しないこと');
