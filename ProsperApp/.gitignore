@@ -1,0 +1,6 @@
+bin/
+obj/
+.codex/
+.codex-remote-attachments/
+output/
+*.PublishSettings

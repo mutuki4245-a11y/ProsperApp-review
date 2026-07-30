@@ -1,0 +1,27 @@
+@page
+@model ProsperApp.Pages.LoginModel
+@{
+    ViewData["Title"] = "Googleログイン";
+}
+
+<div class="auth-login">
+    <section class="auth-login__panel">
+        <div class="auth-login__header">
+            <p class="auth-login__eyebrow">アプリ認証</p>
+            <h1>Googleログイン</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <div class="alert alert-warning" role="alert">@Model.ErrorMessage</div>
+        }
+
+        @if (Model.CanStartGoogleLogin)
+        {
+            <a class="btn btn-primary btn-lg w-100"
+               asp-page="/Login"
+               asp-route-returnUrl="@Model.ReturnUrl"
+               asp-route-forceGoogle="true">Googleでログイン</a>
+        }
+    </section>
+</div>

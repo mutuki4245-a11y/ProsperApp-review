@@ -1,0 +1,266 @@
+@page
+@using System.Text.Json
+@model SettingsModel
+@{
+    ViewData["Title"] = "管理者設定";
+}
+
+<section class="settings-page">
+    <div class="store-home__hero">
+        <p class="store-home__eyebrow">管理者設定</p>
+        <h1>管理者設定</h1>
+        <p>利用店舗、画面モード、配色をこの端末に保存します。このページだけをパスワードで保護します。</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    @if (!Model.IsUnlocked)
+    {
+        <form method="post" asp-page-handler="Unlock" class="settings-card settings-login">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+            <h2>パスワード確認</h2>
+            <p class="text-muted">設定を開くには管理者パスワードを入力してください。解除状態は保存されません。</p>
+
+            <label asp-for="Password" class="form-label"></label>
+            <input asp-for="Password" class="form-control form-control-lg" type="password" inputmode="numeric" autocomplete="off" autofocus />
+            <span asp-validation-for="Password" class="text-danger"></span>
+
+            <div class="settings-actions">
+                <button class="btn btn-primary btn-lg" type="submit">管理者設定を開く</button>
+                <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">営業中へ戻る</a>
+            </div>
+        </form>
+    }
+    else
+    {
+        <form method="post" asp-page-handler="Save" class="settings-form">
+            <input type="hidden" asp-for="SaveToken" />
+            <input type="hidden" asp-for="Input.StoreName" />
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <section class="settings-card">
+                <h2>店舗設定</h2>
+                <p class="text-muted mb-3">department_masterから利用店舗を選択します。選択した店舗は、この端末の営業日、伝票、領収書入力の参照・作成・更新に使われます。</p>
+                @if (Model.Departments.Count == 0)
+                {
+                    <div class="alert alert-warning">
+                        <strong>店舗一覧を取得できません。</strong>
+                        <div>@(Model.StoreSettingsDiagnosticMessage ?? "原因を特定できませんでした。")</div>
+                        @if (!string.IsNullOrWhiteSpace(Model.StoreSettingsRpcStatus) || !string.IsNullOrWhiteSpace(Model.StoreSettingsTableStatus))
+                        {
+                            <hr />
+                            <div class="small">
+                                @if (!string.IsNullOrWhiteSpace(Model.StoreSettingsRpcStatus))
+                                {
+                                    <div>RPC: @Model.StoreSettingsRpcStatus</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(Model.StoreSettingsTableStatus))
+                                {
+                                    <div>REST: @Model.StoreSettingsTableStatus</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                <label asp-for="Input.StoreDepartmentId" class="form-label"></label>
+                <select asp-for="Input.StoreDepartmentId" class="form-select form-select-lg">
+                    <option value="">店舗を選択してください</option>
+                    @foreach (var department in Model.Departments)
+                    {
+                        <option value="@department.DepartmentId">
+                            @department.DisplayName
+                        </option>
+                    }
+                </select>
+                <span asp-validation-for="Input.StoreDepartmentId" class="text-danger"></span>
+                <div class="form-text">Cookieがない場合だけ、appsettingsのSupabase:StoreDepartmentIdを使います。</div>
+            </section>
+
+            <section class="settings-card">
+                <h2>機能設定</h2>
+                <div class="settings-radio-grid">
+                    <label class="settings-radio">
+                        <input asp-for="Input.ScreenMode" type="radio" value="sales-management" />
+                        <span>
+                            <strong>営業管理用画面</strong>
+                            <small>営業中、締め作業、マスタ設定を使う店舗運用画面</small>
+                        </span>
+                    </label>
+                    <label class="settings-radio">
+                        <input asp-for="Input.ScreenMode" type="radio" value="order-entry" />
+                        <span>
+                            <strong>オーダー登録用画面</strong>
+                            <small>後続実装予定のオーダー登録専用画面で利用する設定</small>
+                        </span>
+                    </label>
+                </div>
+                <span asp-validation-for="Input.ScreenMode" class="text-danger"></span>
+                <h3 class="h5 mt-4 mb-2">配色</h3>
+                <div class="settings-radio-grid settings-radio-grid--compact">
+                    <label class="settings-radio">
+                        <input asp-for="Input.ThemeMode" type="radio" value="@LocalSettings.ThemeModeQuietNavy" />
+                        <span>
+                            <strong>E案（夜レジ）</strong>
+                            <small>暗い青グレーに明るい水色を合わせた配色</small>
+                        </span>
+                    </label>
+                    <label class="settings-radio">
+                        <input asp-for="Input.ThemeMode" type="radio" value="@LocalSettings.ThemeModeWhite" />
+                        <span>
+                            <strong>白ベース</strong>
+                            <small>従来の明るい配色</small>
+                        </span>
+                    </label>
+                </div>
+                <span asp-validation-for="Input.ThemeMode" class="text-danger"></span>
+            </section>
+
+            <section class="settings-card">
+                <h2>アプリ内キャッシュ</h2>
+                @if (Model.CacheStatuses.Count == 0)
+                {
+                    <p class="text-muted mb-3">現在までに取得したキャッシュはありません。</p>
+                }
+                else
+                {
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>区分</th>
+                                    <th>対象</th>
+                                    <th>状態</th>
+                                    <th>最終取得</th>
+                                    <th>期限</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var cache in Model.CacheStatuses)
+                                {
+                                    var fetchedAt = cache.LastFetchedAt.ToOffset(TimeSpan.FromHours(9));
+                                    var expiresAt = cache.ExpiresAt.ToOffset(TimeSpan.FromHours(9));
+                                    <tr>
+                                        <td>@cache.Category</td>
+                                        <td>@cache.DisplayName</td>
+                                        <td>@(cache.IsCached ? "保持中" : "破棄済み")</td>
+                                        <td>@fetchedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                        <td>@expiresAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <button
+                    class="btn btn-outline-secondary"
+                    type="submit"
+                    formaction="?handler=ClearCache"
+                    formnovalidate>
+                    キャッシュをすべて削除
+                </button>
+            </section>
+
+            <section class="settings-card settings-card--danger">
+                <h2>デバッグ操作</h2>
+                <div class="alert alert-danger mb-3" role="alert">
+                    選択中の店舗の営業日、出勤、伝票、注文、会計、バック集計のレコードを削除します。マスタテーブルは削除しません。
+                </div>
+                @if (Model.DebugDeletedTableCounts.Count > 0)
+                {
+                    <details class="settings-debug-result">
+                        <summary>削除件数を表示</summary>
+                        <dl>
+                            @foreach (var item in Model.DebugDeletedTableCounts)
+                            {
+                                <div>
+                                    <dt>@item.TableName</dt>
+                                    <dd>@item.DeletedCount 件</dd>
+                                </div>
+                            }
+                        </dl>
+                    </details>
+                }
+                <div class="mb-3">
+                    <label asp-for="DeleteConfirmation" class="form-label">
+                        確認のため
+                        <strong data-delete-confirmation-text>削除 店舗名</strong>
+                        と入力してください
+                    </label>
+                    <input
+                        asp-for="DeleteConfirmation"
+                        class="form-control"
+                        autocomplete="off"
+                        data-delete-confirmation-input />
+                    <span asp-validation-for="DeleteConfirmation" class="text-danger"></span>
+                </div>
+                <button
+                    class="btn btn-danger btn-lg"
+                    type="submit"
+                    formaction="?handler=DeleteNonMasterRecords"
+                    formnovalidate
+                    data-confirm-message="選択中の店舗のマスタ以外のレコードを削除します。この操作は取り消せません。実行しますか？"
+                    data-delete-confirmation-button
+                    disabled>
+                    マスタ以外のテーブルのレコードを削除する
+                </button>
+            </section>
+
+            <div class="settings-actions">
+                <button class="btn btn-primary btn-lg" type="submit">管理者設定を保存</button>
+                <button class="btn btn-outline-danger btn-lg" type="submit" formaction="?handler=Lock">ロックする</button>
+                <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">営業中へ戻る</a>
+            </div>
+        </form>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    @if (!string.IsNullOrWhiteSpace(Model.LocalSettingsJsonForClient))
+    {
+        <script>
+            localStorage.setItem(
+                @JsonSerializer.Serialize(LocalSettings.LocalStorageKey),
+                @Html.Raw(JsonSerializer.Serialize(Model.LocalSettingsJsonForClient)));
+        </script>
+    }
+    <script>
+        const departmentSelect = document.getElementById("Input_StoreDepartmentId");
+        const confirmationText = document.querySelector("[data-delete-confirmation-text]");
+        const confirmationInput = document.querySelector("[data-delete-confirmation-input]");
+        const confirmationButton = document.querySelector("[data-delete-confirmation-button]");
+        const syncDeleteConfirmation = () => {
+            if (!departmentSelect || !confirmationText) {
+                return;
+            }
+
+            const selected = departmentSelect.options[departmentSelect.selectedIndex];
+            const storeName = selected?.value ? selected.text.trim() : "店舗名";
+            const expected = `削除 ${storeName}`;
+            confirmationText.textContent = expected;
+            if (confirmationInput) {
+                confirmationInput.placeholder = expected;
+            }
+            if (confirmationButton) {
+                confirmationButton.disabled = !confirmationInput ||
+                    confirmationInput.value !== expected ||
+                    !selected?.value;
+            }
+        };
+        departmentSelect?.addEventListener("change", syncDeleteConfirmation);
+        confirmationInput?.addEventListener("input", syncDeleteConfirmation);
+        syncDeleteConfirmation();
+
+        document.querySelectorAll("[data-confirm-message]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                const message = button.getAttribute("data-confirm-message");
+                if (message && !window.confirm(message)) {
+                    event.preventDefault();
+                }
+            });
+        });
+    </script>
+}

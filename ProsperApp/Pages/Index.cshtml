@@ -1,0 +1,613 @@
+@page
+@using ProsperApp.Features.BusinessHome
+@model IndexModel
+@{
+    ViewData["Title"] = "営業中";
+    ViewData["HasCurrentBusinessDay"] = Model.HasCurrentBusinessDay;
+    var nominationOptions = Model.NominationOptions
+        .Select(x => (Value: x.NominationKind, Label: x.DisplayName))
+        .ToArray();
+    var hasNominationOptions = nominationOptions.Length > 0;
+    bool IsCompanionNomination(string? nominationKind) =>
+        Model.NominationOptions.Any(option =>
+            string.Equals(option.NominationKind, nominationKind, StringComparison.Ordinal) &&
+            string.Equals(option.NominationType, "companion", StringComparison.Ordinal));
+    var nominationPriceOptions = Enumerable.Range(1, 20).Select(x => x * 1000).ToArray();
+}
+
+<section class="store-home terminal-page terminal-page--sales">
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    @if (Model.LoadIssues.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>営業中画面の情報をすべて取得できませんでした。</strong>
+            @foreach (var issue in Model.LoadIssues)
+            {
+                <div>@issue.Area: @issue.Message</div>
+            }
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Index">再試行</a>
+        </div>
+    }
+    else if (Model.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
+    }
+
+    @if (Model.IsReceiptPrinterEnabled)
+    {
+        <div class="alert alert-info" role="status" data-receipt-print-status hidden>
+            領収書を印刷しています。
+        </div>
+        <div class="alert alert-warning receipt-reprint-panel" role="alert" data-receipt-reprint-panel hidden>
+            <div class="receipt-reprint-panel__header">
+                <div>
+                    <strong>再印刷待ちの領収書があります</strong>
+                    <span>印刷失敗した会計済み伝票です。会計は取り消されていません。</span>
+                </div>
+            </div>
+            <div class="receipt-reprint-panel__list" data-receipt-reprint-list></div>
+        </div>
+    }
+
+    @if (Model.IsPreviousBusinessDayOpen)
+    {
+        <div class="alert alert-danger sales-block-alert" role="alert">
+            前回営業日 @Model.DisplayBusinessDate.ToString("yyyy-MM-dd") の締め作業が未完了です。
+        </div>
+    }
+
+    @if (Model.HasCurrentBusinessDay || Model.CanCreateSalesInput)
+    {
+        <section class="home-workspace business-floor" aria-label="営業中の操作">
+            <header class="sales-summary business-floor__header" aria-label="営業中サマリー">
+                <div class="sales-summary__items business-floor__summary">
+                    <span class="sales-summary__item sales-summary__item--estimated business-floor__summary-item business-floor__summary-item--sales">
+                        <strong>見込み売上</strong>
+                        <span data-business-estimated-sales-amount>@(Model.HasCurrentBusinessDay ? "取得中" : StoreUiText.Yen(0))</span>
+                    </span>
+                    <span class="sales-summary__item business-floor__summary-item">
+                        <strong>未会計伝票</strong>
+                        <span data-business-open-slip-count>取得中</span>
+                    </span>
+                    <span class="sales-summary__item business-floor__summary-item">
+                        <strong>会計済み</strong>
+                        <span data-business-checked-out-slip-count>取得中</span>
+                    </span>
+                    <span class="sales-summary__item business-floor__summary-item">
+                        <strong>営業日</strong>
+                        <span data-business-date-display>@Model.DisplayBusinessDateText</span>
+                    </span>
+                </div>
+                <div class="sales-summary__actions business-floor__header-actions">
+                    @if (Model.ShouldShowCreateSlipButton)
+                    {
+                        <button
+                            class="btn sales-summary__create business-floor__create"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#createSlipModal"
+                            data-business-create-slip-button
+                            @(Model.CanCreateSlip ? null : "disabled")>
+                            <span aria-hidden="true">＋</span>
+                            新しい伝票
+                        </button>
+                    }
+                    <a class="btn sales-summary__attendance business-floor__attendance" asp-page="/Attendance">勤怠管理</a>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Model.CreateSlipDisabledMessage))
+                {
+                    <div class="alert alert-warning sales-summary__warning" role="alert" data-business-create-slip-warning>
+                        @Model.CreateSlipDisabledMessage
+                    </div>
+                }
+            </header>
+            <section class="slip-list-section business-floor__panel" id="slipListPanel">
+                <form method="post" data-business-karaoke-form data-business-day-id="@Model.CurrentBusinessDayId">
+                    <div class="business-floor__toolbar">
+                        <nav class="business-slip-filter" aria-label="伝票の絞り込み">
+                            <button class="is-active" type="button" data-business-slip-filter="all" aria-pressed="true">
+                                すべて <span data-business-filter-count="all">0</span>
+                            </button>
+                            <button type="button" data-business-slip-filter="open" aria-pressed="false">
+                                接客中 <span data-business-filter-count="open">0</span>
+                            </button>
+                            <button type="button" data-business-slip-filter="checkout_ready" aria-pressed="false">
+                                会計準備 <span data-business-filter-count="checkout_ready">0</span>
+                            </button>
+                            <button type="button" data-business-slip-filter="checked_out" aria-pressed="false">
+                                会計済み <span data-business-filter-count="checked_out">0</span>
+                            </button>
+                        </nav>
+                        <div class="business-floor__toolbar-meta">
+                            <div class="business-floor__legend" aria-label="伝票ステータス">
+                                <span class="is-open">接客中</span>
+                                <span class="is-checkout-ready">会計準備中</span>
+                                <span class="is-checked-out">会計済み</span>
+                            </div>
+                            <label class="business-amount-toggle" data-slip-amount-toggle-container hidden>
+                                <span>会計表示</span>
+                                <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額を表示" />
+                            </label>
+                        </div>
+                        <div class="slip-list-section__statusbar">
+                            <output class="terminal-save-status" data-business-karaoke-status data-save-state="saved" aria-live="polite" hidden>同期済み</output>
+                        </div>
+                    </div>
+                    <div class="slip-list business-slip-board" data-business-slip-list>
+                        <article class="slip-list__row slip-list__row--add" data-business-slip-loading>
+                            <div class="slip-list__main">
+                                <strong>伝票を読み込み中</strong>
+                                <span>営業中の一覧を取得しています。</span>
+                            </div>
+                        </article>
+                    </div>
+                </form>
+            </section>
+        </section>
+    }
+
+    @if (Model.CanCreateSalesInput)
+    {
+        <div class="modal fade" id="createSlipModal" tabindex="-1" aria-labelledby="createSlipModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <form method="post" asp-page-handler="CreateSlip">
+                        <div class="modal-header">
+                            <div>
+                                <h2 class="modal-title fs-4" id="createSlipModalLabel">伝票追加</h2>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        </div>
+                        <div class="modal-body slip-modal-form slip-modal-form--create">
+                            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                            <input asp-for="CreateSlipInput.OpenedAt" type="hidden" />
+                            <input asp-for="CreateSlipInput.BusinessDate" type="hidden" data-business-create-date-input />
+                            <input asp-for="CreateSlipInput.BusinessDayId" type="hidden" data-business-create-day-id-input />
+
+                            <span class="visually-hidden" data-business-create-date-display>@Model.CreateSlipInput.BusinessDate?.ToString("yyyy-MM-dd")</span>
+
+                            <div class="slip-create-three-column">
+                                <div class="slip-create-three-column__column">
+                                    <section class="slip-create__panel slip-create__panel--entry">
+                                        <label asp-for="CreateSlipInput.OpenedTime" class="form-label visually-hidden"></label>
+                                        <select class="form-select form-select-lg slip-time-select" name="CreateSlipInput.OpenedTime" aria-label="入店時刻">
+                                            @foreach (var time in Model.TimeOptions)
+                                            {
+                                                if (Model.CreateSlipInput.OpenedTime == time)
+                                                {
+                                                    <option value="@time" selected>@Model.FormatBusinessTimeOption(time)</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@time">@Model.FormatBusinessTimeOption(time)</option>
+                                                }
+                                            }
+                                        </select>
+                                        <span asp-validation-for="CreateSlipInput.OpenedTime" class="text-danger"></span>
+                                        <span asp-validation-for="CreateSlipInput.OpenedAt" class="text-danger"></span>
+                                    </section>
+
+                                    <section class="slip-create__panel slip-create__panel--tables">
+                                        <input asp-for="CreateSlipInput.TableId" type="hidden" id="businessCreateSlipTableId" />
+                                        <span asp-validation-for="CreateSlipInput.TableId" class="text-danger"></span>
+                                        @if (Model.Tables.Count == 0)
+                                        {
+                                            <div class="alert alert-warning mb-0">卓番マスタがありません。</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="table-picker-category-list" role="group" aria-label="卓番選択">
+                                                @foreach (var tableGroup in Model.Tables.GroupBy(table => table.TableCategoryNo).OrderBy(group => group.Key))
+                                                {
+                                                    <div class="table-picker table-picker--category">
+                                                        @foreach (var table in tableGroup)
+                                                        {
+                                                            var selected = Model.CreateSlipInput.TableId == table.TableId;
+                                                            <button class="table-picker__button @(selected ? "is-selected" : "")" type="button" data-business-slip-table-id="@table.TableId">
+                                                                @table.DisplayName
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </section>
+                                    <section class="slip-create__panel slip-create__panel--memo">
+                                        <textarea asp-for="CreateSlipInput.Memo" class="form-control form-control-lg" rows="2" placeholder="共有事項"></textarea>
+                                        <span asp-validation-for="CreateSlipInput.Memo" class="text-danger"></span>
+                                    </section>
+                                </div>
+
+                                <section class="slip-create__panel slip-create__panel--customers">
+                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions slip-create__customer-count">
+                                        <span class="slip-create__customer-count-label">お客様数</span>
+                                        <div class="slip-create__customer-count-controls" role="group" aria-label="お客様数">
+                                            <button class="btn btn-outline-primary" type="button" id="businessDecreaseCustomerCount" aria-label="お客様数を減らす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count <= 1)">－</button>
+                                            <output class="slip-create__customer-count-value" id="businessCustomerCount" aria-live="polite" aria-atomic="true">@($"{Model.CreateSlipInput.CustomerLabels.Count}人")</output>
+                                            <button class="btn btn-outline-primary" type="button" id="businessIncreaseCustomerCount" aria-label="お客様数を増やす" disabled="@(Model.CreateSlipInput.CustomerLabels.Count >= 20)">＋</button>
+                                        </div>
+                                    </div>
+                                    <span asp-validation-for="CreateSlipInput.CustomerLabels" class="text-danger"></span>
+                                    <div class="customer-list" id="businessCustomerList">
+                                        @for (var i = 0; i < Model.CreateSlipInput.CustomerLabels.Count; i++)
+                                        {
+                                            <div class="customer-row" data-business-customer-row>
+                                                <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[@i]" value="@Model.CreateSlipInput.CustomerLabels[i]" maxlength="100" placeholder="お客様名" />
+                                            </div>
+                                        }
+                                    </div>
+                                </section>
+
+                                <section class="slip-create__panel slip-create__panel--nominations">
+                                    <div class="slip-create__panel-title slip-create__panel-title--create-actions slip-create__nomination-count">
+                                        <span class="slip-create__customer-count-label">指名</span>
+                                        <div class="slip-create__customer-count-controls" role="group" aria-label="指名人数">
+                                            <button class="btn btn-outline-primary" type="button" id="businessDecreaseNominationCount" aria-label="指名を減らす" disabled="@(Model.CreateSlipInput.CastNominations.Count == 0)">－</button>
+                                            <output class="slip-create__customer-count-value" id="businessNominationCount" aria-live="polite" aria-atomic="true">@($"{Model.CreateSlipInput.CastNominations.Count}人")</output>
+                                            <button class="btn btn-outline-primary" type="button" id="businessIncreaseNominationCount" aria-label="指名を増やす" disabled="@(!hasNominationOptions || Model.CreateSlipInput.CastNominations.Count >= 20)">＋</button>
+                                        </div>
+                                    </div>
+                                    @if (!hasNominationOptions)
+                                    {
+                                        <div class="alert alert-secondary mb-3">指名種別マスタが未登録です。</div>
+                                    }
+                                    <div class="nomination-list" id="businessNominationList">
+                                        @for (var i = 0; i < Model.CreateSlipInput.CastNominations.Count; i++)
+                                        {
+                                            var nomination = Model.CreateSlipInput.CastNominations[i];
+                                            <div class="nomination-row" data-business-nomination-row>
+                                                <select class="form-select nomination-row__kind" name="CreateSlipInput.CastNominations[@i].NominationKind">
+                                                    @foreach (var option in nominationOptions)
+                                                    {
+                                                        var isSelected = nomination.NominationKind == option.Value;
+                                                        var isCompanion = IsCompanionNomination(option.Value);
+                                                        <option value="@option.Value" selected="@isSelected" data-companion="@isCompanion.ToString().ToLowerInvariant()">@option.Label</option>
+                                                    }
+                                                </select>
+                                                <select class="form-select nomination-row__price" name="CreateSlipInput.CastNominations[@i].NominationPrice">
+                                                    @foreach (var price in nominationPriceOptions)
+                                                    {
+                                                        if (nomination.NominationPrice == price)
+                                                        {
+                                                            <option value="@price" selected>@StoreUiText.Yen(price)</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@price">@StoreUiText.Yen(price)</option>
+                                                        }
+                                                    }
+                                                </select>
+                                                <div class="nomination-row__cast">
+                                                    <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastId" value="@nomination.CastId" data-business-cast-id />
+                                                    <input type="hidden" name="CreateSlipInput.CastNominations[@i].CastName" value="@nomination.CastName" data-business-cast-name-hidden />
+                                                    <button class="selected-cast selected-cast--button" type="button" data-business-open-cast-modal>
+                                                        <span data-business-selected-cast>@(nomination.CastName ?? "キャストを選択")</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (Model.CreateSlipInput.CastNominations.Count == 0)
+                                    {
+                                        <p class="text-muted mb-0" data-business-nomination-empty>指名なし</p>
+                                    }
+                                </section>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                            <button class="btn btn-primary btn-lg" type="button" id="businessCreateSlipSubmit" @((!Model.CanCreateSlip || Model.Tables.Count == 0) ? "disabled" : null)>伝票を作成</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    }
+
+    @if (Model.CanCreateSalesInput || Model.SlipsEnabled)
+    {
+        <div class="modal fade" id="businessAttendingCastSelectModal" tabindex="-1" aria-labelledby="businessAttendingCastSelectModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="businessAttendingCastSelectModalLabel">出勤キャスト選択</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body cast-select-modal">
+                        <div class="form-check cast-select-modal__filter" id="businessAttendingCastDuplicateFilter" hidden>
+                            <input class="form-check-input" type="checkbox" id="businessAttendingCastAllowNominationDuplicates" />
+                            <label class="form-check-label" for="businessAttendingCastAllowNominationDuplicates">重複指名</label>
+                        </div>
+                        <div class="cast-select-modal__list" id="businessAttendingCastModalList"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.CheckoutEnabled)
+    {
+        <div class="modal fade" id="businessCheckoutModal" tabindex="-1" aria-labelledby="businessCheckoutModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content" data-business-checkout-modal>
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1" data-business-checkout-table>会計</p>
+                            <h2 class="modal-title fs-4" id="businessCheckoutModalLabel">会計伝票</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form">
+                        <div class="alert alert-warning" role="alert" data-business-checkout-message hidden></div>
+                        <section class="slip-create__panel" data-business-checkout-issue-panel>
+                            <h3>退店時刻</h3>
+                            <select class="form-select form-select-lg" data-business-checkout-closed-time aria-label="退店時刻">
+                                @foreach (var time in Model.TimeOptions)
+                                {
+                                    <option value="@time">@Model.FormatBusinessTimeOption(time)</option>
+                                }
+                            </select>
+                            <p class="text-muted mb-0">出力すると会計準備中になり、伝票内容を変更できません。</p>
+                        </section>
+
+                        <section class="checkout-review" data-business-checkout-statement hidden>
+                            <div class="checkout-review__hero" data-business-statement-summary></div>
+                            <section class="checkout-review__panel">
+                                <div class="checkout-review__panel-title"><h3>注文</h3></div>
+                                <div class="checkout-review__orders" data-business-statement-orders></div>
+                            </section>
+                            <section class="checkout-review__panel">
+                                <div class="checkout-review__panel-title"><h3>調整</h3></div>
+                                <div class="checkout-review__orders" data-business-statement-adjustments></div>
+                            </section>
+                            <div class="checkout-review__totals" data-business-statement-totals></div>
+                        </section>
+
+                        <section class="slip-create__panel" data-business-statement-print-panel hidden>
+                            <h3>会計伝票の印刷</h3>
+                            <p data-business-statement-print-state>会計伝票を印刷しています。</p>
+                        </section>
+
+                    </div>
+                    <div class="modal-footer business-checkout-modal__footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                        <div class="business-checkout-modal__footer-actions">
+                            <div data-business-checkout-issue-action>
+                                <button class="btn btn-primary btn-lg" type="button" data-business-issue-statement>会計伝票を出力</button>
+                            </div>
+                            <div data-business-checkout-print-actions hidden>
+                                <button class="btn btn-outline-primary" type="button" data-business-print-statement>伝票を再印刷</button>
+                                <button class="btn btn-outline-danger" type="button" data-business-release-checkout>会計準備を解除</button>
+                                <button class="btn btn-primary btn-lg" type="button" data-business-proceed-payment>決済を確定</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="businessPaymentModal" tabindex="-1" aria-labelledby="businessPaymentModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content" data-business-payment-modal>
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1" data-business-payment-table>会計</p>
+                            <h2 class="modal-title fs-4" id="businessPaymentModalLabel">決済</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="戻る"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form">
+                        <div class="alert alert-warning" role="alert" data-business-payment-message hidden></div>
+                        <div data-business-payment-detail>
+                            <section class="checkout-payment-form" data-business-payment-form>
+                                <div class="checkout-payments" data-business-payment-rows></div>
+                                <div class="row g-3 mt-1">
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="businessReceiptAddressee">領収書宛名</label>
+                                        <input class="form-control form-control-lg" id="businessReceiptAddressee" maxlength="120" autocomplete="off" data-business-receipt-addressee />
+                                    </div>
+                                    <div class="col-md-6" data-business-received-row hidden>
+                                        <label class="form-label" for="businessReceivedAmount">受取額</label>
+                                        <input class="form-control form-control-lg" id="businessReceivedAmount" type="number" min="0" step="1" data-business-received-amount />
+                                    </div>
+                                </div>
+                                <div class="checkout-final-summary" data-business-payment-summary></div>
+                            </section>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">戻る</button>
+                        <button class="btn btn-primary btn-lg" type="button" data-business-confirm-checkout disabled>会計を確定</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.SlipsEnabled)
+    {
+        <div class="modal fade" id="businessSlipDetailModal" tabindex="-1" aria-labelledby="businessSlipDetailModalLabel" aria-hidden="true" data-business-slip-detail-modal>
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <p class="store-home__eyebrow mb-1" data-business-slip-detail-subtitle>伝票詳細</p>
+                            <h2 class="modal-title fs-4" id="businessSlipDetailModalLabel" data-business-slip-detail-title>伝票詳細</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form" data-business-slip-detail-content>
+                        <div class="slip-create__panel slip-detail-panel-loading">詳細を読み込み中です。</div>
+                    </div>
+                    <div class="modal-footer" data-business-slip-detail-footer>
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="businessSlipEditorModal" tabindex="-1" aria-labelledby="businessSlipEditorModalLabel" aria-hidden="true" data-business-slip-editor-modal>
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="modal-title fs-4" id="businessSlipEditorModalLabel" data-business-slip-editor-title>編集</h2>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body slip-modal-form" data-business-slip-editor-content>
+                        <div class="slip-create__panel slip-detail-panel-loading">編集内容を読み込み中です。</div>
+                    </div>
+                    <div class="modal-footer" data-business-slip-editor-footer>
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="businessOrderBackTargetModal" tabindex="-1" aria-labelledby="businessOrderBackTargetModalLabel" aria-hidden="true" data-business-order-back-target-modal>
+            <div class="modal-dialog modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title fs-5" id="businessOrderBackTargetModalLabel">バック対象キャスト選択</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body cast-select-modal">
+                        <p class="text-muted mb-0">キャストごとに数量を決めて、まとめて注文キューへ追加します。</p>
+                        <div class="cast-select-modal__list" data-business-order-back-target-list></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">戻る</button>
+                        <button class="btn btn-primary" type="button" data-business-order-back-target-confirm disabled>キューへ追加</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    @if (Model.IsReceiptPrinterEnabled)
+    {
+        @if (!string.IsNullOrWhiteSpace(Model.ReceiptPrinterBrowserSdkScriptUrl))
+        {
+            <script>
+                window.prosperSiiReceiptSdkScript = {
+                    url: @Json.Serialize(Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)),
+                    loaded: false,
+                    failed: false
+                };
+            </script>
+            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"
+                    onload="window.prosperSiiReceiptSdkScript.loaded = true"
+                    onerror="window.prosperSiiReceiptSdkScript.failed = true"></script>
+        }
+        <script>
+            window.prosperSiiReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
+        </script>
+        <script src="~/js/features/sii-print-queue.js" asp-append-version="true"></script>
+        <script src="~/js/features/sii-receipt-layout.js" asp-append-version="true"></script>
+        <script src="~/js/features/sii-receipt-printer.js" asp-append-version="true"></script>
+        <script src="~/js/features/sii-checkout-statement-printer.js" asp-append-version="true"></script>
+    }
+    <script>
+        window.ProsperBusinessHomeConfig = @Json.Serialize(new
+        {
+            businessSlipsUrl = Url.Page("/Index", "BusinessSlips"),
+            flushBusinessHomeChangesUrl = Url.Page("/Index", "FlushBusinessHomeChanges"),
+            issueCheckoutStatementUrl = Url.Page("/Index", "IssueCheckoutStatement"),
+            getCheckoutStatementPrintDataUrl = Url.Page("/Index", "GetCheckoutStatementPrintData"),
+            releaseCheckoutReadyUrl = Url.Page("/Index", "ReleaseCheckoutReady"),
+            confirmCheckoutUrl = Url.Page("/Index", "ConfirmCheckout"),
+            getCheckoutReceiptPrintDataUrl = Url.Page("/Index", "GetCheckoutReceiptPrintData"),
+            cancelCheckoutUrl = Url.Page("/Index", "CancelCheckout"),
+            businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
+            departmentId = Model.StoreContext?.DepartmentId,
+            businessDayId = Model.CurrentBusinessDayId,
+            receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
+            editorOperationTypes = BusinessHomeOperationTypes.All,
+            paymentMethods = Model.PaymentMethods.Select(method => new
+            {
+                methodCode = method.MethodCode,
+                methodName = method.MethodName,
+                requiresReceivedAmount = method.RequiresReceivedAmount
+            }),
+            tableOptions = Model.Tables.Select((table, index) => new
+            {
+                displayName = table.DisplayName,
+                tableCode = table.TableCode,
+                categoryNo = table.TableCategoryNo,
+                sortOrder = index
+            }),
+            editorOptions = new
+            {
+                timeOptions = Model.TimeOptions.Select(time => new
+                {
+                    value = time,
+                    label = Model.FormatBusinessTimeOption(time)
+                }),
+                attendanceCasts = Model.AttendanceCasts.Select(cast => new
+                {
+                    id = cast.CastId,
+                    name = cast.DisplayName,
+                    drinkMemo = cast.DrinkMemo
+                }),
+                nominationOptions = Model.NominationOptions.Select(option => new
+                {
+                    value = option.NominationKind,
+                    label = option.DisplayName,
+                    isCompanion = string.Equals(option.NominationType, "companion", StringComparison.Ordinal)
+                }),
+                nominationPriceOptions = nominationPriceOptions.Select(price => new
+                {
+                    value = price,
+                    label = StoreUiText.Yen(price)
+                }),
+                orderItems = Model.OrderItems.Select(item => new
+                {
+                    id = item.ItemId,
+                    name = item.ItemName,
+                    category = item.CategoryName,
+                    price = item.DefaultPrice,
+                    isCastBackTarget = item.IsCastBackTarget
+                })
+            }
+        });
+    </script>
+    <script src="~/js/features/business-home.js" asp-append-version="true"></script>
+    <script src="~/js/features/business-slip-editor.js" asp-append-version="true"></script>
+    <script src="~/js/features/business-checkout.js" asp-append-version="true"></script>
+    <script>
+        window.prosperCreateSlip = @Json.Serialize(new
+        {
+            attendanceCastsUrl = Url.Page("/Index", "AttendanceCasts"),
+            showCreateSlipModal = Model.ShowCreateSlipModal,
+            castOptions = Model.AttendanceCasts.Select(c => new
+            {
+                id = c.CastId,
+                name = c.DisplayName,
+                display = c.SearchDisplayName,
+                department = c.DepartmentName
+            }),
+            nominationKindOptions = nominationOptions.Select(option => new
+            {
+                value = option.Value,
+                label = option.Label,
+                isCompanion = IsCompanionNomination(option.Value)
+            }),
+            nominationPriceOptions = nominationPriceOptions.Select(price => new
+            {
+                value = price,
+                label = StoreUiText.Yen(price)
+            })
+        });
+    </script>
+    <script src="~/js/features/cast-select-modal.js" asp-append-version="true"></script>
+    <script src="~/js/features/create-slip-modal.js" asp-append-version="true"></script>
+}
