@@ -1,71 +1,88 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
+using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Options;
-using static ProsperApp.Services.SupabaseJson;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseBusinessDayRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
     IStoreClock storeClock,
-    IMemoryCache memoryCache,
+    IApplicationCache cache,
     IOptions<SupabaseOptions> options) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
 {
     private readonly IStoreClock _storeClock = storeClock;
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
     private readonly SupabaseOptions _options = options.Value;
 
-    public async Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false)
+    public async Task<Result<StoreBusinessDay?>> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false)
     {
         if (!HasRpcAccess())
         {
-            return null;
+            return Result<StoreBusinessDay?>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.CurrentBusinessDay(departmentId);
-        if (!forceRefresh && _memoryCache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
+        if (!forceRefresh && _cache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
         {
             if (IsValidBusinessDay(cachedBusinessDay))
             {
-                return cachedBusinessDay;
+                return Result<StoreBusinessDay?>.Success(cachedBusinessDay);
             }
 
-            _memoryCache.Remove(cacheKey);
+            _cache.Remove(cacheKey);
         }
 
-        var rows = await PostRpcArrayAsync(
+        var result = await PostRpcArrayResultAsync(
             "store.get_current_business_day",
             new { p_department_id = departmentId },
             ct);
-
-        if (rows.Count == 0)
+        if (!result.Succeeded)
         {
-            _memoryCache.Remove(cacheKey);
-            return null;
+            return Result<StoreBusinessDay?>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "現在営業日を取得できませんでした。");
         }
 
-        var businessDay = ParseBusinessDay(rows[0]);
+        if (result.Value.Count == 0)
+        {
+            _cache.Remove(cacheKey);
+            return Result<StoreBusinessDay?>.Success(null);
+        }
+
+        var businessDay = ParseBusinessDay(result.Value[0]);
         if (!IsValidBusinessDay(businessDay))
         {
-            _memoryCache.Remove(cacheKey);
-            return null;
+            _cache.Remove(cacheKey);
+            return Result<StoreBusinessDay?>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "現在営業日の応答形式が正しくありません。");
         }
 
-        _memoryCache.Set(cacheKey, businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
-        return businessDay;
+        StoreMasterCacheKeys.SetRuntime(_cache, cacheKey, businessDay, "現在営業日");
+        return Result<StoreBusinessDay?>.Success(businessDay);
     }
 
     public async Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct)
     {
         var currentBusinessDate = _storeClock.GetCurrentBusinessDate();
-        var current = await GetCurrentAsync(ct);
+        var currentResult = await GetCurrentAsync(ct);
+        if (!currentResult.Succeeded)
+        {
+            return BusinessDayEnsureResult.Failed(
+                currentResult.ErrorMessage ?? "現在営業日を確認できませんでした。",
+                currentBusinessDate);
+        }
+
+        var current = currentResult.Value;
         if (current is not null)
         {
             if (current.BusinessDate == currentBusinessDate)
@@ -89,7 +106,8 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayEnsureResult.Success(openResult.BusinessDay, currentBusinessDate);
         }
 
-        var afterOpen = await GetCurrentAsync(ct);
+        var afterOpenResult = await GetCurrentAsync(ct);
+        var afterOpen = afterOpenResult.Succeeded ? afterOpenResult.Value : null;
         if (afterOpen is not null)
         {
             if (afterOpen.BusinessDate == currentBusinessDate)
@@ -160,9 +178,13 @@ public class SupabaseBusinessDayRepository(
         }
 
         var businessDay = ParseBusinessDay(result.Rows[0]);
-        _memoryCache.Set(StoreMasterCacheKeys.CurrentBusinessDay(departmentId), businessDay, StoreMasterCacheKeys.CreateRuntimeOptions());
-        StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, departmentId);
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDay.BusinessDayId);
+        StoreMasterCacheKeys.SetRuntime(
+            _cache,
+            StoreMasterCacheKeys.CurrentBusinessDay(departmentId),
+            businessDay,
+            "現在営業日");
+        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDay.BusinessDayId);
         return BusinessDayOperationResult.Success(businessDay);
     }
 
@@ -199,9 +221,9 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("現在営業中の営業日が見つかりません。");
         }
 
-        StoreMasterCacheKeys.ClearCurrentBusinessDay(_memoryCache, departmentId);
-        StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, departmentId);
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
+        StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
+        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
 
@@ -309,18 +331,18 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayOperationResult.Failed("勤怠入力を更新できませんでした。");
         }
 
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
 
-    public async Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct)
+    public async Task<Result<int>> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct)
     {
-        if (!HasRpcAccess())
+        if (businessDayId <= 0)
         {
-            return 0;
+            return Result<int>.Failure(ResultFailureKind.InvalidInput, "営業日情報が正しくありません。");
         }
 
-        var result = await RpcClient.PostScalarAsync(
+        var result = await PostRpcScalarResultAsync(
             "store.get_open_slip_count",
             new
             {
@@ -328,19 +350,33 @@ public class SupabaseBusinessDayRepository(
                 p_business_day_id = businessDayId
             },
             ct);
-        var value = result.Succeeded ? result.Body?.Trim() : null;
-
-        return int.TryParse(value, out var count) ? count : 0;
-    }
-
-    public async Task<BusinessDayDrinkDeliveryStatus> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct)
-    {
-        if (!HasRpcAccess())
+        if (!result.Succeeded)
         {
-            return new BusinessDayDrinkDeliveryStatus();
+            return Result<int>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "未会計伝票数を取得できませんでした。");
         }
 
-        var rows = await PostRpcArrayAsync(
+        var value = NormalizeScalarBody(result.Value);
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+            ? Result<int>.Success(count)
+            : Result<int>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "未会計伝票数の応答形式が正しくありません。");
+    }
+
+    public async Task<Result<BusinessDayDrinkDeliveryStatus>> GetDrinkDeliveryStatusAsync(
+        long businessDayId,
+        CancellationToken ct)
+    {
+        if (businessDayId <= 0)
+        {
+            return Result<BusinessDayDrinkDeliveryStatus>.Failure(
+                ResultFailureKind.InvalidInput,
+                "営業日情報が正しくありません。");
+        }
+
+        var result = await PostRpcArrayResultAsync(
             "store.get_business_day_drink_delivery_status",
             new
             {
@@ -348,17 +384,25 @@ public class SupabaseBusinessDayRepository(
                 p_business_day_id = businessDayId
             },
             ct);
-
-        if (rows.Count == 0)
+        if (!result.Succeeded)
         {
-            return new BusinessDayDrinkDeliveryStatus();
+            return Result<BusinessDayDrinkDeliveryStatus>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "酒代入力状況を取得できませんでした。");
         }
 
-        return new BusinessDayDrinkDeliveryStatus
+        if (result.Value.Count == 0)
         {
-            Amount = ReadDecimal(rows[0], "drink_delivery_amount") ?? 0,
-            IsEntered = ReadBool(rows[0], "is_entered") ?? false
-        };
+            return Result<BusinessDayDrinkDeliveryStatus>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "酒代入力状況の応答がありません。");
+        }
+
+        return Result<BusinessDayDrinkDeliveryStatus>.Success(new BusinessDayDrinkDeliveryStatus
+        {
+            Amount = ReadDecimal(result.Value[0], "drink_delivery_amount") ?? 0,
+            IsEntered = ReadBool(result.Value[0], "is_entered") ?? false
+        });
     }
 
     public async Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(
@@ -397,16 +441,18 @@ public class SupabaseBusinessDayRepository(
             : BusinessDayAmountSaveResult.Failed("納品額を保存できませんでした。");
     }
 
-    public async Task<IReadOnlyList<BusinessDayClosingAttendanceItem>> GetClosingAttendanceAsync(
+    public async Task<Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>> GetClosingAttendanceAsync(
         long businessDayId,
         CancellationToken ct)
     {
-        if (!HasRpcAccess())
+        if (businessDayId <= 0)
         {
-            return [];
+            return Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>.Failure(
+                ResultFailureKind.InvalidInput,
+                "営業日情報が正しくありません。");
         }
 
-        var rows = await PostRpcArrayAsync(
+        var result = await PostRpcArrayResultAsync(
             "store.get_business_day_closing_attendance",
             new
             {
@@ -414,11 +460,18 @@ public class SupabaseBusinessDayRepository(
                 p_business_day_id = businessDayId
             },
             ct);
+        if (!result.Succeeded)
+        {
+            return Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "勤怠入力を取得できませんでした。");
+        }
 
-        return rows
+        var attendance = result.Value
             .Select(ParseClosingAttendanceItem)
             .Where(x => x.AttendanceId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
+        return Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>.Success(attendance);
     }
 
     public async Task<BusinessDayAttendanceSaveResult> SaveClosingAttendanceAsync(
@@ -469,7 +522,7 @@ public class SupabaseBusinessDayRepository(
             return BusinessDayAttendanceSaveResult.Failed("勤怠入力を保存できませんでした。");
         }
 
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
+        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
         return BusinessDayAttendanceSaveResult.Success(savedCount);
     }
 

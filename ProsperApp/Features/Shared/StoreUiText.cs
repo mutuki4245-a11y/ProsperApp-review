@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Shared;
 
 public static class StoreUiText
 {

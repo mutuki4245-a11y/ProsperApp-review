@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Receipts;
 
 public class QuickEntryInputModel
 {

@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -27,6 +27,7 @@ public class ReceiptsModel(
     public IReadOnlyList<PendingReceiptItem> PendingReceipts { get; private set; } = [];
     public PendingReceiptItem? CurrentReceipt { get; private set; }
     public string? PendingReceiptsLoadError { get; private set; }
+    public PageLoadStatus? PendingReceiptsLoadStatus { get; private set; }
     public string? NextPreviewUrl { get; private set; }
     public int CurrentPosition => PendingReceipts.Count == 0 ? 0 : CurrentIndex + 1;
     public int TotalCount => PendingReceipts.Count;
@@ -120,8 +121,14 @@ public class ReceiptsModel(
             return NotFound();
         }
 
-        var pendingReceipts = await _receiptRepository.GetPendingAsync(cancellationToken);
-        if (Index + 1 >= pendingReceipts.Count)
+        var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
+        if (!pendingResult.Succeeded)
+        {
+            ApplyPendingFailure(pendingResult);
+            return Page();
+        }
+
+        if (Index + 1 >= pendingResult.Value.Count)
         {
             return RedirectToPage("/Closing/Index");
         }
@@ -164,13 +171,19 @@ public class ReceiptsModel(
 
     private async Task<IActionResult> RedirectAfterReceiptChangeAsync(int requestedIndex, CancellationToken cancellationToken)
     {
-        var pendingReceipts = await _receiptRepository.GetPendingAsync(cancellationToken);
-        if (pendingReceipts.Count == 0)
+        var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
+        if (!pendingResult.Succeeded)
+        {
+            ApplyPendingFailure(pendingResult);
+            return Page();
+        }
+
+        if (pendingResult.Value.Count == 0)
         {
             return RedirectToPage("/Closing/Index");
         }
 
-        var nextIndex = Math.Clamp(requestedIndex, 0, pendingReceipts.Count - 1);
+        var nextIndex = Math.Clamp(requestedIndex, 0, pendingResult.Value.Count - 1);
         return RedirectToPage(new { index = nextIndex });
     }
 
@@ -179,6 +192,11 @@ public class ReceiptsModel(
         var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
         PendingReceipts = pendingResult.Succeeded ? pendingResult.Value : [];
         PendingReceiptsLoadError = pendingResult.Succeeded ? null : pendingResult.ErrorMessage;
+        PendingReceiptsLoadStatus = pendingResult.Succeeded
+            ? PageLoadStatus.Success(_storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()))
+            : PageLoadStatus.Failure(
+                pendingResult.FailureKind ?? ResultFailureKind.Unavailable,
+                pendingResult.ErrorMessage ?? "未処理領収書を取得できませんでした。");
         if (PendingReceipts.Count == 0)
         {
             CurrentReceipt = null;
@@ -202,6 +220,17 @@ public class ReceiptsModel(
                 Amount = CurrentReceipt.Amount
             };
         }
+    }
+
+    private void ApplyPendingFailure(Result<IReadOnlyList<PendingReceiptItem>> result)
+    {
+        PendingReceipts = [];
+        CurrentReceipt = null;
+        CurrentIndex = 0;
+        PendingReceiptsLoadError = result.ErrorMessage ?? "未処理領収書を取得できませんでした。";
+        PendingReceiptsLoadStatus = PageLoadStatus.Failure(
+            result.FailureKind ?? ResultFailureKind.Unavailable,
+            PendingReceiptsLoadError);
     }
 
     private async Task<IActionResult?> RedirectToGoogleLoginIfCurrentReceiptNeedsDriveAsync()

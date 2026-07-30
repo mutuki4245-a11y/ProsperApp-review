@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Receipts;
 
 public sealed class DocumentJournalSavePayload
 {

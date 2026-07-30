@@ -1,29 +1,31 @@
-using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseNominationBackAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), INominationBackAdminRepository
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), INominationBackAdminRepository
 {
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
 
-    public async Task<IReadOnlyList<NominationBackMasterItem>> GetSettingsAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyList<NominationBackMasterItem>>> GetSettingsAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return [];
+            return Result<IReadOnlyList<NominationBackMasterItem>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.NominationBackMaster(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<NominationBackMasterItem>? cachedSettings))
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<NominationBackMasterItem>? cachedSettings))
         {
-            return cachedSettings ?? [];
+            return Result<IReadOnlyList<NominationBackMasterItem>>.Success(cachedSettings ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -33,7 +35,9 @@ public class SupabaseNominationBackAdminRepository(
 
         if (!result.Succeeded)
         {
-            return [];
+            return RpcFailure<IReadOnlyList<NominationBackMasterItem>>(
+                result.ErrorMessage,
+                "指名バック設定を取得できませんでした。");
         }
 
         var settings = result.Rows
@@ -53,8 +57,8 @@ public class SupabaseNominationBackAdminRepository(
             .ThenBy(x => x.DisplayName)
             .ToList();
 
-        _memoryCache.Set(cacheKey, settings, StoreMasterCacheKeys.CreateRuntimeOptions());
-        return settings;
+        StoreMasterCacheKeys.SetRuntime(_cache, cacheKey, settings, "指名バック設定");
+        return Result<IReadOnlyList<NominationBackMasterItem>>.Success(settings);
     }
 
     public async Task<NominationBackMasterSaveResult> SaveSettingsAsync(
@@ -100,7 +104,7 @@ public class SupabaseNominationBackAdminRepository(
         var updatedCount = result.Rows.Count > 0 ? (int)(ReadLong(result.Rows[0], "updated_count") ?? 0) : 0;
         if (updatedCount > 0)
         {
-            StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearNominationBacks(_cache, CurrentStoreDepartmentId);
         }
 
         return updatedCount > 0

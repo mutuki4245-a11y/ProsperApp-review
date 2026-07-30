@@ -1,0 +1,17 @@
+global using ProsperApp.Features.Attendance;
+global using ProsperApp.Features.BusinessDays;
+global using ProsperApp.Features.BusinessHome;
+global using ProsperApp.Features.Catalog;
+global using ProsperApp.Features.Checkout;
+global using ProsperApp.Features.Closing;
+global using ProsperApp.Features.Drive;
+global using ProsperApp.Features.Orders;
+global using ProsperApp.Features.Pricing;
+global using ProsperApp.Features.Receipts;
+global using ProsperApp.Features.Settings;
+global using ProsperApp.Features.Shared;
+global using ProsperApp.Features.Slips;
+global using ProsperApp.Infrastructure.Caching;
+global using ProsperApp.Infrastructure.GoogleDrive;
+global using ProsperApp.Infrastructure.Supabase;
+global using ProsperApp.Services;

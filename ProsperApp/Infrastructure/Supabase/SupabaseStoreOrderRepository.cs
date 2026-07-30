@@ -1,21 +1,28 @@
-using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStoreOrderRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreOrderRepository
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreOrderRepository
 {
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
 
-    public async Task<IReadOnlyList<StoreOrderSlipOption>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct)
+    public async Task<Result<IReadOnlyList<StoreOrderSlipOption>>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        if (businessDayId <= 0)
+        {
+            return Result<IReadOnlyList<StoreOrderSlipOption>>.Failure(
+                ResultFailureKind.InvalidInput,
+                "営業日情報が正しくありません。");
+        }
+
+        var result = await PostRpcArrayResultAsync(
             "store.get_order_entry_slips",
             new
             {
@@ -23,8 +30,14 @@ public class SupabaseStoreOrderRepository(
                 p_business_day_id = businessDayId
             },
             ct);
+        if (!result.Succeeded)
+        {
+            return Result<IReadOnlyList<StoreOrderSlipOption>>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "注文対象の伝票を取得できませんでした。");
+        }
 
-        return rows.Select(row => new StoreOrderSlipOption
+        var slips = result.Value.Select(row => new StoreOrderSlipOption
             {
                 SlipId = ReadLong(row, "slip_id") ?? 0,
                 TableId = ReadLong(row, "table_id"),
@@ -39,20 +52,23 @@ public class SupabaseStoreOrderRepository(
             })
             .Where(x => x.SlipId > 0)
             .ToList();
+        return Result<IReadOnlyList<StoreOrderSlipOption>>.Success(slips);
     }
 
-    public async Task<IReadOnlyList<StoreOrderItemOption>> GetItemsAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyList<StoreOrderItemOption>>> GetItemsAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return [];
+            return Result<IReadOnlyList<StoreOrderItemOption>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.OrderItems(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderItemOption>? cachedItems))
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderItemOption>? cachedItems))
         {
-            return cachedItems ?? [];
+            return Result<IReadOnlyList<StoreOrderItemOption>>.Success(cachedItems ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -62,7 +78,9 @@ public class SupabaseStoreOrderRepository(
 
         if (!result.Succeeded)
         {
-            return [];
+            return RpcFailure<IReadOnlyList<StoreOrderItemOption>>(
+                result.ErrorMessage,
+                "商品一覧を取得できませんでした。");
         }
 
         var items = result.Rows.Select(row => new StoreOrderItemOption
@@ -80,22 +98,33 @@ public class SupabaseStoreOrderRepository(
             })
             .Where(x => x.ItemId > 0 && !string.IsNullOrWhiteSpace(x.ItemName))
             .ToList();
-        _memoryCache.Set(cacheKey, items, StoreMasterCacheKeys.CreateOptions());
-        return items;
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, items, "注文商品");
+        return Result<IReadOnlyList<StoreOrderItemOption>>.Success(items);
     }
 
-    public async Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsAsync(long businessDayId, CancellationToken ct)
+    public async Task<Result<IReadOnlyList<StoreOrderAttendanceCastOption>>> GetAttendanceCastsAsync(
+        long businessDayId,
+        CancellationToken ct)
     {
-        if (!HasRpcAccess() || businessDayId <= 0)
+        if (!HasRpcAccess())
         {
-            return [];
+            return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
+        }
+
+        if (businessDayId <= 0)
+        {
+            return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Failure(
+                ResultFailureKind.InvalidInput,
+                "営業日情報が正しくありません。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.OrderAttendingCasts(departmentId, businessDayId);
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderAttendanceCastOption>? cachedCasts))
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderAttendanceCastOption>? cachedCasts))
         {
-            return cachedCasts ?? [];
+            return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Success(cachedCasts ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -109,7 +138,9 @@ public class SupabaseStoreOrderRepository(
 
         if (!result.Succeeded)
         {
-            return [];
+            return RpcFailure<IReadOnlyList<StoreOrderAttendanceCastOption>>(
+                result.ErrorMessage,
+                "出勤キャストを取得できませんでした。");
         }
 
         var casts = result.Rows.Select(row => new StoreOrderAttendanceCastOption
@@ -123,8 +154,8 @@ public class SupabaseStoreOrderRepository(
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
 
-        _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateRuntimeOptions());
-        return casts;
+        StoreMasterCacheKeys.SetRuntime(_cache, cacheKey, casts, "注文用出勤キャスト");
+        return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Success(casts);
     }
 
     public async Task<AddStoreOrderLinesResult> AddOrderLinesAsync(long slipId, IReadOnlyList<OrderQueueInputModel> lines, CancellationToken ct)

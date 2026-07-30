@@ -35,9 +35,14 @@
     @if (!string.IsNullOrWhiteSpace(Model.PendingReceiptsLoadError))
     {
         <div class="alert alert-danger">
+            <strong>@Model.PendingReceiptsLoadStatus?.FailureTitle</strong>
             <div>@Model.PendingReceiptsLoadError</div>
             <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Closing/Receipts" asp-route-index="@Model.Index">再試行</a>
         </div>
+    }
+    else if (Model.PendingReceiptsLoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
     }
     else if (Model.CurrentReceipt is null)
     {

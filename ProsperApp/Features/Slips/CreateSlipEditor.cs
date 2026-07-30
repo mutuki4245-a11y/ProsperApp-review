@@ -1,6 +1,5 @@
-using ProsperApp.Models;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Slips;
 
 public static class CreateSlipEditor
 {

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -36,6 +36,8 @@ public class CastSalesAdjustmentModel(
     public string? SuccessMessage { get; private set; }
 
     public string? LoadErrorMessage { get; private set; }
+
+    public PageLoadStatus? LoadStatus { get; private set; }
 
     public long? ShowCastSalesAdjustmentModalSlipId { get; private set; }
 
@@ -167,11 +169,32 @@ public class CastSalesAdjustmentModel(
         await Task.WhenAll(storeContextTask, currentBusinessDayTask);
 
         var storeContext = await storeContextTask;
-        CastSalesAmountBasis = storeContext?.CastSalesAmountBasis ?? LocalSettings.CastSalesAmountBasisTotal;
-        CastSalesSplitMode = storeContext?.CastSalesSplitMode ?? LocalSettings.CastSalesSplitModeSplit;
-        CurrentBusinessDay = await currentBusinessDayTask;
+        var currentBusinessDay = await currentBusinessDayTask;
+        if (!storeContext.Succeeded || !currentBusinessDay.Succeeded)
+        {
+            var failureKind = !storeContext.Succeeded
+                ? storeContext.FailureKind
+                : currentBusinessDay.FailureKind;
+            LoadErrorMessage = !storeContext.Succeeded
+                ? storeContext.ErrorMessage
+                : currentBusinessDay.ErrorMessage;
+            LoadStatus = PageLoadStatus.Failure(
+                failureKind ?? ResultFailureKind.Unavailable,
+                LoadErrorMessage ?? "キャスト売上額調整に必要な情報を取得できませんでした。");
+            CurrentBusinessDay = null;
+            CastSalesAdjustmentStatus = new CastSalesAdjustmentStatus();
+            CastSalesAdjustmentSlips = [];
+            CastSalesAdjustmentDetails = [];
+            return;
+        }
+
+        CastSalesAmountBasis = storeContext.Value.CastSalesAmountBasis;
+        CastSalesSplitMode = storeContext.Value.CastSalesSplitMode;
+        CurrentBusinessDay = currentBusinessDay.Value;
         if (CurrentBusinessDay is null)
         {
+            LoadStatus = PageLoadStatus.Success(
+                _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
             CastSalesAdjustmentStatus = new CastSalesAdjustmentStatus();
             CastSalesAdjustmentSlips = [];
             CastSalesAdjustmentDetails = [];
@@ -184,6 +207,9 @@ public class CastSalesAdjustmentModel(
         if (!overviewResult.Succeeded)
         {
             LoadErrorMessage = overviewResult.ErrorMessage ?? "キャスト売上額調整を取得できませんでした。";
+            LoadStatus = PageLoadStatus.Failure(
+                overviewResult.FailureKind ?? ResultFailureKind.Unavailable,
+                LoadErrorMessage);
             CastSalesAdjustmentStatus = new CastSalesAdjustmentStatus
             {
                 RequiredSlipCount = 1,
@@ -195,6 +221,8 @@ public class CastSalesAdjustmentModel(
         }
 
         CastSalesAdjustmentStatus = overviewResult.Value.Status;
+        LoadStatus = PageLoadStatus.Success(
+            _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
         CastSalesAdjustmentSlips = overviewResult.Value.Slips;
         foreach (var detail in overviewResult.Value.Details)
         {

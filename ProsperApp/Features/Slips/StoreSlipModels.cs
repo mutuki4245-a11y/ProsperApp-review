@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using ProsperApp.Services;
 
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Slips;
 
 public class StoreContext
 {

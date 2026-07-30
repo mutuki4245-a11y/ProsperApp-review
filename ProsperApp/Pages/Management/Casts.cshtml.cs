@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -8,11 +8,13 @@ namespace ProsperApp.Pages;
 public class ManagementCastsModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
-    IStoreCastAdminRepository castAdminRepository) : PageModel
+    IStoreCastAdminRepository castAdminRepository,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreCastAdminRepository _castAdminRepository = castAdminRepository;
+    private readonly IStoreClock _storeClock = storeClock;
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
@@ -30,6 +32,7 @@ public class ManagementCastsModel(
     public long? EditingDrinkMemoCastId { get; private set; }
 
     public string? SuccessMessage { get; set; }
+    public PageLoadStatus? LoadStatus { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -38,8 +41,7 @@ public class ManagementCastsModel(
             return NotFound();
         }
 
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+        await LoadAsync(cancellationToken);
         return Page();
     }
 
@@ -50,11 +52,13 @@ public class ManagementCastsModel(
             return NotFound();
         }
 
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (!await LoadAsync(cancellationToken))
+        {
+            return Page();
+        }
         ModelState.Clear();
         if (!TryValidateModel(Input, nameof(Input)))
         {
-            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
         }
 
@@ -62,14 +66,13 @@ public class ManagementCastsModel(
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "キャストを登録できませんでした。");
-            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
         }
 
         ModelState.Clear();
         Input = new StoreCastCreateInputModel();
         SuccessMessage = "キャストを登録しました。";
-        Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+        await LoadAsync(cancellationToken);
         return Page();
     }
 
@@ -80,11 +83,13 @@ public class ManagementCastsModel(
             return NotFound();
         }
 
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (!await LoadAsync(cancellationToken))
+        {
+            return Page();
+        }
         if (DeleteCastId is null or <= 0)
         {
             ModelState.AddModelError(string.Empty, "削除するキャストを選択してください。");
-            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
         }
 
@@ -92,14 +97,13 @@ public class ManagementCastsModel(
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "キャストを削除できませんでした。");
-            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
         }
 
         ModelState.Clear();
         Input = new StoreCastCreateInputModel();
         SuccessMessage = "キャストを削除しました。";
-        Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+        await LoadAsync(cancellationToken);
         return Page();
     }
 
@@ -110,12 +114,14 @@ public class ManagementCastsModel(
             return NotFound();
         }
 
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (!await LoadAsync(cancellationToken))
+        {
+            return Page();
+        }
         ModelState.Clear();
         if (!TryValidateModel(DrinkMemoInput, nameof(DrinkMemoInput)))
         {
             EditingDrinkMemoCastId = DrinkMemoInput.CastId;
-            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
         }
 
@@ -127,7 +133,6 @@ public class ManagementCastsModel(
         {
             EditingDrinkMemoCastId = DrinkMemoInput.CastId;
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "ドリンクメモを更新できませんでした。");
-            Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
             return Page();
         }
 
@@ -135,7 +140,34 @@ public class ManagementCastsModel(
         Input = new StoreCastCreateInputModel();
         DrinkMemoInput = new StoreCastDrinkMemoInputModel();
         SuccessMessage = "ドリンクメモを更新しました。";
-        Casts = await _castAdminRepository.GetCastsAsync(cancellationToken);
+        await LoadAsync(cancellationToken);
         return Page();
+    }
+
+    private async Task<bool> LoadAsync(CancellationToken cancellationToken)
+    {
+        var businessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
+        var castsTask = _castAdminRepository.GetCastsAsync(cancellationToken);
+        await Task.WhenAll(businessDayTask, castsTask);
+
+        var businessDay = await businessDayTask;
+        var casts = await castsTask;
+        CurrentBusinessDay = businessDay.Succeeded ? businessDay.Value : null;
+        Casts = casts.Succeeded ? casts.Value : [];
+
+        if (!businessDay.Succeeded || !casts.Succeeded)
+        {
+            var failureKind = !businessDay.Succeeded ? businessDay.FailureKind : casts.FailureKind;
+            var message = !businessDay.Succeeded ? businessDay.ErrorMessage : casts.ErrorMessage;
+            LoadStatus = PageLoadStatus.Failure(
+                failureKind ?? ResultFailureKind.Unavailable,
+                message ?? "キャスト管理に必要な情報を取得できませんでした。");
+            ModelState.AddModelError(string.Empty, LoadStatus.ErrorMessage!);
+            return false;
+        }
+
+        LoadStatus = PageLoadStatus.Success(
+            _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
+        return true;
     }
 }

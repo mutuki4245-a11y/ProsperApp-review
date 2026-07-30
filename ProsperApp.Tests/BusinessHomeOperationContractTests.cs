@@ -1,6 +1,5 @@
 using System.Text.Json;
 using ProsperApp.Features.BusinessHome;
-using ProsperApp.Models;
 
 namespace ProsperApp.Tests;
 

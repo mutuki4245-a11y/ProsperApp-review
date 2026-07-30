@@ -2,24 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ProsperApp.Models;
+using ProsperApp.Features.Orders;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages.Orders;
 
 public class IndexModel(
     IFeatureGate featureGate,
-    IBusinessDayRepository businessDayRepository,
-    IStoreOrderRepository orderRepository,
-    IStoreSlipRepository slipRepository,
-    IOrderQueueService orderQueueService,
+    IOrderEntryApplicationService orderEntryApplicationService,
     IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
-    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
-    private readonly IStoreOrderRepository _orderRepository = orderRepository;
-    private readonly IStoreSlipRepository _slipRepository = slipRepository;
-    private readonly IOrderQueueService _orderQueueService = orderQueueService;
+    private readonly IOrderEntryApplicationService _orderEntryApplicationService = orderEntryApplicationService;
     private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty(SupportsGet = true)]
@@ -46,6 +41,10 @@ public class IndexModel(
 
     public string? SuccessMessage { get; set; }
 
+    public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
+
+    public DateTimeOffset? LastUpdatedAt { get; private set; }
+
     public async Task<IActionResult> OnGetAsync(long? slipId, CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Orders))
@@ -65,16 +64,22 @@ public class IndexModel(
             return NotFound();
         }
 
-        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (currentBusinessDay is null)
+        var result = await _orderEntryApplicationService.GetOpenSlipsAsync(cancellationToken);
+        if (!result.Succeeded)
         {
-            return new JsonResult(new { succeeded = true, slips = Array.Empty<object>() });
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                failureKind = result.FailureKind?.ToString(),
+                message = result.ErrorMessage ?? "注文対象の伝票を取得できませんでした。"
+            });
         }
 
-        var slips = await _orderRepository.GetOpenSlipsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
+        var slips = result.Value;
         return new JsonResult(new
         {
             succeeded = true,
+            updatedAt = _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()),
             slips = slips.Select(slip => new
             {
                 id = slip.SlipId,
@@ -96,7 +101,7 @@ public class IndexModel(
             return NotFound();
         }
 
-        QueueLines = _orderQueueService.ReadPostedQueue(OrderQueueJson, QueueLines);
+        QueueLines = _orderEntryApplicationService.ReadPostedQueue(OrderQueueJson, QueueLines).ToList();
         await LoadOptionsAsync(cancellationToken);
         ValidateBusinessRules();
 
@@ -105,7 +110,7 @@ public class IndexModel(
             return Page();
         }
 
-        var result = await _orderRepository.AddOrderLinesAsync(0, QueueLines, cancellationToken);
+        var result = await _orderEntryApplicationService.AddOrderLinesAsync(QueueLines, cancellationToken);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文を登録できませんでした。");
@@ -127,28 +132,14 @@ public class IndexModel(
 
     private async Task LoadOptionsAsync(CancellationToken cancellationToken)
     {
-        var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
-        var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
-        var itemsTask = _orderRepository.GetItemsAsync(cancellationToken);
-
-        await Task.WhenAll(storeContextTask, currentBusinessDayTask, itemsTask);
-
-        StoreContext = await storeContextTask;
-        CurrentBusinessDay = await currentBusinessDayTask;
-
-        if (CurrentBusinessDay is null)
-        {
-            Slips = [];
-            Items = [];
-            AttendanceCasts = [];
-            return;
-        }
-
-        var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-
+        var state = await _orderEntryApplicationService.LoadPageAsync(cancellationToken);
+        StoreContext = state.StoreContext;
+        CurrentBusinessDay = state.BusinessDay;
         Slips = [];
-        Items = await itemsTask;
-        AttendanceCasts = await attendanceCastsTask;
+        Items = state.Items;
+        AttendanceCasts = state.AttendanceCasts;
+        LoadIssues = state.LoadIssues;
+        LastUpdatedAt = state.LastUpdatedAt;
     }
 
     private void ValidateBusinessRules()
@@ -159,7 +150,13 @@ public class IndexModel(
             return;
         }
 
-        foreach (var error in _orderQueueService.ValidateOrderEntryQueue(QueueLines, Items, AttendanceCasts))
+        if (LoadIssues.Count > 0)
+        {
+            ModelState.AddModelError(string.Empty, "必要な情報を取得できないため注文を登録できません。再取得してください。");
+            return;
+        }
+
+        foreach (var error in _orderEntryApplicationService.ValidateQueue(QueueLines, Items, AttendanceCasts))
         {
             ModelState.AddModelError(nameof(QueueLines), error);
         }

@@ -1,5 +1,4 @@
 @page
-@using ProsperApp.Models
 @model CastSalesAdjustmentModel
 @{
     ViewData["Title"] = "キャスト売上額調整";
@@ -29,10 +28,15 @@
 
     @if (!string.IsNullOrWhiteSpace(Model.LoadErrorMessage))
     {
-        <div class="alert alert-warning" role="alert">
-            <span>@Model.LoadErrorMessage</span>
-            <a class="btn btn-outline-secondary btn-sm ms-2" asp-page="/Closing/CastSalesAdjustment">再読込</a>
+        <div class="alert alert-danger" role="alert">
+            <strong>@Model.LoadStatus?.FailureTitle</strong>
+            <div>@Model.LoadErrorMessage</div>
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Closing/CastSalesAdjustment">再試行</a>
         </div>
+    }
+    else if (Model.LoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
     }
 
     @if (!hasBusinessDay)

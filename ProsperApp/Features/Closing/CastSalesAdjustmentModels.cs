@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using ProsperApp.Services;
 
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Closing;
 
 public class CastSalesAdjustmentStatus
 {

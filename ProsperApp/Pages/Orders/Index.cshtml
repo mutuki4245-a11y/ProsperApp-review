@@ -26,6 +26,22 @@
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
     }
 
+    @if (Model.LoadIssues.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>注文端末の情報をすべて取得できませんでした。</strong>
+            @foreach (var issue in Model.LoadIssues)
+            {
+                <div>@issue.Area: @issue.Message</div>
+            }
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Orders/Index">再試行</a>
+        </div>
+    }
+    else if (Model.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
+    }
+
     <form method="post" class="order-entry__form" id="orderForm">
         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
         <input type="hidden" asp-for="SelectedSlipId" id="selectedSlipId" />

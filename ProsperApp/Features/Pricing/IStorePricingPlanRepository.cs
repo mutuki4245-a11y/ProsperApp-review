@@ -1,10 +1,10 @@
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Pricing;
 
 public interface IStorePricingPlanRepository
 {
-    Task<StorePricingPlanInputModel> GetAsync(CancellationToken ct);
+    Task<Result<StorePricingPlanInputModel>> GetAsync(CancellationToken ct);
 
     Task<StorePricingPlanSaveResult> SaveAsync(StorePricingPlanInputModel plan, CancellationToken ct);
 }

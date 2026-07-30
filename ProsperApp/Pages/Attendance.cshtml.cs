@@ -1,21 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Features.Attendance;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
 public class AttendanceModel(
     IFeatureGate featureGate,
-    IBusinessDayRepository businessDayRepository,
-    IStoreSlipRepository slipRepository,
-    IStoreClock storeClock) : PageModel
+    IAttendanceApplicationService attendanceApplicationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
-    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
-    private readonly IStoreSlipRepository _slipRepository = slipRepository;
-    private readonly IStoreClock _storeClock = storeClock;
+    private readonly IAttendanceApplicationService _attendanceApplicationService = attendanceApplicationService;
+    private AttendancePageState? _pageState;
 
     [BindProperty]
     public ClosingAttendanceInputModel Input { get; set; } = new();
@@ -37,6 +34,10 @@ public class AttendanceModel(
     public string? SuccessMessage { get; private set; }
 
     public string? CastLoadErrorMessage { get; private set; }
+
+    public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
+
+    public DateTimeOffset? LastUpdatedAt { get; private set; }
 
     public bool IsClosingContext => Request.Path.StartsWithSegments("/Closing/Attendance", StringComparison.OrdinalIgnoreCase);
 
@@ -61,109 +62,34 @@ public class AttendanceModel(
             return NotFound();
         }
 
-        var postedBusinessDayId = Input.BusinessDayId;
         var mergeResult = AttendanceEditor.MergeSelectedEntries(Input);
         if (!mergeResult.Succeeded)
         {
             ModelState.AddModelError(string.Empty, mergeResult.ErrorMessage ?? "勤怠入力を読み取れませんでした。");
         }
         await LoadAsync(cancellationToken, preserveInput: true);
-        if (CurrentBusinessDay is not null && postedBusinessDayId != CurrentBusinessDay.BusinessDayId)
+        if (LoadIssues.Count > 0 || _pageState is null)
         {
-            ModelState.AddModelError(string.Empty, "営業日情報が更新されています。画面を再読み込みしてください。");
+            ModelState.AddModelError(string.Empty, "必要な情報を取得できないため勤怠を保存できません。再試行してください。");
             return Page();
         }
 
-        AddAttendanceErrors(AttendanceEditor.Validate(
-            Input,
-            ClockInTimeOptions,
-            ClockOutTimeOptions,
-            CurrentBusinessDay?.BusinessDate ?? CurrentBusinessDate,
-            _storeClock,
-            CastLoadErrorMessage));
+        AddAttendanceErrors(_attendanceApplicationService.Validate(_pageState, Input));
         if (!ModelState.IsValid)
         {
             return Page();
         }
 
-        if (CurrentBusinessDay is null)
+        var saveResult = await _attendanceApplicationService.SaveAsync(Input, cancellationToken);
+        if (!saveResult.Succeeded)
         {
-            var ensureResult = await _businessDayRepository.EnsureCurrentAsync(cancellationToken);
-            if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
-            {
-                ModelState.AddModelError(string.Empty, ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
-                return Page();
-            }
-
-            CurrentBusinessDay = ensureResult.BusinessDay;
-            Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;
-        }
-
-        var attendanceEntries = Input.Entries
-            .Where(x => x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime)))
-            .Select(x => new BusinessDayAttendanceInput
-            {
-                CastId = x.CastId,
-                IsSelected = x.IsSelected,
-                ClockInTime = x.ClockInTime?.Trim() ?? string.Empty
-            })
-            .ToArray();
-
-        var attendanceResult = await _businessDayRepository.SaveAttendanceAsync(
-            CurrentBusinessDay.BusinessDayId,
-            attendanceEntries,
-            cancellationToken);
-
-        if (!attendanceResult.Succeeded)
-        {
-            ModelState.AddModelError(string.Empty, attendanceResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
+            ModelState.AddModelError(string.Empty, saveResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
+            await LoadAsync(cancellationToken, preserveInput: true);
             return Page();
         }
 
-        var savedAttendance = await _businessDayRepository.GetClosingAttendanceAsync(
-            CurrentBusinessDay.BusinessDayId,
-            cancellationToken);
-        var attendanceIdByCastId = savedAttendance
-            .GroupBy(x => x.CastId)
-            .ToDictionary(x => x.Key, x => x.Last().AttendanceId);
-        var clockOutEntries = Input.Entries
-            .Where(x => x.IsSelected && !string.IsNullOrWhiteSpace(x.ClockOutTime))
-            .Select(x =>
-            {
-                attendanceIdByCastId.TryGetValue(x.CastId, out var attendanceId);
-                return new BusinessDayClosingAttendanceInput
-                {
-                    AttendanceId = attendanceId,
-                    DisplayName = x.DisplayName,
-                    DepartmentName = x.DepartmentName,
-                    ClockInTime = x.ClockInTime?.Trim(),
-                    ClockOutTime = x.ClockOutTime?.Trim(),
-                    UsesSendService = x.UsesSendService
-                };
-            })
-            .Where(x => x.AttendanceId > 0)
-            .ToArray();
-
-        var savedClockOutCount = 0;
-        if (clockOutEntries.Length > 0)
-        {
-            var closingResult = await _businessDayRepository.SaveClosingAttendanceAsync(
-                CurrentBusinessDay.BusinessDayId,
-                clockOutEntries,
-                cancellationToken);
-
-            if (!closingResult.Succeeded)
-            {
-                ModelState.AddModelError(string.Empty, closingResult.ErrorMessage ?? "退勤時刻を保存できませんでした。");
-                await LoadAsync(cancellationToken);
-                return Page();
-            }
-
-            savedClockOutCount = closingResult.SavedCount;
-        }
-
-        var selectedCount = Input.Entries.Count(x => x.IsSelected);
-        TempData["SuccessMessage"] = $"勤怠入力を保存しました。出勤 {selectedCount}名 / 退勤 {savedClockOutCount}名";
+        TempData["SuccessMessage"] =
+            $"勤怠入力を保存しました。出勤 {saveResult.Value.SelectedCount}名 / 退勤 {saveResult.Value.SavedClockOutCount}名";
         return IsClosingContext
             ? RedirectToPage("/Closing/Index")
             : RedirectToCurrentPath();
@@ -176,101 +102,20 @@ public class AttendanceModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
     {
-        var storeContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
-        StoreContext = storeContext;
-        var minuteStep = storeContext?.AttendanceMinuteStep ?? 15;
-        ClockInTimeOptions = AttendanceEditor.BuildTimeOptions(19, 0, minuteStep);
-        ClockOutTimeOptions = AttendanceEditor.BuildTimeOptions(24, 0, minuteStep);
-        DefaultClockInTime = AttendanceEditor.ResolveDefaultTime(ClockInTimeOptions, "19:00");
-        DefaultClockOutTime = string.Empty;
-        CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        var postedByCastId = preserveInput
-            ? Input.Entries
-                .Where(x => x.CastId > 0)
-                .GroupBy(x => x.CastId)
-                .ToDictionary(x => x.Key, x => x.Last())
-            : [];
-        var postedSelectedCastIds = preserveInput
-            ? AttendanceEditor.ParseSelectedCastIds(Input.SelectedCastIds)
-            : new HashSet<long>();
-        IReadOnlyList<BusinessDayClosingAttendanceItem> attendanceItems = CurrentBusinessDay is null
-            ? []
-            : await _businessDayRepository.GetClosingAttendanceAsync(
-                CurrentBusinessDay.BusinessDayId,
-                cancellationToken);
-        var attendanceByCastId = attendanceItems
-            .GroupBy(x => x.CastId)
-            .ToDictionary(x => x.Key, x => x.Last());
-        var castLoadResult = await _slipRepository.GetCastsResultAsync(cancellationToken);
-        CastLoadErrorMessage = castLoadResult.Succeeded ? null : castLoadResult.ErrorMessage;
-        var casts = castLoadResult.Casts;
-        var entries = casts
-            .Select(cast =>
-            {
-                postedByCastId.TryGetValue(cast.CastId, out var posted);
-                attendanceByCastId.TryGetValue(cast.CastId, out var attendance);
-                var clockInTime = posted?.ClockInTime ??
-                    _storeClock.FormatStoreTime(attendance?.ClockInAt, string.Empty);
-                if (attendance is null && posted is null && string.IsNullOrWhiteSpace(clockInTime))
-                {
-                    clockInTime = DefaultClockInTime;
-                }
-
-                var clockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty);
-
-                return new BusinessDayAttendanceEntryInput
-                {
-                    CastId = cast.CastId,
-                    AttendanceId = attendance?.AttendanceId ?? posted?.AttendanceId ?? 0,
-                    DisplayName = cast.SearchDisplayName,
-                    DepartmentName = cast.DepartmentName,
-                    IsSelected = posted?.IsSelected ?? (attendance is not null && !string.IsNullOrWhiteSpace(clockInTime)),
-                    IsRegistered = attendance is not null,
-                    ClockInTime = clockInTime,
-                    ClockOutTime = clockOutTime,
-                    UsesSendService = posted?.UsesSendService ?? attendance?.UsesSendService ?? false
-                };
-            })
-            .ToList();
-        var listedCastIds = entries.Select(x => x.CastId).ToHashSet();
-        entries.AddRange(attendanceItems
-            .Where(item => !listedCastIds.Contains(item.CastId))
-            .Select(item =>
-            {
-                postedByCastId.TryGetValue(item.CastId, out var posted);
-                var clockInTime = posted?.ClockInTime ?? _storeClock.FormatStoreTime(item.ClockInAt, string.Empty);
-                var clockOutTime = posted?.ClockOutTime ?? _storeClock.FormatStoreTime(item.ClockOutAt, string.Empty);
-
-                return new BusinessDayAttendanceEntryInput
-                {
-                    CastId = item.CastId,
-                    AttendanceId = item.AttendanceId,
-                    DisplayName = item.SearchDisplayName,
-                    DepartmentName = item.DepartmentName,
-                    IsSelected = posted?.IsSelected ?? !string.IsNullOrWhiteSpace(clockInTime),
-                    IsRegistered = true,
-                    ClockInTime = clockInTime,
-                    ClockOutTime = clockOutTime,
-                    UsesSendService = posted?.UsesSendService ?? item.UsesSendService
-                };
-            }));
-
-        if (postedSelectedCastIds.Count > 0)
-        {
-            foreach (var entry in entries)
-            {
-                entry.IsSelected = entry.IsSelected || postedSelectedCastIds.Contains(entry.CastId);
-            }
-        }
-
-        Input = new ClosingAttendanceInputModel
-        {
-            BusinessDayId = CurrentBusinessDay?.BusinessDayId,
-            SelectedCastIds = string.Join(',', entries.Where(x => x.IsSelected).Select(x => x.CastId)),
-            SelectedEntriesJson = Input.SelectedEntriesJson,
-            Entries = entries
-        };
+        _pageState = await _attendanceApplicationService.LoadAsync(Input, preserveInput, cancellationToken);
+        StoreContext = _pageState.StoreContext;
+        CurrentBusinessDay = _pageState.BusinessDay;
+        CurrentBusinessDate = _pageState.BusinessDate;
+        ClockInTimeOptions = _pageState.ClockInTimeOptions;
+        ClockOutTimeOptions = _pageState.ClockOutTimeOptions;
+        DefaultClockInTime = _pageState.DefaultClockInTime;
+        DefaultClockOutTime = _pageState.DefaultClockOutTime;
+        Input = _pageState.Input;
+        LoadIssues = _pageState.LoadIssues;
+        LastUpdatedAt = _pageState.LastUpdatedAt;
+        CastLoadErrorMessage = _pageState.LoadIssues
+            .FirstOrDefault(issue => string.Equals(issue.Area, "キャスト", StringComparison.Ordinal))
+            ?.Message;
     }
 
     private void AddAttendanceErrors(IEnumerable<AttendanceValidationError> errors)

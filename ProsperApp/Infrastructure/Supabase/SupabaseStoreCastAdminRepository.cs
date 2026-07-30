@@ -1,28 +1,30 @@
-using Microsoft.Extensions.Caching.Memory;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStoreCastAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreCastAdminRepository
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreCastAdminRepository
 {
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
 
-    public async Task<IReadOnlyList<StoreCastAdminItem>> GetCastsAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyList<StoreCastAdminItem>>> GetCastsAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return [];
+            return Result<IReadOnlyList<StoreCastAdminItem>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.CastAdminList(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreCastAdminItem>? cachedCasts))
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<StoreCastAdminItem>? cachedCasts))
         {
-            return cachedCasts ?? [];
+            return Result<IReadOnlyList<StoreCastAdminItem>>.Success(cachedCasts ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -32,7 +34,9 @@ public class SupabaseStoreCastAdminRepository(
 
         if (!result.Succeeded)
         {
-            return [];
+            return RpcFailure<IReadOnlyList<StoreCastAdminItem>>(
+                result.ErrorMessage,
+                "キャスト一覧を取得できませんでした。");
         }
 
         var casts = result.Rows.Select(row => new StoreCastAdminItem
@@ -44,8 +48,8 @@ public class SupabaseStoreCastAdminRepository(
             })
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
-        _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateOptions());
-        return casts;
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, casts, "キャスト管理一覧");
+        return Result<IReadOnlyList<StoreCastAdminItem>>.Success(casts);
     }
 
     public async Task<StoreCastSaveResult> CreateCastAsync(StoreCastCreateInputModel input, CancellationToken ct)
@@ -73,7 +77,7 @@ public class SupabaseStoreCastAdminRepository(
         var castId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "cast_id") ?? 0 : 0;
         if (castId > 0)
         {
-            StoreMasterCacheKeys.ClearCasts(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearCasts(_cache, CurrentStoreDepartmentId);
         }
 
         return castId > 0
@@ -111,8 +115,8 @@ public class SupabaseStoreCastAdminRepository(
         var castId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "cast_id") ?? 0 : 0;
         if (castId > 0)
         {
-            StoreMasterCacheKeys.ClearCasts(_memoryCache, CurrentStoreDepartmentId);
-            StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, CurrentStoreDepartmentId, currentBusinessDayId ?? 0);
+            StoreMasterCacheKeys.ClearCasts(_cache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, CurrentStoreDepartmentId, currentBusinessDayId ?? 0);
         }
 
         return castId > 0
@@ -149,7 +153,7 @@ public class SupabaseStoreCastAdminRepository(
         var deletedCastId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "cast_id") ?? 0 : 0;
         if (deletedCastId > 0)
         {
-            StoreMasterCacheKeys.ClearCasts(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearCasts(_cache, CurrentStoreDepartmentId);
         }
 
         return deletedCastId > 0

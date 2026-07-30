@@ -1,16 +1,15 @@
-using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Infrastructure.Caching;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
-public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemoryCache memoryCache)
+public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IApplicationCache cache)
     : SupabaseRepositoryBase(rpcClient), IStoreSettingsRepository
 {
     private const string DebugDeleteConfirmation = "DELETE_NON_MASTER_RECORDS";
 
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
 
     public async Task<StoreSettingsLoadResult> GetDepartmentsAsync(CancellationToken ct)
     {
@@ -19,7 +18,7 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
             return StoreSettingsLoadResult.Failed("Supabase Edge Function設定が未設定です。Azure App Serviceの環境変数 SUPABASE_RPC_EDGE_FUNCTION_URL と Supabase_Edge_Key を設定してください。");
         }
 
-        if (_memoryCache.TryGetValue(StoreMasterCacheKeys.Departments, out IReadOnlyList<DepartmentOption>? cachedDepartments) &&
+        if (_cache.TryGetValue(StoreMasterCacheKeys.Departments, out IReadOnlyList<DepartmentOption>? cachedDepartments) &&
             cachedDepartments is { Count: > 0 })
         {
             return StoreSettingsLoadResult.Success(cachedDepartments, $"cache: {cachedDepartments.Count}件");
@@ -28,7 +27,11 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
         var rpcResult = await GetDepartmentsFromRpcAsync(ct);
         if (rpcResult.Departments.Count > 0)
         {
-            _memoryCache.Set(StoreMasterCacheKeys.Departments, rpcResult.Departments, StoreMasterCacheKeys.CreateOptions());
+            StoreMasterCacheKeys.SetMaster(
+                _cache,
+                StoreMasterCacheKeys.Departments,
+                rpcResult.Departments,
+                "店舗一覧");
             return StoreSettingsLoadResult.Success(rpcResult.Departments, rpcResult.Status);
         }
 
@@ -62,8 +65,8 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IMemo
         }
 
         var tableCounts = ParseDebugDeleteCounts(result.Rows);
-        StoreMasterCacheKeys.ClearCurrentBusinessDay(_memoryCache, departmentId);
-        StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, departmentId);
+        StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
+        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
         return DebugDeleteNonMasterRecordsResult.Success(tableCounts);
     }
 

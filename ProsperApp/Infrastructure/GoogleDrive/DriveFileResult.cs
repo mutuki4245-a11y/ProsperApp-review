@@ -1,4 +1,4 @@
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.GoogleDrive;
 
 public sealed class DriveFileResult
 {

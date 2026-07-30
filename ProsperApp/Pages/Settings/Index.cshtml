@@ -1,6 +1,5 @@
 @page
 @using System.Text.Json
-@using ProsperApp.Models
 @model SettingsModel
 @{
     ViewData["Title"] = "管理者設定";
@@ -117,6 +116,51 @@
                     </label>
                 </div>
                 <span asp-validation-for="Input.ThemeMode" class="text-danger"></span>
+            </section>
+
+            <section class="settings-card">
+                <h2>アプリ内キャッシュ</h2>
+                @if (Model.CacheStatuses.Count == 0)
+                {
+                    <p class="text-muted mb-3">現在までに取得したキャッシュはありません。</p>
+                }
+                else
+                {
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>区分</th>
+                                    <th>対象</th>
+                                    <th>状態</th>
+                                    <th>最終取得</th>
+                                    <th>期限</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var cache in Model.CacheStatuses)
+                                {
+                                    var fetchedAt = cache.LastFetchedAt.ToOffset(TimeSpan.FromHours(9));
+                                    var expiresAt = cache.ExpiresAt.ToOffset(TimeSpan.FromHours(9));
+                                    <tr>
+                                        <td>@cache.Category</td>
+                                        <td>@cache.DisplayName</td>
+                                        <td>@(cache.IsCached ? "保持中" : "破棄済み")</td>
+                                        <td>@fetchedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                        <td>@expiresAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <button
+                    class="btn btn-outline-secondary"
+                    type="submit"
+                    formaction="?handler=ClearCache"
+                    formnovalidate>
+                    キャッシュをすべて削除
+                </button>
             </section>
 
             <section class="settings-card settings-card--danger">

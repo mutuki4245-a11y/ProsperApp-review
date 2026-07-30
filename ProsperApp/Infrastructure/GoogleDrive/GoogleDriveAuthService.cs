@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using ProsperApp.Options;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.GoogleDrive;
 
 public interface IGoogleDriveAuthService
 {

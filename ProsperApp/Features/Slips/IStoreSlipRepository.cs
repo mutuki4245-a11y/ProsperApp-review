@@ -1,16 +1,14 @@
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Slips;
 
 public interface IStoreSlipRepository
 {
-    Task<StoreContext?> GetStoreContextAsync(CancellationToken ct);
+    Task<Result<StoreContext>> GetStoreContextAsync(CancellationToken ct);
 
-    Task<IReadOnlyList<StoreTableOption>> GetTablesAsync(CancellationToken ct);
+    Task<Result<IReadOnlyList<StoreTableOption>>> GetTablesAsync(CancellationToken ct);
 
-    Task<IReadOnlyList<CastOption>> GetCastsAsync(CancellationToken ct);
-
-    Task<CastOptionsLoadResult> GetCastsResultAsync(CancellationToken ct);
+    Task<Result<IReadOnlyList<CastOption>>> GetCastsAsync(CancellationToken ct);
 
     Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct);
 

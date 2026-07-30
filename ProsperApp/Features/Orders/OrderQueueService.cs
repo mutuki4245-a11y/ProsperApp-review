@@ -1,7 +1,6 @@
 using System.Text.Json;
-using ProsperApp.Models;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Orders;
 
 public sealed class OrderQueueService : IOrderQueueService
 {

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -25,6 +25,8 @@ public class ClosingDrinkCostModel(
 
     public string? SuccessMessage { get; private set; }
 
+    public PageLoadStatus? LoadStatus { get; private set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
@@ -45,6 +47,12 @@ public class ClosingDrinkCostModel(
         }
 
         await LoadAsync(cancellationToken, preserveInput: true);
+        if (LoadStatus is { Succeeded: false })
+        {
+            ModelState.AddModelError(string.Empty, "必要な情報を取得できないため納品額を保存できません。再試行してください。");
+            return Page();
+        }
+
         if (CurrentBusinessDay is not null && Input.BusinessDayId != CurrentBusinessDay.BusinessDayId)
         {
             ModelState.AddModelError(string.Empty, "営業日情報が更新されています。画面を再読み込みしてください。");
@@ -92,9 +100,21 @@ public class ClosingDrinkCostModel(
     private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
     {
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
-        CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        var businessDayResult = await _businessDayRepository.GetCurrentAsync(cancellationToken);
+        if (!businessDayResult.Succeeded)
+        {
+            LoadStatus = PageLoadStatus.Failure(
+                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
+                businessDayResult.ErrorMessage ?? "現在営業日を取得できませんでした。");
+            CurrentBusinessDay = null;
+            return;
+        }
+
+        CurrentBusinessDay = businessDayResult.Value;
         if (CurrentBusinessDay is null)
         {
+            LoadStatus = PageLoadStatus.Success(
+                _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
             if (!preserveInput)
             {
                 Input = new DrinkDeliveryInputModel();
@@ -107,11 +127,21 @@ public class ClosingDrinkCostModel(
         var status = await _businessDayRepository.GetDrinkDeliveryStatusAsync(
             CurrentBusinessDay.BusinessDayId,
             cancellationToken);
-        IsDrinkDeliveryAmountEntered = status.IsEntered;
+        if (!status.Succeeded)
+        {
+            LoadStatus = PageLoadStatus.Failure(
+                status.FailureKind ?? ResultFailureKind.Unavailable,
+                status.ErrorMessage ?? "酒代入力状況を取得できませんでした。");
+            return;
+        }
+
+        LoadStatus = PageLoadStatus.Success(
+            _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
+        IsDrinkDeliveryAmountEntered = status.Value.IsEntered;
 
         if (!preserveInput)
         {
-            Input.DrinkDeliveryAmount = status.Amount;
+            Input.DrinkDeliveryAmount = status.Value.Amount;
         }
 
         Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;

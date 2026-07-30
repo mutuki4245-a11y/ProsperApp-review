@@ -1,4 +1,4 @@
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Shared;
 
 public interface IStoreClock
 {

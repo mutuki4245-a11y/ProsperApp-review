@@ -1,28 +1,21 @@
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
+using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Options;
-using static ProsperApp.Services.SupabaseJson;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseReceiptRepository(
     ISupabaseRpcClient rpcClient,
     IOptions<SupabaseOptions> options,
     ILocalSettingsProvider localSettingsProvider,
-    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IReceiptRepository
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IReceiptRepository
 {
     private static readonly TimeSpan PendingCacheDuration = TimeSpan.FromSeconds(30);
     private readonly SupabaseOptions _options = options.Value;
-    private readonly IMemoryCache _memoryCache = memoryCache;
-
-    public async Task<IReadOnlyList<PendingReceiptItem>> GetPendingAsync(CancellationToken ct)
-    {
-        var result = await GetPendingResultAsync(ct);
-        return result.Succeeded ? result.Value : [];
-    }
+    private readonly IApplicationCache _cache = cache;
 
     public async Task<Result<IReadOnlyList<PendingReceiptItem>>> GetPendingResultAsync(CancellationToken ct)
     {
@@ -34,7 +27,7 @@ public class SupabaseReceiptRepository(
         }
 
         var cacheKey = BuildPendingCacheKey();
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<PendingReceiptItem>? cached) &&
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<PendingReceiptItem>? cached) &&
             cached is not null)
         {
             return Result<IReadOnlyList<PendingReceiptItem>>.Success(cached);
@@ -50,29 +43,32 @@ public class SupabaseReceiptRepository(
             ct);
         if (!rpcResult.Succeeded)
         {
+            var failure = RpcFailure<IReadOnlyList<PendingReceiptItem>>(
+                rpcResult.ErrorMessage,
+                "未処理領収書を取得できませんでした。");
             return Result<IReadOnlyList<PendingReceiptItem>>.Failure(
-                ResultFailureKind.Unavailable,
-                ToFriendlyError(rpcResult.ErrorMessage));
+                failure.FailureKind ?? ResultFailureKind.Unavailable,
+                ToFriendlyError(failure.ErrorMessage));
         }
 
         var pending = ParsePendingItems(rpcResult.Rows);
-        _memoryCache.Set(cacheKey, pending, new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = PendingCacheDuration,
-            Priority = CacheItemPriority.Normal
-        });
+        _cache.Set(cacheKey, pending, PendingCacheDuration, "営業中", "未処理領収書");
         return Result<IReadOnlyList<PendingReceiptItem>>.Success(pending);
     }
 
-    public async Task<bool> IsPendingDriveFileAllowedAsync(string driveFileId, CancellationToken ct)
+    public async Task<Result<bool>> IsPendingDriveFileAllowedAsync(string driveFileId, CancellationToken ct)
     {
-        if (!HasRpcAccess() || string.IsNullOrWhiteSpace(driveFileId))
+        if (string.IsNullOrWhiteSpace(driveFileId))
         {
-            return false;
+            return Result<bool>.Failure(ResultFailureKind.InvalidInput, "DriveファイルIDがありません。");
         }
 
-        var pending = await GetPendingAsync(ct);
-        return pending.Any(x => x.DriveFileId == driveFileId);
+        var pending = await GetPendingResultAsync(ct);
+        return pending.Succeeded
+            ? Result<bool>.Success(pending.Value.Any(x => x.DriveFileId == driveFileId))
+            : Result<bool>.Failure(
+                pending.FailureKind ?? ResultFailureKind.Unavailable,
+                pending.ErrorMessage ?? "未処理領収書を確認できませんでした。");
     }
 
     public async Task<SaveReceiptResult> SaveQuickEntryAsync(QuickEntryInputModel input, CancellationToken ct)
@@ -91,13 +87,15 @@ public class SupabaseReceiptRepository(
             return SaveReceiptResult.Failed("領収書保存に必要な入力が不足しています。");
         }
 
-        var companyId = await GetCompanyIdAsync(ct);
-        if (companyId is null)
+        var companyIdResult = await GetCompanyIdAsync(ct);
+        if (!companyIdResult.Succeeded || companyIdResult.Value is null)
         {
-            return SaveReceiptResult.Failed("店舗の会社IDを取得できません。店舗設定とstore.get_context RPCを確認してください。");
+            return SaveReceiptResult.Failed(
+                companyIdResult.ErrorMessage ??
+                "店舗の会社IDを取得できません。店舗設定とstore.get_context RPCを確認してください。");
         }
 
-        var journalPayload = BuildJournalPayload(input, companyId.Value, CurrentStoreDepartmentId);
+        var journalPayload = BuildJournalPayload(input, companyIdResult.Value.Value, CurrentStoreDepartmentId);
 
         var result = await RpcClient.PostArrayAsync(
             "store.quick_enter_receipt",
@@ -170,7 +168,7 @@ public class SupabaseReceiptRepository(
 
     private void ClearPendingCache()
     {
-        _memoryCache.Remove(BuildPendingCacheKey());
+        _cache.Remove(BuildPendingCacheKey());
     }
 
     private static IReadOnlyList<PendingReceiptItem> ParsePendingItems(IReadOnlyList<JsonElement> rows)
@@ -190,20 +188,32 @@ public class SupabaseReceiptRepository(
             .ToList();
     }
 
-    private async Task<long?> GetCompanyIdAsync(CancellationToken ct)
+    private async Task<Result<long?>> GetCompanyIdAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        var result = await PostRpcArrayResultAsync(
             "store.get_context",
             new { p_department_id = CurrentStoreDepartmentId },
             ct);
-
-        if (rows.Count == 0)
+        if (!result.Succeeded)
         {
-            return null;
+            return Result<long?>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "店舗の会社IDを取得できませんでした。");
         }
 
-        var companyId = ReadLong(rows[0], "company_id");
-        return companyId is > 0 ? companyId : null;
+        if (result.Value.Count == 0)
+        {
+            return Result<long?>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗マスタを取得できません。管理者設定で利用店舗を確認してください。");
+        }
+
+        var companyId = ReadLong(result.Value[0], "company_id");
+        return companyId is > 0
+            ? Result<long?>.Success(companyId)
+            : Result<long?>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "店舗の会社IDが正しくありません。");
     }
 
     private static DocumentJournalSavePayload BuildJournalPayload(

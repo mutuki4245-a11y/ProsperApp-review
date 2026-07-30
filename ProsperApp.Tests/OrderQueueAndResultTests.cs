@@ -1,5 +1,4 @@
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
 using ProsperApp.Services;
 using ProsperApp.Pages;
 

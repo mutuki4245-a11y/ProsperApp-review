@@ -1,10 +1,10 @@
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Catalog;
 
 public interface IStoreItemAdminRepository
 {
-    Task<StoreItemAdminCatalog> GetCatalogAsync(CancellationToken ct);
+    Task<Result<StoreItemAdminCatalog>> GetCatalogAsync(CancellationToken ct);
 
     Task<StoreItemAdminSaveResult> SaveCategoryAsync(StoreItemCategoryInputModel input, CancellationToken ct);
 

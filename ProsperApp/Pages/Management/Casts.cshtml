@@ -15,6 +15,20 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
+    @if (Model.LoadStatus is { Succeeded: false } loadStatus)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>@loadStatus.FailureTitle</strong>
+            <div>@loadStatus.ErrorMessage</div>
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Management/Casts">再試行</a>
+        </div>
+    }
+    else if (Model.LoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
+    }
+
+    <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
     <form method="post" asp-page-handler="Create" class="slip-create__panel cast-admin-form">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div>
@@ -75,6 +89,7 @@
             </div>
         }
     </div>
+    </fieldset>
 </section>
 
 @foreach (var cast in Model.Casts)

@@ -1,18 +1,20 @@
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Features.Shared;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStorePricingPlanRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider)
     : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStorePricingPlanRepository
 {
-    public async Task<StorePricingPlanInputModel> GetAsync(CancellationToken ct)
+    public async Task<Result<StorePricingPlanInputModel>> GetAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return new StorePricingPlanInputModel();
+            return Result<StorePricingPlanInputModel>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -20,13 +22,20 @@ public class SupabaseStorePricingPlanRepository(
             new { p_department_id = CurrentStoreDepartmentId },
             ct);
 
-        if (!result.Succeeded || result.Rows.Count == 0)
+        if (!result.Succeeded)
         {
-            return new StorePricingPlanInputModel();
+            return RpcFailure<StorePricingPlanInputModel>(
+                result.ErrorMessage,
+                "料金設定を取得できませんでした。");
+        }
+
+        if (result.Rows.Count == 0)
+        {
+            return Result<StorePricingPlanInputModel>.Success(new StorePricingPlanInputModel());
         }
 
         var row = result.Rows[0];
-        return new StorePricingPlanInputModel
+        return Result<StorePricingPlanInputModel>.Success(new StorePricingPlanInputModel
         {
             SetMinutes = (int)(ReadLong(row, "set_minutes") ?? 60),
             SetUnitPriceSingle = ReadDecimal(row, "set_unit_price_single") ?? 0,
@@ -34,7 +43,7 @@ public class SupabaseStorePricingPlanRepository(
             ExtensionUnitPriceSingle = ReadDecimal(row, "extension_unit_price_single") ?? 0,
             ExtensionUnitPricePerCustomer = ReadDecimal(row, "extension_unit_price_per_customer") ?? 0,
             IsActive = ReadBool(row, "is_active") ?? false
-        };
+        });
     }
 
     public async Task<StorePricingPlanSaveResult> SaveAsync(StorePricingPlanInputModel plan, CancellationToken ct)

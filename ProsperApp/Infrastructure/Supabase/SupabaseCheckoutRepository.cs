@@ -1,10 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseCheckoutRepository(
     ISupabaseRpcClient rpcClient,
@@ -12,25 +11,18 @@ public class SupabaseCheckoutRepository(
 {
     public async Task<Result<IReadOnlyList<CheckoutPaymentMethod>>> GetPaymentMethodsAsync(CancellationToken ct)
     {
-        if (!HasRpcAccess())
-        {
-            return Result<IReadOnlyList<CheckoutPaymentMethod>>.Failure(
-                ResultFailureKind.NotConfigured,
-                "Supabase Edge Function設定が未設定です。決済方法を取得できません。");
-        }
-
-        var result = await RpcClient.PostArrayAsync(
+        var result = await PostRpcArrayResultAsync(
             "store.get_payment_methods",
             new { p_department_id = CurrentStoreDepartmentId },
             ct);
         if (!result.Succeeded)
         {
             return Result<IReadOnlyList<CheckoutPaymentMethod>>.Failure(
-                ResultFailureKind.Unavailable,
-                ToFriendlyError(result.ErrorMessage));
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "決済方法を取得できませんでした。");
         }
 
-        var methods = result.Rows
+        var methods = result.Value
             .Select(row => new CheckoutPaymentMethod
             {
                 MethodCode = ReadString(row, "method_code") ?? string.Empty,

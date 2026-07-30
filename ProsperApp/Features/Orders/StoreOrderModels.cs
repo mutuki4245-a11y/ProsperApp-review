@@ -1,4 +1,4 @@
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Orders;
 
 public class StoreOrderSlipOption
 {

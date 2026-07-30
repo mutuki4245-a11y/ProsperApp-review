@@ -1,4 +1,3 @@
-using ProsperApp.Models;
 
 namespace ProsperApp.Services;
 

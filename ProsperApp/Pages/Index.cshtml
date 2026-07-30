@@ -1,6 +1,5 @@
 @page
 @using ProsperApp.Features.BusinessHome
-@using ProsperApp.Models
 @model IndexModel
 @{
     ViewData["Title"] = "営業中";
@@ -20,6 +19,22 @@
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
     {
         <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
+    }
+
+    @if (Model.LoadIssues.Count > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>営業中画面の情報をすべて取得できませんでした。</strong>
+            @foreach (var issue in Model.LoadIssues)
+            {
+                <div>@issue.Area: @issue.Message</div>
+            }
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Index">再試行</a>
+        </div>
+    }
+    else if (Model.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
     }
 
     @if (Model.IsReceiptPrinterEnabled)

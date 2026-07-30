@@ -1,7 +1,7 @@
 using System.Text.Json;
 using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public abstract class SupabaseRepositoryBase(
     ISupabaseRpcClient rpcClient,
@@ -15,20 +15,6 @@ public abstract class SupabaseRepositoryBase(
     {
         return RpcClient.HasAccess &&
                (localSettingsProvider is null || CurrentStoreDepartmentId > 0);
-    }
-
-    protected async Task<IReadOnlyList<JsonElement>> PostRpcArrayAsync<TPayload>(
-        string functionName,
-        TPayload payload,
-        CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return [];
-        }
-
-        var result = await RpcClient.PostArrayAsync(functionName, payload, ct);
-        return result.Succeeded ? result.Rows : [];
     }
 
     protected async Task<Result<IReadOnlyList<JsonElement>>> PostRpcArrayResultAsync<TPayload>(
@@ -46,11 +32,42 @@ public abstract class SupabaseRepositoryBase(
         var result = await RpcClient.PostArrayAsync(functionName, payload, ct);
         return result.Succeeded
             ? Result<IReadOnlyList<JsonElement>>.Success(result.Rows)
-            : Result<IReadOnlyList<JsonElement>>.Failure(
-                ResultFailureKind.Unavailable,
-                string.IsNullOrWhiteSpace(result.ErrorMessage)
-                    ? "DBから情報を取得できませんでした。"
-                    : result.ErrorMessage);
+            : RpcFailure<IReadOnlyList<JsonElement>>(
+                result.ErrorMessage,
+                "DBから情報を取得できませんでした。");
+    }
+
+    protected async Task<Result<string?>> PostRpcScalarResultAsync<TPayload>(
+        string functionName,
+        TPayload payload,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<string?>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。");
+        }
+
+        var result = await RpcClient.PostScalarAsync(functionName, payload, ct);
+        return result.Succeeded
+            ? Result<string?>.Success(result.Body)
+            : RpcFailure<string?>(
+                result.ErrorMessage,
+                "DBから情報を取得できませんでした。");
+    }
+
+    protected static Result<T> RpcFailure<T>(string? rawError, string fallbackMessage)
+    {
+        var message = string.IsNullOrWhiteSpace(rawError) ? fallbackMessage : rawError;
+        if (message.Contains("401", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("403", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<T>.Failure(ResultFailureKind.PermissionDenied, PermissionErrorMessage());
+        }
+
+        return Result<T>.Failure(ResultFailureKind.Unavailable, message);
     }
 
     protected static long? NormalizeId(long? id)

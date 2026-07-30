@@ -1,10 +1,10 @@
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Catalog;
 
 public interface INominationBackAdminRepository
 {
-    Task<IReadOnlyList<NominationBackMasterItem>> GetSettingsAsync(CancellationToken ct);
+    Task<Result<IReadOnlyList<NominationBackMasterItem>>> GetSettingsAsync(CancellationToken ct);
 
     Task<NominationBackMasterSaveResult> SaveSettingsAsync(
         IReadOnlyList<NominationBackMasterInputModel> settings,

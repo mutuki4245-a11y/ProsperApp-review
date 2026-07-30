@@ -1,5 +1,4 @@
 using ProsperApp.Services;
-using ProsperApp.Models;
 
 namespace ProsperApp.Tests;
 

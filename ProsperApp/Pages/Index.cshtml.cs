@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using ProsperApp.Features.BusinessHome;
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
 using ProsperApp.Options;
 using ProsperApp.Services;
 using System.Text.Json;
@@ -12,22 +11,12 @@ namespace ProsperApp.Pages;
 
 public class IndexModel(
     IFeatureGate featureGate,
-    IBusinessDayRepository businessDayRepository,
-    IStoreSlipRepository slipRepository,
-    IStoreOrderRepository orderRepository,
-    INominationBackAdminRepository nominationBackRepository,
-    ICheckoutRepository checkoutRepository,
     IBusinessHomeApplicationService businessHomeApplicationService,
     ILocalSettingsProvider localSettingsProvider,
     IOptions<ReceiptPrinterOptions> receiptPrinterOptions,
     IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
-    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
-    private readonly IStoreSlipRepository _slipRepository = slipRepository;
-    private readonly IStoreOrderRepository _orderRepository = orderRepository;
-    private readonly INominationBackAdminRepository _nominationBackRepository = nominationBackRepository;
-    private readonly ICheckoutRepository _checkoutRepository = checkoutRepository;
     private readonly IBusinessHomeApplicationService _businessHomeApplicationService = businessHomeApplicationService;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly ReceiptPrinterOptions _receiptPrinterOptions = receiptPrinterOptions.Value;
@@ -50,14 +39,13 @@ public class IndexModel(
 
     public IReadOnlyList<NominationBackMasterItem> NominationOptions { get; set; } = [];
 
-    public IReadOnlyList<CheckoutPaymentMethod> PaymentMethods { get; private set; } =
-    [
-        new() { MethodCode = "cash", MethodName = "現金", RequiresReceivedAmount = true, SortOrder = 10 },
-        new() { MethodCode = "cat", MethodName = "クレジット", SortOrder = 20 },
-        new() { MethodCode = "paypay", MethodName = "PAYPAY", SortOrder = 30 }
-    ];
+    public IReadOnlyList<CheckoutPaymentMethod> PaymentMethods { get; private set; } = [];
 
     public string? PaymentMethodsLoadError { get; private set; }
+
+    public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
+
+    public DateTimeOffset? LastUpdatedAt { get; private set; }
 
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
 
@@ -152,14 +140,19 @@ public class IndexModel(
             return NotFound();
         }
 
-        var currentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (currentBusinessDay is null)
+        var result = await _businessHomeApplicationService.GetAttendanceCastsAsync(cancellationToken);
+        if (!result.Succeeded)
         {
-            return new JsonResult(Array.Empty<object>());
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                failureKind = result.FailureKind?.ToString(),
+                message = result.ErrorMessage ?? "出勤キャストを取得できませんでした。"
+            });
         }
 
-        var casts = await _orderRepository.GetAttendanceCastsAsync(currentBusinessDay.BusinessDayId, cancellationToken);
-        return new JsonResult(casts.Select(cast => new
+        Response.Headers["X-Last-Updated"] = DateTimeOffset.UtcNow.ToString("O");
+        return new JsonResult(result.Value.Select(cast => new
         {
             id = cast.CastId,
             name = cast.DisplayName,
@@ -261,7 +254,7 @@ public class IndexModel(
             return Page();
         }
 
-        var result = await _slipRepository.CreateSlipAsync(CreateSlipInput, cancellationToken);
+        var result = await _businessHomeApplicationService.CreateSlipAsync(CreateSlipInput, cancellationToken);
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "伝票を作成できませんでした。");
@@ -291,7 +284,10 @@ public class IndexModel(
             return CheckoutJsonError("会計伝票の対象と退店時刻を確認してください。");
         }
 
-        var result = await _checkoutRepository.IssueCheckoutStatementAsync(request.SlipId, request.ClosedAt.Value, cancellationToken);
+        var result = await _businessHomeApplicationService.IssueCheckoutStatementAsync(
+            request.SlipId,
+            request.ClosedAt.Value,
+            cancellationToken);
         return result.Succeeded && result.PrintData is { } printData && result.ReviewData is { } reviewData
             ? new JsonResult(new { succeeded = true, slipId = request.SlipId, printData, reviewData })
             : CheckoutJsonError(result.ErrorMessage ?? "会計伝票を出力できませんでした。");
@@ -310,7 +306,9 @@ public class IndexModel(
             return CheckoutJsonError("会計伝票の対象を確認してください。");
         }
 
-        var result = await _checkoutRepository.GetCheckoutStatementPrintDataAsync(request.SlipId, cancellationToken);
+        var result = await _businessHomeApplicationService.GetCheckoutStatementPrintDataAsync(
+            request.SlipId,
+            cancellationToken);
         return result.Succeeded && result.PrintData is { } printData && result.ReviewData is { } reviewData
             ? new JsonResult(new { succeeded = true, slipId = request.SlipId, printData, reviewData })
             : CheckoutJsonError(result.ErrorMessage ?? "会計伝票を復旧できませんでした。");
@@ -329,7 +327,9 @@ public class IndexModel(
             return CheckoutJsonError("会計伝票の対象を確認してください。");
         }
 
-        var result = await _checkoutRepository.ReleaseCheckoutReadyAsync(request.SlipId, cancellationToken);
+        var result = await _businessHomeApplicationService.ReleaseCheckoutReadyAsync(
+            request.SlipId,
+            cancellationToken);
         return result.Succeeded
             ? new JsonResult(new { succeeded = true, slipId = request.SlipId })
             : CheckoutJsonError(result.ErrorMessage ?? "会計準備を解除できませんでした。");
@@ -348,7 +348,7 @@ public class IndexModel(
             return CheckoutJsonError("会計伝票の対象を確認してください。");
         }
 
-        var result = await _checkoutRepository.ConfirmCheckoutAsync(
+        var result = await _businessHomeApplicationService.ConfirmCheckoutAsync(
             request.SlipId,
             request.Payments ?? [],
             request.ReceivedAmount,
@@ -378,7 +378,9 @@ public class IndexModel(
             return CheckoutJsonError("領収書の対象を確認してください。");
         }
 
-        var result = await _checkoutRepository.GetCheckoutReceiptPrintDataAsync(request.SlipId, cancellationToken);
+        var result = await _businessHomeApplicationService.GetCheckoutReceiptPrintDataAsync(
+            request.SlipId,
+            cancellationToken);
         return result.Succeeded && result.CheckoutId is { } checkoutId && result.PrintData is { } printData
             ? new JsonResult(new { succeeded = true, checkoutId, printData })
             : CheckoutJsonError(result.ErrorMessage ?? "領収書を取得できませんでした。");
@@ -397,7 +399,9 @@ public class IndexModel(
             return CheckoutJsonError("会計取消の対象を確認してください。");
         }
 
-        var result = await _checkoutRepository.CancelCheckoutAsync(request.SlipId, cancellationToken);
+        var result = await _businessHomeApplicationService.CancelCheckoutAsync(
+            request.SlipId,
+            cancellationToken);
         return result.Succeeded && result.CheckoutId is { } checkoutId
             ? new JsonResult(new { succeeded = true, slipId = request.SlipId, checkoutId })
             : CheckoutJsonError(result.ErrorMessage ?? "会計を取消できませんでした。");
@@ -405,64 +409,26 @@ public class IndexModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool includeAttendanceCasts)
     {
-        var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
-        var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
-        var tablesTask = _slipRepository.GetTablesAsync(cancellationToken);
-        var nominationOptionsTask = _nominationBackRepository.GetSettingsAsync(cancellationToken);
-        var orderItemsTask = OrdersEnabled
-            ? _orderRepository.GetItemsAsync(cancellationToken)
-            : Task.FromResult<IReadOnlyList<StoreOrderItemOption>>([]);
-        var paymentMethodsTask = CheckoutEnabled
-            ? _checkoutRepository.GetPaymentMethodsAsync(cancellationToken)
-            : Task.FromResult(Result<IReadOnlyList<CheckoutPaymentMethod>>.Success([]));
+        var state = await _businessHomeApplicationService.LoadPageAsync(
+            OrdersEnabled,
+            CheckoutEnabled,
+            includeAttendanceCasts,
+            cancellationToken);
 
-        CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
+        StoreContext = state.StoreContext;
+        CurrentBusinessDay = state.BusinessDay;
+        CurrentBusinessDate = state.BusinessDate;
+        Tables = state.Tables;
+        NominationOptions = state.NominationOptions;
+        OrderItems = state.OrderItems;
+        AttendanceCasts = state.AttendanceCasts;
+        PaymentMethods = state.PaymentMethods;
+        LoadIssues = state.LoadIssues;
+        LastUpdatedAt = state.LastUpdatedAt;
+        PaymentMethodsLoadError = state.LoadIssues
+            .FirstOrDefault(issue => string.Equals(issue.Area, "決済方法", StringComparison.Ordinal))
+            ?.Message;
         TimeOptions = _storeClock.BuildTimeOptions(5);
-
-        await Task.WhenAll(
-            storeContextTask,
-            currentBusinessDayTask,
-            tablesTask,
-            nominationOptionsTask,
-            orderItemsTask,
-            paymentMethodsTask);
-
-        StoreContext = await storeContextTask;
-        CurrentBusinessDay = await currentBusinessDayTask;
-        Tables = await tablesTask;
-        NominationOptions = (await nominationOptionsTask)
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.SortOrder)
-            .ThenBy(x => x.DisplayName)
-            .ToList();
-        OrderItems = (await orderItemsTask)
-            .Where(x => x.IsStandard)
-            .ToList();
-        var paymentMethodsResult = await paymentMethodsTask;
-        PaymentMethodsLoadError = paymentMethodsResult.Succeeded
-            ? null
-            : paymentMethodsResult.ErrorMessage;
-        if (paymentMethodsResult.Succeeded && paymentMethodsResult.Value.Count > 0)
-        {
-            PaymentMethods = paymentMethodsResult.Value;
-        }
-
-        if (CurrentBusinessDay is null)
-        {
-            AttendanceCasts = [];
-            return;
-        }
-
-        if (includeAttendanceCasts)
-        {
-            var attendanceCastsTask = _orderRepository.GetAttendanceCastsAsync(CurrentBusinessDay.BusinessDayId, cancellationToken);
-            AttendanceCasts = await attendanceCastsTask;
-        }
-        else
-        {
-            AttendanceCasts = [];
-        }
-
     }
 
     private void SetDefaultCreateSlipInput()

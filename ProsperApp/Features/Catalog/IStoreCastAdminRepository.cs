@@ -1,10 +1,10 @@
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Catalog;
 
 public interface IStoreCastAdminRepository
 {
-    Task<IReadOnlyList<StoreCastAdminItem>> GetCastsAsync(CancellationToken ct);
+    Task<Result<IReadOnlyList<StoreCastAdminItem>>> GetCastsAsync(CancellationToken ct);
 
     Task<StoreCastSaveResult> CreateCastAsync(StoreCastCreateInputModel input, CancellationToken ct);
 

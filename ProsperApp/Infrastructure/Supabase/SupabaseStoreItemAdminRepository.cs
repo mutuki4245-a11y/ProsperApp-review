@@ -1,29 +1,31 @@
-using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json.Serialization;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStoreItemAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreItemAdminRepository
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreItemAdminRepository
 {
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
 
-    public async Task<StoreItemAdminCatalog> GetCatalogAsync(CancellationToken ct)
+    public async Task<Result<StoreItemAdminCatalog>> GetCatalogAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return new StoreItemAdminCatalog();
+            return Result<StoreItemAdminCatalog>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.ItemAdminCatalog(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out StoreItemAdminCatalog? cachedCatalog))
+        if (_cache.TryGetValue(cacheKey, out StoreItemAdminCatalog? cachedCatalog))
         {
-            return cachedCatalog ?? new StoreItemAdminCatalog();
+            return Result<StoreItemAdminCatalog>.Success(cachedCatalog ?? new StoreItemAdminCatalog());
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -33,7 +35,9 @@ public class SupabaseStoreItemAdminRepository(
 
         if (!result.Succeeded)
         {
-            return new StoreItemAdminCatalog();
+            return RpcFailure<StoreItemAdminCatalog>(
+                result.ErrorMessage,
+                "商品マスタを取得できませんでした。");
         }
 
         var categories = result.Rows
@@ -71,8 +75,8 @@ public class SupabaseStoreItemAdminRepository(
             .ToList();
 
         var catalog = new StoreItemAdminCatalog { Categories = categories, Items = items };
-        _memoryCache.Set(cacheKey, catalog, StoreMasterCacheKeys.CreateOptions());
-        return catalog;
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, catalog, "商品管理カタログ");
+        return Result<StoreItemAdminCatalog>.Success(catalog);
     }
 
     public async Task<StoreItemAdminSaveResult> SaveCategoryAsync(StoreItemCategoryInputModel input, CancellationToken ct)
@@ -103,7 +107,7 @@ public class SupabaseStoreItemAdminRepository(
         var id = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_category_id") ?? 0 : 0;
         if (id > 0)
         {
-            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearItems(_cache, CurrentStoreDepartmentId);
         }
 
         return id > 0
@@ -143,7 +147,7 @@ public class SupabaseStoreItemAdminRepository(
         var id = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_id") ?? 0 : 0;
         if (id > 0)
         {
-            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearItems(_cache, CurrentStoreDepartmentId);
         }
 
         return id > 0
@@ -180,7 +184,7 @@ public class SupabaseStoreItemAdminRepository(
         var deletedItemId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_id") ?? 0 : 0;
         if (deletedItemId > 0)
         {
-            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearItems(_cache, CurrentStoreDepartmentId);
         }
 
         return deletedItemId > 0
@@ -222,7 +226,7 @@ public class SupabaseStoreItemAdminRepository(
         var updatedCount = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "updated_count") ?? 0 : 0;
         if (updatedCount > 0)
         {
-            StoreMasterCacheKeys.ClearItems(_memoryCache, CurrentStoreDepartmentId);
+            StoreMasterCacheKeys.ClearItems(_cache, CurrentStoreDepartmentId);
         }
 
         return updatedCount > 0

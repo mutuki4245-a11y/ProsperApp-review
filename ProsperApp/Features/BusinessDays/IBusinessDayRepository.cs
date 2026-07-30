@@ -1,11 +1,10 @@
-using ProsperApp.Models;
 using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.BusinessDays;
 
 public interface IBusinessDayRepository
 {
-    Task<StoreBusinessDay?> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false);
+    Task<Result<StoreBusinessDay?>> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false);
 
     Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct);
 
@@ -31,13 +30,13 @@ public interface IBusinessDayRepository
         bool includePendingReceipts,
         CancellationToken ct);
 
-    Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);
+    Task<Result<int>> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);
 
-    Task<BusinessDayDrinkDeliveryStatus> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct);
+    Task<Result<BusinessDayDrinkDeliveryStatus>> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(long businessDayId, decimal amount, CancellationToken ct);
 
-    Task<IReadOnlyList<BusinessDayClosingAttendanceItem>> GetClosingAttendanceAsync(long businessDayId, CancellationToken ct);
+    Task<Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>> GetClosingAttendanceAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessDayAttendanceSaveResult> SaveClosingAttendanceAsync(
         long businessDayId,

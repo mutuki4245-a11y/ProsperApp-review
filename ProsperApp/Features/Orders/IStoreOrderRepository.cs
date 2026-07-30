@@ -1,14 +1,14 @@
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Orders;
 
 public interface IStoreOrderRepository
 {
-    Task<IReadOnlyList<StoreOrderSlipOption>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct);
+    Task<Result<IReadOnlyList<StoreOrderSlipOption>>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct);
 
-    Task<IReadOnlyList<StoreOrderItemOption>> GetItemsAsync(CancellationToken ct);
+    Task<Result<IReadOnlyList<StoreOrderItemOption>>> GetItemsAsync(CancellationToken ct);
 
-    Task<IReadOnlyList<StoreOrderAttendanceCastOption>> GetAttendanceCastsAsync(long businessDayId, CancellationToken ct);
+    Task<Result<IReadOnlyList<StoreOrderAttendanceCastOption>>> GetAttendanceCastsAsync(long businessDayId, CancellationToken ct);
 
     Task<AddStoreOrderLinesResult> AddOrderLinesAsync(long slipId, IReadOnlyList<OrderQueueInputModel> lines, CancellationToken ct);
 }

@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
 
 namespace ProsperApp.Features.BusinessHome;
 

@@ -1,16 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
 public class ManagementItemsModel(
     IFeatureGate featureGate,
-    IStoreItemAdminRepository itemAdminRepository) : PageModel
+    IStoreItemAdminRepository itemAdminRepository,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreItemAdminRepository _itemAdminRepository = itemAdminRepository;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
     public StoreItemCategoryInputModel CategoryInput { get; set; } = new();
@@ -27,6 +29,8 @@ public class ManagementItemsModel(
     public StoreItemAdminCatalog Catalog { get; set; } = new();
 
     public string? SuccessMessage { get; set; }
+
+    public PageLoadStatus? LoadStatus { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -165,7 +169,13 @@ public class ManagementItemsModel(
 
     private async Task LoadCatalogAsync(CancellationToken cancellationToken)
     {
-        Catalog = await _itemAdminRepository.GetCatalogAsync(cancellationToken);
+        var result = await _itemAdminRepository.GetCatalogAsync(cancellationToken);
+        Catalog = result.Succeeded ? result.Value : new StoreItemAdminCatalog();
+        LoadStatus = result.Succeeded
+            ? PageLoadStatus.Success(_storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()))
+            : PageLoadStatus.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "商品マスタを取得できませんでした。");
     }
 
     private void ResetInputs()

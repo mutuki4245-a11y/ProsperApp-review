@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 internal static class SupabaseJson
 {

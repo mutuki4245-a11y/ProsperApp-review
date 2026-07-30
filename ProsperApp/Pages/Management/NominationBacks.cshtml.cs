@@ -1,21 +1,24 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
 public class ManagementNominationBacksModel(
     IFeatureGate featureGate,
-    INominationBackAdminRepository nominationBackAdminRepository) : PageModel
+    INominationBackAdminRepository nominationBackAdminRepository,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly INominationBackAdminRepository _nominationBackAdminRepository = nominationBackAdminRepository;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
     public List<NominationBackMasterInputModel> Settings { get; set; } = [];
 
     public string? SuccessMessage { get; set; }
+    public PageLoadStatus? LoadStatus { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -63,7 +66,18 @@ public class ManagementNominationBacksModel(
     private async Task LoadSettingsAsync(CancellationToken cancellationToken)
     {
         var settings = await _nominationBackAdminRepository.GetSettingsAsync(cancellationToken);
-        Settings = settings
+        if (!settings.Succeeded)
+        {
+            Settings = [];
+            LoadStatus = PageLoadStatus.Failure(
+                settings.FailureKind ?? ResultFailureKind.Unavailable,
+                settings.ErrorMessage ?? "指名バック設定を取得できませんでした。");
+            return;
+        }
+
+        LoadStatus = PageLoadStatus.Success(
+            _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
+        Settings = settings.Value
             .Select(setting => new NominationBackMasterInputModel
             {
                 NominationKind = setting.NominationKind,

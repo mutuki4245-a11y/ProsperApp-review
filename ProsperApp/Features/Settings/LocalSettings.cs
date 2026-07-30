@@ -1,4 +1,4 @@
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Settings;
 
 public class LocalSettings
 {

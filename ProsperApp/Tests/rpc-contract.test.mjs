@@ -84,7 +84,7 @@ for (const rpcName of csharpRpcNames) {
     assert.match(functionBlock, /\bsecurity\s+definer\b/i, `${rpcName} はsecurity definerで統一します。`);
     assert.match(
         functionBlock,
-        /\bset\s+search_path\s*=\s*public\b/i,
+        /\bset\s+search_path\s*=\s*(?:pg_catalog\s*,\s*)?public\b/i,
         `${rpcName} はsearch_pathを固定してください。`
     );
 }

@@ -1,7 +1,6 @@
-using ProsperApp.Models;
 using ProsperApp.Features.Shared;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Features.Checkout;
 
 public interface ICheckoutRepository
 {

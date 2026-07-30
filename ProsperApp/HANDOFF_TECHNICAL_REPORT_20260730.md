@@ -2,6 +2,18 @@
 
 作成日: 2026-07-30
 
+## 実装結果
+
+本レポートの指摘を確認後、2026-07-30に次の改善を実装した。以下の運用判断を含め、このレポートに残る推奨実装はない。今後の実端末受入確認や会計運用上の作業は `HANDOFF.md` で管理する。
+
+- 管理者権限は当初案を採用せず、利用者指定に合わせてページ保護へ戻した。管理者Cookieは廃止し、`/Settings` を開いている間だけセッション内の一時トークンで設定POSTを保護する。店舗で行うマスタ変更は管理者保護の対象外とし、営業データ削除だけはパスワード解除と `削除 店舗名` の完全一致入力を必須にした。
+- 締め可否は構造化RPCの準備状態を表示と実行前確認に使い、締め条件を無視する経路を削除した。営業中編集は操作DTO、Parser、ApplicationServiceへ集約した。
+- `BusinessHomeApplicationService`、`OrderEntryApplicationService`、`AttendanceApplicationService`、`ClosingApplicationService` を追加し、主要PageModelをHTTP入力、Service呼び出し、ViewModel設定中心へ整理した。
+- 読み取り系Repositoryを `Result<T>` へ移行し、成功時の空結果と通信・権限・設定エラーを分離した。主要画面には取得失敗、再試行、最終更新時刻を表示する。
+- キャッシュを `IApplicationCache` に集約し、マスタ10分、実行時情報30秒のTTLと明示invalidateを併用した。`/Settings` でキー別の保持状態、最終取得時刻、期限を確認し、一括クリアできる。
+- 業務時刻を `IStoreClock` に集約し、営業日跨ぎをC#テストで固定した。キャスト売上額調整は一覧・詳細の構造化取得と一括保存、支払方法はDB取得へ移行済みである。Driveプレビューのpending判定は認可と最新状態確認を兼ねるため、キャッシュヒット時も意図して維持する。
+- `Features` と `Infrastructure` をフォルダ対応のnamespaceへ移行した。`ProsperApp.Tests` では業務時刻、伝票作成、注文キュー、締め準備状態、`Result<T>`、fake `ISupabaseRpcClient` を使うRepository、キャッシュ管理を検証する。
+
 ## 調査範囲と前提
 
 - `Docs/` と `CONTEXT.md` は削除対象として扱い、`HANDOFF.md` は残した。
@@ -272,7 +284,7 @@ JS契約テストとSQL契約テストはあるが、C# PageModel、Repository�
 - `ProsperApp.Tests` を追加し、業務時刻、伝票作成、注文キュー、締め条件表示をテストする。
 - RPC Adapterはfake `ISupabaseRpcClient` でRepository単体テストを追加する。
 
-## 優先改善順
+## 優先改善順（実装時の順序）
 
 1. 管理者権限をCookie由来のローカル設定から分離する。
 2. マスタ系POSTと締め条件無視を共通のサーバー権限Serviceに通す。

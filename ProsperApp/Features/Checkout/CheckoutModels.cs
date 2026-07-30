@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
-namespace ProsperApp.Models;
+namespace ProsperApp.Features.Checkout;
 
 public class CheckoutPaymentMethod
 {

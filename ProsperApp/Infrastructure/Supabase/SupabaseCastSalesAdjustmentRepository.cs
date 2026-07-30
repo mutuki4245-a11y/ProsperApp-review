@@ -2,10 +2,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseCastSalesAdjustmentRepository(
     ISupabaseRpcClient rpcClient,
@@ -65,71 +64,6 @@ public class SupabaseCastSalesAdjustmentRepository(
             Slips = ParseSlips(slipsElement.EnumerateArray()),
             Details = ParseDetails(detailsElement.EnumerateArray())
         });
-    }
-
-    public async Task<CastSalesAdjustmentStatus> GetStatusAsync(long businessDayId, CancellationToken ct)
-    {
-        if (!HasRpcAccess() || businessDayId <= 0)
-        {
-            return new CastSalesAdjustmentStatus { RequiredSlipCount = 1, MissingSlipCount = 1 };
-        }
-
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_business_day_cast_sales_adjustment_status",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-        var rows = result.Succeeded ? result.Rows : [];
-
-        if (rows.Count == 0)
-        {
-            return new CastSalesAdjustmentStatus { RequiredSlipCount = 1, MissingSlipCount = 1 };
-        }
-
-        return ParseStatus(rows[0]);
-    }
-
-    public async Task<IReadOnlyList<CastSalesAdjustmentSlip>> GetSlipsAsync(long businessDayId, CancellationToken ct)
-    {
-        if (!HasRpcAccess() || businessDayId <= 0)
-        {
-            return [];
-        }
-
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_cast_sales_adjustment_slips",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-        var rows = result.Succeeded ? result.Rows : [];
-
-        return ParseSlips(rows);
-    }
-
-    public async Task<CastSalesAdjustmentDetail?> GetDetailAsync(long slipId, CancellationToken ct)
-    {
-        if (!HasRpcAccess() || slipId <= 0)
-        {
-            return null;
-        }
-
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_cast_sales_adjustment_detail",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_slip_id = slipId
-            },
-            ct);
-        var rows = result.Succeeded ? result.Rows : [];
-
-        return ParseDetail(rows);
     }
 
     public async Task<CastSalesAdjustmentSaveResult> SaveAsync(CastSalesAdjustmentSaveInput input, CancellationToken ct)

@@ -1,32 +1,46 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Microsoft.Extensions.Caching.Memory;
+using ProsperApp.Infrastructure.Caching;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.GoogleDrive;
 
 public class GoogleDriveFileService(
     HttpClient httpClient,
     IGoogleDriveAuthService googleDriveAuthService,
     IReceiptRepository receiptRepository,
-    IMemoryCache memoryCache) : IDriveFileService
+    IApplicationCache cache) : IDriveFileService
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
 
     public async Task<DriveFileResult> GetFileWithDiagnosticsAsync(string driveFileId, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(driveFileId) ||
-            !await _receiptRepository.IsPendingDriveFileAllowedAsync(driveFileId, ct))
+        if (string.IsNullOrWhiteSpace(driveFileId))
         {
             return DriveFileResult.Failed(
                 "not_allowed",
                 "The drive_file_id is empty or is not included in the current store pending list.");
         }
 
-        if (_memoryCache.TryGetValue(BuildCacheKey(driveFileId), out CachedDriveFile? cachedFile) &&
+        var pendingAccess = await _receiptRepository.IsPendingDriveFileAllowedAsync(driveFileId, ct);
+        if (!pendingAccess.Succeeded)
+        {
+            return DriveFileResult.Failed(
+                "pending_lookup_failed",
+                pendingAccess.ErrorMessage ?? "The pending receipt list could not be loaded.");
+        }
+
+        if (!pendingAccess.Value)
+        {
+            return DriveFileResult.Failed(
+                "not_allowed",
+                "The drive_file_id is empty or is not included in the current store pending list.");
+        }
+
+        if (_cache.TryGetValue(BuildCacheKey(driveFileId), out CachedDriveFile? cachedFile) &&
             cachedFile is not null)
         {
             return DriveFileResult.Success(ToDriveFileContent(cachedFile));
@@ -71,7 +85,12 @@ public class GoogleDriveFileService(
             ContentType = metadata.MimeType ?? "application/octet-stream",
             FileName = metadata.Name ?? $"{driveFileId}.bin"
         };
-        _memoryCache.Set(BuildCacheKey(driveFileId), cached, BuildCacheEntryOptions());
+        _cache.Set(
+            BuildCacheKey(driveFileId),
+            cached,
+            CacheDuration,
+            "Drive",
+            cached.FileName);
 
         return DriveFileResult.Success(ToDriveFileContent(cached));
     }
@@ -80,20 +99,11 @@ public class GoogleDriveFileService(
     {
         if (!string.IsNullOrWhiteSpace(driveFileId))
         {
-            _memoryCache.Remove(BuildCacheKey(driveFileId));
+            _cache.Remove(BuildCacheKey(driveFileId));
         }
     }
 
     private static string BuildCacheKey(string driveFileId) => $"drive-preview:{driveFileId}";
-
-    private static MemoryCacheEntryOptions BuildCacheEntryOptions()
-    {
-        return new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = CacheDuration,
-            SlidingExpiration = CacheDuration
-        };
-    }
 
     private static DriveFileContent ToDriveFileContent(CachedDriveFile cachedFile)
     {

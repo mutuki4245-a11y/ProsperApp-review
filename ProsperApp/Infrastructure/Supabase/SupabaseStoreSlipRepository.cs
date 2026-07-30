@@ -1,34 +1,40 @@
-using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ProsperApp.Models;
-using static ProsperApp.Services.SupabaseJson;
+using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
+using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
-namespace ProsperApp.Services;
+namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStoreSlipRepository(
     ISupabaseRpcClient rpcClient,
     IBusinessDayRepository businessDayRepository,
     ILocalSettingsProvider localSettingsProvider,
-    IMemoryCache memoryCache,
+    IApplicationCache cache,
     IStoreClock storeClock)
     : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreSlipRepository
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
-    private readonly IMemoryCache _memoryCache = memoryCache;
+    private readonly IApplicationCache _cache = cache;
 
-    public async Task<StoreContext?> GetStoreContextAsync(CancellationToken ct)
+    public async Task<Result<StoreContext>> GetStoreContextAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return null;
+            return Result<StoreContext>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.StoreContext(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out StoreContext? cachedContext))
+        if (_cache.TryGetValue(cacheKey, out StoreContext? cachedContext))
         {
-            return cachedContext;
+            return cachedContext is not null
+                ? Result<StoreContext>.Success(cachedContext)
+                : Result<StoreContext>.Failure(
+                    ResultFailureKind.InvalidResponse,
+                    "店舗設定のキャッシュを読み取れませんでした。");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -36,9 +42,16 @@ public class SupabaseStoreSlipRepository(
             new { p_department_id = departmentId },
             ct);
 
-        if (!result.Succeeded || result.Rows.Count == 0)
+        if (!result.Succeeded)
         {
-            return null;
+            return RpcFailure<StoreContext>(result.ErrorMessage, "店舗設定を取得できませんでした。");
+        }
+
+        if (result.Rows.Count == 0)
+        {
+            return Result<StoreContext>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗マスタを取得できません。管理者設定で利用店舗を確認してください。");
         }
 
         var row = result.Rows[0];
@@ -51,22 +64,24 @@ public class SupabaseStoreSlipRepository(
             CastSalesAmountBasis = NormalizeCastSalesAmountBasis(ReadString(row, "cast_sales_amount_basis")),
             CastSalesSplitMode = NormalizeCastSalesSplitMode(ReadString(row, "cast_sales_split_mode"))
         };
-        _memoryCache.Set(cacheKey, context, StoreMasterCacheKeys.CreateOptions());
-        return context;
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, context, "店舗コンテキスト");
+        return Result<StoreContext>.Success(context);
     }
 
-    public async Task<IReadOnlyList<StoreTableOption>> GetTablesAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyList<StoreTableOption>>> GetTablesAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return [];
+            return Result<IReadOnlyList<StoreTableOption>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.Tables(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<StoreTableOption>? cachedTables))
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<StoreTableOption>? cachedTables))
         {
-            return cachedTables ?? [];
+            return Result<IReadOnlyList<StoreTableOption>>.Success(cachedTables ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -76,7 +91,9 @@ public class SupabaseStoreSlipRepository(
 
         if (!result.Succeeded)
         {
-            return [];
+            return RpcFailure<IReadOnlyList<StoreTableOption>>(
+                result.ErrorMessage,
+                "卓番一覧を取得できませんでした。");
         }
 
         var tables = result.Rows.Select(row => new StoreTableOption
@@ -88,28 +105,24 @@ public class SupabaseStoreSlipRepository(
             })
             .Where(x => x.TableId > 0 && !string.IsNullOrWhiteSpace(x.TableCode))
             .ToList();
-        _memoryCache.Set(cacheKey, tables, StoreMasterCacheKeys.CreateOptions());
-        return tables;
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, tables, "卓番");
+        return Result<IReadOnlyList<StoreTableOption>>.Success(tables);
     }
 
-    public async Task<IReadOnlyList<CastOption>> GetCastsAsync(CancellationToken ct)
-    {
-        var result = await GetCastsResultAsync(ct);
-        return result.Succeeded ? result.Casts : [];
-    }
-
-    public async Task<CastOptionsLoadResult> GetCastsResultAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyList<CastOption>>> GetCastsAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return CastOptionsLoadResult.Failed("店舗設定またはSupabase Edge Function設定が未設定です。管理者設定で利用店舗を保存し、RPCキー設定を確認してください。");
+            return Result<IReadOnlyList<CastOption>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。管理者設定で利用店舗を保存し、RPCキー設定を確認してください。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
         var cacheKey = StoreMasterCacheKeys.StoreCasts(departmentId);
-        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<CastOption>? cachedCasts))
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<CastOption>? cachedCasts))
         {
-            return CastOptionsLoadResult.Success(cachedCasts ?? []);
+            return Result<IReadOnlyList<CastOption>>.Success(cachedCasts ?? []);
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -119,7 +132,12 @@ public class SupabaseStoreSlipRepository(
 
         if (!result.Succeeded)
         {
-            return CastOptionsLoadResult.Failed(ToCastLoadFriendlyError(result.ErrorMessage));
+            var failure = RpcFailure<IReadOnlyList<CastOption>>(
+                result.ErrorMessage,
+                "出勤候補のキャスト情報を取得できません。");
+            return Result<IReadOnlyList<CastOption>>.Failure(
+                failure.FailureKind ?? ResultFailureKind.Unavailable,
+                ToCastLoadFriendlyError(failure.ErrorMessage));
         }
 
         var casts = result.Rows.Select(row => new CastOption
@@ -131,8 +149,8 @@ public class SupabaseStoreSlipRepository(
             })
             .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
-        _memoryCache.Set(cacheKey, casts, StoreMasterCacheKeys.CreateOptions());
-        return CastOptionsLoadResult.Success(casts);
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, casts, "キャスト候補");
+        return Result<IReadOnlyList<CastOption>>.Success(casts);
     }
 
 
