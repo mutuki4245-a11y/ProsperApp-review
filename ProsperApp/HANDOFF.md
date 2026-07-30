@@ -18,7 +18,9 @@
 
 2026-07-30の技術課題改善では、Cookie由来の管理者モードを廃止し、`/Settings` を開いている間だけセッション内の一時トークンで設定POSTを許可する形へ戻しました。マスタ画面は店舗スタッフが通常運用で変更でき、締め条件を無視する経路は画面・C#・Edge Functionから削除しています。削除だけはパスワード解除に加え、選択店舗名を含む `削除 店舗名` の完全一致入力を必須とします。締め準備状態、キャスト売上額調整の一覧・一括保存、決済方法取得を構造化RPCへ寄せ、業務時刻を `IStoreClock`、営業中操作を型付き契約とApplicationService、勤怠検証を `AttendanceEditor` へ集約しました。C#テストプロジェクトでは営業日跨ぎ、勤怠、営業中操作契約、注文キュー、`Result<T>` を検証します。
 
-この改善はSQL定義コミット `698ed16` とアプリコミット `305d68c` を `origin/main` へpushし、アプリはAzure App ServiceへZipDeploy済みです。KuduはHTTP 202で受理後、status 4 / complete True / active Trueとなり、公開URLは未認証HTTP 302でGoogle認証へ遷移することを確認しました。対象SupabaseはCLIの管理APIアクセストークンがこの端末にないため、`01_business_day.sql`、`08_checkout_ready.sql`、`14_operational_read_models.sql` と `prosper-rpc` の更新を未適用です。適用まではアプリが旧締め判定・旧キャスト売上額調整・固定3決済へ限定フォールバックし、適用後は集約RPCと決済方法マスタへ自動的に切り替わります。
+この改善はSQL定義コミット `698ed16` とアプリコミット `305d68c` を `origin/main` へpushし、アプリはAzure App ServiceへZipDeploy済みです。KuduはHTTP 202で受理後、status 4 / complete True / active Trueとなり、公開URLは未認証HTTP 302でGoogle認証へ遷移することを確認しました。対象Supabaseには `01_business_day.sql`、`08_checkout_ready.sql`、`14_operational_read_models.sql`、`99_grants.sql` を適用し、`prosper-rpc` をversion 28へ更新済みです。新しい締め準備、決済方法、キャスト売上額調整一覧・一括保存RPCの存在、実データに対する読み取り呼び出し、`anon`、`authenticated`、`service_role` の直接実行禁止を確認しました。
+
+Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出したため、領収書RPCは現行の `accounting.documents`、`accounting.document_journal_links`、`accounting.save_journal_payload` へ移行しました。店舗の未処理領収書は、店舗が既定値として設定されたupload sourceに属する未仕訳 `unlinked` 文書だけを対象にします。クイック入力は店舗・会社・文書・金額を検証して `confirmed` 仕訳を保存し、スキャンミス除外は仕訳未連携文書だけを論理削除します。締め準備、領収書一覧、決済方法、キャスト売上額調整一覧の実呼び出しは成功し、Supabase AdvisorはSecurity/PerformanceともWARN 0、ERROR 0です。
 
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
@@ -341,7 +343,7 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 
 残る境界:
 
-- `documents` は `business_day_id` を持たない別会計領域です。営業日締めの未処理領収書確認は締めトランザクション内のポイントインタイム確認であり、同時刻のDrive取込・領収書状態変更とは営業日行ロックで直列化していません。厳密化する場合は文書へ営業日帰属を追加するか、文書更新も店舗のopen営業日ロックへ参加させます。
+- `accounting.documents` は `business_day_id` を持たない別会計領域です。営業日締めの未仕訳領収書確認は締めトランザクション内のポイントインタイム確認であり、同時刻のDrive取込・領収書状態変更とは営業日行ロックで直列化していません。厳密化する場合は文書へ営業日帰属を追加するか、文書更新も店舗のopen営業日ロックへ参加させます。
 - 導入前backfillの注文・料金・調整明細は導入時点の既存行から再構成した参考情報です。当時の明細を復元した正本ではありません。`store_checkouts` の小計、サービス料、合計と `business_home_data.accountingAmount` を会計集計の正本とし、`backfilled = true` の明細を商品別・カテゴリ別監査へ使いません。
 - 公開RPCに伝票の営業日帰属を変更する経路はなく、`store` schemaとテーブルの直接実行権限も剥奪済みです。ただしpostgres権限の管理SQLまで含めて `store_slips.business_day_id` の変更を拒否する専用トリガーや複合FKは未実装です。管理SQLでは伝票の会社・店舗・営業日・営業日付を変更しない運用とします。
 

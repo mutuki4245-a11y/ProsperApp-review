@@ -718,9 +718,10 @@ begin
     if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
         select count(*)::integer
           into v_pending_receipt_count
-        from public.documents d
-        where d.department_id = p_department_id
-          and d.status = p_pending_receipt_status;
+        from store.get_pending_receipts(
+            p_department_id,
+            p_pending_receipt_status
+        );
     end if;
 
     if coalesce(v_open_slip_count, 0) > 0 then
