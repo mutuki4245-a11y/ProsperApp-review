@@ -79,6 +79,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_item_admin_catalog", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_nomination_back_master", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_pricing_plan", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_payment_methods", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.save_pricing_plan",
     {
@@ -146,6 +147,27 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ],
   [
     "store.get_business_day_cast_sales_adjustment_status",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
+    "store.get_business_day_closing_readiness",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_pending_receipt_status", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.get_business_day_cast_sales_adjustment_overview",
     {
       result: "rows",
       params: [
@@ -249,7 +271,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_business_day_id", type: "bigint" },
         { name: "p_memo", type: "text" },
         { name: "p_pending_receipt_status", type: "text" },
-        { name: "p_ignore_closing_requirements", type: "boolean" },
       ],
     },
   ],
@@ -476,6 +497,17 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_adjustments", type: "jsonb" },
         { name: "p_source_amount_type", type: "text" },
         { name: "p_split_mode", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.save_business_day_cast_sales_adjustments",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_slips", type: "jsonb" },
       ],
     },
   ],

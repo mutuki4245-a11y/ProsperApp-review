@@ -1,9 +1,12 @@
 using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
 namespace ProsperApp.Services;
 
 public interface ICheckoutRepository
 {
+    Task<Result<IReadOnlyList<CheckoutPaymentMethod>>> GetPaymentMethodsAsync(CancellationToken ct);
+
     Task<CheckoutStatementResult> IssueCheckoutStatementAsync(long slipId, DateTimeOffset closedAt, CancellationToken ct);
 
     Task<CheckoutStatementResult> GetCheckoutStatementPrintDataAsync(long slipId, CancellationToken ct);

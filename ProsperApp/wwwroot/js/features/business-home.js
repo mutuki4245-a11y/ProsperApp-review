@@ -66,17 +66,8 @@
     let activeSlipFilter = 'all';
     let karaokeDraft = null;
     let draftRestored = false;
-    const editorOperationTypes = new Set([
-        'add_customer',
-        'update_customer',
-        'leave_customer',
-        'add_nomination',
-        'cancel_nomination',
-        'add_adjustment',
-        'void_adjustment',
-        'add_order',
-        'void_order'
-    ]);
+    const editorOperationTypes = new Set(
+        Array.isArray(config.editorOperationTypes) ? config.editorOperationTypes : []);
 
     const formatYen = window.MoneyText.yen;
     const formatSignedYen = (value) => {

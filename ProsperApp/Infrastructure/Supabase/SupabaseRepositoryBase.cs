@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ProsperApp.Features.Shared;
 
 namespace ProsperApp.Services;
 
@@ -28,6 +29,28 @@ public abstract class SupabaseRepositoryBase(
 
         var result = await RpcClient.PostArrayAsync(functionName, payload, ct);
         return result.Succeeded ? result.Rows : [];
+    }
+
+    protected async Task<Result<IReadOnlyList<JsonElement>>> PostRpcArrayResultAsync<TPayload>(
+        string functionName,
+        TPayload payload,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<IReadOnlyList<JsonElement>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(functionName, payload, ct);
+        return result.Succeeded
+            ? Result<IReadOnlyList<JsonElement>>.Success(result.Rows)
+            : Result<IReadOnlyList<JsonElement>>.Failure(
+                ResultFailureKind.Unavailable,
+                string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? "DBから情報を取得できませんでした。"
+                    : result.ErrorMessage);
     }
 
     protected static long? NormalizeId(long? id)

@@ -15,9 +15,7 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
-    @if (Model.IsAdminMode)
-    {
-        <form method="post" asp-page-handler="Create" class="slip-create__panel cast-admin-form">
+    <form method="post" asp-page-handler="Create" class="slip-create__panel cast-admin-form">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <div>
                 <label asp-for="Input.DisplayName" class="form-label"></label>
@@ -30,8 +28,7 @@
                 <span asp-validation-for="Input.DrinkMemo" class="text-danger"></span>
             </div>
             <button class="btn btn-primary btn-lg" type="submit">登録</button>
-        </form>
-    }
+    </form>
 
     <div class="slip-create__panel">
         <div class="opening-attendance__header">
@@ -67,14 +64,11 @@
                         <span>@cast.JoinedOn.ToString("yyyy-MM-dd")</span>
                         <span class="cast-admin-table__drink-memo">@(string.IsNullOrWhiteSpace(cast.DrinkMemo) ? "未設定" : cast.DrinkMemo)</span>
                         <div class="cast-admin-table__actions">
-                            @if (Model.IsAdminMode)
-                            {
-                                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#castDrinkMemoModal-@cast.CastId">編集</button>
-                                <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このキャストを削除しますか？');">
-                                    <input type="hidden" asp-for="DeleteCastId" value="@cast.CastId" />
-                                    <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
-                                </form>
-                            }
+                            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#castDrinkMemoModal-@cast.CastId">編集</button>
+                            <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このキャストを削除しますか？');">
+                                <input type="hidden" asp-for="DeleteCastId" value="@cast.CastId" />
+                                <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
+                            </form>
                         </div>
                     </div>
                 }
@@ -83,13 +77,11 @@
     </div>
 </section>
 
-@if (Model.IsAdminMode)
+@foreach (var cast in Model.Casts)
 {
-    @foreach (var cast in Model.Casts)
-    {
-        var drinkMemo = Model.EditingDrinkMemoCastId == cast.CastId
-            ? Model.DrinkMemoInput.DrinkMemo
-            : cast.DrinkMemo;
+    var drinkMemo = Model.EditingDrinkMemoCastId == cast.CastId
+        ? Model.DrinkMemoInput.DrinkMemo
+        : cast.DrinkMemo;
         <div class="modal fade" id="castDrinkMemoModal-@cast.CastId" tabindex="-1" aria-labelledby="castDrinkMemoModalLabel-@cast.CastId" aria-hidden="true">
             <div class="modal-dialog">
                 <form method="post" asp-page-handler="UpdateDrinkMemo" class="modal-content">
@@ -114,7 +106,6 @@
                 </form>
             </div>
         </div>
-    }
 }
 
 @section Scripts {

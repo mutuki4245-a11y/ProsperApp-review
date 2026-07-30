@@ -94,25 +94,42 @@ public class BusinessDayClosingReadiness
 
     public int MissingClockOutCount { get; init; }
 
-    public bool IsCastSalesAdjustmentCompleted { get; init; }
+    public int CastSalesRequiredSlipCount { get; init; }
+
+    public int CastSalesCompletedSlipCount { get; init; }
+
+    public int CastSalesMissingSlipCount { get; init; }
 
     public int PendingReceiptCount { get; init; }
 
     public bool ReceiptsEnabled { get; init; }
 
-    public bool CanClose =>
+    public bool? CanCloseFromStore { get; init; }
+
+    public IReadOnlyList<string> BlockReasonsFromStore { get; init; } = [];
+
+    public DateTimeOffset? CheckedAt { get; init; }
+
+    public bool IsCastSalesAdjustmentCompleted => CastSalesMissingSlipCount == 0;
+
+    public bool CanClose => CanCloseFromStore ?? (
         BusinessDay is not null &&
         OpenSlipCount == 0 &&
         IsDrinkDeliveryAmountEntered &&
         AttendanceCount > 0 &&
         MissingClockOutCount == 0 &&
         IsCastSalesAdjustmentCompleted &&
-        (!ReceiptsEnabled || PendingReceiptCount == 0);
+        (!ReceiptsEnabled || PendingReceiptCount == 0));
 
     public IReadOnlyList<string> BlockReasons
     {
         get
         {
+            if (CanCloseFromStore is not null)
+            {
+                return BlockReasonsFromStore;
+            }
+
             var reasons = new List<string>();
             if (BusinessDay is null)
             {

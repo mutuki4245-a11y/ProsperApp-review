@@ -14,6 +14,15 @@ public class CastSalesAdjustmentStatus
     public bool IsCompleted => MissingSlipCount == 0;
 }
 
+public class CastSalesAdjustmentOverview
+{
+    public CastSalesAdjustmentStatus Status { get; init; } = new();
+
+    public IReadOnlyList<CastSalesAdjustmentSlip> Slips { get; init; } = [];
+
+    public IReadOnlyList<CastSalesAdjustmentDetail> Details { get; init; } = [];
+}
+
 public class CastSalesAdjustmentSlip
 {
     public long SlipId { get; init; }

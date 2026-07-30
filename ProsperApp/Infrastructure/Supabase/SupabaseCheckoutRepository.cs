@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ProsperApp.Features.Shared;
 using ProsperApp.Models;
 using static ProsperApp.Services.SupabaseJson;
 
@@ -9,6 +10,44 @@ public class SupabaseCheckoutRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), ICheckoutRepository
 {
+    public async Task<Result<IReadOnlyList<CheckoutPaymentMethod>>> GetPaymentMethodsAsync(CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<IReadOnlyList<CheckoutPaymentMethod>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。決済方法を取得できません。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.get_payment_methods",
+            new { p_department_id = CurrentStoreDepartmentId },
+            ct);
+        if (!result.Succeeded)
+        {
+            return Result<IReadOnlyList<CheckoutPaymentMethod>>.Failure(
+                ResultFailureKind.Unavailable,
+                ToFriendlyError(result.ErrorMessage));
+        }
+
+        var methods = result.Rows
+            .Select(row => new CheckoutPaymentMethod
+            {
+                MethodCode = ReadString(row, "method_code") ?? string.Empty,
+                MethodName = ReadString(row, "method_name") ?? string.Empty,
+                RequiresReceivedAmount = ReadBool(row, "requires_received_amount") ?? false,
+                SortOrder = (int)(ReadLong(row, "sort_order") ?? 0)
+            })
+            .Where(method =>
+                !string.IsNullOrWhiteSpace(method.MethodCode) &&
+                !string.IsNullOrWhiteSpace(method.MethodName))
+            .OrderBy(method => method.SortOrder)
+            .ThenBy(method => method.MethodCode, StringComparer.Ordinal)
+            .ToList();
+
+        return Result<IReadOnlyList<CheckoutPaymentMethod>>.Success(methods);
+    }
+
     public async Task<CheckoutStatementResult> IssueCheckoutStatementAsync(long slipId, DateTimeOffset closedAt, CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -185,6 +224,7 @@ public class SupabaseCheckoutRepository(
         if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase)) return "退店時刻は伝票とすべてのお客様の入店時刻より後にしてください。";
         if (rawError.Contains("invalid_checkout_total", StringComparison.OrdinalIgnoreCase)) return "決済金額の合計が会計額と一致しません。";
         if (rawError.Contains("invalid_received_amount", StringComparison.OrdinalIgnoreCase)) return "受取額を確認してください。";
+        if (rawError.Contains("multiple_received_amount_payment_methods", StringComparison.OrdinalIgnoreCase)) return "受取額を入力する決済方法は1つだけ選択してください。";
         if (rawError.Contains("duplicate_checkout_payment_method", StringComparison.OrdinalIgnoreCase)) return "同じ決済方法を重複して入力できません。";
         if (rawError.Contains("invalid_checkout_payment", StringComparison.OrdinalIgnoreCase)) return "決済方法と金額を確認してください。";
         return $"会計処理を実行できません。{rawError}";

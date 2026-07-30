@@ -12,13 +12,15 @@ public class IndexModel(
     IBusinessDayRepository businessDayRepository,
     IStoreOrderRepository orderRepository,
     IStoreSlipRepository slipRepository,
-    IOrderQueueService orderQueueService) : PageModel
+    IOrderQueueService orderQueueService,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IOrderQueueService _orderQueueService = orderQueueService;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty(SupportsGet = true)]
     public long? SelectedSlipId { get; set; }
@@ -77,7 +79,7 @@ public class IndexModel(
             {
                 id = slip.SlipId,
                 display = slip.TableDisplayName,
-                openedTime = StoreBusinessTime.FormatBusinessTime(slip.OpenedAt),
+                openedTime = _storeClock.FormatBusinessTime(slip.OpenedAt),
                 customerCount = slip.CustomerCount,
                 customerNames = slip.CustomerDisplayName,
                 nominationCastIds = slip.NominationCastIdList,

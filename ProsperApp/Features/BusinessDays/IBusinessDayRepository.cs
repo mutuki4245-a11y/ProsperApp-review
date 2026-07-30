@@ -1,4 +1,5 @@
 using ProsperApp.Models;
+using ProsperApp.Features.Shared;
 
 namespace ProsperApp.Services;
 
@@ -22,7 +23,12 @@ public interface IBusinessDayRepository
     Task<BusinessDayOperationResult> CloseAsync(
         long businessDayId,
         string? memo,
-        bool ignoreClosingRequirements,
+        bool includePendingReceipts,
+        CancellationToken ct);
+
+    Task<Result<BusinessDayClosingReadiness>> GetClosingReadinessAsync(
+        StoreBusinessDay businessDay,
+        bool includePendingReceipts,
         CancellationToken ct);
 
     Task<int> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -9,13 +8,11 @@ namespace ProsperApp.Pages;
 public class ManagementCastsModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
-    IStoreCastAdminRepository castAdminRepository,
-    IAdminAuthorizationService adminAuthorizationService) : PageModel
+    IStoreCastAdminRepository castAdminRepository) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreCastAdminRepository _castAdminRepository = castAdminRepository;
-    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
@@ -31,8 +28,6 @@ public class ManagementCastsModel(
     public StoreCastDrinkMemoInputModel DrinkMemoInput { get; set; } = new();
 
     public long? EditingDrinkMemoCastId { get; private set; }
-
-    public bool IsAdminMode => _adminAuthorizationService.IsAdminMode;
 
     public string? SuccessMessage { get; set; }
 
@@ -51,11 +46,6 @@ public class ManagementCastsModel(
     public async Task<IActionResult> OnPostCreateAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
-        {
-            return NotFound();
-        }
-
-        if (!IsAdminMode)
         {
             return NotFound();
         }
@@ -86,11 +76,6 @@ public class ManagementCastsModel(
     public async Task<IActionResult> OnPostDeleteAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
-        {
-            return NotFound();
-        }
-
-        if (!IsAdminMode)
         {
             return NotFound();
         }

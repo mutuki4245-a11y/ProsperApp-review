@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -11,16 +10,15 @@ namespace ProsperApp.Pages;
 public class SettingsModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
-    IAdminAuthorizationService adminAuthorizationService,
     IStoreSettingsRepository storeSettingsRepository) : PageModel
 {
     private const string SettingsPassword = "4245";
     private const string SaveTokenSessionKey = "SettingsSaveToken";
+    private const string LegacyAdminCookieName = "ProsperApp.AdminSession";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
-    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
     private readonly IStoreSettingsRepository _storeSettingsRepository = storeSettingsRepository;
 
     [BindProperty]
@@ -32,6 +30,9 @@ public class SettingsModel(
 
     [BindProperty]
     public string? SaveToken { get; set; }
+
+    [BindProperty]
+    public string? DeleteConfirmation { get; set; }
 
     public bool IsUnlocked { get; private set; }
 
@@ -56,16 +57,9 @@ public class SettingsModel(
             return NotFound();
         }
 
+        DeleteLegacyAdminCookie();
         LoadCurrentSettings();
-        if (_adminAuthorizationService.IsAdminMode)
-        {
-            RefreshSaveToken();
-        }
-        else
-        {
-            LockSettings();
-        }
-
+        LockSettings();
         await LoadDepartmentsAsync(ct);
         return Page();
     }
@@ -77,7 +71,7 @@ public class SettingsModel(
             return NotFound();
         }
 
-        if (!CanAccessSettings() && Password != SettingsPassword)
+        if (Password != SettingsPassword)
         {
             IsUnlocked = false;
             LoadCurrentSettings();
@@ -86,7 +80,6 @@ public class SettingsModel(
             return Page();
         }
 
-        _adminAuthorizationService.SetAdminMode(true);
         RefreshSaveToken();
         LoadCurrentSettings();
         await LoadDepartmentsAsync(ct);
@@ -100,7 +93,7 @@ public class SettingsModel(
             return NotFound();
         }
 
-        IsUnlocked = CanAccessSettings();
+        IsUnlocked = IsValidSaveToken();
         if (!IsUnlocked)
         {
             LockSettings();
@@ -128,7 +121,6 @@ public class SettingsModel(
         };
 
         WriteSettingsCookie(settings);
-        _adminAuthorizationService.SetAdminMode(Input.IsAdminMode);
         TempData["SuccessMessage"] = "設定をこの端末に保存しました。";
         LockSettings();
         return RedirectToPage("/Index");
@@ -141,7 +133,6 @@ public class SettingsModel(
             return NotFound();
         }
 
-        _adminAuthorizationService.SetAdminMode(false);
         LoadCurrentSettings();
         LockSettings();
 
@@ -156,13 +147,13 @@ public class SettingsModel(
             return NotFound();
         }
 
-        IsUnlocked = CanAccessSettings();
-        if (!IsUnlocked || !_adminAuthorizationService.IsAdminMode)
+        IsUnlocked = IsValidSaveToken();
+        if (!IsUnlocked)
         {
             LockSettings();
             LoadCurrentSettings();
             await LoadDepartmentsAsync(ct);
-            ModelState.AddModelError(string.Empty, "デバッグ操作を実行するには、管理者モードで開いてください。");
+            ModelState.AddModelError(string.Empty, "削除するには、もう一度設定ページを開いてください。");
             return Page();
         }
 
@@ -170,6 +161,16 @@ public class SettingsModel(
         var selectedDepartment = ValidateSettings();
         if (!ModelState.IsValid || selectedDepartment is null)
         {
+            RefreshSaveToken();
+            return Page();
+        }
+
+        var expectedConfirmation = BuildDeleteConfirmation(selectedDepartment.DisplayName);
+        if (!string.Equals(DeleteConfirmation, expectedConfirmation, StringComparison.Ordinal))
+        {
+            ModelState.AddModelError(
+                nameof(DeleteConfirmation),
+                $"確認欄に「{expectedConfirmation}」と入力してください。");
             RefreshSaveToken();
             return Page();
         }
@@ -199,18 +200,17 @@ public class SettingsModel(
 
     private void LoadCurrentSettings()
     {
-        Input = ToInput(_localSettingsProvider.GetCurrent(), _adminAuthorizationService.IsAdminMode);
+        Input = ToInput(_localSettingsProvider.GetCurrent());
     }
 
-    private static SettingsInputModel ToInput(LocalSettings settings, bool isAdminMode)
+    private static SettingsInputModel ToInput(LocalSettings settings)
     {
         return new SettingsInputModel
         {
             StoreName = settings.StoreName,
             StoreDepartmentId = settings.StoreDepartmentId,
             ScreenMode = settings.ScreenMode,
-            ThemeMode = settings.ThemeMode,
-            IsAdminMode = isAdminMode
+            ThemeMode = settings.ThemeMode
         };
     }
 
@@ -220,11 +220,6 @@ public class SettingsModel(
         return !string.IsNullOrWhiteSpace(SaveToken) &&
                !string.IsNullOrWhiteSpace(sessionToken) &&
                string.Equals(SaveToken, sessionToken, StringComparison.Ordinal);
-    }
-
-    private bool CanAccessSettings()
-    {
-        return IsValidSaveToken() || _adminAuthorizationService.IsAdminMode;
     }
 
     private void LockSettings()
@@ -251,6 +246,25 @@ public class SettingsModel(
             {
                 Expires = DateTimeOffset.UtcNow.AddYears(1),
                 HttpOnly = false,
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = Request.IsHttps,
+                Path = "/"
+            });
+    }
+
+    private void DeleteLegacyAdminCookie()
+    {
+        if (!Request.Cookies.ContainsKey(LegacyAdminCookieName))
+        {
+            return;
+        }
+
+        Response.Cookies.Delete(
+            LegacyAdminCookieName,
+            new CookieOptions
+            {
+                HttpOnly = true,
                 IsEssential = true,
                 SameSite = SameSiteMode.Lax,
                 Secure = Request.IsHttps,
@@ -287,6 +301,11 @@ public class SettingsModel(
 
         return selectedDepartment;
     }
+
+    public static string BuildDeleteConfirmation(string storeName)
+    {
+        return $"削除 {storeName}";
+    }
 }
 
 public class SettingsInputModel
@@ -302,6 +321,4 @@ public class SettingsInputModel
     [Display(Name = "配色")]
     public string ThemeMode { get; set; } = LocalSettings.ThemeModeQuietNavy;
 
-    [Display(Name = "管理者モード")]
-    public bool IsAdminMode { get; set; }
 }

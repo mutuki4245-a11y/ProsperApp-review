@@ -28,7 +28,7 @@ const repositorySource = walk('Infrastructure/Supabase', '.cs')
     .join('\n');
 const csharpRpcNames = new Set(
     [...repositorySource.matchAll(
-        /(?:PostRpcArrayAsync|PostArrayAsync|PostScalarAsync)\s*\(\s*"(store\.[a-z0-9_]+)"/g
+        /(?:PostRpcArrayAsync|PostRpcArrayResultAsync|PostArrayAsync|PostScalarAsync)\s*\(\s*"(store\.[a-z0-9_]+)"/g
     )].map((match) => match[1])
 );
 
@@ -99,4 +99,45 @@ assert.match(
     grantsSource,
     /alter\s+default\s+privileges\s+in\s+schema\s+store\s+revoke\s+execute\s+on\s+functions\s+from\s+public/i,
     '今後追加するstore関数もPUBLIC実行不可を既定にしてください。'
+);
+
+const businessDaySource = read('Sql/store_rpc/01_business_day.sql');
+assert.match(
+    businessDaySource,
+    /create\s+or\s+replace\s+function\s+store\.get_business_day_closing_readiness/i,
+    '締め条件は構造化RPCへ集約してください。'
+);
+assert.match(
+    businessDaySource,
+    /from\s+store\.get_business_day_closing_readiness\s*\(/i,
+    '締め実行も画面と同じ準備判定関数を使ってください。'
+);
+assert.match(
+    businessDaySource,
+    /if\s+coalesce\(p_ignore_closing_requirements,\s*false\)\s+then[\s\S]*?raise\s+exception\s+'closing_override_disabled'/i,
+    '旧締め上書き引数は互換目的に限り、trueを拒否してください。'
+);
+
+const operationalSource = read('Sql/store_rpc/14_operational_read_models.sql');
+assert.match(
+    operationalSource,
+    /create\s+or\s+replace\s+function\s+store\.get_business_day_cast_sales_adjustment_overview/i,
+    'キャスト売上額調整は一覧・詳細を一括取得してください。'
+);
+assert.match(
+    operationalSource,
+    /create\s+or\s+replace\s+function\s+store\.save_business_day_cast_sales_adjustments/i,
+    'キャスト売上額調整は営業日単位の一括保存RPCを持ってください。'
+);
+
+const checkoutSource = read('Sql/store_rpc/08_checkout_ready.sql');
+assert.match(
+    checkoutSource,
+    /coalesce\(v_payment_method\.requires_received_amount,\s*false\)/i,
+    '受取額の要否は決済方法マスタを参照してください。'
+);
+assert.equal(
+    checkoutSource.includes("if v_method_code = 'cash'"),
+    false,
+    '受取額判定をcash固定へ戻さないでください。'
 );

@@ -10,7 +10,7 @@
     <div class="store-home__hero">
         <p class="store-home__eyebrow">管理者設定</p>
         <h1>管理者設定</h1>
-        <p>利用店舗、画面モード、配色をこの端末に保存します。管理者モードは保護されたセッションで保持します。</p>
+        <p>利用店舗、画面モード、配色をこの端末に保存します。このページだけをパスワードで保護します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -117,13 +117,6 @@
                     </label>
                 </div>
                 <span asp-validation-for="Input.ThemeMode" class="text-danger"></span>
-                <label class="settings-radio mt-3">
-                    <input asp-for="Input.IsAdminMode" type="checkbox" />
-                    <span>
-                        <strong>管理者モード</strong>
-                        <small>カテゴリ追加など、管理者向けの編集項目を表示・実行する</small>
-                    </span>
-                </label>
             </section>
 
             <section class="settings-card settings-card--danger">
@@ -146,13 +139,27 @@
                         </dl>
                     </details>
                 }
+                <div class="mb-3">
+                    <label asp-for="DeleteConfirmation" class="form-label">
+                        確認のため
+                        <strong data-delete-confirmation-text>削除 店舗名</strong>
+                        と入力してください
+                    </label>
+                    <input
+                        asp-for="DeleteConfirmation"
+                        class="form-control"
+                        autocomplete="off"
+                        data-delete-confirmation-input />
+                    <span asp-validation-for="DeleteConfirmation" class="text-danger"></span>
+                </div>
                 <button
                     class="btn btn-danger btn-lg"
                     type="submit"
                     formaction="?handler=DeleteNonMasterRecords"
                     formnovalidate
                     data-confirm-message="選択中の店舗のマスタ以外のレコードを削除します。この操作は取り消せません。実行しますか？"
-                    disabled="@(Model.Departments.Count == 0)">
+                    data-delete-confirmation-button
+                    disabled>
                     マスタ以外のテーブルのレコードを削除する
                 </button>
             </section>
@@ -177,6 +184,32 @@
         </script>
     }
     <script>
+        const departmentSelect = document.getElementById("Input_StoreDepartmentId");
+        const confirmationText = document.querySelector("[data-delete-confirmation-text]");
+        const confirmationInput = document.querySelector("[data-delete-confirmation-input]");
+        const confirmationButton = document.querySelector("[data-delete-confirmation-button]");
+        const syncDeleteConfirmation = () => {
+            if (!departmentSelect || !confirmationText) {
+                return;
+            }
+
+            const selected = departmentSelect.options[departmentSelect.selectedIndex];
+            const storeName = selected?.value ? selected.text.trim() : "店舗名";
+            const expected = `削除 ${storeName}`;
+            confirmationText.textContent = expected;
+            if (confirmationInput) {
+                confirmationInput.placeholder = expected;
+            }
+            if (confirmationButton) {
+                confirmationButton.disabled = !confirmationInput ||
+                    confirmationInput.value !== expected ||
+                    !selected?.value;
+            }
+        };
+        departmentSelect?.addEventListener("change", syncDeleteConfirmation);
+        confirmationInput?.addEventListener("input", syncDeleteConfirmation);
+        syncDeleteConfirmation();
+
         document.querySelectorAll("[data-confirm-message]").forEach((button) => {
             button.addEventListener("click", (event) => {
                 const message = button.getAttribute("data-confirm-message");

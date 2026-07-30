@@ -6,6 +6,8 @@ public interface IStoreClock
 
     DateOnly GetCurrentBusinessDate();
 
+    DateOnly GetStoreToday();
+
     DateTime FloorToMinuteStep(DateTime value, int minuteStep);
 
     DateTime ComposeBusinessDateTime(DateOnly businessDate, TimeOnly inputTime);

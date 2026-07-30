@@ -3,6 +3,17 @@ using System.Text.Json;
 
 namespace ProsperApp.Models;
 
+public class CheckoutPaymentMethod
+{
+    public string MethodCode { get; init; } = string.Empty;
+
+    public string MethodName { get; init; } = string.Empty;
+
+    public bool RequiresReceivedAmount { get; init; }
+
+    public int SortOrder { get; init; }
+}
+
 public class CheckoutPaymentInputModel
 {
     public string MethodCode { get; set; } = string.Empty;

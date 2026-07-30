@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -8,12 +7,10 @@ namespace ProsperApp.Pages;
 
 public class ManagementItemsModel(
     IFeatureGate featureGate,
-    IStoreItemAdminRepository itemAdminRepository,
-    IAdminAuthorizationService adminAuthorizationService) : PageModel
+    IStoreItemAdminRepository itemAdminRepository) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreItemAdminRepository _itemAdminRepository = itemAdminRepository;
-    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
 
     [BindProperty]
     public StoreItemCategoryInputModel CategoryInput { get; set; } = new();
@@ -28,8 +25,6 @@ public class ManagementItemsModel(
     public List<StoreItemOrderInputModel> ReorderItems { get; set; } = [];
 
     public StoreItemAdminCatalog Catalog { get; set; } = new();
-
-    public bool IsAdminMode => _adminAuthorizationService.IsAdminMode;
 
     public string? SuccessMessage { get; set; }
 
@@ -48,11 +43,6 @@ public class ManagementItemsModel(
     public async Task<IActionResult> OnPostSaveCategoryAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
-        {
-            return NotFound();
-        }
-
-        if (!IsAdminMode)
         {
             return NotFound();
         }
@@ -83,11 +73,6 @@ public class ManagementItemsModel(
     public async Task<IActionResult> OnPostSaveItemAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
-        {
-            return NotFound();
-        }
-
-        if (!IsAdminMode)
         {
             return NotFound();
         }
@@ -124,11 +109,6 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
-        if (!IsAdminMode)
-        {
-            return NotFound();
-        }
-
         if (DeleteItemId is null or <= 0)
         {
             ModelState.AddModelError(string.Empty, "削除する商品を選択してください。");
@@ -155,11 +135,6 @@ public class ManagementItemsModel(
     public async Task<IActionResult> OnPostReorderItemsAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
-        {
-            return NotFound();
-        }
-
-        if (!IsAdminMode)
         {
             return NotFound();
         }

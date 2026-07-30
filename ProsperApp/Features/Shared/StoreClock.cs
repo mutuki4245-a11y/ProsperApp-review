@@ -1,12 +1,14 @@
 namespace ProsperApp.Services;
 
-public sealed class StoreClock : IStoreClock
+public sealed class StoreClock(TimeProvider timeProvider) : IStoreClock
 {
     private static readonly TimeOnly BusinessDaySwitchTime = new(12, 0);
+    private static readonly TimeZoneInfo StoreTimeZone = GetStoreTimeZone();
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     public DateTime GetStoreNow()
     {
-        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, GetStoreTimeZone());
+        return TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), StoreTimeZone).DateTime;
     }
 
     public DateOnly GetCurrentBusinessDate()
@@ -17,6 +19,11 @@ public sealed class StoreClock : IStoreClock
             : now;
 
         return DateOnly.FromDateTime(businessDate);
+    }
+
+    public DateOnly GetStoreToday()
+    {
+        return DateOnly.FromDateTime(GetStoreNow());
     }
 
     public DateTime FloorToMinuteStep(DateTime value, int minuteStep)
@@ -41,13 +48,13 @@ public sealed class StoreClock : IStoreClock
 
     public DateTime ToStoreDateTime(DateTimeOffset value)
     {
-        return TimeZoneInfo.ConvertTime(value, GetStoreTimeZone()).DateTime;
+        return TimeZoneInfo.ConvertTime(value, StoreTimeZone).DateTime;
     }
 
     public DateTimeOffset ToStoreDateTimeOffset(DateTime value)
     {
         var unspecified = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
-        return new DateTimeOffset(unspecified, GetStoreTimeZone().GetUtcOffset(unspecified));
+        return new DateTimeOffset(unspecified, StoreTimeZone.GetUtcOffset(unspecified));
     }
 
     public IReadOnlyList<string> BuildTimeOptions(int minuteStep)

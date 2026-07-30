@@ -9,12 +9,14 @@ public class ReceiptsModel(
     IReceiptRepository receiptRepository,
     IDriveFileService driveFileService,
     IGoogleDriveAuthService googleDriveAuthService,
-    IFeatureGate featureGate) : PageModel
+    IFeatureGate featureGate,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IDriveFileService _driveFileService = driveFileService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IFeatureGate _featureGate = featureGate;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
     public QuickEntryInputModel Input { get; set; } = new();
@@ -24,11 +26,12 @@ public class ReceiptsModel(
 
     public IReadOnlyList<PendingReceiptItem> PendingReceipts { get; private set; } = [];
     public PendingReceiptItem? CurrentReceipt { get; private set; }
+    public string? PendingReceiptsLoadError { get; private set; }
     public string? NextPreviewUrl { get; private set; }
     public int CurrentPosition => PendingReceipts.Count == 0 ? 0 : CurrentIndex + 1;
     public int TotalCount => PendingReceipts.Count;
     public DateOnly PaymentDateMin => PaymentDateMax.AddYears(-1);
-    public DateOnly PaymentDateMax => GetJapanToday();
+    public DateOnly PaymentDateMax => _storeClock.GetStoreToday();
     public IReadOnlyList<AccountSubjectGroup> AccountSubjectGroups { get; } =
     [
         new("前渡金", ["スタッフ", "キャスト"]),
@@ -173,7 +176,9 @@ public class ReceiptsModel(
 
     private async Task LoadCurrentAsync(int requestedIndex, CancellationToken cancellationToken)
     {
-        PendingReceipts = await _receiptRepository.GetPendingAsync(cancellationToken);
+        var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
+        PendingReceipts = pendingResult.Succeeded ? pendingResult.Value : [];
+        PendingReceiptsLoadError = pendingResult.Succeeded ? null : pendingResult.ErrorMessage;
         if (PendingReceipts.Count == 0)
         {
             CurrentReceipt = null;
@@ -295,24 +300,6 @@ public class ReceiptsModel(
     {
         return _featureGate.IsEnabled(FeatureNames.Closing) &&
                _featureGate.IsEnabled(FeatureNames.Receipts);
-    }
-
-    private static DateOnly GetJapanToday()
-    {
-        var timeZone = GetJapanTimeZone();
-        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone));
-    }
-
-    private static TimeZoneInfo GetJapanTimeZone()
-    {
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time");
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
-        }
     }
 
     public sealed record AccountSubjectGroup(string Name, IReadOnlyList<string> Items);

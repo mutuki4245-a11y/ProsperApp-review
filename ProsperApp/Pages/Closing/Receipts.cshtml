@@ -32,7 +32,14 @@
     }
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-    @if (Model.CurrentReceipt is null)
+    @if (!string.IsNullOrWhiteSpace(Model.PendingReceiptsLoadError))
+    {
+        <div class="alert alert-danger">
+            <div>@Model.PendingReceiptsLoadError</div>
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Closing/Receipts" asp-route-index="@Model.Index">再試行</a>
+        </div>
+    }
+    else if (Model.CurrentReceipt is null)
     {
         <div class="alert alert-secondary">未入力の証憑はありません。</div>
     }

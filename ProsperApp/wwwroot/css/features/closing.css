@@ -189,7 +189,8 @@ a.closing-panel:focus {
 
 .closing-final__status {
   align-self: end;
-  justify-self: end;
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .closing-panel__form {
@@ -527,11 +528,11 @@ a.closing-panel:focus {
   }
 
   .closing-final-panel--compact {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
   .closing-final__status {
-    grid-column: 1;
+    grid-column: 1 / -1;
     justify-self: start;
   }
 
@@ -557,12 +558,14 @@ a.closing-panel:focus {
   }
 
   .closing-panel__action,
-  .closing-panel__submit {
+  .closing-panel__submit,
+  .closing-final__retry {
     grid-column: 1 / -1;
     justify-self: start;
   }
 
-  .closing-panel__submit {
+  .closing-panel__submit,
+  .closing-final__retry {
     width: 100%;
   }
 

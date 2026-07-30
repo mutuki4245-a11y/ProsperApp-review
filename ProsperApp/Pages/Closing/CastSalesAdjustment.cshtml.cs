@@ -9,12 +9,14 @@ public class CastSalesAdjustmentModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
-    IStoreSlipRepository slipRepository) : PageModel
+    IStoreSlipRepository slipRepository,
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty]
     public CastSalesAdjustmentSaveInput CastSalesAdjustmentInput { get; set; } = new();
@@ -33,6 +35,8 @@ public class CastSalesAdjustmentModel(
 
     public string? SuccessMessage { get; private set; }
 
+    public string? LoadErrorMessage { get; private set; }
+
     public long? ShowCastSalesAdjustmentModalSlipId { get; private set; }
 
     public bool CanConfirmCastSalesAdjustment =>
@@ -40,6 +44,8 @@ public class CastSalesAdjustmentModel(
         CastSalesAdjustmentStatus.RequiredSlipCount > 0 &&
         CastSalesAdjustmentSlips.Count > 0 &&
         CastSalesAdjustmentDetails.Count == CastSalesAdjustmentSlips.Count;
+
+    public string FormatBusinessTime(DateTimeOffset value) => _storeClock.FormatBusinessTime(value);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -121,33 +127,33 @@ public class CastSalesAdjustmentModel(
             return Page();
         }
 
-        foreach (var detail in CastSalesAdjustmentDetails)
-        {
-            var result = await _castSalesAdjustmentRepository.SaveAsync(
-                new CastSalesAdjustmentSaveInput
-                {
-                    BusinessDayId = CurrentBusinessDay.BusinessDayId,
-                    SlipId = detail.SlipId,
-                    SourceAmountType = CastSalesAmountBasis,
-                    SplitMode = CastSalesSplitMode,
-                    Casts = detail.Casts
-                        .Select(cast => new CastSalesAdjustmentCastInput
-                        {
-                            SlipCastId = cast.SlipCastId,
-                            SalesAmount = cast.EffectiveSalesAmount
-                        })
-                        .ToList()
-                },
-                cancellationToken);
-
-            if (!result.Succeeded)
+        var inputs = CastSalesAdjustmentDetails
+            .Select(detail => new CastSalesAdjustmentSaveInput
             {
-                ModelState.AddModelError(
-                    string.Empty,
-                    $"{detail.TableDisplayName} の売上額調整を確認できませんでした。{result.ErrorMessage}");
-                await LoadAsync(cancellationToken);
-                return Page();
-            }
+                BusinessDayId = CurrentBusinessDay.BusinessDayId,
+                SlipId = detail.SlipId,
+                SourceAmountType = CastSalesAmountBasis,
+                SplitMode = CastSalesSplitMode,
+                Casts = detail.Casts
+                    .Select(cast => new CastSalesAdjustmentCastInput
+                    {
+                        SlipCastId = cast.SlipCastId,
+                        SalesAmount = cast.EffectiveSalesAmount
+                    })
+                    .ToList()
+            })
+            .ToList();
+        var result = await _castSalesAdjustmentRepository.SaveBatchAsync(
+            CurrentBusinessDay.BusinessDayId,
+            inputs,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                result.ErrorMessage ?? "キャスト売上額調整を確認できませんでした。");
+            await LoadAsync(cancellationToken);
+            return Page();
         }
 
         TempData["SuccessMessage"] = "キャスト売上額調整を確認しました。";
@@ -172,45 +178,35 @@ public class CastSalesAdjustmentModel(
             return;
         }
 
-        var castSalesAdjustmentStatusTask = _castSalesAdjustmentRepository.GetStatusAsync(
+        var overviewResult = await _castSalesAdjustmentRepository.GetOverviewAsync(
             CurrentBusinessDay.BusinessDayId,
             cancellationToken);
-        var castSalesAdjustmentSlipsTask = _castSalesAdjustmentRepository.GetSlipsAsync(
-            CurrentBusinessDay.BusinessDayId,
-            cancellationToken);
-        await Task.WhenAll(castSalesAdjustmentStatusTask, castSalesAdjustmentSlipsTask);
+        if (!overviewResult.Succeeded)
+        {
+            LoadErrorMessage = overviewResult.ErrorMessage ?? "キャスト売上額調整を取得できませんでした。";
+            CastSalesAdjustmentStatus = new CastSalesAdjustmentStatus
+            {
+                RequiredSlipCount = 1,
+                MissingSlipCount = 1
+            };
+            CastSalesAdjustmentSlips = [];
+            CastSalesAdjustmentDetails = [];
+            return;
+        }
 
-        CastSalesAdjustmentStatus = await castSalesAdjustmentStatusTask;
-        CastSalesAdjustmentSlips = await castSalesAdjustmentSlipsTask;
-        CastSalesAdjustmentDetails = await LoadCastSalesAdjustmentDetailsAsync(
-            CastSalesAdjustmentSlips,
-            cancellationToken);
+        CastSalesAdjustmentStatus = overviewResult.Value.Status;
+        CastSalesAdjustmentSlips = overviewResult.Value.Slips;
+        foreach (var detail in overviewResult.Value.Details)
+        {
+            ApplyInitialCastSalesAmounts(detail);
+        }
+
+        CastSalesAdjustmentDetails = overviewResult.Value.Details;
     }
 
     public CastSalesAdjustmentDetail? FindCastSalesAdjustmentDetail(long slipId)
     {
         return CastSalesAdjustmentDetails.FirstOrDefault(x => x.SlipId == slipId);
-    }
-
-    private async Task<IReadOnlyList<CastSalesAdjustmentDetail>> LoadCastSalesAdjustmentDetailsAsync(
-        IReadOnlyList<CastSalesAdjustmentSlip> slips,
-        CancellationToken cancellationToken)
-    {
-        var details = await Task.WhenAll(slips.Select(async slip =>
-        {
-            var detail = await _castSalesAdjustmentRepository.GetDetailAsync(slip.SlipId, cancellationToken);
-            if (detail is not null)
-            {
-                ApplyInitialCastSalesAmounts(detail);
-            }
-
-            return detail;
-        }));
-
-        return details
-            .Where(detail => detail is not null)
-            .Select(detail => detail!)
-            .ToList();
     }
 
     private void ApplyInitialCastSalesAmounts(CastSalesAdjustmentDetail detail)

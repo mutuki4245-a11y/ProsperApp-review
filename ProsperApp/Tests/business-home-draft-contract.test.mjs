@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [markup, source, pageModel] = await Promise.all([
+const [markup, source, operationContract] = await Promise.all([
     readFile(new URL('../Pages/Index.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/business-home.js', import.meta.url), 'utf8'),
-    readFile(new URL('../Pages/Index.cshtml.cs', import.meta.url), 'utf8')
+    readFile(new URL('../Features/BusinessHome/BusinessHomeOperationContract.cs', import.meta.url), 'utf8')
 ]);
 
 const operationTypes = [
@@ -32,7 +32,7 @@ assert.match(source, /if \(!editorOperationTypes\.has\(operation\?\.operationTyp
 
 for (const operationType of operationTypes) {
     assert.equal(source.includes(`'${operationType}'`), true, `${operationType} をJS契約表に含めること`);
-    assert.equal(pageModel.includes(`"${operationType}"`), true, `${operationType} をPageModel許可リストに含めること`);
+    assert.equal(operationContract.includes(`"${operationType}"`), true, `${operationType} をサーバー側契約に含めること`);
 }
 
 console.log('Business home draft contract checks passed.');

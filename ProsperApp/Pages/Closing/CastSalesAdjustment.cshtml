@@ -27,6 +27,14 @@
 
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
+    @if (!string.IsNullOrWhiteSpace(Model.LoadErrorMessage))
+    {
+        <div class="alert alert-warning" role="alert">
+            <span>@Model.LoadErrorMessage</span>
+            <a class="btn btn-outline-secondary btn-sm ms-2" asp-page="/Closing/CastSalesAdjustment">再読込</a>
+        </div>
+    }
+
     @if (!hasBusinessDay)
     {
         <div class="closing-panel is-preparing">
@@ -56,7 +64,7 @@
                 var detail = Model.FindCastSalesAdjustmentDetail(slip.SlipId);
                 <div class="slip-list__row slip-list__row--action cast-sales-adjustment-list__row">
                     <strong class="slip-list__table">@slip.TableDisplayName</strong>
-                    <span>@StoreBusinessTime.FormatBusinessTime(slip.CheckoutAt)</span>
+                    <span>@Model.FormatBusinessTime(slip.CheckoutAt)</span>
                     <span class="slip-list__customers">@slip.CustomerDisplayNames</span>
                     <span class="cast-sales-adjustment-list__casts">
                         @if (detail is not null)

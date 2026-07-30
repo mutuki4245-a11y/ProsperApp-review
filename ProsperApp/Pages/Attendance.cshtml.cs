@@ -1,9 +1,6 @@
-using System.ComponentModel.DataAnnotations;
-using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Attendance;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -65,7 +62,11 @@ public class AttendanceModel(
         }
 
         var postedBusinessDayId = Input.BusinessDayId;
-        MergeSelectedEntriesJsonIntoInput();
+        var mergeResult = AttendanceEditor.MergeSelectedEntries(Input);
+        if (!mergeResult.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, mergeResult.ErrorMessage ?? "勤怠入力を読み取れませんでした。");
+        }
         await LoadAsync(cancellationToken, preserveInput: true);
         if (CurrentBusinessDay is not null && postedBusinessDayId != CurrentBusinessDay.BusinessDayId)
         {
@@ -73,7 +74,13 @@ public class AttendanceModel(
             return Page();
         }
 
-        ValidateAttendanceInput();
+        AddAttendanceErrors(AttendanceEditor.Validate(
+            Input,
+            ClockInTimeOptions,
+            ClockOutTimeOptions,
+            CurrentBusinessDay?.BusinessDate ?? CurrentBusinessDate,
+            _storeClock,
+            CastLoadErrorMessage));
         if (!ModelState.IsValid)
         {
             return Page();
@@ -172,9 +179,9 @@ public class AttendanceModel(
         var storeContext = await _slipRepository.GetStoreContextAsync(cancellationToken);
         StoreContext = storeContext;
         var minuteStep = storeContext?.AttendanceMinuteStep ?? 15;
-        ClockInTimeOptions = BuildAttendanceTimeOptions(19, 0, minuteStep);
-        ClockOutTimeOptions = BuildAttendanceTimeOptions(24, 0, minuteStep);
-        DefaultClockInTime = ResolveDefaultTime(ClockInTimeOptions, "19:00");
+        ClockInTimeOptions = AttendanceEditor.BuildTimeOptions(19, 0, minuteStep);
+        ClockOutTimeOptions = AttendanceEditor.BuildTimeOptions(24, 0, minuteStep);
+        DefaultClockInTime = AttendanceEditor.ResolveDefaultTime(ClockInTimeOptions, "19:00");
         DefaultClockOutTime = string.Empty;
         CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken);
@@ -185,7 +192,7 @@ public class AttendanceModel(
                 .ToDictionary(x => x.Key, x => x.Last())
             : [];
         var postedSelectedCastIds = preserveInput
-            ? ParseSelectedCastIds(Input.SelectedCastIds)
+            ? AttendanceEditor.ParseSelectedCastIds(Input.SelectedCastIds)
             : new HashSet<long>();
         IReadOnlyList<BusinessDayClosingAttendanceItem> attendanceItems = CurrentBusinessDay is null
             ? []
@@ -266,257 +273,11 @@ public class AttendanceModel(
         };
     }
 
-    private void MergeSelectedEntriesJsonIntoInput()
+    private void AddAttendanceErrors(IEnumerable<AttendanceValidationError> errors)
     {
-        var selectedEntries = ParseSelectedEntries(Input.SelectedEntriesJson);
-        if (selectedEntries.Count == 0)
+        foreach (var error in errors)
         {
-            return;
-        }
-
-        var inputByCastId = Input.Entries
-            .Where(x => x.CastId > 0)
-            .GroupBy(x => x.CastId)
-            .ToDictionary(x => x.Key, x => x.Last());
-
-        foreach (var posted in selectedEntries)
-        {
-            if (posted.CastId <= 0)
-            {
-                continue;
-            }
-
-            if (!inputByCastId.TryGetValue(posted.CastId, out var entry))
-            {
-                entry = new BusinessDayAttendanceEntryInput { CastId = posted.CastId };
-                Input.Entries.Add(entry);
-                inputByCastId[posted.CastId] = entry;
-            }
-
-            entry.IsSelected = true;
-            entry.AttendanceId = posted.AttendanceId > 0 ? posted.AttendanceId : entry.AttendanceId;
-            entry.DisplayName = FirstNonEmpty(posted.DisplayName, entry.DisplayName);
-            entry.DepartmentName = FirstNonEmpty(posted.DepartmentName, entry.DepartmentName);
-            entry.IsRegistered = posted.IsRegistered || entry.IsRegistered;
-            entry.ClockInTime = FirstNonEmpty(posted.ClockInTime, entry.ClockInTime);
-            entry.ClockOutTime = FirstNonEmpty(posted.ClockOutTime, entry.ClockOutTime);
-            entry.UsesSendService = posted.UsesSendService || entry.UsesSendService;
-        }
-
-        var selectedCastIds = ParseSelectedCastIds(Input.SelectedCastIds);
-        foreach (var castId in selectedEntries.Select(x => x.CastId).Where(x => x > 0))
-        {
-            selectedCastIds.Add(castId);
-        }
-
-        Input.SelectedCastIds = string.Join(',', selectedCastIds);
-    }
-
-    private static IReadOnlyList<PostedAttendanceEntry> ParseSelectedEntries(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return [];
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<List<PostedAttendanceEntry>>(value) ?? [];
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
-
-    private static string FirstNonEmpty(string? primary, string? fallback)
-    {
-        return string.IsNullOrWhiteSpace(primary)
-            ? fallback ?? string.Empty
-            : primary.Trim();
-    }
-
-    private static HashSet<long> ParseSelectedCastIds(string? value)
-    {
-        return (value ?? string.Empty)
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(x => long.TryParse(x, CultureInfo.InvariantCulture, out var castId) ? castId : 0)
-            .Where(x => x > 0)
-            .ToHashSet();
-    }
-
-    private static IReadOnlyList<AttendanceTimeOption> BuildAttendanceTimeOptions(
-        int centerHour,
-        int centerMinute,
-        int minuteStep)
-    {
-        if (minuteStep <= 0 || 60 % minuteStep != 0)
-        {
-            minuteStep = 15;
-        }
-
-        var centerTotalMinutes = centerHour * 60 + centerMinute;
-        var startMinutes = centerTotalMinutes - 12 * 60;
-        var endMinutes = centerTotalMinutes + 12 * 60;
-        var options = new List<AttendanceTimeOption>();
-        var seenValues = new HashSet<string>(StringComparer.Ordinal);
-
-        for (var totalMinutes = startMinutes; totalMinutes < endMinutes; totalMinutes += minuteStep)
-        {
-            var normalizedMinutes = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
-            var value = $"{normalizedMinutes / 60:00}:{normalizedMinutes % 60:00}";
-            if (!seenValues.Add(value))
-            {
-                continue;
-            }
-
-            options.Add(new AttendanceTimeOption(
-                value,
-                $"{totalMinutes / 60:00}:{totalMinutes % 60:00}"));
-        }
-
-        return options;
-    }
-
-    private static string ResolveDefaultTime(IReadOnlyList<AttendanceTimeOption> timeOptions, string preferredValue)
-    {
-        return timeOptions.Any(x => string.Equals(x.Value, preferredValue, StringComparison.Ordinal))
-            ? preferredValue
-            : timeOptions.FirstOrDefault()?.Value ?? string.Empty;
-    }
-
-    private void ValidateAttendanceInput()
-    {
-        var selectedCastIds = ParseSelectedCastIds(Input.SelectedCastIds);
-        if (selectedCastIds.Count > 0)
-        {
-            foreach (var entry in Input.Entries)
-            {
-                entry.IsSelected = entry.IsSelected || selectedCastIds.Contains(entry.CastId);
-            }
-        }
-
-        if (Input.Entries.Count == 0)
-        {
-            ModelState.AddModelError(
-                string.Empty,
-                string.IsNullOrWhiteSpace(CastLoadErrorMessage)
-                    ? "キャスト情報が未登録です。先にキャスト情報を登録してください。"
-                    : CastLoadErrorMessage);
-            return;
-        }
-
-        var selectedRows = Input.Entries.Where(x => x.IsSelected).ToList();
-        if (selectedRows.Count == 0)
-        {
-            ModelState.AddModelError(nameof(Input.Entries), "出勤キャストを1名以上選択してください。");
-            return;
-        }
-
-        var validClockInTimes = ClockInTimeOptions.Select(x => x.Value).ToHashSet(StringComparer.Ordinal);
-        var validClockOutTimes = ClockOutTimeOptions.Select(x => x.Value).ToHashSet(StringComparer.Ordinal);
-        for (var i = 0; i < Input.Entries.Count; i++)
-        {
-            var entry = Input.Entries[i];
-            TimeOnly? clockInTime = null;
-            TimeOnly? clockOutTime = null;
-
-            if (entry.CastId <= 0)
-            {
-                ModelState.AddModelError(string.Empty, "キャストの選択内容を確認してください。");
-                continue;
-            }
-
-            if (!entry.IsSelected)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(entry.ClockInTime) ||
-                !TimeOnly.TryParse(entry.ClockInTime, CultureInfo.InvariantCulture, out var parsedClockInTime) ||
-                !validClockInTimes.Contains(entry.ClockInTime))
-            {
-                ModelState.AddModelError(
-                    $"Input.Entries[{i}].ClockInTime",
-                    $"{entry.DisplayName} の出勤時刻を選択してください。");
-            }
-            else
-            {
-                clockInTime = parsedClockInTime;
-            }
-
-            if (!string.IsNullOrWhiteSpace(entry.ClockOutTime))
-            {
-                if (!TimeOnly.TryParse(entry.ClockOutTime, CultureInfo.InvariantCulture, out var parsedClockOutTime) ||
-                    !validClockOutTimes.Contains(entry.ClockOutTime))
-                {
-                    ModelState.AddModelError(
-                        $"Input.Entries[{i}].ClockOutTime",
-                        $"{entry.DisplayName} の退勤時刻を確認してください。");
-                }
-                else
-                {
-                    clockOutTime = parsedClockOutTime;
-                }
-            }
-
-            var businessDate = CurrentBusinessDay?.BusinessDate ?? CurrentBusinessDate;
-            if (businessDate != default &&
-                clockInTime is { } validClockInTime &&
-                clockOutTime is { } validClockOutTime &&
-                _storeClock.ComposeBusinessDateTime(businessDate, validClockOutTime) <=
-                _storeClock.ComposeBusinessDateTime(businessDate, validClockInTime))
-            {
-                ModelState.AddModelError(
-                    $"Input.Entries[{i}].ClockOutTime",
-                    $"{entry.DisplayName} の退勤時刻は出勤時刻より後にしてください。");
-            }
+            ModelState.AddModelError(error.Field, error.Message);
         }
     }
 }
-
-public class ClosingAttendanceInputModel
-{
-    public long? BusinessDayId { get; set; }
-
-    public string SelectedCastIds { get; set; } = string.Empty;
-
-    public string SelectedEntriesJson { get; set; } = string.Empty;
-
-    public List<BusinessDayAttendanceEntryInput> Entries { get; set; } = [];
-}
-
-public class BusinessDayAttendanceEntryInput
-{
-    public long CastId { get; set; }
-
-    public long AttendanceId { get; set; }
-
-    public string DisplayName { get; set; } = string.Empty;
-
-    public string? DepartmentName { get; set; }
-
-    public bool IsSelected { get; set; }
-
-    public bool IsRegistered { get; set; }
-
-    [StringLength(5, ErrorMessage = "出勤時刻を確認してください。")]
-    public string? ClockInTime { get; set; }
-
-    [StringLength(5, ErrorMessage = "退勤時刻を確認してください。")]
-    public string? ClockOutTime { get; set; }
-
-    public bool UsesSendService { get; set; }
-}
-
-public sealed record AttendanceTimeOption(string Value, string Label);
-
-internal sealed record PostedAttendanceEntry(
-    [property: JsonPropertyName("cast_id")] long CastId,
-    [property: JsonPropertyName("attendance_id")] long AttendanceId,
-    [property: JsonPropertyName("display_name")] string? DisplayName,
-    [property: JsonPropertyName("department_name")] string? DepartmentName,
-    [property: JsonPropertyName("is_registered")] bool IsRegistered,
-    [property: JsonPropertyName("clock_in_time")] string? ClockInTime,
-    [property: JsonPropertyName("clock_out_time")] string? ClockOutTime,
-    [property: JsonPropertyName("uses_send_service")] bool UsesSendService);

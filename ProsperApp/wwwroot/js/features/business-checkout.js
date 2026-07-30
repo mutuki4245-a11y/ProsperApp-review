@@ -33,6 +33,19 @@
     const releaseCheckoutButton = root.querySelector('[data-business-release-checkout]');
     const proceedPaymentButton = root.querySelector('[data-business-proceed-payment]');
     const storagePrefix = 'prosper:checkout-statement:v1:';
+    const fallbackPaymentMethods = [
+        { methodCode: 'cash', methodName: '現金', requiresReceivedAmount: true },
+        { methodCode: 'cat', methodName: 'クレジット', requiresReceivedAmount: false },
+        { methodCode: 'paypay', methodName: 'PAYPAY', requiresReceivedAmount: false }
+    ];
+    const configuredPaymentMethods = Array.isArray(config.paymentMethods)
+        ? config.paymentMethods.filter((method) => method?.methodCode && method?.methodName)
+        : [];
+    const paymentMethods = configuredPaymentMethods.length > 0
+        ? configuredPaymentMethods
+        : fallbackPaymentMethods;
+    const paymentMethodByCode = new Map(
+        paymentMethods.map((method) => [String(method.methodCode), method]));
     let current = null;
     let isActionInFlight = false;
     let paymentModalCloseIsProgrammatic = false;
@@ -228,7 +241,9 @@
             renderPaymentSummary();
             return;
         }
-        [ ['cash', '現金'], ['cat', 'クレジット'], ['paypay', 'PAYPAY'] ].forEach(([code, name]) => {
+        paymentMethods.forEach((method) => {
+            const code = String(method.methodCode);
+            const name = String(method.methodName);
             const row = document.createElement('div'); row.className = 'checkout-payment-row';
             const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-outline-primary checkout-payment-row__button';
             button.dataset.paymentCode = code; button.textContent = name;
@@ -259,13 +274,18 @@
     const selectedPayments = () => Array.from(paymentRows.querySelectorAll('[data-payment-code]')).map((button) => {
         const code = button.dataset.paymentCode;
         const input = paymentRows.querySelector(`[data-payment-amount="${code}"]`);
-        return { methodCode: code, isSelected: button.classList.contains('btn-primary'), amount: Math.round(Number(input?.value) || 0) };
+        return {
+            methodCode: code,
+            isSelected: button.classList.contains('btn-primary'),
+            amount: Math.round(Number(input?.value) || 0),
+            requiresReceivedAmount: paymentMethodByCode.get(code)?.requiresReceivedAmount === true
+        };
     }).filter((payment) => payment.isSelected);
     const paymentValidation = () => {
         const total = Math.round(Number(current?.queue?.printData?.total_amount) || 0);
         const payments = selectedPayments();
         const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-        const cash = payments.find((payment) => payment.methodCode === 'cash');
+        const receivedPayment = payments.find((payment) => payment.requiresReceivedAmount);
         const receivedEntered = receivedAmount.value !== '';
         const received = Math.round(Number(receivedAmount.value) || 0);
 
@@ -274,7 +294,7 @@
                 total,
                 payments,
                 paid,
-                cash,
+                receivedPayment,
                 received,
                 canConfirm: payments.length === 0,
                 message: payments.length === 0 ? '' : '0円会計では決済方法を選択しません。'
@@ -282,34 +302,38 @@
         }
 
         if (payments.length === 0) {
-            return { total, payments, paid, cash, received, canConfirm: false, message: '決済方法を選択してください。' };
+            return { total, payments, paid, receivedPayment, received, canConfirm: false, message: '決済方法を選択してください。' };
         }
 
         if (payments.some((payment) => payment.amount <= 0)) {
-            return { total, payments, paid, cash, received, canConfirm: false, message: '決済金額は1円以上で入力してください。' };
+            return { total, payments, paid, receivedPayment, received, canConfirm: false, message: '決済金額は1円以上で入力してください。' };
         }
 
         if (paid !== total) {
-            return { total, payments, paid, cash, received, canConfirm: false, message: '決済合計を会計額に合わせてください。' };
+            return { total, payments, paid, receivedPayment, received, canConfirm: false, message: '決済合計を会計額に合わせてください。' };
         }
 
-        if (cash && (!receivedEntered || received < cash.amount)) {
-            return { total, payments, paid, cash, received, canConfirm: false, message: '現金の受取額を確認してください。' };
+        if (payments.filter((payment) => payment.requiresReceivedAmount).length > 1) {
+            return { total, payments, paid, receivedPayment, received, canConfirm: false, message: '受取額を入力する決済方法は1つだけ選択してください。' };
         }
 
-        return { total, payments, paid, cash, received, canConfirm: true, message: '' };
+        if (receivedPayment && (!receivedEntered || received < receivedPayment.amount)) {
+            return { total, payments, paid, receivedPayment, received, canConfirm: false, message: '受取額を確認してください。' };
+        }
+
+        return { total, payments, paid, receivedPayment, received, canConfirm: true, message: '' };
     };
     const renderPaymentSummary = () => {
         const validation = paymentValidation();
-        const { total, payments, paid, cash, received } = validation;
-        receivedRow.hidden = !cash;
-        if (!cash) receivedAmount.value = '';
+        const { total, payments, paid, receivedPayment, received } = validation;
+        receivedRow.hidden = !receivedPayment;
+        if (!receivedPayment) receivedAmount.value = '';
         paymentSummary.replaceChildren();
         [['会計額', yen(total)], ['決済合計', yen(paid)], ['差額', yen(total - paid)]].forEach(([label, value]) => {
             const item = document.createElement('div'); item.append(Object.assign(document.createElement('span'), { textContent: label }), Object.assign(document.createElement('strong'), { textContent: value })); paymentSummary.appendChild(item);
         });
-        if (cash && received >= cash.amount) {
-            const item = document.createElement('div'); item.append(Object.assign(document.createElement('span'), { textContent: '釣銭' }), Object.assign(document.createElement('strong'), { textContent: yen(received - cash.amount) })); paymentSummary.appendChild(item);
+        if (receivedPayment && received >= receivedPayment.amount) {
+            const item = document.createElement('div'); item.append(Object.assign(document.createElement('span'), { textContent: '釣銭' }), Object.assign(document.createElement('strong'), { textContent: yen(received - receivedPayment.amount) })); paymentSummary.appendChild(item);
         }
         if (!validation.canConfirm && validation.message) {
             const item = document.createElement('div');
@@ -537,7 +561,9 @@
         }
         if (!selected) {
             input.value = '';
-            if (button.dataset.paymentCode === 'cash') receivedAmount.value = '';
+            if (paymentMethodByCode.get(button.dataset.paymentCode)?.requiresReceivedAmount === true) {
+                receivedAmount.value = '';
+            }
         }
         renderPaymentSummary();
     });

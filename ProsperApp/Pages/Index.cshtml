@@ -1,4 +1,5 @@
 @page
+@using ProsperApp.Features.BusinessHome
 @using ProsperApp.Models
 @model IndexModel
 @{
@@ -515,6 +516,13 @@
             departmentId = Model.StoreContext?.DepartmentId,
             businessDayId = Model.CurrentBusinessDayId,
             receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
+            editorOperationTypes = BusinessHomeOperationTypes.All,
+            paymentMethods = Model.PaymentMethods.Select(method => new
+            {
+                methodCode = method.MethodCode,
+                methodName = method.MethodName,
+                requiresReceivedAmount = method.RequiresReceivedAmount
+            }),
             tableOptions = Model.Tables.Select((table, index) => new
             {
                 displayName = table.DisplayName,

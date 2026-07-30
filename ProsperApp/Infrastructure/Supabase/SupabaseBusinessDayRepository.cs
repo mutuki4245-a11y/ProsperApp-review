@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using ProsperApp.Features.Shared;
 using ProsperApp.Models;
 using ProsperApp.Options;
 using static ProsperApp.Services.SupabaseJson;
@@ -168,7 +169,7 @@ public class SupabaseBusinessDayRepository(
     public async Task<BusinessDayOperationResult> CloseAsync(
         long businessDayId,
         string? memo,
-        bool ignoreClosingRequirements,
+        bool includePendingReceipts,
         CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -184,8 +185,7 @@ public class SupabaseBusinessDayRepository(
                 p_department_id = departmentId,
                 p_business_day_id = businessDayId,
                 p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
-                p_pending_receipt_status = _options.PendingStatus,
-                p_ignore_closing_requirements = ignoreClosingRequirements
+                p_pending_receipt_status = includePendingReceipts ? _options.PendingStatus : null
             },
             ct);
 
@@ -203,6 +203,67 @@ public class SupabaseBusinessDayRepository(
         StoreMasterCacheKeys.ClearNominationBacks(_memoryCache, departmentId);
         StoreMasterCacheKeys.ClearOrderAttendingCasts(_memoryCache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
+    }
+
+    public async Task<Result<BusinessDayClosingReadiness>> GetClosingReadinessAsync(
+        StoreBusinessDay businessDay,
+        bool includePendingReceipts,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<BusinessDayClosingReadiness>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。締め条件を確認できません。");
+        }
+
+        if (!IsValidBusinessDay(businessDay))
+        {
+            return Result<BusinessDayClosingReadiness>.Failure(
+                ResultFailureKind.InvalidInput,
+                "営業日情報が正しくありません。");
+        }
+
+        var result = await PostRpcArrayResultAsync(
+            "store.get_business_day_closing_readiness",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_business_day_id = businessDay.BusinessDayId,
+                p_pending_receipt_status = includePendingReceipts ? _options.PendingStatus : null
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return await GetLegacyClosingReadinessAsync(businessDay, includePendingReceipts, ct);
+        }
+
+        if (result.Value.Count == 0)
+        {
+            return Result<BusinessDayClosingReadiness>.Failure(
+                ResultFailureKind.NotFound,
+                "営業中の営業日が見つかりません。");
+        }
+
+        var row = result.Value[0];
+        return Result<BusinessDayClosingReadiness>.Success(new BusinessDayClosingReadiness
+        {
+            BusinessDay = businessDay,
+            OpenSlipCount = (int)(ReadLong(row, "open_slip_count") ?? 0),
+            DrinkDeliveryAmount = ReadDecimal(row, "drink_delivery_amount") ?? 0,
+            IsDrinkDeliveryAmountEntered = ReadBool(row, "is_drink_delivery_amount_entered") ?? false,
+            AttendanceCount = (int)(ReadLong(row, "attendance_count") ?? 0),
+            MissingClockOutCount = (int)(ReadLong(row, "missing_clock_out_count") ?? 0),
+            CastSalesRequiredSlipCount = (int)(ReadLong(row, "cast_sales_required_slip_count") ?? 0),
+            CastSalesCompletedSlipCount = (int)(ReadLong(row, "cast_sales_completed_slip_count") ?? 0),
+            CastSalesMissingSlipCount = (int)(ReadLong(row, "cast_sales_missing_slip_count") ?? 0),
+            PendingReceiptCount = (int)(ReadLong(row, "pending_receipt_count") ?? 0),
+            ReceiptsEnabled = includePendingReceipts,
+            CanCloseFromStore = ReadBool(row, "can_close") ?? false,
+            BlockReasonsFromStore = ReadStringArray(row, "block_reasons"),
+            CheckedAt = ReadDateTimeOffset(row, "checked_at")
+        });
     }
 
     public async Task<BusinessDayOperationResult> SaveAttendanceAsync(
@@ -463,6 +524,105 @@ public class SupabaseBusinessDayRepository(
         return string.IsNullOrWhiteSpace(body)
             ? null
             : body.Trim().Trim('"');
+    }
+
+    private async Task<Result<BusinessDayClosingReadiness>> GetLegacyClosingReadinessAsync(
+        StoreBusinessDay businessDay,
+        bool includePendingReceipts,
+        CancellationToken ct)
+    {
+        var departmentId = CurrentStoreDepartmentId;
+        var openSlipsTask = RpcClient.PostScalarAsync(
+            "store.get_open_slip_count",
+            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
+            ct);
+        var drinkTask = RpcClient.PostArrayAsync(
+            "store.get_business_day_drink_delivery_status",
+            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
+            ct);
+        var attendanceTask = RpcClient.PostArrayAsync(
+            "store.get_business_day_closing_attendance",
+            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
+            ct);
+        var castTask = RpcClient.PostArrayAsync(
+            "store.get_business_day_cast_sales_adjustment_status",
+            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
+            ct);
+        var receiptsTask = includePendingReceipts
+            ? RpcClient.PostArrayAsync(
+                "store.get_pending_receipts",
+                new { p_department_id = departmentId, p_status = _options.PendingStatus },
+                ct)
+            : Task.FromResult(SupabaseRpcResult.Success("[]") with { Rows = [] });
+
+        await Task.WhenAll(openSlipsTask, drinkTask, attendanceTask, castTask, receiptsTask);
+
+        var openSlips = await openSlipsTask;
+        var drink = await drinkTask;
+        var attendance = await attendanceTask;
+        var cast = await castTask;
+        var receipts = await receiptsTask;
+        if (!openSlips.Succeeded ||
+            !drink.Succeeded ||
+            !attendance.Succeeded ||
+            !cast.Succeeded ||
+            !receipts.Succeeded)
+        {
+            return Result<BusinessDayClosingReadiness>.Failure(
+                ResultFailureKind.Unavailable,
+                "締め条件の一部を取得できませんでした。時間をおいて再表示してください。");
+        }
+
+        if (!int.TryParse(
+                NormalizeScalarBody(openSlips.Body),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var openSlipCount))
+        {
+            return Result<BusinessDayClosingReadiness>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "未会計伝票数を確認できませんでした。");
+        }
+
+        var drinkRow = drink.Rows.FirstOrDefault();
+        var castRow = cast.Rows.FirstOrDefault();
+        if (drink.Rows.Count == 0 || cast.Rows.Count == 0)
+        {
+            return Result<BusinessDayClosingReadiness>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "締め条件の応答が不足しています。");
+        }
+
+        return Result<BusinessDayClosingReadiness>.Success(new BusinessDayClosingReadiness
+        {
+            BusinessDay = businessDay,
+            OpenSlipCount = openSlipCount,
+            DrinkDeliveryAmount = ReadDecimal(drinkRow, "drink_delivery_amount") ?? 0,
+            IsDrinkDeliveryAmountEntered = ReadBool(drinkRow, "is_entered") ?? false,
+            AttendanceCount = attendance.Rows.Count,
+            MissingClockOutCount = attendance.Rows.Count(row => ReadDateTimeOffset(row, "clock_out_at") is null),
+            CastSalesRequiredSlipCount = (int)(ReadLong(castRow, "required_slip_count") ?? 0),
+            CastSalesCompletedSlipCount = (int)(ReadLong(castRow, "completed_slip_count") ?? 0),
+            CastSalesMissingSlipCount = (int)(ReadLong(castRow, "missing_slip_count") ?? 0),
+            PendingReceiptCount = receipts.Rows.Count,
+            ReceiptsEnabled = includePendingReceipts
+        });
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement row, string propertyName)
+    {
+        if (!row.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return value
+            .EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item!)
+            .ToList();
     }
 
     private static string ToFriendlyError(string? rawError)

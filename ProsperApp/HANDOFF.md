@@ -16,6 +16,8 @@
 
 2026-07-30時点で、会計・営業日snapshotを対象Supabaseへ適用済みです。`open` 伝票は現在マスタ・現在料金で再計算し、`checkout_ready` への遷移時に会計伝票・確認表示・営業中一覧payloadを版管理して固定します。`checked_out` は固定済み会計額を使って決済・発行者情報を追加固定し、会計準備解除または会計取消では旧版を監査用に残して無効化し、自動料金行をvoid化します。営業日締めでは営業日行を先にロックし、決済、勤怠、キャスト売上額調整を含む日次snapshotを同一トランザクションで保存した後、対象営業日の伝票系テーブルをDBトリガーで更新不能にします。伝票更新側も営業日行を共有ロックするため、締めと会計・取消・配分保存は直列化されます。導入時点で既存の会計済み伝票1件と締め済み営業日1件をbackfillし、確定済み会計金額と締め時刻を正としてpolicy version 2へ固定しました。
 
+2026-07-30の技術課題改善では、Cookie由来の管理者モードを廃止し、`/Settings` を開いている間だけセッション内の一時トークンで設定POSTを許可する形へ戻しました。マスタ画面は店舗スタッフが通常運用で変更でき、締め条件を無視する経路は画面・C#・Edge Functionから削除しています。削除だけはパスワード解除に加え、選択店舗名を含む `削除 店舗名` の完全一致入力を必須とします。締め準備状態、キャスト売上額調整の一覧・一括保存、決済方法取得を構造化RPCへ寄せ、業務時刻を `IStoreClock`、営業中操作を型付き契約とApplicationService、勤怠検証を `AttendanceEditor` へ集約しました。C#テストプロジェクトでは営業日跨ぎ、勤怠、営業中操作契約、注文キュー、`Result<T>` を検証します。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針
@@ -28,13 +30,13 @@
 - アプリ用RPCは `store` schemaに集約し、Repositoryと `prosper-rpc` allowlistでは `store.get_casts` のようなschema-qualified名を使います。
 - `prosper-rpc` で `json` / `jsonb` 引数をSQLへ渡すときは、JSの配列/オブジェクトをそのまま `postgres.js` に渡します。Edge Function側で先に `JSON.stringify` すると二重エンコードされ、Postgres側ではJSON配列ではなくJSON文字列になり、指名追加や注文追加が0件登録になるため避けます。
 - RLSは有効化し、アプリ用の操作は `security definer` RPCで制御します。
-- 現場画面の初期表示では、既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合だけ関連キャッシュを破棄します。指名バック設定は店舗別マスタDBですが当日の指名入力に使うため現在営業日と同じライフサイクルで保持し、営業日開始、営業日締め、指名バック設定保存の成功時に破棄します。現在営業日は店舗別に締め成功までキャッシュし、営業日開始時は更新、締め成功時は破棄します。複数インスタンスではプロセス単位のキャッシュになるため、他プロセスで締めた営業日は次回プロセス再起動または明示破棄まで残り得ます。RPC失敗や設定未完了の結果はキャッシュしません。
+- 現場画面の初期表示では、独立した既存RPCをPageModel内で並列化して待ち時間を短縮します。卓、商品、キャスト、店舗コンテキスト、店舗一覧などのマスタ系候補はサーバー側 `IMemoryCache` に初回成功時だけ10分保持し、商品/カテゴリ/キャストのマスタ設定保存が成功した場合は関連キャッシュを破棄します。現在営業日、出勤キャスト、指名バック設定などのruntime情報は30秒保持し、営業日開始・締め・関連保存成功時に破棄します。領収書pending一覧も30秒保持し、入力またはスキャンミス除外成功時に破棄します。複数App Serviceインスタンスではキャッシュを共有しないため、重要操作前は締め準備RPCなどDBの現在値を正とします。RPC失敗や設定未完了の結果はキャッシュしません。
 - 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。注文端末、営業中トップともに、未送信キューは店舗・営業日・伝票に紐付けた端末ごとのlocalStorage下書きとして扱い、画面終了・再読み込み後も復元します。復元時はDB最新状態を確認し、`open` でない伝票や現行スナップショットと合わない行は破棄します。アプリ内遷移、他フォーム送信、会計前には `store.flush_business_home_changes` で保存完了を待ちます。端末間では直接同期せず、共有状態はDB/RPC保存後のデータを基準にします。
 - 出勤キャスト候補の `store.get_order_attending_casts` は、店舗別・営業日別に `IMemoryCache` へ初回成功時だけ保持します。勤怠保存、退勤情報保存、営業日開始、営業日締め、またはキャストのドリンクメモ保存の成功時に対象営業日のキャッシュを破棄します。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
 - 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は端末設定ではなく、`department_master` の店舗別運用設定として管理します。アプリ側では `store.get_context` から取得し、店舗コンテキストキャッシュに載せます。
-- 管理者モードでは営業日締め条件を無視できます。画面POSTの `Readiness` ブロックと `store.close_business_day` RPCの条件検証は、同じ管理者モードフラグで迂回します。営業日が存在することと、画面の営業日IDが現在営業日と一致することは引き続き確認します。
+- 管理者モードという継続権限は持ちません。`/Settings` だけを固定パスワードとセッション内一時トークンで保護し、GET、保存、明示ロック後は解除状態を持ち越しません。マスタ画面は店舗スタッフの通常運用画面として扱います。営業日締めは全条件を必須とし、旧互換引数 `p_ignore_closing_requirements=true` はDBで `closing_override_disabled` として拒否します。
 - 指名・バックまわりの用語は、会計額へ加算する料金を `指名料金`、指名時にキャストへ支払うバックを `指名バック`、商品注文時にキャストへ支払う通常バックを `ドリンクバック`、その商品注文バック対象が当該伝票の指名キャストだった場合のバックを `担当バック` と呼び分けます。UI文言とドキュメントではこの4語を混同しないでください。
-- 営業中トップは営業中操作に必要なスナップショットだけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` の各パネル用GET handlerで初期表示後に取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ保存は `store.flush_business_home_changes` の `p_karaoke_lines` に含め、客・指名・注文・自由入力明細の未送信操作と同じバッチで確定します。保存成功後だけ遷移または送信を続行し、保存失敗時は操作を止めて「保存失敗」と表示します。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、SQL内部で同一伝票内のカラオケ注文行を1行に集約します。
+- 営業中トップは営業中操作に必要なスナップショットだけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` の締め準備GET handlerでまとめて取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ保存は `store.flush_business_home_changes` の `p_karaoke_lines` に含め、客・指名・注文・自由入力明細の未送信操作と同じバッチで確定します。保存成功後だけ遷移または送信を続行し、保存失敗時は操作を止めて「保存失敗」と表示します。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、SQL内部で同一伝票内のカラオケ注文行を1行に集約します。
 - 営業中一覧の `store.get_business_day_snapshot` と `/Orders` の `store.get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、10秒ごとの表示中自動更新で再取得し、営業中トップの保存成功時は `store.flush_business_home_changes` の応答スナップショットで反映します。営業中一覧と `/Orders` の注文対象伝票はどちらも `slipId` 単位で差分反映し、同期のたびに一覧全体を作り直さないでください。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
 - 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `store.get_business_day_snapshot`、`store.get_order_entry_slips`、`store.get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
@@ -146,7 +148,7 @@
 - 卓番カテゴリは `store_table_master.table_category_no` の1桁数値（`0`〜`9`）で持ちます。伝票作成モーダルだけでカテゴリ間に細い区切り線を表示し、カテゴリ名・見出し・管理UIは置きません。`store.get_tables` はカテゴリ番号、既存の表示順、卓番順で返します。卓マスタをSQLで更新した後は、`store.get_tables` のプロセス内キャッシュを更新するためアプリ再起動または再配備が必要です。
 - 旧 `/Slips/Edit` の詳細ページ、部分HTML、専用JavaScript、旧editor helperは削除済みです。営業中の客、指名、注文、自由入力明細、カラオケは営業中トップの `business-home.js` を唯一の状態所有者とし、editor/checkout JavaScriptは `window.ProsperBusinessHome` の公開メソッドだけを使います。
 - 営業中トップの対象別編集モーダルは、保存済み一覧を現在スナップショットから描画し、追加・変更・取消などの一操作だけをキューへ積みます。注文は営業中トップ内の注文キューで扱い、保存時は `store.flush_business_home_changes` にまとめます。失敗行だけを通知・ロールバックし、同じバッチの他行は保存を継続します。モーダルを閉じた後も、保存応答前の未送信キューは同一端末のlocalStorageへ保持し、登録成功、明示破棄、または対象伝票の状態変更時に削除します。
-- 営業中トップの会計モーダルは、0円会計で決済方法なしの確定を許容し、`請求なし 0円` として扱います。現金0円やカード0円の支払明細は作りません。現金決済額は、他の決済方法を併用した場合に会計額から非現金決済額を引いた残額へ初期表示しますが、利用者の入力後は自動上書きしません。決済確定ボタンは、決済合計が会計額と一致し、選択済み決済の金額が正値で、現金決済がある場合は受取額が現金決済額以上になるまで有効にしません。選択できる決済方法は現金、CAT、PAYPAYの3種類に固定し、決済方法マスタを運用可能にする画面・取得RPCは別タスクとします。会計準備解除、会計取消、会計前エラーなどの確認・通知は共通の `window.AppConfirm` Bootstrapモーダルを優先し、Bootstrapが使えない場合だけブラウザ標準ダイアログへフォールバックします。
+- 営業中トップの会計モーダルは、0円会計で決済方法なしの確定を許容し、`請求なし 0円` として扱います。0円の支払明細は作りません。選択できる決済方法は `store.get_payment_methods` が返す店舗別有効マスタを使い、`requires_received_amount` の方法がある場合だけ受取額を入力します。決済確定ボタンは、決済合計が会計額と一致し、選択済み決済の金額が正値で、受取額が必要な決済では受取額が対象額以上になるまで有効にしません。会計準備解除、会計取消、会計前エラーなどの確認・通知は共通の `window.AppConfirm` Bootstrapモーダルを優先し、Bootstrapが使えない場合だけブラウザ標準ダイアログへフォールバックします。
 
 ### 会計フロー第1段階の実装状況と後続候補
 
@@ -213,7 +215,7 @@
     - 20%のサービス料は消費税ではない。会計SQL、RPC JSON、C#モデルは `service_charge_amount` / `ServiceChargeAmount` へ切替済みであり、`service_tax_amount` / `ServiceTaxAmount` は現行契約に使わない。テスト段階のため旧列・旧JSONキーとの互換実装は作らない。
     - サービス料は有効な `store_order_lines` 全体の小計に20%を掛け、`round(order_subtotal_amount * 0.20)` とする。標準商品、カラオケ、指名料金を含み、自由入力明細の加算・値引きはサービス料の対象に含めない。`base_amount = order_subtotal_amount + service_charge_amount`、`applied_adjustment_amount = max(adjustment_amount, -base_amount)`、`total_amount = base_amount + applied_adjustment_amount` とする。計算上の合計が負でも会計伝票出力・会計確定を拒否せず、0円会計として会計伝票と領収書を出力する。超過した値引きを繰り越し・印字しない。
     - `会計準備中` への遷移は、物理プリンターの成功コールバックではなく、退店時刻選択後にサーバー側の会計伝票出力RPCが成功した時点で確定する。DB上の `store_slips.status` は `checkout_ready` とする。SII印刷失敗、タイムアウト、端末側設定不足があってもサーバー状態は戻さず、会計準備中のまま再印刷、会計準備解除、決済への移行を選べるようにする。印刷待ち、印刷中、印刷失敗、印刷済みはDB状態に追加せず、同一端末の会計伝票印刷記録で扱い、会計確定の条件にはしない。
-    - 通常の営業日締めでは `open` と `checkout_ready` の両方を未会計伝票として数え、1件でもあれば締めを拒否する。管理者モードの締め条件無視は既存どおりこの条件も迂回できる。
+    - 営業日締めでは `open` と `checkout_ready` の両方を未会計伝票として数え、1件でもあれば締めを拒否する。条件を無視する管理者操作は提供しない。
     - `store.release_checkout_ready` の成功応答時も、対象伝票の同一端末の会計伝票印刷記録をlocalStorageから削除する。解除後は伝票内容が変わり得るため、解除前の会計伝票を再印刷させない。
     - 営業中端末は店舗1台で、会計準備中の伝票を別端末から変更しない運用を前提にする。`store.issue_checkout_statement` が返す `print_data` は物理印刷開始前に同一ブラウザの会計伝票用 `localStorage` へ保存し、直ちに印刷を開始する。同じ端末での印刷失敗・再印刷は保存済みデータを使うため、通常は追加RPCを呼ばない。会計準備中は自由に再印刷でき、紙面に `再印刷` などの表記を付けない。記録は `slip_id` を識別子にし、端末内で印刷待ち、印刷中、印刷失敗、印刷済みを表す。印刷状態は会計確定を無効にせず、モーダルでは再印刷、会計準備解除、決済への移行を選べる。記録は会計確定の成功応答時に削除し、記録がない `checkout_ready` は再印刷用に復旧用RPCで会計伝票を再取得する。会計確定は `checkout_ready` を `checked_out` へ遷移させるDB操作であり、端末状態にはしない。会計確定の成功応答を受けた時だけ領収書印刷要求を作成し、失敗時には領収書印刷や再印刷待ちを作らない。
     - ローカルデータが消失、破損、または別ブラウザ利用で存在しない場合だけ、読み取り専用RPC `store.get_checkout_statement_print_data(p_department_id, p_slip_id)` で現在DB状態から再生成する。専用の印刷スナップショットテーブルは作らず、`store_slips.closed_at`、客行、注文、自由入力明細、会計準備中ステータスを正とする。取得後はlocalStorageへ保存して再印刷する。再印刷では `closed_at`、客行の退店時刻、伝票ステータスを変更しない。DB上の `checkout_ready` は状態と会計確定の正であり、localStorageは再印刷のレスポンス改善用データ保持に限定する。営業中一覧の定期更新には印刷用JSONを含めない。印刷履歴や印字済み内容そのものの監査が必要になった場合だけ、後続でスナップショットテーブルまたは印刷ログを追加検討する。
@@ -232,7 +234,7 @@
     - 会計額0円での決済は引き続き認める。0円会計は決済方法を登録しない専用扱いとし、画面や領収書の支払方法欄には `請求なし 0円` のように表示する。現金0円やカード0円の支払明細は作成しない。
     - 0円会計で決済方法UIが会計額を別金額へ戻す回帰を防ぐ。会計額0円の場合は支払方法選択を必須にせず、預り金や釣銭入力も不要にする。
     - 各決済方法の入力合計は決済額と一致するようUIで検証する。決済方法を追加した初回だけ、その時点の残額を入力額の初期値にしてよい。入力後は他の決済方法や金額変更に合わせて勝手に自動上書きしない。
-    - 会計改修の初期実装では決済方法を現金、CAT、PAYPAYの3種類に固定する。`payment_method_master` の固定3行は専用seed SQLで事前作成し、`store.confirm_checkout` はマスタをinsert/updateしない。現行の会計ごとに固定3行をupsertする暫定処理は削除する。同じ決済方法コードが複数回含まれる入力はRPC側で拒否し、1会計で1方法1行を保証する。マスタ管理画面・取得RPCは別タスクとする。
+    - 決済方法は `payment_method_master` の店舗別有効行を `store.get_payment_methods` で取得し、`store.confirm_checkout` も同じマスタでコード、有効状態、`requires_received_amount` を検証する。会計RPCはマスタをinsert/updateしない。同じ決済方法コードが複数回含まれる入力は拒否し、受取額が必要な決済方法は1会計につき最大1種類とする。
     - 過不足がある場合は確定を止め、残額または超過額を画面上で明確にする。最終的な合計一致は会計確定時にUI側が確認し、RPC側も確定時に再検証する。
     - 現金決済では、支払方法として現金を選んだ初回に残額を決済額へ初期入力し、その場で預り金を入力して釣銭を表示できるようにする。利用者が現金決済額を編集した後は自動上書きしない。
     - 会計伝票は、店舗表示名、入店時刻、退店時刻、卓番、客人数、オーダー明細を出力する。客名、指名キャスト名・種別、バック対象キャストは印字しない。客人数は `store_slip_customers.status <> 'cancelled'` の件数とし、途中退店した客は含める。
@@ -291,7 +293,7 @@
   - 伝票一覧からアコーディオン的に伝票詳細を展開し、客、指名、注文、自由入力明細、会計など各項目の編集は専用モーダルに任せる案を、別ブランチまたはprototypeで試す。
   - 伝票一覧の会計済み伝票は、未会計伝票と分けてアコーディオンUIにまとめる。
   - 伝票がない時の「伝票を追加」UIは、上部サマリーの追加導線と重複するため一覧内からは廃止済み。
-  - 性能ベースラインを記録済みです。検証用営業日34（伝票1件）の読み取り専用 `EXPLAIN ANALYZE` では、`store.get_business_day_slips` が11.643ms、`store.get_order_entry_slips` が4.056msで、いずれもディスク読込0でした。営業中一覧と注文対象卓は可視時10秒ごと、締め各パネルは30秒ごとに対象だけを取得し、重複更新を画面側で直列化します。通常営業中の伝票数・注文行数でブラウザ応答時間と最初の操作可能時刻を追加採取してから、閾値やインデックス追加を判断してください。
+  - 性能ベースラインを記録済みです。検証用営業日34（伝票1件）の読み取り専用 `EXPLAIN ANALYZE` では、`store.get_business_day_slips` が11.643ms、`store.get_order_entry_slips` が4.056msで、いずれもディスク読込0でした。営業中一覧と注文対象卓は可視時10秒ごと、締め準備状態は30秒ごとに集約RPCで取得し、重複更新を画面側で直列化します。通常営業中の伝票数・注文行数でブラウザ応答時間と最初の操作可能時刻を追加採取してから、閾値やインデックス追加を判断してください。
 - レシートプリンターは、会計確定の成功応答に含まれる `checkout-receipt-v2` の `print_data` を同じブラウザからSII Web SDK Serverへ直接印刷します。紙面は80mm幅で、発行者情報、宛名、会計確定の実日付、「ご飲食代として」、会計額、決済方法、内消費税額、税込み55,000円以上の収入印紙欄、担当者印欄を出します。識別子や伝票番号は印字しません。印刷失敗で会計確定は取り消さず、最初の失敗通知は端末内localStorageに残します。`checked_out` の伝票は営業中トップから手動再発行でき、紙面に `再試行` を付けるのは同じ端末に初回印刷成功記録があり、店員が明示的に再出力した場合だけです。会計取消済み伝票は再発行できません。
 
 ## SQL参照とDB反映
@@ -316,9 +318,10 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 14. `Sql/store_rpc/09_business_home_snapshot.sql`
 15. `Sql/store_rpc/10_business_home_flush.sql`
 16. `Sql/store_rpc/13_accounting_snapshot_guards.sql`
-17. `Sql/store_rpc/99_grants.sql`
-18. 必要に応じて `Sql/store_table_master_seed.sql`
-19. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+17. `Sql/store_rpc/14_operational_read_models.sql`
+18. `Sql/store_rpc/99_grants.sql`
+19. 必要に応じて `Sql/store_table_master_seed.sql`
+20. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 `agent_schema_reference.sql` と `store_rpc_functions.sql` は実行対象ではありません。
 
@@ -366,11 +369,15 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 - `store.save_business_day_drink_delivery_amount(p_department_id, p_business_day_id, p_drink_delivery_amount)`
 - `store.get_business_day_closing_attendance(p_department_id, p_business_day_id)`
 - `store.save_business_day_closing_attendance(p_department_id, p_business_day_id, p_attendance_entries)`
+- `store.get_business_day_closing_readiness(p_department_id, p_business_day_id, p_pending_receipt_status)`
 - `store.get_business_day_cast_sales_adjustment_status(p_department_id, p_business_day_id)`
 - `store.get_cast_sales_adjustment_slips(p_department_id, p_business_day_id)`
 - `store.get_cast_sales_adjustment_detail(p_department_id, p_slip_id)`
+- `store.get_business_day_cast_sales_adjustment_overview(p_department_id, p_business_day_id)`
 - `store.save_cast_sales_adjustment(p_department_id, p_slip_id, p_adjustments, p_source_amount_type, p_split_mode)`
-- `store.close_business_day(p_department_id, p_business_day_id, p_memo, p_pending_receipt_status, p_ignore_closing_requirements)`
+- `store.save_business_day_cast_sales_adjustments(p_department_id, p_business_day_id, p_slips)`
+- `store.close_business_day(p_department_id, p_business_day_id, p_memo, p_pending_receipt_status)`
+  - DB関数は段階デプロイ互換のため5番目の旧引数を残しますが、`true` は必ず拒否します。アプリとEdge Functionはこの引数を送りません。
 
 ### 伝票
 
@@ -384,6 +391,7 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 - `store.flush_business_home_changes(p_department_id, p_business_day_id, p_client_batch_id, p_operations, p_karaoke_lines)`
 - `store.get_order_entry_slips(p_department_id, p_business_day_id)`
 - `store.get_order_items(p_department_id)`
+- `store.get_payment_methods(p_department_id)`
 - `store.get_item_admin_catalog(p_department_id)`
 - `store.get_nomination_back_master(p_department_id)`
 - `store.save_nomination_back_master(p_department_id, p_settings)`
@@ -522,14 +530,14 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 - `/Closing`
   - 締め作業画面。
   - 会計確認、酒代入力、勤怠確認、キャスト売上額調整、領収書入力を順番付きの独立パネルで表示します。会計確認は `open` と `checkout_ready` の未会計伝票件数を表示し、営業中へ戻す導線を持ちます。
-  - 初期表示では現在営業日と締めメモだけを取得し、各パネルの状態は表示後、フォーカス復帰時、30秒ごとの表示中自動更新でJSON handlerから取得します。更新ごとにまず `BusinessDayShell` handler が `store.get_current_business_day` をキャッシュを通さず1回取得し、その後の各パネルは同じ営業日を共有して並列取得します。営業日がなくなった時は古い現在営業日キャッシュも破棄します。
+  - 初期表示後、フォーカス復帰時、30秒ごとの表示中自動更新で `Readiness` JSON handlerを1回呼び、`store.get_business_day_closing_readiness` の構造化結果から全パネルと最終実行可否を更新します。営業日がなくなった時は古い現在営業日キャッシュも破棄します。
   - いずれかの状態取得が失敗した場合は該当手順を「未取得」とし、最終実行も失敗理由を表示して無効化します。画面表示が締め可能でも、`store.close_business_day` RPCがDB上の同じ条件を再検証します。
   - 対象環境の検証用営業日33で、会計確認の会計済表示と全段階の番号を確認した。検証後に営業日33を閉じ、再表示時には営業中の営業日なしの案内へ切り替わることを確認した。
   - 営業日締めは通常の作業パネルから分離し、締め条件と最終実行ボタンを下部にまとめます。
   - 酒代入力、勤怠確認、キャスト売上額調整、領収書入力は締め前の必須作業です。未完了の必須作業は赤、確認対象は橙、完了は緑で表示します。
-  - キャスト売上額調整は `/Closing/CastSalesAdjustment` の専用ページで、会計済みかつ指名キャストがいる伝票を一覧表示し、客名とキャストごとの売上分配額を一覧上で確認できるようにします。売上額調整は行末のボタンから開くモーダルで保存します。状態・対象伝票一覧と、対象伝票ごとの詳細はそれぞれ並列取得し、対象件数が増えても詳細取得を直列化しません。2026-07-20にReleaseビルド成功後、Azure App Serviceへ直接配備（HTTP 200）済みです。
+  - キャスト売上額調整は `/Closing/CastSalesAdjustment` の専用ページで、会計済みかつ指名キャストがいる伝票を一覧表示し、客名とキャストごとの売上分配額を一覧上で確認できるようにします。状態・対象伝票・全詳細は `store.get_business_day_cast_sales_adjustment_overview` で一括取得します。行末モーダルの個別保存は残し、画面全体の確認は `store.save_business_day_cast_sales_adjustments` で全伝票を1トランザクション保存します。
   - 領収書入力は未入力がある場合に要入力として表示し、営業日締めのブロック条件にします。
-  - 営業日締めは、通常モードでは未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済み、領収書入力完了を満たした場合だけ実行できます。画面POSTと `store.close_business_day` RPCの両方で同じ条件を検証します。管理者モードでは締め条件を無視して実行できます。
+  - 営業日締めは、未会計伝票0、酒代入力済み、勤怠1名以上、退勤未入力0、キャスト売上額調整済み、領収書入力完了を満たした場合だけ実行できます。画面表示とPOSTは締め準備RPCの結果を使い、`store.close_business_day` も同じ締め準備関数を呼んで再検証します。条件を無視する操作はありません。
 
 - `/Closing/Attendance`
   - 出勤登録を統合した勤怠入力画面。
@@ -556,8 +564,9 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 - `/Settings`
   - 管理者設定。
   - パスワードは固定で `4245`。
-  - 利用店舗、画面モード、管理者モードを端末ローカル保存します。勤怠時刻刻み、売上額基準、売上額人数割は店舗別マスターで管理します。
-  - 端末が管理者モードの場合は、管理者設定のパスワード入力をスキップして設定フォームを開きます。
+  - 利用店舗、画面モード、配色を端末ローカル保存します。勤怠時刻刻み、売上額基準、売上額人数割は店舗別マスターで管理します。
+  - パスワード解除はページ内のセッション一時トークンだけに保持し、永続的な管理者Cookieは作りません。GET、保存、明示ロック後は再度パスワードが必要です。
+  - マスタ以外の全データ削除だけは、選択店舗名を含む `削除 店舗名` の完全一致入力と最終確認ダイアログを追加で必須にします。
   - 管理者設定の保存後は端末設定Cookieを更新し、共通レイアウトでlocalStorageへ同期してからトップ `/` へ遷移します。
 
 ## 非画面endpoint

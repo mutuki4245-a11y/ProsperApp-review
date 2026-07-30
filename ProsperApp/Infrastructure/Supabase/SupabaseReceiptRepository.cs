@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using ProsperApp.Features.Shared;
 using ProsperApp.Models;
 using ProsperApp.Options;
 using static ProsperApp.Services.SupabaseJson;
@@ -9,13 +11,36 @@ namespace ProsperApp.Services;
 public class SupabaseReceiptRepository(
     ISupabaseRpcClient rpcClient,
     IOptions<SupabaseOptions> options,
-    ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IReceiptRepository
+    ILocalSettingsProvider localSettingsProvider,
+    IMemoryCache memoryCache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IReceiptRepository
 {
+    private static readonly TimeSpan PendingCacheDuration = TimeSpan.FromSeconds(30);
     private readonly SupabaseOptions _options = options.Value;
+    private readonly IMemoryCache _memoryCache = memoryCache;
 
     public async Task<IReadOnlyList<PendingReceiptItem>> GetPendingAsync(CancellationToken ct)
     {
-        var rows = await PostRpcArrayAsync(
+        var result = await GetPendingResultAsync(ct);
+        return result.Succeeded ? result.Value : [];
+    }
+
+    public async Task<Result<IReadOnlyList<PendingReceiptItem>>> GetPendingResultAsync(CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<IReadOnlyList<PendingReceiptItem>>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。未処理領収書を取得できません。");
+        }
+
+        var cacheKey = BuildPendingCacheKey();
+        if (_memoryCache.TryGetValue(cacheKey, out IReadOnlyList<PendingReceiptItem>? cached) &&
+            cached is not null)
+        {
+            return Result<IReadOnlyList<PendingReceiptItem>>.Success(cached);
+        }
+
+        var rpcResult = await RpcClient.PostArrayAsync(
             "store.get_pending_receipts",
             new
             {
@@ -23,8 +48,20 @@ public class SupabaseReceiptRepository(
                 p_status = _options.PendingStatus
             },
             ct);
+        if (!rpcResult.Succeeded)
+        {
+            return Result<IReadOnlyList<PendingReceiptItem>>.Failure(
+                ResultFailureKind.Unavailable,
+                ToFriendlyError(rpcResult.ErrorMessage));
+        }
 
-        return ParsePendingItems(rows);
+        var pending = ParsePendingItems(rpcResult.Rows);
+        _memoryCache.Set(cacheKey, pending, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = PendingCacheDuration,
+            Priority = CacheItemPriority.Normal
+        });
+        return Result<IReadOnlyList<PendingReceiptItem>>.Success(pending);
     }
 
     public async Task<bool> IsPendingDriveFileAllowedAsync(string driveFileId, CancellationToken ct)
@@ -83,9 +120,13 @@ public class SupabaseReceiptRepository(
             return SaveReceiptResult.Failed(ToFriendlyError(result.ErrorMessage));
         }
 
-        return result.Rows.Count == 0
-            ? SaveReceiptResult.Failed("対象の領収書を更新できません。店舗設定またはステータスを確認してください。")
-            : SaveReceiptResult.Success(input.DocumentId);
+        if (result.Rows.Count == 0)
+        {
+            return SaveReceiptResult.Failed("対象の領収書を更新できません。店舗設定またはステータスを確認してください。");
+        }
+
+        ClearPendingCache();
+        return SaveReceiptResult.Success(input.DocumentId);
     }
 
     public async Task<SaveReceiptResult> MarkScanMistakeAsync(string documentId, CancellationToken ct)
@@ -115,9 +156,21 @@ public class SupabaseReceiptRepository(
             return SaveReceiptResult.Failed(ToFriendlyError(result.ErrorMessage));
         }
 
-        return result.Rows.Count == 0
-            ? SaveReceiptResult.Failed("対象の領収書を更新できません。店舗設定またはステータスを確認してください。")
-            : SaveReceiptResult.Success(documentId);
+        if (result.Rows.Count == 0)
+        {
+            return SaveReceiptResult.Failed("対象の領収書を更新できません。店舗設定またはステータスを確認してください。");
+        }
+
+        ClearPendingCache();
+        return SaveReceiptResult.Success(documentId);
+    }
+
+    private string BuildPendingCacheKey() =>
+        $"receipt-pending:{CurrentStoreDepartmentId}:{_options.PendingStatus}";
+
+    private void ClearPendingCache()
+    {
+        _memoryCache.Remove(BuildPendingCacheKey());
     }
 
     private static IReadOnlyList<PendingReceiptItem> ParsePendingItems(IReadOnlyList<JsonElement> rows)
@@ -167,7 +220,7 @@ public class SupabaseReceiptRepository(
         payload.JournalEntries.Add(new DocumentJournalEntryRecord
         {
             JournalEntryId = journalEntryId,
-            JournalDate = input.PaymentDate ?? DateOnly.FromDateTime(DateTime.Today),
+            JournalDate = input.PaymentDate ?? throw new InvalidOperationException("Payment date is required."),
             Status = "confirmed"
         });
         payload.JournalEntryLines.Add(new DocumentJournalEntryLineRecord
