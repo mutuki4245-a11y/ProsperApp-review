@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -7,15 +8,19 @@ namespace ProsperApp.Pages;
 
 public class ManagementPricingModel(
     IFeatureGate featureGate,
-    IStorePricingPlanRepository pricingPlanRepository) : PageModel
+    IStorePricingPlanRepository pricingPlanRepository,
+    IAdminAuthorizationService adminAuthorizationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStorePricingPlanRepository _pricingPlanRepository = pricingPlanRepository;
+    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
 
     [BindProperty]
     public StorePricingPlanInputModel Plan { get; set; } = new();
 
     public string? SuccessMessage { get; private set; }
+
+    public bool IsAdminMode => _adminAuthorizationService.IsAdminMode;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct)
     {
@@ -27,6 +32,7 @@ public class ManagementPricingModel(
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken ct)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening)) return NotFound();
+        if (!IsAdminMode) return NotFound();
 
         if (Plan.SetMinutes % 5 != 0)
         {

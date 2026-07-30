@@ -10,7 +10,7 @@
     <div class="store-home__hero">
         <p class="store-home__eyebrow">管理者設定</p>
         <h1>管理者設定</h1>
-        <p>利用店舗、画面モード、配色、管理者モードをこの端末に保存します。</p>
+        <p>利用店舗、画面モード、配色をこの端末に保存します。管理者モードは保護されたセッションで保持します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -121,7 +121,7 @@
                     <input asp-for="Input.IsAdminMode" type="checkbox" />
                     <span>
                         <strong>管理者モード</strong>
-                        <small>カテゴリ追加など、管理者向けの編集項目を表示する</small>
+                        <small>カテゴリ追加など、管理者向けの編集項目を表示・実行する</small>
                     </span>
                 </label>
             </section>

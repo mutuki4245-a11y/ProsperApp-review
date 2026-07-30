@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -7,15 +8,19 @@ namespace ProsperApp.Pages;
 
 public class ManagementNominationBacksModel(
     IFeatureGate featureGate,
-    INominationBackAdminRepository nominationBackAdminRepository) : PageModel
+    INominationBackAdminRepository nominationBackAdminRepository,
+    IAdminAuthorizationService adminAuthorizationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly INominationBackAdminRepository _nominationBackAdminRepository = nominationBackAdminRepository;
+    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
 
     [BindProperty]
     public List<NominationBackMasterInputModel> Settings { get; set; } = [];
 
     public string? SuccessMessage { get; set; }
+
+    public bool IsAdminMode => _adminAuthorizationService.IsAdminMode;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -31,6 +36,11 @@ public class ManagementNominationBacksModel(
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        if (!IsAdminMode)
         {
             return NotFound();
         }

@@ -20,5 +20,4 @@ public class LocalSettings
 
     public string ThemeMode { get; set; } = ThemeModeQuietNavy;
 
-    public bool IsAdminMode { get; set; }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -10,13 +11,13 @@ public class ClosingModel(
     IBusinessDayRepository businessDayRepository,
     ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
     IReceiptRepository receiptRepository,
-    ILocalSettingsProvider localSettingsProvider) : PageModel
+    IAdminAuthorizationService adminAuthorizationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
 
     [BindProperty]
     public long? BusinessDayId { get; set; }
@@ -341,7 +342,7 @@ public class ClosingModel(
 
     private async Task LoadBusinessDayShellAsync(CancellationToken cancellationToken, bool forceRefresh = false)
     {
-        IsAdminMode = _localSettingsProvider.GetCurrent().IsAdminMode;
+        IsAdminMode = _adminAuthorizationService.IsAdminMode;
         CurrentBusinessDay = await _businessDayRepository.GetCurrentAsync(cancellationToken, forceRefresh);
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
     }

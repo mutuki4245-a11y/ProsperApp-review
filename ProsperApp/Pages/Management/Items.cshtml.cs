@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -8,11 +9,11 @@ namespace ProsperApp.Pages;
 public class ManagementItemsModel(
     IFeatureGate featureGate,
     IStoreItemAdminRepository itemAdminRepository,
-    ILocalSettingsProvider localSettingsProvider) : PageModel
+    IAdminAuthorizationService adminAuthorizationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreItemAdminRepository _itemAdminRepository = itemAdminRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
 
     [BindProperty]
     public StoreItemCategoryInputModel CategoryInput { get; set; } = new();
@@ -28,7 +29,7 @@ public class ManagementItemsModel(
 
     public StoreItemAdminCatalog Catalog { get; set; } = new();
 
-    public bool IsAdminMode => _localSettingsProvider.GetCurrent().IsAdminMode;
+    public bool IsAdminMode => _adminAuthorizationService.IsAdminMode;
 
     public string? SuccessMessage { get; set; }
 
@@ -86,6 +87,11 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
+        if (!IsAdminMode)
+        {
+            return NotFound();
+        }
+
         ItemInput.ItemId = null;
         ItemInput.IsActive = true;
         ModelState.Clear();
@@ -118,6 +124,11 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
+        if (!IsAdminMode)
+        {
+            return NotFound();
+        }
+
         if (DeleteItemId is null or <= 0)
         {
             ModelState.AddModelError(string.Empty, "削除する商品を選択してください。");
@@ -144,6 +155,11 @@ public class ManagementItemsModel(
     public async Task<IActionResult> OnPostReorderItemsAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        if (!IsAdminMode)
         {
             return NotFound();
         }

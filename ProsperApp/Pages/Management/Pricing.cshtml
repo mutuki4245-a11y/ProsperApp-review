@@ -22,43 +22,46 @@
                 <div class="item-admin__field">
                     <label asp-for="Plan.SetMinutes"></label>
                     <div class="input-group">
-                        <input asp-for="Plan.SetMinutes" class="form-control" type="number" min="5" max="480" step="5" inputmode="numeric" />
+                        <input asp-for="Plan.SetMinutes" class="form-control" type="number" min="5" max="480" step="5" inputmode="numeric" disabled="@(!Model.IsAdminMode)" />
                         <span class="input-group-text">分</span>
                     </div>
                     <span asp-validation-for="Plan.SetMinutes" class="text-danger"></span>
                 </div>
                 <label class="item-admin__field item-admin__field--check">
                     <span>有効</span>
-                    <input asp-for="Plan.IsActive" class="form-check-input" type="checkbox" />
+                    <input asp-for="Plan.IsActive" class="form-check-input" type="checkbox" disabled="@(!Model.IsAdminMode)" />
                 </label>
             </div>
             <div class="item-admin__row item-admin__row--nomination-back">
                 <div class="item-admin__field">
                     <label asp-for="Plan.SetUnitPriceSingle"></label>
-                    <div class="input-group"><input asp-for="Plan.SetUnitPriceSingle" class="form-control" type="number" min="0" step="1" inputmode="numeric" /><span class="input-group-text">円</span></div>
+                    <div class="input-group"><input asp-for="Plan.SetUnitPriceSingle" class="form-control" type="number" min="0" step="1" inputmode="numeric" disabled="@(!Model.IsAdminMode)" /><span class="input-group-text">円</span></div>
                     <span asp-validation-for="Plan.SetUnitPriceSingle" class="text-danger"></span>
                 </div>
                 <div class="item-admin__field">
                     <label asp-for="Plan.SetUnitPricePerCustomer"></label>
-                    <div class="input-group"><input asp-for="Plan.SetUnitPricePerCustomer" class="form-control" type="number" min="0" step="1" inputmode="numeric" /><span class="input-group-text">円</span></div>
+                    <div class="input-group"><input asp-for="Plan.SetUnitPricePerCustomer" class="form-control" type="number" min="0" step="1" inputmode="numeric" disabled="@(!Model.IsAdminMode)" /><span class="input-group-text">円</span></div>
                     <span asp-validation-for="Plan.SetUnitPricePerCustomer" class="text-danger"></span>
                 </div>
             </div>
             <div class="item-admin__row item-admin__row--nomination-back">
                 <div class="item-admin__field">
                     <label asp-for="Plan.ExtensionUnitPriceSingle"></label>
-                    <div class="input-group"><input asp-for="Plan.ExtensionUnitPriceSingle" class="form-control" type="number" min="0" step="1" inputmode="numeric" /><span class="input-group-text">円</span></div>
+                    <div class="input-group"><input asp-for="Plan.ExtensionUnitPriceSingle" class="form-control" type="number" min="0" step="1" inputmode="numeric" disabled="@(!Model.IsAdminMode)" /><span class="input-group-text">円</span></div>
                     <span asp-validation-for="Plan.ExtensionUnitPriceSingle" class="text-danger"></span>
                 </div>
                 <div class="item-admin__field">
                     <label asp-for="Plan.ExtensionUnitPricePerCustomer"></label>
-                    <div class="input-group"><input asp-for="Plan.ExtensionUnitPricePerCustomer" class="form-control" type="number" min="0" step="1" inputmode="numeric" /><span class="input-group-text">円</span></div>
+                    <div class="input-group"><input asp-for="Plan.ExtensionUnitPricePerCustomer" class="form-control" type="number" min="0" step="1" inputmode="numeric" disabled="@(!Model.IsAdminMode)" /><span class="input-group-text">円</span></div>
                     <span asp-validation-for="Plan.ExtensionUnitPricePerCustomer" class="text-danger"></span>
                 </div>
             </div>
         </div>
         <p class="text-muted mt-3 mb-0">入店時の人数でセット料金を1回計算します。各延長は、その時点で在席している人数で計算します。会計伝票を出力した後は、その時点の料金内容を固定します。</p>
-        <div class="mt-3"><button class="btn btn-primary btn-lg" type="submit">保存</button></div>
+        @if (Model.IsAdminMode)
+        {
+            <div class="mt-3"><button class="btn btn-primary btn-lg" type="submit">保存</button></div>
+        }
     </form>
 </section>
 

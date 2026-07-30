@@ -125,7 +125,7 @@
                     {
                         <span class="item-admin__count">@activeItems.Count 件</span>
                     }
-                    @if (activeItems.Count > 1)
+                    @if (Model.IsAdminMode && activeItems.Count > 1)
                     {
                         <button class="btn btn-outline-primary" type="button" data-item-reorder-toggle>並べ替え</button>
                         <form method="post" asp-page-handler="ReorderItems" class="item-admin__reorder-actions" id="itemReorderForm" data-item-reorder-actions hidden>
@@ -192,7 +192,11 @@
                                             <label>担当バック</label>
                                             <span>@item.CastBackNominationUnitAmountText</span>
                                         </div>
-                                        @if (item.IsSystemItem)
+                                        @if (!Model.IsAdminMode)
+                                        {
+                                            <span></span>
+                                        }
+                                        else if (item.IsSystemItem)
                                         {
                                             <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
                                         }
@@ -203,37 +207,43 @@
                                                 <button class="btn btn-outline-danger" type="submit">削除</button>
                                             </form>
                                         }
-                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
-                                        </div>
+                                        @if (Model.IsAdminMode)
+                                        {
+                                            <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
+                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
+                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
+                                            </div>
+                                        }
                                     </div>
                                 }
-                                <form method="post" asp-page-handler="SaveItem" class="item-admin__row item-admin__row--add" data-item-add-row>
-                                    <input type="hidden" name="ItemInput.ItemCategoryId" value="@group.Category.ItemCategoryId" />
-                                    <div class="item-admin__field item-admin__field--name">
-                                        <label>商品追加</label>
-                                        <input class="form-control" name="ItemInput.ItemName" value="@itemNameInput" placeholder="商品名" maxlength="120" />
-                                    </div>
-                                    <div class="item-admin__field">
-                                        <label>税込価格</label>
-                                        <input class="form-control" name="ItemInput.DefaultPrice" value="@defaultPriceInput" type="number" min="0" step="1" placeholder="0" />
-                                    </div>
-                                    <label class="item-admin__field item-admin__field--check">
-                                        <span>バック対象</span>
-                                        <input class="form-check-input" name="ItemInput.IsCastBackTarget" type="checkbox" value="true" checked="@isCastBackTargetInput" />
-                                        <input type="hidden" name="ItemInput.IsCastBackTarget" value="false" />
-                                    </label>
-                                    <div class="item-admin__field">
-                                        <label>ドリンクバック</label>
-                                        <input class="form-control" name="ItemInput.CastBackRegularUnitAmount" value="@regularBackInput" type="number" min="0" step="1" placeholder="0" />
-                                    </div>
-                                    <div class="item-admin__field">
-                                        <label>担当バック</label>
-                                        <input class="form-control" name="ItemInput.CastBackNominationUnitAmount" value="@nominationBackInput" type="number" min="0" step="1" placeholder="0" />
-                                    </div>
-                                    <button class="btn btn-primary" type="submit">追加</button>
-                                </form>
+                                @if (Model.IsAdminMode)
+                                {
+                                    <form method="post" asp-page-handler="SaveItem" class="item-admin__row item-admin__row--add" data-item-add-row>
+                                        <input type="hidden" name="ItemInput.ItemCategoryId" value="@group.Category.ItemCategoryId" />
+                                        <div class="item-admin__field item-admin__field--name">
+                                            <label>商品追加</label>
+                                            <input class="form-control" name="ItemInput.ItemName" value="@itemNameInput" placeholder="商品名" maxlength="120" />
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>税込価格</label>
+                                            <input class="form-control" name="ItemInput.DefaultPrice" value="@defaultPriceInput" type="number" min="0" step="1" placeholder="0" />
+                                        </div>
+                                        <label class="item-admin__field item-admin__field--check">
+                                            <span>バック対象</span>
+                                            <input class="form-check-input" name="ItemInput.IsCastBackTarget" type="checkbox" value="true" checked="@isCastBackTargetInput" />
+                                            <input type="hidden" name="ItemInput.IsCastBackTarget" value="false" />
+                                        </label>
+                                        <div class="item-admin__field">
+                                            <label>ドリンクバック</label>
+                                            <input class="form-control" name="ItemInput.CastBackRegularUnitAmount" value="@regularBackInput" type="number" min="0" step="1" placeholder="0" />
+                                        </div>
+                                        <div class="item-admin__field">
+                                            <label>担当バック</label>
+                                            <input class="form-control" name="ItemInput.CastBackNominationUnitAmount" value="@nominationBackInput" type="number" min="0" step="1" placeholder="0" />
+                                        </div>
+                                        <button class="btn btn-primary" type="submit">追加</button>
+                                    </form>
+                                }
                             </div>
                         </details>
                     }
@@ -273,7 +283,11 @@
                                             <label>担当バック</label>
                                             <span>@item.CastBackNominationUnitAmountText</span>
                                         </div>
-                                        @if (item.IsSystemItem)
+                                        @if (!Model.IsAdminMode)
+                                        {
+                                            <span></span>
+                                        }
+                                        else if (item.IsSystemItem)
                                         {
                                             <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
                                         }
@@ -284,10 +298,13 @@
                                                 <button class="btn btn-outline-danger" type="submit">削除</button>
                                             </form>
                                         }
-                                        <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
-                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
-                                        </div>
+                                        @if (Model.IsAdminMode)
+                                        {
+                                            <div class="item-admin__reorder-controls" aria-label="@($"{item.ItemName}の並び替え")">
+                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="up">上</button>
+                                                <button class="btn btn-outline-secondary btn-sm" type="button" data-item-move="down">下</button>
+                                            </div>
+                                        }
                                     </div>
                                 }
                             </div>

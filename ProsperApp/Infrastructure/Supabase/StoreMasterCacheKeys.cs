@@ -4,6 +4,9 @@ namespace ProsperApp.Services;
 
 internal static class StoreMasterCacheKeys
 {
+    private static readonly TimeSpan MasterCacheTtl = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan RuntimeCacheTtl = TimeSpan.FromSeconds(30);
+
     public static string Departments => "store-master:departments";
 
     public static string StoreContext(long departmentId) => $"store-master:{departmentId}:context";
@@ -28,7 +31,8 @@ internal static class StoreMasterCacheKeys
     {
         return new MemoryCacheEntryOptions
         {
-            Priority = CacheItemPriority.NeverRemove
+            AbsoluteExpirationRelativeToNow = MasterCacheTtl,
+            Priority = CacheItemPriority.Normal
         };
     }
 
@@ -36,7 +40,8 @@ internal static class StoreMasterCacheKeys
     {
         return new MemoryCacheEntryOptions
         {
-            Priority = CacheItemPriority.NeverRemove
+            AbsoluteExpirationRelativeToNow = RuntimeCacheTtl,
+            Priority = CacheItemPriority.Normal
         };
     }
 

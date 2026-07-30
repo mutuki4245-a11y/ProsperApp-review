@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Admin;
 using ProsperApp.Models;
 using ProsperApp.Services;
 
@@ -10,6 +11,7 @@ namespace ProsperApp.Pages;
 public class SettingsModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
+    IAdminAuthorizationService adminAuthorizationService,
     IStoreSettingsRepository storeSettingsRepository) : PageModel
 {
     private const string SettingsPassword = "4245";
@@ -18,6 +20,7 @@ public class SettingsModel(
 
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly IAdminAuthorizationService _adminAuthorizationService = adminAuthorizationService;
     private readonly IStoreSettingsRepository _storeSettingsRepository = storeSettingsRepository;
 
     [BindProperty]
@@ -54,7 +57,7 @@ public class SettingsModel(
         }
 
         LoadCurrentSettings();
-        if (Input.IsAdminMode)
+        if (_adminAuthorizationService.IsAdminMode)
         {
             RefreshSaveToken();
         }
@@ -83,6 +86,7 @@ public class SettingsModel(
             return Page();
         }
 
+        _adminAuthorizationService.SetAdminMode(true);
         RefreshSaveToken();
         LoadCurrentSettings();
         await LoadDepartmentsAsync(ct);
@@ -120,11 +124,11 @@ public class SettingsModel(
             StoreName = selectedDepartment.DisplayName,
             StoreDepartmentId = selectedDepartment.DepartmentId,
             ScreenMode = Input.ScreenMode,
-            ThemeMode = Input.ThemeMode,
-            IsAdminMode = Input.IsAdminMode
+            ThemeMode = Input.ThemeMode
         };
 
         WriteSettingsCookie(settings);
+        _adminAuthorizationService.SetAdminMode(Input.IsAdminMode);
         TempData["SuccessMessage"] = "設定をこの端末に保存しました。";
         LockSettings();
         return RedirectToPage("/Index");
@@ -137,15 +141,9 @@ public class SettingsModel(
             return NotFound();
         }
 
+        _adminAuthorizationService.SetAdminMode(false);
         LoadCurrentSettings();
-        if (Input.IsAdminMode)
-        {
-            RefreshSaveToken();
-        }
-        else
-        {
-            LockSettings();
-        }
+        LockSettings();
 
         await LoadDepartmentsAsync(ct);
         return Page();
@@ -159,12 +157,12 @@ public class SettingsModel(
         }
 
         IsUnlocked = CanAccessSettings();
-        if (!IsUnlocked)
+        if (!IsUnlocked || !_adminAuthorizationService.IsAdminMode)
         {
             LockSettings();
             LoadCurrentSettings();
             await LoadDepartmentsAsync(ct);
-            ModelState.AddModelError(string.Empty, "デバッグ操作を実行するには、もう一度パスワードを入力してください。");
+            ModelState.AddModelError(string.Empty, "デバッグ操作を実行するには、管理者モードで開いてください。");
             return Page();
         }
 
@@ -201,10 +199,10 @@ public class SettingsModel(
 
     private void LoadCurrentSettings()
     {
-        Input = ToInput(_localSettingsProvider.GetCurrent());
+        Input = ToInput(_localSettingsProvider.GetCurrent(), _adminAuthorizationService.IsAdminMode);
     }
 
-    private static SettingsInputModel ToInput(LocalSettings settings)
+    private static SettingsInputModel ToInput(LocalSettings settings, bool isAdminMode)
     {
         return new SettingsInputModel
         {
@@ -212,7 +210,7 @@ public class SettingsModel(
             StoreDepartmentId = settings.StoreDepartmentId,
             ScreenMode = settings.ScreenMode,
             ThemeMode = settings.ThemeMode,
-            IsAdminMode = settings.IsAdminMode
+            IsAdminMode = isAdminMode
         };
     }
 
@@ -226,7 +224,7 @@ public class SettingsModel(
 
     private bool CanAccessSettings()
     {
-        return IsValidSaveToken() || _localSettingsProvider.GetCurrent().IsAdminMode;
+        return IsValidSaveToken() || _adminAuthorizationService.IsAdminMode;
     }
 
     private void LockSettings()
