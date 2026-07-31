@@ -35,6 +35,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IFeatureGate, FeatureGate>();
 builder.Services.AddSingleton<IStoreClock, StoreClock>();
 builder.Services.AddSingleton<IOrderQueueService, OrderQueueService>();
+builder.Services.AddScoped<IAdminModeService, AdminModeService>();
 builder.Services.AddScoped<IOrderEntryApplicationService, OrderEntryApplicationService>();
 builder.Services.AddScoped<ILocalSettingsProvider, LocalSettingsProvider>();
 builder.Services.AddScoped<IBusinessHomeApplicationService, BusinessHomeApplicationService>();
@@ -49,6 +50,7 @@ builder.Services.AddScoped<ICastSalesAdjustmentRepository, SupabaseCastSalesAdju
 builder.Services.AddScoped<IStoreSlipRepository, SupabaseStoreSlipRepository>();
 builder.Services.AddScoped<IStoreOrderRepository, SupabaseStoreOrderRepository>();
 builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();
+builder.Services.AddScoped<IStoreTableAdminRepository, SupabaseStoreTableAdminRepository>();
 builder.Services.AddScoped<IStoreItemAdminRepository, SupabaseStoreItemAdminRepository>();
 builder.Services.AddScoped<IStoreCastAdminRepository, SupabaseStoreCastAdminRepository>();
 builder.Services.AddScoped<INominationBackAdminRepository, SupabaseNominationBackAdminRepository>();

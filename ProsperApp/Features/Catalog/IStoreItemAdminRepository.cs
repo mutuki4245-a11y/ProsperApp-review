@@ -10,6 +10,8 @@ public interface IStoreItemAdminRepository
 
     Task<StoreItemAdminSaveResult> SaveItemAsync(StoreItemInputModel input, CancellationToken ct);
 
+    Task<StoreItemAdminSaveResult> DeleteCategoryAsync(long itemCategoryId, CancellationToken ct);
+
     Task<StoreItemAdminSaveResult> DeleteItemAsync(long itemId, CancellationToken ct);
 
     Task<StoreItemAdminSaveResult> ReorderItemsAsync(IReadOnlyList<StoreItemOrderInputModel> items, CancellationToken ct);

@@ -8,11 +8,13 @@ namespace ProsperApp.Pages;
 public class ManagementItemsModel(
     IFeatureGate featureGate,
     IStoreItemAdminRepository itemAdminRepository,
-    IStoreClock storeClock) : PageModel
+    IStoreClock storeClock,
+    IAdminModeService adminModeService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreItemAdminRepository _itemAdminRepository = itemAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
     public StoreItemCategoryInputModel CategoryInput { get; set; } = new();
@@ -24,6 +26,9 @@ public class ManagementItemsModel(
     public long? DeleteItemId { get; set; }
 
     [BindProperty]
+    public long? DeleteCategoryId { get; set; }
+
+    [BindProperty]
     public List<StoreItemOrderInputModel> ReorderItems { get; set; } = [];
 
     public StoreItemAdminCatalog Catalog { get; set; } = new();
@@ -31,6 +36,8 @@ public class ManagementItemsModel(
     public string? SuccessMessage { get; set; }
 
     public PageLoadStatus? LoadStatus { get; private set; }
+
+    public bool IsAdminMode => _adminModeService.IsEnabled;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -49,6 +56,11 @@ public class ManagementItemsModel(
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
+        }
+
+        if (!await EnsureAdminModeAsync(cancellationToken))
+        {
+            return Page();
         }
 
         ModelState.Clear();
@@ -79,6 +91,11 @@ public class ManagementItemsModel(
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
+        }
+
+        if (!await EnsureAdminModeAsync(cancellationToken))
+        {
+            return Page();
         }
 
         ItemInput.ItemId = null;
@@ -113,6 +130,11 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
+        if (!await EnsureAdminModeAsync(cancellationToken))
+        {
+            return Page();
+        }
+
         if (DeleteItemId is null or <= 0)
         {
             ModelState.AddModelError(string.Empty, "削除する商品を選択してください。");
@@ -136,11 +158,51 @@ public class ManagementItemsModel(
         return Page();
     }
 
+    public async Task<IActionResult> OnPostDeleteCategoryAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        if (!await EnsureAdminModeAsync(cancellationToken))
+        {
+            return Page();
+        }
+
+        if (DeleteCategoryId is null or <= 0)
+        {
+            ModelState.AddModelError(string.Empty, "削除するカテゴリを選択してください。");
+            await LoadCatalogAsync(cancellationToken);
+            PrepareMissingInputs();
+            return Page();
+        }
+
+        var result = await _itemAdminRepository.DeleteCategoryAsync(DeleteCategoryId.Value, cancellationToken);
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "カテゴリを削除できませんでした。");
+            await LoadCatalogAsync(cancellationToken);
+            PrepareMissingInputs();
+            return Page();
+        }
+
+        SuccessMessage = "カテゴリを削除しました。";
+        await LoadCatalogAsync(cancellationToken);
+        ResetInputs();
+        return Page();
+    }
+
     public async Task<IActionResult> OnPostReorderItemsAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
+        }
+
+        if (!await EnsureAdminModeAsync(cancellationToken))
+        {
+            return Page();
         }
 
         ModelState.Clear();
@@ -176,6 +238,19 @@ public class ManagementItemsModel(
             : PageLoadStatus.Failure(
                 result.FailureKind ?? ResultFailureKind.Unavailable,
                 result.ErrorMessage ?? "商品マスタを取得できませんでした。");
+    }
+
+    private async Task<bool> EnsureAdminModeAsync(CancellationToken cancellationToken)
+    {
+        if (IsAdminMode)
+        {
+            return true;
+        }
+
+        ModelState.AddModelError(string.Empty, "変更するには管理者設定で管理者モードを有効にしてください。");
+        await LoadCatalogAsync(cancellationToken);
+        PrepareMissingInputs();
+        return false;
     }
 
     private void ResetInputs()

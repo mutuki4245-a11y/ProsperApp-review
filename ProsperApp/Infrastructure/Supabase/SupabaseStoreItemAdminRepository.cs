@@ -192,6 +192,43 @@ public class SupabaseStoreItemAdminRepository(
             : StoreItemAdminSaveResult.Failed("商品を削除できませんでした。");
     }
 
+    public async Task<StoreItemAdminSaveResult> DeleteCategoryAsync(long itemCategoryId, CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return StoreItemAdminSaveResult.Failed("Supabase Edge Function設定が未設定です。カテゴリを削除できません。");
+        }
+
+        if (itemCategoryId <= 0)
+        {
+            return StoreItemAdminSaveResult.Failed("削除するカテゴリを選択してください。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.delete_item_category",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_item_category_id = itemCategoryId
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return StoreItemAdminSaveResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var deletedCategoryId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "item_category_id") ?? 0 : 0;
+        if (deletedCategoryId > 0)
+        {
+            StoreMasterCacheKeys.ClearItems(_cache, CurrentStoreDepartmentId);
+        }
+
+        return deletedCategoryId > 0
+            ? StoreItemAdminSaveResult.Success(deletedCategoryId)
+            : StoreItemAdminSaveResult.Failed("カテゴリを削除できませんでした。");
+    }
+
     public async Task<StoreItemAdminSaveResult> ReorderItemsAsync(IReadOnlyList<StoreItemOrderInputModel> items, CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -257,7 +294,12 @@ public class SupabaseStoreItemAdminRepository(
 
         if (rawError.Contains("store_item_category_not_found", StringComparison.OrdinalIgnoreCase))
         {
-            return "選択したカテゴリを確認してください。";
+            return "対象のカテゴリが見つかりません。";
+        }
+
+        if (rawError.Contains("store_item_category_in_use", StringComparison.OrdinalIgnoreCase))
+        {
+            return "商品が登録されているカテゴリは削除できません。先に配下の商品を削除してください。";
         }
 
         if (rawError.Contains("invalid_store_item", StringComparison.OrdinalIgnoreCase))

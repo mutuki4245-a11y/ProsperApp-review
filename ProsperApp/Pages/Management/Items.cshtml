@@ -17,6 +17,12 @@
         .ThenBy(x => x.SortOrder)
         .ThenBy(x => x.ItemName)
         .ToList();
+    var inactiveItems = Model.Catalog.Items
+        .Where(x => !x.IsActive)
+        .OrderBy(x => x.CategoryName)
+        .ThenBy(x => x.SortOrder)
+        .ThenBy(x => x.ItemName)
+        .ToList();
     var activeCategoryIds = activeCategories.Select(x => x.ItemCategoryId).ToHashSet();
     var itemGroups = activeCategories
         .Select(category => new
@@ -47,6 +53,15 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
+    @if (!Model.IsAdminMode)
+    {
+        <div class="alert alert-warning">
+            現在は参照モードです。変更する場合は
+            <a asp-page="/Settings/Index">管理者設定</a>
+            で管理者モードを有効にしてください。
+        </div>
+    }
+
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     @if (Model.LoadStatus is { Succeeded: false } loadStatus)
@@ -62,7 +77,7 @@
         <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
     }
 
-    <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
+    <fieldset class="border-0 p-0 m-0" @(!Model.IsAdminMode || Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
     <div class="item-admin" data-item-admin>
         <section class="slip-create__panel">
                 <div class="slip-create__panel-title">
@@ -102,6 +117,7 @@
                     <div class="item-admin__table item-admin__table--category">
                         @foreach (var category in categoryRows)
                         {
+                            var categoryItemCount = Model.Catalog.Items.Count(item => item.ItemCategoryId == category.ItemCategoryId);
                             <form method="post" asp-page-handler="SaveCategory" class="item-admin__row item-admin__row--category">
                                 <input type="hidden" name="CategoryInput.ItemCategoryId" value="@category.ItemCategoryId" />
                                 <div class="item-admin__field">
@@ -122,6 +138,24 @@
                                     <span class="form-check-label">有効</span>
                                 </label>
                                 <button class="btn btn-outline-primary" type="submit">保存</button>
+                                @if (categoryItemCount == 0)
+                                {
+                                    <button
+                                        class="btn btn-outline-danger"
+                                        type="submit"
+                                        formaction="?handler=DeleteCategory"
+                                        name="DeleteCategoryId"
+                                        value="@category.ItemCategoryId"
+                                        onclick="return confirm('このカテゴリを削除しますか？');">
+                                        削除
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline-secondary" type="button" disabled title="配下の商品を先に削除してください">
+                                        商品 @categoryItemCount 件
+                                    </button>
+                                }
                             </form>
                         }
                     </div>
@@ -305,6 +339,55 @@
                         </details>
                     }
                 </div>
+            }
+
+            @if (inactiveItems.Count > 0)
+            {
+                <details class="item-admin__group mt-3">
+                    <summary>
+                        <span>無効な商品</span>
+                        <span>@inactiveItems.Count 件</span>
+                    </summary>
+                    <div class="item-admin__table item-admin__table--item">
+                        @foreach (var item in inactiveItems)
+                        {
+                            <div class="item-admin__row item-admin__row--item">
+                                <div class="item-admin__field item-admin__field--name">
+                                    <label>商品名</label>
+                                    <strong>@item.ItemName</strong>
+                                    <span class="badge text-bg-secondary">無効</span>
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>カテゴリ</label>
+                                    <span>@(string.IsNullOrWhiteSpace(item.CategoryName) ? "未分類" : item.CategoryName)</span>
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>価格</label>
+                                    <span>@item.DefaultPriceText</span>
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>バック対象</label>
+                                    <span>@(item.IsCastBackTarget ? "対象" : "対象外")</span>
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>状態</label>
+                                    <span>無効</span>
+                                </div>
+                                @if (item.IsSystemItem)
+                                {
+                                    <button class="btn btn-outline-secondary" type="button" disabled>削除不可</button>
+                                }
+                                else
+                                {
+                                    <form method="post" asp-page-handler="DeleteItem" class="item-admin__delete-form" onsubmit="return confirm('この商品を削除しますか？');">
+                                        <input type="hidden" asp-for="DeleteItemId" value="@item.ItemId" />
+                                        <button class="btn btn-outline-danger" type="submit">削除</button>
+                                    </form>
+                                }
+                            </div>
+                        }
+                    </div>
+                </details>
             }
         </section>
     </div>

@@ -80,6 +80,15 @@
             </section>
 
             <section class="settings-card">
+                <h2>管理者モード</h2>
+                <p class="text-muted mb-3">店舗設定のマスタ追加・編集・削除を一時的に許可します。ログアウトまたは明示ロックで自動的に解除されます。</p>
+                <div class="form-check form-switch">
+                    <input asp-for="Input.AdminMode" class="form-check-input" type="checkbox" role="switch" />
+                    <label asp-for="Input.AdminMode" class="form-check-label">管理者モードを有効にする</label>
+                </div>
+            </section>
+
+            <section class="settings-card">
                 <h2>アプリ内キャッシュ</h2>
                 @if (Model.CacheStatuses.Count == 0)
                 {

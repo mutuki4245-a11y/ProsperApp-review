@@ -70,6 +70,7 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 - Google 認証では許可メールまたは許可ドメインを必須とし、未許可ユーザーは認証チケット作成時または Principal 検証時に拒否する。
 - ログアウト時は Session と Cookie を破棄する。
 - ログイン後リダイレクトはローカルURLだけを許可する。
+- 管理者設定は固定パスワードと保存トークンで保護し、管理者モードはサーバー側 Session にだけ保持する。店舗設定のマスタ更新POSTは管理者モードを再検証する。
 
 ## 5. 機能フラグ
 
@@ -101,11 +102,12 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 | `/DrivePreview/{driveFileId}` | `DrivePreviewModel` | Drive 証憑プレビュー |
 | `/Closing/CastSalesAdjustment` | `CastSalesAdjustmentModel` | キャスト売上額調整 |
 | `/Management/Index` | `Management.IndexModel` | 店舗設定メニュー、端末の画面モード・配色設定 |
+| `/Management/Tables` | `TablesModel` | 卓番管理 |
 | `/Management/Casts` | `CastsModel` | キャスト管理 |
 | `/Management/Items` | `ItemsModel` | 商品カテゴリ・商品管理 |
 | `/Management/NominationBacks` | `NominationBacksModel` | 指名バック管理 |
 | `/Management/Pricing` | `PricingModel` | 時間料金管理 |
-| `/Settings/Index` | `SettingsModel` | 利用店舗設定、キャッシュ、デバッグ削除 |
+| `/Settings/Index` | `SettingsModel` | 利用店舗・管理者モード設定、キャッシュ、デバッグ削除 |
 
 `/Attendance` は `/Closing/Attendance` にもマップされる。
 
@@ -140,6 +142,8 @@ Repository は Supabase RPC を通じて、店舗文脈、マスタ、営業日�
 | 指名バック | `store_nomination_back_master` |
 | 決済方法 | `payment_method_master` |
 | 時間料金 | `store_pricing_plan_master` |
+
+卓番と標準商品は物理削除できるため、伝票・注文明細側は削除可能マスタへのFKを持たず、IDと表示用snapshotを保持する。注文明細は商品名・単価に加えてカテゴリID・コード・名称も注文時に固定する。商品カテゴリは配下商品がない場合だけ物理削除できる。
 
 ### 8.2 営業中データ
 
@@ -231,6 +235,9 @@ Edge Function は allowlist 済みの `store.*` 関数のみを実行する。�
 ### 10.3 マスタ
 
 - `store.get_tables`
+- `store.get_table_admin_list`
+- `store.upsert_table`
+- `store.delete_table`
 - `store.get_casts`
 - `store.get_casts_admin`
 - `store.create_cast`
@@ -240,6 +247,7 @@ Edge Function は allowlist 済みの `store.*` 関数のみを実行する。�
 - `store.get_order_items`
 - `store.get_item_admin_catalog`
 - `store.upsert_item_category`
+- `store.delete_item_category`
 - `store.upsert_item`
 - `store.delete_item`
 - `store.reorder_items`

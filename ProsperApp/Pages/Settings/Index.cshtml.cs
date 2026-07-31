@@ -11,7 +11,8 @@ public class SettingsModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
     IStoreSettingsRepository storeSettingsRepository,
-    IApplicationCache applicationCache) : PageModel
+    IApplicationCache applicationCache,
+    IAdminModeService adminModeService) : PageModel
 {
     private const string SettingsPassword = "4245";
     private const string SaveTokenSessionKey = "SettingsSaveToken";
@@ -22,6 +23,7 @@ public class SettingsModel(
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreSettingsRepository _storeSettingsRepository = storeSettingsRepository;
     private readonly IApplicationCache _applicationCache = applicationCache;
+    private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
     [Display(Name = "パスワード")]
@@ -126,9 +128,12 @@ public class SettingsModel(
         };
 
         WriteSettingsCookie(settings);
-        TempData["SuccessMessage"] = "設定をこの端末に保存しました。";
+        _adminModeService.SetEnabled(Input.AdminMode);
+        TempData["SuccessMessage"] = Input.AdminMode
+            ? "設定を保存し、管理者モードを有効にしました。"
+            : "設定を保存し、管理者モードを無効にしました。";
         LockSettings();
-        return RedirectToPage("/Index");
+        return RedirectToPage("/Management/Index");
     }
 
     public async Task<IActionResult> OnPostLockAsync(CancellationToken ct)
@@ -139,6 +144,7 @@ public class SettingsModel(
         }
 
         LoadCurrentSettings();
+        _adminModeService.SetEnabled(false);
         LockSettings();
 
         await LoadDepartmentsAsync(ct);
@@ -238,6 +244,7 @@ public class SettingsModel(
     private void LoadCurrentSettings()
     {
         Input = ToInput(_localSettingsProvider.GetCurrent());
+        Input.AdminMode = _adminModeService.IsEnabled;
     }
 
     private static SettingsInputModel ToInput(LocalSettings settings)
@@ -337,4 +344,6 @@ public class SettingsInputModel
     [Display(Name = "利用店舗")]
     public long StoreDepartmentId { get; set; }
 
+    [Display(Name = "管理者モード")]
+    public bool AdminMode { get; set; }
 }

@@ -28,6 +28,8 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
 
 領収書互換修正コミット `4b19e49` とアプリ側の仕訳UUID修正コミット `bbe44f0` は `origin/main` へpush済みです。Releaseビルドは警告0、C#テストは18件成功しました。アプリはAzure App ServiceへZipDeployし、KuduはHTTP 202で受理後、status 4 / complete True / active True、公開URLは未認証HTTP 302でGoogle認証へ遷移することを確認しました。
 
+2026-07-31の店舗設定改善では、`/Management/Tables` に卓番の追加・編集・無効化・物理削除を追加し、商品と商品カテゴリも物理削除方式へ変更しました。卓番表示は伝票作成時、商品名・単価・商品カテゴリID・コード・名称は注文時のsnapshotを使用し、削除可能マスタへのFKは持たず履歴IDを残します。カテゴリは配下商品が0件の場合だけ削除できます。`/Settings` にはサーバー側Sessionの管理者モードトグルを追加し、店舗設定のマスタ変更POSTは管理者モード中だけ許可します。明示ロックとログアウトで管理者モードを解除します。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針
@@ -44,15 +46,15 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
 - 現場運用は、営業中画面を操作する `sales-management` 端末1台と、注文入力専用の `order-entry` / `/Orders` 端末複数台を前提にします。注文端末、営業中トップともに、未送信キューは店舗・営業日・伝票に紐付けた端末ごとのlocalStorage下書きとして扱い、画面終了・再読み込み後も復元します。復元時はDB最新状態を確認し、`open` でない伝票や現行スナップショットと合わない行は破棄します。アプリ内遷移、他フォーム送信、会計前には `store.flush_business_home_changes` で保存完了を待ちます。端末間では直接同期せず、共有状態はDB/RPC保存後のデータを基準にします。
 - 出勤キャスト候補の `store.get_order_attending_casts` は、店舗別・営業日別に `IApplicationCache` へ初回成功時だけ30秒保持します。勤怠保存、退勤情報保存、営業日開始、営業日締め、またはキャストのドリンクメモ保存の成功時に対象営業日のキャッシュを破棄します。退勤済みキャストも候補に残す仕様なので、退勤済みかどうかだけを理由に候補キャッシュを避ける必要はありません。
 - 勤怠時刻刻み、キャスト売上額調整の売上額基準、売上額人数割は端末設定ではなく、`department_master` の店舗別運用設定として管理します。アプリ側では `store.get_context` から取得し、店舗コンテキストキャッシュに載せます。
-- 管理者モードという継続権限は持ちません。`/Settings` だけを固定パスワードとセッション内一時トークンで保護し、GET、保存、明示ロック後は解除状態を持ち越しません。マスタ画面は店舗スタッフの通常運用画面として扱います。営業日締めは全条件を必須とし、旧互換引数 `p_ignore_closing_requirements=true` はDBで `closing_override_disabled` として拒否します。
+- `/Settings` は固定パスワードとセッション内一時トークンで設定POSTを保護します。別に、店舗設定のマスタ更新を許可する管理者モードをサーバー側Sessionへ保持し、明示ロックまたはログアウトで解除します。通常CookieやlocalStorageを権限判定に使いません。営業日締めは全条件を必須とし、旧互換引数 `p_ignore_closing_requirements=true` はDBで `closing_override_disabled` として拒否します。
 - 指名・バックまわりの用語は、会計額へ加算する料金を `指名料金`、指名時にキャストへ支払うバックを `指名バック`、商品注文時にキャストへ支払う通常バックを `ドリンクバック`、その商品注文バック対象が当該伝票の指名キャストだった場合のバックを `担当バック` と呼び分けます。UI文言とドキュメントではこの4語を混同しないでください。
 - 営業中トップは営業中操作に必要なスナップショットだけを取得し、締め作業専用の酒代、締め勤怠、未処理領収書、キャスト売上額調整状態は `/Closing` の締め準備GET handlerでまとめて取得します。伝票追加モーダルの指名候補は初期表示をブロックせず、モーダル表示時にGET handlerで遅延取得します。営業中カラオケ保存は `store.flush_business_home_changes` の `p_karaoke_lines` に含め、客・指名・注文・自由入力明細の未送信操作と同じバッチで確定します。保存成功後だけ遷移または送信を続行し、保存失敗時は操作を止めて「保存失敗」と表示します。カラオケは `store_item_master.item_type = 'karaoke'` の商品として扱い、SQL内部で同一伝票内のカラオケ注文行を1行に集約します。
 - 営業中一覧の `store.get_business_day_snapshot` と `/Orders` の `store.get_order_entry_slips` は、Razor初期表示をブロックしないようページ用JSON handlerから取得します。初回表示後、フォーカス復帰時、10秒ごとの表示中自動更新で再取得し、営業中トップの保存成功時は `store.flush_business_home_changes` の応答スナップショットで反映します。営業中一覧と `/Orders` の注文対象伝票はどちらも `slipId` 単位で差分反映し、同期のたびに一覧全体を作り直さないでください。`/Orders` で会計済みなどにより候補から消えた伝票は選択と未送信キューから外します。
 - 一覧RPCは対象営業日・対象伝票を先に絞ってから関連行を集計します。特に `store.get_business_day_snapshot`、`store.get_order_entry_slips`、`store.get_cast_sales_adjustment_slips` は全期間の客、指名、注文、自由入力明細を集計してから最後に絞る形へ戻さないでください。
 - 店舗は `department_master.department_id` を基準に扱います。
-- `department_master.department_id`、`cast_master.cast_id`、`store_table_master.table_id` と各行の所属会社・店舗は不変IDです。名称は変更できます。集計はIDで行い現在マスタの名称を表示し、会計伝票・領収書・締めsnapshotの再表示は保存時点の名称を使います。
-- snapshot境界は `open -> checkout_ready` と営業日 `open -> closed` です。`open` 中のマスタ・料金変更は未会計伝票へ反映して構いません。`checkout_ready` / `checked_out` の表示・会計額は再計算せず、締め済み営業日の伝票、客、指名、注文、バック、自由明細、料金、会計、決済、勤怠、売上額調整、snapshotは更新・削除しません。
-- 標準商品削除は `store_item_master.is_active = false` の論理削除です。使用済み伝票の `item_id` をNULL化せず、集計軸を保持します。
+- `department_master.department_id`、`cast_master.cast_id` と各行の所属会社・店舗は不変IDです。卓番・標準商品はマスタ行を物理削除できますが、伝票・注文明細には当時のIDを履歴識別子として残します。
+- 卓番コード・名称は伝票作成時、商品名・単価・商品カテゴリID・コード・名称は注文時にsnapshot保存します。会計のsnapshot境界は `open -> checkout_ready`、営業日のsnapshot境界は `open -> closed` です。`checkout_ready` / `checked_out` の表示・会計額は再計算せず、締め済み営業日の伝票、客、指名、注文、バック、自由明細、料金、会計、決済、勤怠、売上額調整、snapshotは更新・削除しません。
+- 標準商品削除は `store.delete_item` による物理削除です。`store_order_lines.item_id` と名称・単価・カテゴリsnapshotは変更しません。システム商品は削除できません。商品カテゴリは配下商品が0件の場合だけ物理削除できます。
 - 端末ごとの店舗設定はブラウザ `localStorage` と通常Cookieに保存します。
 - サーバー側処理ではCookieの `StoreDepartmentId` を優先し、なければ `appsettings` の `Supabase:StoreDepartmentId` にフォールバックします。
 - アプリログインはGoogle認証に統一します。
@@ -155,7 +157,7 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
 - 営業中一覧ハブの要約行は、状態を列に出さず `open` を緑、その他を灰色の行枠で区別する。卓番は2.5rem、入店は3.75rem、客・指名は残りを均等に配る可変列とし、メモ列は表示しない。カラオケは＋／－と数だけを出し、行・操作の余白を詰めて一覧性を優先する。展開詳細の客行は在席人数を出さず、指名行は指名料金を出さない。どちらも同じ文字サイズ・太さで、客名または「キャスト — 指名区分」を表示する。メモの再表示場所は別途決める。
 - `/Settings` の管理者解除後に、デバッグ用の「マスタ以外のテーブルのレコードを削除する」操作を表示します。`store.delete_non_master_records` は選択店舗の営業日、出勤、伝票、注文、会計、バック集計の営業データだけを削除し、`company_master`、`department_master`、`cast_master`、卓、商品、指名バック、支払方法などのマスタ表は削除しません。成功時は現在営業日と指名バック設定のruntimeキャッシュを破棄します。
 - 伝票追加モーダルは、時刻/卓番/メモ、客、指名の3カラム構成です。入店時刻を左列上端、メモを下端に固定し、卓番・客・指名の各リストへモーダル本文の残り高を配分します。入り切らない行だけを各リスト内でスクロールし、客・指名行はリスト上端から詰めます。指名は既定の先頭区分を初期選択し、空の「指名区分」は置きません。種別・料金・キャスト選択を1行で扱い、指名区分は0.6fr、料金は7.5rem、残りをキャスト選択へ配分して長いキャスト名だけを省略表示します。説明文や補助文言、客・指名の行番号は出さず、同伴系の指名種別を選ぶと指名料金の初期値を3000円にします。伝票作成は作成ボタンの明示クリックだけで送信し、入力・選択欄でのEnterは送信しません。
-- 卓番カテゴリは `store_table_master.table_category_no` の1桁数値（`0`〜`9`）で持ちます。伝票作成モーダルだけでカテゴリ間に細い区切り線を表示し、カテゴリ名・見出し・管理UIは置きません。`store.get_tables` はカテゴリ番号、既存の表示順、卓番順で返します。卓マスタをSQLで更新した後は、`/Settings` のキャッシュ一括クリアで即時反映でき、操作しない場合も10分以内に期限切れで再取得します。
+- 卓番カテゴリは `store_table_master.table_category_no` の1桁数値（`0`〜`9`）で持ちます。伝票作成モーダルだけでカテゴリ間に細い区切り線を表示し、カテゴリ名・見出しは置きません。卓番は管理者モード中に `/Management/Tables` で追加・編集・削除でき、保存成功時は卓番候補と管理一覧のキャッシュを破棄します。
 - 旧 `/Slips/Edit` の詳細ページ、部分HTML、専用JavaScript、旧editor helperは削除済みです。営業中の客、指名、注文、自由入力明細、カラオケは営業中トップの `business-home.js` を唯一の状態所有者とし、editor/checkout JavaScriptは `window.ProsperBusinessHome` の公開メソッドだけを使います。
 - 営業中トップの対象別編集モーダルは、保存済み一覧を現在スナップショットから描画し、追加・変更・取消などの一操作だけをキューへ積みます。注文は営業中トップ内の注文キューで扱い、保存時は `store.flush_business_home_changes` にまとめます。失敗行だけを通知・ロールバックし、同じバッチの他行は保存を継続します。モーダルを閉じた後も、保存応答前の未送信キューは同一端末のlocalStorageへ保持し、登録成功、明示破棄、または対象伝票の状態変更時に削除します。
 - 営業中トップの会計モーダルは、0円会計で決済方法なしの確定を許容し、`請求なし 0円` として扱います。0円の支払明細は作りません。選択できる決済方法は `store.get_payment_methods` が返す店舗別有効マスタを使い、`requires_received_amount` の方法がある場合だけ受取額を入力します。決済確定ボタンは、決済合計が会計額と一致し、選択済み決済の金額が正値で、受取額が必要な決済では受取額が対象額以上になるまで有効にしません。会計準備解除、会計取消、会計前エラーなどの確認・通知は共通の `window.AppConfirm` Bootstrapモーダルを優先し、Bootstrapが使えない場合だけブラウザ標準ダイアログへフォールバックします。
@@ -272,7 +274,7 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
     - 各モーダルやフォームで、最終行入力中にEnterを押しただけでフォーム送信や確定が走らないようにする。
     - 明示的な確定ボタン以外は `type="button"` を徹底し、テキスト入力のEnterは検索/候補選択など意図がある箇所だけ個別に許可する。複数行メモ入力のEnterは改行として扱う。
   - 卓番マスタ/DB:
-    - **実装済み（2026-07-20）:** `store_table_master.table_category_no` を1桁数値として追加し、mieu本店のA/B/C卓へ `1`/`2`/`3` をseedする。カテゴリ名・カテゴリマスタ・アプリ内管理UIは作らない。カテゴリ表示は伝票作成モーダルだけで、カテゴリ間の細い区切り線だけを置く。営業中一覧と注文端末の卓表示は変更しない。
+    - **更新済み（2026-07-31）:** `store_table_master.table_category_no` は1桁数値のままとし、カテゴリ名・カテゴリマスタは作らない。卓番自体は `/Management/Tables` でコード、表示名、区分、表示順、有効状態を管理する。カテゴリ表示は伝票作成モーダルだけで、カテゴリ間の細い区切り線だけを置く。
   - 時刻制約/RPC検証:
     - 各RPCや画面バリデーションで、入店時刻 < 退店時刻、出勤時刻 < 退勤時刻などの時刻制約を整理する。
     - 深夜営業で24:00以降を扱うため、単純な時刻型比較ではなく営業日基準の日時または分数表現で比較する。DB制約、RPC内検証、PageModel検証、UI表示の責務を分ける。
@@ -355,8 +357,10 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 
 DB変更はGit revertだけでは戻りません。緊急時は新規会計・締めを止め、次の順で戻します。
 
+2026-07-31の物理削除対応後は、卓番・商品・カテゴリsnapshot列、削除可能マスタへのFKなし、snapshot対応reader、卓番マスタのDELETEを許可するidentity triggerを後方互換基盤として維持します。物理削除済みIDが1件でもある環境では、欠落マスタを同じID・所属で復元して全参照整合を確認するまで、旧FKや旧reader、卓番DELETE禁止triggerへ戻してはいけません。
+
 1. `trg_*_closed_day_guard`、`trg_store_business_days_closed_guard`、3つの `*_identity_immutable`、`trg_store_business_day_closing_snapshots_immutable` を削除する。
-2. `01_business_day.sql`、`02_store_masters.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`09_business_home_snapshot.sql`、`store_settings_functions.sql` を変更前コミットの定義へ戻す。
+2. `01_business_day.sql`、`02_store_masters.sql`、`05_checkout.sql`、`07_cast_sales_adjustments.sql`、`08_checkout_ready.sql`、`09_business_home_snapshot.sql`、`store_settings_functions.sql` を変更前コミットの定義へ戻す。ただし、上記の2026-07-31後方互換基盤に該当する列、FKなし、reader、卓番identity trigger、物理削除RPCは戻さない。
 3. `store_slip_accounting_snapshots` と `store_business_day_closing_snapshots` は監査データを退避するまで削除しない。削除する場合は依存関数を戻した後に行う。
 4. `store_slip_cast_sales_adjustments` には取消履歴が複数残り得るため、旧unique制約へ直接戻さない。履歴を退避または統合するまで `ux_store_slip_cast_sales_adjustments_confirmed` を維持する。
 5. 戻した関数へ `99_grants.sql` を再適用し、`store` schemaの直接実行権限が復活していないことを確認する。
@@ -392,6 +396,9 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 ### 伝票
 
 - `store.get_tables(p_department_id)`
+- `store.get_table_admin_list(p_department_id)`
+- `store.upsert_table(p_department_id, p_table_id, p_table_code, p_table_name, p_table_category_no, p_sort_order, p_is_active)`
+- `store.delete_table(p_department_id, p_table_id)`
 - `store.get_casts(p_department_id)`
   - 有効店舗に所属する全会社の有効キャストを返します。
   - ヘルプ対応のため、現在店舗所属キャストだけに限定しません。
@@ -406,6 +413,7 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 - `store.get_nomination_back_master(p_department_id)`
 - `store.save_nomination_back_master(p_department_id, p_settings)`
 - `store.upsert_item_category(p_department_id, p_item_category_id, p_category_code, p_category_name, p_sort_order, p_is_active)`
+- `store.delete_item_category(p_department_id, p_item_category_id)`
 - `store.upsert_item(p_department_id, p_item_id, p_item_category_id, p_item_name, p_default_price, p_is_active, p_is_cast_back_target, p_cast_back_regular_unit_amount, p_cast_back_nomination_unit_amount, p_cast_back_type)`
 - `store.delete_item(p_department_id, p_item_id)`
 - `store.add_order_lines(p_department_id, p_slip_id, p_order_lines)`
@@ -500,9 +508,14 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 
 - `/Management`
   - 上部タブの `店舗設定` 入口です。
-  - 端末の画面モードと配色を保存し、キャスト情報、商品情報、指名バック設定、時間料金設定を任意のタイミングで開く導線にします。
+  - 端末の画面モードと配色を保存し、卓番、キャスト情報、商品情報、指名バック設定、時間料金設定を任意のタイミングで開く導線にします。
   - 画面設定の保存後は端末設定Cookieを更新し、選択した営業管理画面またはオーダー登録画面へ遷移します。
   - 管理メニューも操作パネルの縦並びを維持します。
+  - マスタ画面は通常時に参照でき、追加・編集・削除は管理者モード中だけ許可します。PageModelのPOSTでも管理者モードを再検証します。
+
+- `/Management/Tables`
+  - 卓番コード、任意表示名、区分0～9、表示順、有効状態を追加・編集できます。
+  - 物理削除後も既存伝票は `table_code_snapshot` / `table_name_snapshot` を表示します。
 
 - `/Management/Casts`
   - 店舗設定タブから開くキャスト情報確認/編集導線用です。
@@ -510,15 +523,17 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
 
 - `/Management/Items`
   - 店舗設定タブから開く商品管理です。
-  - 非管理者はカテゴリを編集できません。
+  - 非管理者は参照のみで、カテゴリ・商品の変更はできません。
   - 商品名は店舗内uniqueです。
   - 商品コード、商品表示順など利用者が判断しづらい項目は画面に出しません。
   - 商品の並び替えが必要になったら専用UIで扱います。
   - 商品は既存行を直接編集せず、追加と削除で運用します。
   - カラオケは `item_type = 'karaoke'` のシステム商品として商品マスタに置きます。1回200円固定で、通常の商品小計に含めてサービス料対象にします。通常の商品削除RPCでは削除できません。
   - 指名料金は `item_type = 'nomination_fee'` のシステム商品として商品マスタに置きます。価格は指名登録時の選択額を注文行へスナップショットし、カラオケと同じく商品小計とサービス料20%の対象にします。通常の商品削除RPCでは削除できません。
-  - 注文履歴は `item_name_snapshot` / `unit_price` / `amount` を保持するため、商品マスタを再参照しません。
-  - 商品削除は `store.delete_item` で `is_active = false` にする論理削除です。既存注文行の `item_id` は保持します。
+  - 注文履歴は `item_name_snapshot` / `unit_price` / `amount` と商品カテゴリID・コード・名称snapshotを保持するため、商品・カテゴリマスタを再参照しません。
+  - 標準商品削除は `store.delete_item` でマスタ行を物理削除します。既存注文行の `item_id`、商品・カテゴリsnapshot、`unit_price`、`amount` は保持します。
+  - カテゴリ削除は配下商品が0件の場合だけ `store.delete_item_category` で物理削除します。
+  - DBを戻す場合も、卓番・商品・カテゴリsnapshot列、削除可能マスタへのFKなし、snapshot対応readerは後方互換基盤として残します。物理削除後に旧FKを戻すには、欠落IDを同じID・所属でマスタへ復元してから全参照整合を確認する必要があり、Git revertだけでは戻りません。
 
 - `/Management/NominationBacks`
   - 指名種別別キャストバックの店舗別マスタです。
@@ -577,8 +592,9 @@ DB変更はGit revertだけでは戻りません。緊急時は新規会計・�
   - パスワードは固定で `4245`。
   - 利用店舗を端末ローカル保存し、店舗設定で選択した画面モードと配色は維持します。勤怠時刻刻み、売上額基準、売上額人数割は店舗別マスターで管理します。
   - パスワード解除はページ内のセッション一時トークンだけに保持し、永続的な管理者Cookieは作りません。GET、保存、明示ロック後は再度パスワードが必要です。
+  - 管理者モードは別のSession状態としてトグルで切り替えます。管理者設定の明示ロックまたはログアウトで解除します。
   - マスタ以外の全データ削除だけは、選択店舗名を含む `削除 店舗名` の完全一致入力と最終確認ダイアログを追加で必須にします。
-  - 管理者設定の保存後は端末設定Cookieを更新し、共通レイアウトでlocalStorageへ同期してからトップ `/` へ遷移します。
+  - 管理者設定の保存後は端末設定Cookieを更新し、共通レイアウトでlocalStorageへ同期してから店舗設定 `/Management` へ遷移します。
 
 ## 非画面endpoint
 

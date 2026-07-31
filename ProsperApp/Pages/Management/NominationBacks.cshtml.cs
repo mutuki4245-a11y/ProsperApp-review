@@ -8,17 +8,21 @@ namespace ProsperApp.Pages;
 public class ManagementNominationBacksModel(
     IFeatureGate featureGate,
     INominationBackAdminRepository nominationBackAdminRepository,
-    IStoreClock storeClock) : PageModel
+    IStoreClock storeClock,
+    IAdminModeService adminModeService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly INominationBackAdminRepository _nominationBackAdminRepository = nominationBackAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
     public List<NominationBackMasterInputModel> Settings { get; set; } = [];
 
     public string? SuccessMessage { get; set; }
     public PageLoadStatus? LoadStatus { get; private set; }
+
+    public bool IsAdminMode => _adminModeService.IsEnabled;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -36,6 +40,13 @@ public class ManagementNominationBacksModel(
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
+        }
+
+        if (!IsAdminMode)
+        {
+            ModelState.AddModelError(string.Empty, "変更するには管理者設定で管理者モードを有効にしてください。");
+            await LoadSettingsAsync(cancellationToken);
+            return Page();
         }
 
         if (Settings.Count == 0)

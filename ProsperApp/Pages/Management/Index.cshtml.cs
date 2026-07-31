@@ -8,12 +8,14 @@ namespace ProsperApp.Pages;
 
 public class ManagementIndexModel(
     IFeatureGate featureGate,
-    ILocalSettingsProvider localSettingsProvider) : PageModel
+    ILocalSettingsProvider localSettingsProvider,
+    IAdminModeService adminModeService) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
     [Display(Name = "使用する画面")]
@@ -22,6 +24,8 @@ public class ManagementIndexModel(
     [BindProperty]
     [Display(Name = "配色")]
     public string ThemeMode { get; set; } = LocalSettings.ThemeModeQuietNavy;
+
+    public bool IsAdminMode => _adminModeService.IsEnabled;
 
     public IActionResult OnGet()
     {

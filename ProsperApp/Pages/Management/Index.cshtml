@@ -11,6 +11,11 @@
         <p>店舗運用に使うマスタ情報と、この端末で使用する画面・配色を設定します。</p>
     </div>
 
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
     <section class="settings-card">
         <h2>画面設定</h2>
         <p class="text-muted mb-3">この端末で使用する画面と配色を選択します。</p>
@@ -61,8 +66,28 @@
 
     <section class="settings-card">
         <h2>マスタ情報</h2>
-        <p class="text-muted mb-3">キャスト、商品、バック、時間料金を必要なタイミングで更新します。</p>
+        <p class="text-muted mb-3">卓番、キャスト、商品、バック、時間料金を必要なタイミングで更新します。</p>
+        @if (Model.IsAdminMode)
+        {
+            <div class="alert alert-success py-2">管理者モードが有効です。マスタを追加・編集・削除できます。</div>
+        }
+        else
+        {
+            <div class="alert alert-warning py-2">
+                現在は参照モードです。変更する場合は
+                <a asp-page="/Settings/Index">管理者設定</a>
+                で管理者モードを有効にしてください。
+            </div>
+        }
         <div class="closing-list">
+            <a class="closing-panel is-ready" asp-page="/Management/Tables">
+                <span class="closing-panel__body">
+                    <strong>卓番情報</strong>
+                    <small>卓番の追加・編集・削除を行います。</small>
+                </span>
+                <span class="closing-panel__badge is-ready">任意</span>
+                <span class="closing-panel__action">開く</span>
+            </a>
             <a class="closing-panel is-ready" asp-page="/Management/Casts">
                 <span class="closing-panel__body">
                     <strong>キャスト情報</strong>

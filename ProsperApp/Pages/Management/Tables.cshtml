@@ -1,0 +1,143 @@
+@page
+@model ManagementTablesModel
+@{
+    ViewData["Title"] = "卓番情報";
+    var tableRows = Model.Tables
+        .OrderBy(table => table.TableCategoryNo)
+        .ThenBy(table => table.SortOrder)
+        .ThenBy(table => table.TableCode)
+        .ToList();
+}
+
+<section class="opening-page">
+    <div class="page-section-heading">
+        <h1>卓番情報</h1>
+        <p>伝票作成で選択する卓番と表示順を管理します。</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    @if (!Model.IsAdminMode)
+    {
+        <div class="alert alert-warning">
+            現在は参照モードです。変更する場合は
+            <a asp-page="/Settings/Index">管理者設定</a>
+            で管理者モードを有効にしてください。
+        </div>
+    }
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+    @if (Model.LoadStatus is { Succeeded: false } loadStatus)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>@loadStatus.FailureTitle</strong>
+            <div>@loadStatus.ErrorMessage</div>
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Management/Tables">再試行</a>
+        </div>
+    }
+    else if (Model.LoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
+    }
+
+    <fieldset class="border-0 p-0 m-0" @(!Model.IsAdminMode || Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
+        <div class="item-admin">
+            <section class="slip-create__panel">
+                <div class="slip-create__panel-title">
+                    <h2>卓番を追加</h2>
+                </div>
+                <form method="post" asp-page-handler="Save" class="item-admin__form item-admin__form--category">
+                    <input type="hidden" asp-for="Input.TableId" />
+                    <div>
+                        <label asp-for="Input.TableCode" class="form-label"></label>
+                        <input asp-for="Input.TableCode" class="form-control" placeholder="例: A1" />
+                        <span asp-validation-for="Input.TableCode" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="Input.TableName" class="form-label"></label>
+                        <input asp-for="Input.TableName" class="form-control" placeholder="例: VIP席" />
+                        <span asp-validation-for="Input.TableName" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="Input.TableCategoryNo" class="form-label"></label>
+                        <input asp-for="Input.TableCategoryNo" class="form-control" type="number" min="0" max="9" step="1" />
+                        <span asp-validation-for="Input.TableCategoryNo" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="Input.SortOrder" class="form-label"></label>
+                        <input asp-for="Input.SortOrder" class="form-control" type="number" min="0" max="9999" step="1" />
+                        <span asp-validation-for="Input.SortOrder" class="text-danger"></span>
+                    </div>
+                    <label class="form-check item-admin__check">
+                        <input asp-for="Input.IsActive" class="form-check-input" type="checkbox" value="true" />
+                        <span class="form-check-label">有効</span>
+                    </label>
+                    <button class="btn btn-primary" type="submit">追加</button>
+                </form>
+                <p class="form-text mb-0">区分は0～9で、伝票作成画面の卓番グループ分けに使います。</p>
+            </section>
+
+            <section class="slip-create__panel">
+                <div class="slip-create__panel-title">
+                    <h2>登録済み卓番</h2>
+                    <span class="item-admin__count">@tableRows.Count 件</span>
+                </div>
+
+                @if (tableRows.Count == 0)
+                {
+                    <p class="text-muted mb-0">卓番が未登録です。</p>
+                }
+                else
+                {
+                    <div class="item-admin__table">
+                        @foreach (var table in tableRows)
+                        {
+                            <form method="post" asp-page-handler="Save" class="item-admin__row item-admin__row--category">
+                                <input type="hidden" name="Input.TableId" value="@table.TableId" />
+                                <div class="item-admin__field">
+                                    <label>卓番コード</label>
+                                    <input class="form-control" name="Input.TableCode" value="@table.TableCode" maxlength="40" />
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>表示名</label>
+                                    <input class="form-control" name="Input.TableName" value="@table.TableName" maxlength="100" />
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>区分</label>
+                                    <input class="form-control" name="Input.TableCategoryNo" value="@table.TableCategoryNo" type="number" min="0" max="9" step="1" />
+                                </div>
+                                <div class="item-admin__field">
+                                    <label>表示順</label>
+                                    <input class="form-control" name="Input.SortOrder" value="@table.SortOrder" type="number" min="0" max="9999" step="1" />
+                                </div>
+                                <label class="form-check item-admin__check">
+                                    <input class="form-check-input" name="Input.IsActive" type="checkbox" value="true" checked="@table.IsActive" />
+                                    <input type="hidden" name="Input.IsActive" value="false" />
+                                    <span class="form-check-label">有効</span>
+                                </label>
+                                <button class="btn btn-outline-primary" type="submit">保存</button>
+                                <button
+                                    class="btn btn-outline-danger"
+                                    type="submit"
+                                    formaction="?handler=Delete"
+                                    name="DeleteTableId"
+                                    value="@table.TableId"
+                                    onclick="return confirm('この卓番を削除しますか？既存伝票は保存済みの表示を使用します。');">
+                                    削除
+                                </button>
+                            </form>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    </fieldset>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
