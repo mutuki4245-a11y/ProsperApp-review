@@ -46,177 +46,181 @@
             <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Closing/Receipts" asp-route-index="@Model.Index">再試行</a>
         </div>
     }
-    else if (Model.PendingReceiptsLoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
-    {
-        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
-    }
-    else if (Model.CurrentReceipt is null)
-    {
-        <div class="alert alert-secondary">未入力の証憑はありません。</div>
-    }
     else
     {
-        <div class="tablet-entry__workspace">
-            <section class="tablet-entry__preview" aria-label="証憑プレビュー">
-                <div class="preview-toolbar">
-                    <span>@Model.CurrentReceipt.FileName</span>
+        @if (Model.PendingReceiptsLoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
+        {
+            <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
+        }
+
+        @if (Model.CurrentReceipt is null)
+        {
+            <div class="alert alert-secondary">未入力の証憑はありません。</div>
+        }
+        else
+        {
+            <div class="tablet-entry__workspace">
+                <section class="tablet-entry__preview" aria-label="証憑プレビュー">
+                    <div class="preview-toolbar">
+                        <span>@Model.CurrentReceipt.FileName</span>
+                        @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
+                        {
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="@Model.CurrentReceipt.PreviewUrl"
+                               target="_blank"
+                               rel="noopener noreferrer">別タブで開く</a>
+                        }
+                    </div>
+
                     @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
                     {
-                        <a class="btn btn-sm btn-outline-secondary"
-                           href="@Model.CurrentReceipt.PreviewUrl"
-                           target="_blank"
-                           rel="noopener noreferrer">別タブで開く</a>
+                        <iframe id="receiptPreview"
+                                src="@(Model.CurrentReceipt.PreviewUrl)#toolbar=0&navpanes=0&view=Fit&zoom=page-fit"
+                                title="証憑プレビュー"></iframe>
                     }
-                </div>
+                    else
+                    {
+                        <div class="preview-empty">プレビューできるファイルがありません。</div>
+                    }
+                </section>
 
-                @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
-                {
-                    <iframe id="receiptPreview"
-                            src="@(Model.CurrentReceipt.PreviewUrl)#toolbar=0&navpanes=0&view=Fit&zoom=page-fit"
-                            title="証憑プレビュー"></iframe>
-                }
-                else
-                {
-                    <div class="preview-empty">プレビューできるファイルがありません。</div>
-                }
-            </section>
+                <section class="tablet-entry__form" aria-label="簡易入力フォーム">
+                    <form method="post" asp-page-handler="Next">
+                        <input type="hidden" asp-for="Index" />
+                        <input type="hidden" asp-for="Input.DocumentId" value="@Model.CurrentReceipt.Id" />
+                        <input type="hidden" asp-for="Input.DriveFileId" value="@Model.CurrentReceipt.DriveFileId" />
+                        <input type="hidden" asp-for="Input.BusinessDayId" />
 
-            <section class="tablet-entry__form" aria-label="簡易入力フォーム">
-                <form method="post" asp-page-handler="Next">
-                    <input type="hidden" asp-for="Index" />
-                    <input type="hidden" asp-for="Input.DocumentId" value="@Model.CurrentReceipt.Id" />
-                    <input type="hidden" asp-for="Input.DriveFileId" value="@Model.CurrentReceipt.DriveFileId" />
-                    <input type="hidden" asp-for="Input.BusinessDayId" />
+                        <div class="mb-3">
+                            <label asp-for="Input.PaymentDate" class="form-label"></label>
+                            <input asp-for="Input.PaymentDate"
+                                   type="date"
+                                   min="@Model.PaymentDateMin.ToString("yyyy-MM-dd")"
+                                   max="@Model.PaymentDateMax.ToString("yyyy-MM-dd")"
+                                   class="form-control form-control-lg" />
+                            <span asp-validation-for="Input.PaymentDate" class="text-danger"></span>
+                        </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.PaymentDate" class="form-label"></label>
-                        <input asp-for="Input.PaymentDate"
-                               type="date"
-                               min="@Model.PaymentDateMin.ToString("yyyy-MM-dd")"
-                               max="@Model.PaymentDateMax.ToString("yyyy-MM-dd")"
-                               class="form-control form-control-lg" />
-                        <span asp-validation-for="Input.PaymentDate" class="text-danger"></span>
-                    </div>
+                        <div class="mb-3">
+                            <label asp-for="Input.Amount" class="form-label"></label>
+                            <input asp-for="Input.Amount"
+                                   class="form-control form-control-lg"
+                                   min="1"
+                                   max="9999999"
+                                   step="1"
+                                   inputmode="numeric"
+                                   autocomplete="off" />
+                            <span asp-validation-for="Input.Amount" class="text-danger"></span>
+                        </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Input.Amount" class="form-label"></label>
-                        <input asp-for="Input.Amount"
-                               class="form-control form-control-lg"
-                               min="1"
-                               max="9999999"
-                               step="1"
-                               inputmode="numeric"
-                               autocomplete="off" />
-                        <span asp-validation-for="Input.Amount" class="text-danger"></span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Input.AccountSubject" class="form-label"></label>
-                        <input type="hidden" asp-for="Input.AccountSubject" id="accountSubjectInput" />
-                        <div class="account-subject-picker">
-                            <div class="account-subject-selected" id="accountSubjectSelected">
-                                @(string.IsNullOrWhiteSpace(Model.Input.AccountSubject) ? "科目を選択してください" : Model.Input.AccountSubject)
+                        <div class="mb-3">
+                            <label asp-for="Input.AccountSubject" class="form-label"></label>
+                            <input type="hidden" asp-for="Input.AccountSubject" id="accountSubjectInput" />
+                            <div class="account-subject-picker">
+                                <div class="account-subject-selected" id="accountSubjectSelected">
+                                    @(string.IsNullOrWhiteSpace(Model.Input.AccountSubject) ? "科目を選択してください" : Model.Input.AccountSubject)
+                                </div>
+                                <button type="button"
+                                        class="btn btn-outline-primary btn-lg"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#accountSubjectModal">
+                                    科目を選ぶ
+                                </button>
                             </div>
-                            <button type="button"
-                                    class="btn btn-outline-primary btn-lg"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#accountSubjectModal">
-                                科目を選ぶ
+                            <span asp-validation-for="Input.AccountSubject" class="text-danger"></span>
+                        </div>
+
+                        <div class="modal fade" id="accountSubjectModal" tabindex="-1" aria-labelledby="accountSubjectModalLabel" aria-hidden="true">
+                            <div class="modal-dialog modal-fullscreen-md-down modal-xl modal-dialog-scrollable">
+                                <div class="modal-content account-modal">
+                                    <div class="modal-header">
+                                        <div>
+                                            <h2 class="modal-title" id="accountSubjectModalLabel">科目を選択</h2>
+                                            <p class="account-modal__hint">一覧から該当する項目を選択してください。</p>
+                                        </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="account-sheet account-sheet--modal" role="group" aria-label="科目選択">
+                                @foreach (var group in Model.AccountSubjectGroups)
+                                {
+                                    <section class="account-sheet__group">
+                                        <h2>@group.Name</h2>
+                                        <div class="account-sheet__items">
+                                            @foreach (var item in group.Items)
+                                            {
+                                                var value = $"{group.Name}: {item}";
+                                                var selected = Model.Input.AccountSubject == value;
+                                                <button type="button"
+                                                        class="account-sheet__item @(selected ? "is-selected" : "")"
+                                                        data-account-value="@value">
+                                                    @item
+                                                </button>
+                                            }
+                                        </div>
+                                    </section>
+                                }
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @{
+                            var isCastAdvance = string.Equals(
+                                Model.Input.AccountSubject,
+                                "前渡金: キャスト",
+                                StringComparison.Ordinal);
+                        }
+                        <div class="mb-3 @(isCastAdvance ? string.Empty : "d-none")" data-cast-advance-field>
+                            <label asp-for="Input.AdvanceCastId" class="form-label"></label>
+                            <select asp-for="Input.AdvanceCastId"
+                                    class="form-select form-select-lg"
+                                    data-cast-advance-select>
+                                <option value="">当日出勤のキャストを選択</option>
+                                @foreach (var cast in Model.AdvanceCastOptions)
+                                {
+                                    <option value="@cast.CastId">@cast.SearchDisplayName</option>
+                                }
+                            </select>
+                            @if (Model.AdvanceCastOptions.Count == 0)
+                            {
+                                <div class="form-text text-warning">選択できる出勤キャストがいません。先に勤怠を登録してください。</div>
+                            }
+                            <span asp-validation-for="Input.AdvanceCastId" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="Input.Description" class="form-label"></label>
+                            <textarea asp-for="Input.Description"
+                                      class="form-control form-control-lg"
+                                      rows="3"></textarea>
+                            <span asp-validation-for="Input.Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="tablet-entry__actions">
+                            <button type="submit" class="btn btn-primary btn-lg">保存して次へ</button>
+                            <button type="submit"
+                                    class="btn btn-outline-secondary btn-lg"
+                                    formmethod="post"
+                                    asp-page-handler="Skip"
+                                    formnovalidate>スキップ</button>
+                            <button type="submit"
+                                    class="btn btn-outline-danger btn-lg tablet-entry__delete"
+                                    formmethod="post"
+                                    asp-page-handler="DeleteScanMistake"
+                                    formnovalidate
+                                    onclick="return confirm('スキャンミスとしてDB上で対象外にします。実行しますか？');">
+                                スキャンミスとして対象外
                             </button>
                         </div>
-                        <span asp-validation-for="Input.AccountSubject" class="text-danger"></span>
-                    </div>
-
-                    <div class="modal fade" id="accountSubjectModal" tabindex="-1" aria-labelledby="accountSubjectModalLabel" aria-hidden="true">
-                        <div class="modal-dialog modal-fullscreen-md-down modal-xl modal-dialog-scrollable">
-                            <div class="modal-content account-modal">
-                                <div class="modal-header">
-                                    <div>
-                                        <h2 class="modal-title" id="accountSubjectModalLabel">科目を選択</h2>
-                                        <p class="account-modal__hint">一覧から該当する項目を選択してください。</p>
-                                    </div>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="account-sheet account-sheet--modal" role="group" aria-label="科目選択">
-                            @foreach (var group in Model.AccountSubjectGroups)
-                            {
-                                <section class="account-sheet__group">
-                                    <h2>@group.Name</h2>
-                                    <div class="account-sheet__items">
-                                        @foreach (var item in group.Items)
-                                        {
-                                            var value = $"{group.Name}: {item}";
-                                            var selected = Model.Input.AccountSubject == value;
-                                            <button type="button"
-                                                    class="account-sheet__item @(selected ? "is-selected" : "")"
-                                                    data-account-value="@value">
-                                                @item
-                                            </button>
-                                        }
-                                    </div>
-                                </section>
-                            }
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    @{
-                        var isCastAdvance = string.Equals(
-                            Model.Input.AccountSubject,
-                            "前渡金: キャスト",
-                            StringComparison.Ordinal);
-                    }
-                    <div class="mb-3 @(isCastAdvance ? string.Empty : "d-none")" data-cast-advance-field>
-                        <label asp-for="Input.AdvanceCastId" class="form-label"></label>
-                        <select asp-for="Input.AdvanceCastId"
-                                class="form-select form-select-lg"
-                                data-cast-advance-select>
-                            <option value="">当日出勤のキャストを選択</option>
-                            @foreach (var cast in Model.AdvanceCastOptions)
-                            {
-                                <option value="@cast.CastId">@cast.SearchDisplayName</option>
-                            }
-                        </select>
-                        @if (Model.AdvanceCastOptions.Count == 0)
-                        {
-                            <div class="form-text text-warning">選択できる出勤キャストがいません。先に勤怠を登録してください。</div>
-                        }
-                        <span asp-validation-for="Input.AdvanceCastId" class="text-danger"></span>
-                    </div>
-
-                    <div class="mb-4">
-                        <label asp-for="Input.Description" class="form-label"></label>
-                        <textarea asp-for="Input.Description"
-                                  class="form-control form-control-lg"
-                                  rows="3"></textarea>
-                        <span asp-validation-for="Input.Description" class="text-danger"></span>
-                    </div>
-
-                    <div class="tablet-entry__actions">
-                        <button type="submit" class="btn btn-primary btn-lg">保存して次へ</button>
-                        <button type="submit"
-                                class="btn btn-outline-secondary btn-lg"
-                                formmethod="post"
-                                asp-page-handler="Skip"
-                                formnovalidate>スキップ</button>
-                        <button type="submit"
-                                class="btn btn-outline-danger btn-lg tablet-entry__delete"
-                                formmethod="post"
-                                asp-page-handler="DeleteScanMistake"
-                                formnovalidate
-                                onclick="return confirm('スキャンミスとしてDB上で対象外にします。実行しますか？');">
-                            スキャンミスとして対象外
-                        </button>
-                    </div>
-                </form>
-            </section>
-        </div>
+                    </form>
+                </section>
+            </div>
+        }
     }
 </div>
 
