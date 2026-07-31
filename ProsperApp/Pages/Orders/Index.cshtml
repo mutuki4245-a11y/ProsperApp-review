@@ -15,10 +15,16 @@
 <section class="order-entry terminal-page terminal-page--orders">
     <div class="order-entry__header">
         <h1>オーダー入力</h1>
-        @if (FeatureGate.IsEnabled(FeatureNames.Settings))
-        {
-            <a class="btn btn-outline-secondary btn-sm" asp-page="/Settings/Index">管理者設定</a>
-        }
+        <div class="d-flex gap-2">
+            @if (FeatureGate.IsEnabled(FeatureNames.Opening))
+            {
+                <a class="btn btn-outline-secondary btn-sm" asp-page="/Management/Index">店舗設定</a>
+            }
+            @if (FeatureGate.IsEnabled(FeatureNames.Settings))
+            {
+                <a class="btn btn-outline-secondary btn-sm" asp-page="/Settings/Index">管理者設定</a>
+            }
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -199,7 +205,7 @@
             initialSlipId = Model.SelectedSlipId,
             departmentId = Model.StoreContext?.DepartmentId,
             businessDayId = Model.CurrentBusinessDay?.BusinessDayId,
-            discardStoredQueue = !string.IsNullOrWhiteSpace(Model.SuccessMessage),
+            discardStoredQueue = Model.ShouldDiscardStoredQueue,
             slipOptionsUrl = Url.Page("/Orders/Index", "SlipOptions"),
             refreshIntervalMs = 10000
         }))

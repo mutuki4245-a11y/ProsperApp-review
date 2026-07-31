@@ -11,6 +11,9 @@ const localSettingsPath = new URL("../Features/Settings/LocalSettings.cs", impor
 const localSettingsProviderPath = new URL("../Services/LocalSettingsProvider.cs", import.meta.url);
 const settingsPagePath = new URL("../Pages/Settings/Index.cshtml", import.meta.url);
 const settingsPageModelPath = new URL("../Pages/Settings/Index.cshtml.cs", import.meta.url);
+const storeSettingsPagePath = new URL("../Pages/Management/Index.cshtml", import.meta.url);
+const storeSettingsPageModelPath = new URL("../Pages/Management/Index.cshtml.cs", import.meta.url);
+const ordersPagePath = new URL("../Pages/Orders/Index.cshtml", import.meta.url);
 
 test("the default dark theme is enabled at the document and PWA level", async () => {
   const [layout, manifestSource, icon] = await Promise.all([
@@ -103,12 +106,16 @@ test("the theme covers shared controls and every operational surface", async () 
   );
 });
 
-test("administrator settings persist the selected theme mode", async () => {
-  const [localSettings, provider, pageModel, page] = await Promise.all([
+test("store settings persist the selected screen and theme modes", async () => {
+  const [localSettings, provider, adminPageModel, adminPage, storePageModel, storePage, layout, ordersPage] = await Promise.all([
     readFile(localSettingsPath, "utf8"),
     readFile(localSettingsProviderPath, "utf8"),
     readFile(settingsPageModelPath, "utf8"),
     readFile(settingsPagePath, "utf8"),
+    readFile(storeSettingsPageModelPath, "utf8"),
+    readFile(storeSettingsPagePath, "utf8"),
+    readFile(layoutPath, "utf8"),
+    readFile(ordersPagePath, "utf8"),
   ]);
 
   assert.match(localSettings, /public const string ThemeModeQuietNavy = "quiet-navy";/);
@@ -116,10 +123,27 @@ test("administrator settings persist the selected theme mode", async () => {
   assert.match(localSettings, /public string ThemeMode \{ get; set; \} = ThemeModeQuietNavy;/);
   assert.match(provider, /settings\.ThemeMode is LocalSettings\.ThemeModeQuietNavy or LocalSettings\.ThemeModeWhite/);
   assert.match(provider, /ThemeMode = themeMode/);
-  assert.match(pageModel, /ThemeMode = Input\.ThemeMode/);
-  assert.match(pageModel, /ThemeMode = settings\.ThemeMode/);
-  assert.match(pageModel, /Input\.ThemeMode is not LocalSettings\.ThemeModeQuietNavy and not LocalSettings\.ThemeModeWhite/);
-  assert.match(page, /asp-for="Input\.ThemeMode"/);
-  assert.match(page, /value="@LocalSettings\.ThemeModeQuietNavy"/);
-  assert.match(page, /value="@LocalSettings\.ThemeModeWhite"/);
+  assert.match(storePageModel, /public IActionResult OnPostSaveDisplaySettings\(\)/);
+  assert.match(storePageModel, /ScreenMode is not "sales-management" and not "order-entry"/);
+  assert.match(storePageModel, /ThemeMode is not LocalSettings\.ThemeModeQuietNavy and not LocalSettings\.ThemeModeWhite/);
+  assert.match(storePageModel, /StoreName = currentSettings\.StoreName/);
+  assert.match(storePageModel, /StoreDepartmentId = currentSettings\.StoreDepartmentId/);
+  assert.match(storePageModel, /ScreenMode = ScreenMode/);
+  assert.match(storePageModel, /ThemeMode = ThemeMode/);
+  assert.match(storePage, /ViewData\["Title"\] = "店舗設定"/);
+  assert.match(storePage, /asp-for="ScreenMode"/);
+  assert.match(storePage, /value="sales-management"/);
+  assert.match(storePage, /value="order-entry"/);
+  assert.match(storePage, /asp-for="ThemeMode"/);
+  assert.match(storePage, /value="@LocalSettings\.ThemeModeQuietNavy"/);
+  assert.match(storePage, /value="@LocalSettings\.ThemeModeWhite"/);
+  assert.match(layout, /asp-page="\/Management\/Index">店舗設定<\/a>/);
+  assert.match(ordersPage, /asp-page="\/Management\/Index">店舗設定<\/a>/);
+  assert.match(adminPageModel, /ScreenMode = currentSettings\.ScreenMode/);
+  assert.match(adminPageModel, /ThemeMode = currentSettings\.ThemeMode/);
+  assert.doesNotMatch(adminPageModel, /Input\.ScreenMode/);
+  assert.doesNotMatch(adminPageModel, /Input\.ThemeMode/);
+  assert.doesNotMatch(adminPage, /asp-for="Input\.ScreenMode"/);
+  assert.doesNotMatch(adminPage, /asp-for="Input\.ThemeMode"/);
+  assert.match(adminPage, /<h2>利用店舗<\/h2>/);
 });

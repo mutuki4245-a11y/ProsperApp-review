@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [markup, source] = await Promise.all([
+const [markup, pageModel, source] = await Promise.all([
     readFile(new URL('../Pages/Orders/Index.cshtml', import.meta.url), 'utf8'),
+    readFile(new URL('../Pages/Orders/Index.cshtml.cs', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/order-entry.js', import.meta.url), 'utf8')
 ]);
 
@@ -11,7 +12,10 @@ assert.match(markup, /id="refreshSlipOptionsButton"[\s\S]*?>再取得<\/button>/
 assert.match(markup, /id="orderItemSelectionWarning"[\s\S]*?先に卓番を選択してください/, '卓未選択時の理由を商品パネルに表示すること');
 assert.match(markup, /departmentId = Model\.StoreContext\?\.DepartmentId/, '注文端末下書きキーに店舗IDを含めること');
 assert.match(markup, /businessDayId = Model\.CurrentBusinessDay\?\.BusinessDayId/, '注文端末下書きキーに営業日IDを含めること');
-assert.match(markup, /discardStoredQueue = !string\.IsNullOrWhiteSpace\(Model\.SuccessMessage\)/, '注文登録成功後は端末内下書きを破棄すること');
+assert.match(markup, /discardStoredQueue = Model\.ShouldDiscardStoredQueue/, '注文登録成功時だけ端末内下書きを破棄すること');
+assert.match(pageModel, /public bool ShouldDiscardStoredQueue \{ get; private set; \}/, '通知表示と端末内下書きの破棄条件を分離すること');
+assert.match(pageModel, /SuccessMessage = successMessage;\s*ShouldDiscardStoredQueue = true;/, '注文登録成功時に端末内下書きの破棄を指示すること');
+assert.match(pageModel, /SuccessMessage = TempData\["SuccessMessage"\] as string;\s*return Page\(\);/, '画面設定の保存通知では端末内下書きを維持すること');
 
 assert.match(source, /prosper:order-entry-draft:v1:\$\{pageData\.departmentId\}:\$\{pageData\.businessDayId\}/, '注文端末下書きは店舗・営業日単位のlocalStorageキーを使うこと');
 assert.match(source, /const restoreStoredDraft = \(\) => \{[\s\S]*hydrateQueueLines\(draft\.lines\)/, '注文端末はlocalStorage下書きをキューへ復元すること');

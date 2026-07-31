@@ -1,17 +1,96 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class ManagementIndexModel(IFeatureGate featureGate) : PageModel
+public class ManagementIndexModel(
+    IFeatureGate featureGate,
+    ILocalSettingsProvider localSettingsProvider) : PageModel
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IFeatureGate _featureGate = featureGate;
+    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+
+    [BindProperty]
+    [Display(Name = "使用する画面")]
+    public string ScreenMode { get; set; } = "sales-management";
+
+    [BindProperty]
+    [Display(Name = "配色")]
+    public string ThemeMode { get; set; } = LocalSettings.ThemeModeQuietNavy;
 
     public IActionResult OnGet()
     {
-        return _featureGate.IsEnabled(FeatureNames.Opening)
-            ? Page()
-            : NotFound();
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        var currentSettings = _localSettingsProvider.GetCurrent();
+        ScreenMode = currentSettings.ScreenMode;
+        ThemeMode = currentSettings.ThemeMode;
+        return Page();
+    }
+
+    public IActionResult OnPostSaveDisplaySettings()
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        ScreenMode = ScreenMode?.Trim() ?? string.Empty;
+        ThemeMode = ThemeMode?.Trim() ?? string.Empty;
+        var currentSettings = _localSettingsProvider.GetCurrent();
+        if (ScreenMode is not "sales-management" and not "order-entry")
+        {
+            ScreenMode = currentSettings.ScreenMode;
+            ModelState.AddModelError(nameof(ScreenMode), "使用する画面を選択してください。");
+        }
+
+        if (ThemeMode is not LocalSettings.ThemeModeQuietNavy and not LocalSettings.ThemeModeWhite)
+        {
+            ThemeMode = currentSettings.ThemeMode;
+            ModelState.AddModelError(nameof(ThemeMode), "配色を選択してください。");
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return Page();
+        }
+
+        WriteSettingsCookie(new LocalSettings
+        {
+            StoreName = currentSettings.StoreName,
+            StoreDepartmentId = currentSettings.StoreDepartmentId,
+            ScreenMode = ScreenMode,
+            ThemeMode = ThemeMode
+        });
+
+        TempData["SuccessMessage"] = "画面設定をこの端末に保存しました。";
+        return ScreenMode == "order-entry"
+            ? RedirectToPage("/Orders/Index")
+            : RedirectToPage("/Index");
+    }
+
+    private void WriteSettingsCookie(LocalSettings settings)
+    {
+        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        Response.Cookies.Append(
+            LocalSettings.CookieName,
+            Uri.EscapeDataString(json),
+            new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1),
+                HttpOnly = false,
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = Request.IsHttps,
+                Path = "/"
+            });
     }
 }

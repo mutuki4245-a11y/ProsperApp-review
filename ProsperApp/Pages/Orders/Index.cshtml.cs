@@ -41,6 +41,8 @@ public class IndexModel(
 
     public string? SuccessMessage { get; set; }
 
+    public bool ShouldDiscardStoredQueue { get; private set; }
+
     public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
 
     public DateTimeOffset? LastUpdatedAt { get; private set; }
@@ -54,6 +56,7 @@ public class IndexModel(
 
         SelectedSlipId = slipId;
         await LoadOptionsAsync(cancellationToken);
+        SuccessMessage = TempData["SuccessMessage"] as string;
         return Page();
     }
 
@@ -123,6 +126,7 @@ public class IndexModel(
         QueueLines = [];
         OrderQueueSummaryJson = string.Empty;
         SuccessMessage = successMessage;
+        ShouldDiscardStoredQueue = true;
         return Page();
     }
 

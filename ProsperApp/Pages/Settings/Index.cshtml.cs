@@ -116,12 +116,13 @@ public class SettingsModel(
             return Page();
         }
 
+        var currentSettings = _localSettingsProvider.GetCurrent();
         var settings = new LocalSettings
         {
             StoreName = selectedDepartment.DisplayName,
             StoreDepartmentId = selectedDepartment.DepartmentId,
-            ScreenMode = Input.ScreenMode,
-            ThemeMode = Input.ThemeMode
+            ScreenMode = currentSettings.ScreenMode,
+            ThemeMode = currentSettings.ThemeMode
         };
 
         WriteSettingsCookie(settings);
@@ -244,9 +245,7 @@ public class SettingsModel(
         return new SettingsInputModel
         {
             StoreName = settings.StoreName,
-            StoreDepartmentId = settings.StoreDepartmentId,
-            ScreenMode = settings.ScreenMode,
-            ThemeMode = settings.ThemeMode
+            StoreDepartmentId = settings.StoreDepartmentId
         };
     }
 
@@ -310,9 +309,6 @@ public class SettingsModel(
 
     private DepartmentOption? ValidateSettings()
     {
-        Input.ScreenMode = Input.ScreenMode?.Trim() ?? string.Empty;
-        Input.ThemeMode = Input.ThemeMode?.Trim() ?? string.Empty;
-
         if (Departments.Count == 0)
         {
             ModelState.AddModelError("Input.StoreDepartmentId", StoreSettingsDiagnosticMessage ?? "店舗マスタを取得できません。");
@@ -323,16 +319,6 @@ public class SettingsModel(
         if (selectedDepartment is null)
         {
             ModelState.AddModelError("Input.StoreDepartmentId", "店舗マスタから店舗を選択してください。");
-        }
-
-        if (Input.ScreenMode is not "sales-management" and not "order-entry")
-        {
-            ModelState.AddModelError("Input.ScreenMode", "機能設定を選択してください。");
-        }
-
-        if (Input.ThemeMode is not LocalSettings.ThemeModeQuietNavy and not LocalSettings.ThemeModeWhite)
-        {
-            ModelState.AddModelError("Input.ThemeMode", "配色を選択してください。");
         }
 
         return selectedDepartment;
@@ -350,11 +336,5 @@ public class SettingsInputModel
 
     [Display(Name = "利用店舗")]
     public long StoreDepartmentId { get; set; }
-
-    [Display(Name = "機能設定")]
-    public string ScreenMode { get; set; } = "sales-management";
-
-    [Display(Name = "配色")]
-    public string ThemeMode { get; set; } = LocalSettings.ThemeModeQuietNavy;
 
 }

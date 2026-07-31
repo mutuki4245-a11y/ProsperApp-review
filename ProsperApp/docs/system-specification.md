@@ -75,7 +75,7 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 
 | 機能名 | 主な対象 |
 | --- | --- |
-| `Opening` | 営業中、マスタ設定導線 |
+| `Opening` | 営業中、店舗設定導線 |
 | `Slips` | 伝票作成 |
 | `Orders` | 注文端末 |
 | `Checkout` | 会計、決済、領収書印字 |
@@ -100,12 +100,12 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 | `/Closing/Receipts` | `ReceiptsModel` | 領収書簡易入力 |
 | `/DrivePreview/{driveFileId}` | `DrivePreviewModel` | Drive 証憑プレビュー |
 | `/Closing/CastSalesAdjustment` | `CastSalesAdjustmentModel` | キャスト売上額調整 |
-| `/Management/Index` | `Management.IndexModel` | マスタ設定メニュー |
+| `/Management/Index` | `Management.IndexModel` | 店舗設定メニュー、端末の画面モード・配色設定 |
 | `/Management/Casts` | `CastsModel` | キャスト管理 |
 | `/Management/Items` | `ItemsModel` | 商品カテゴリ・商品管理 |
 | `/Management/NominationBacks` | `NominationBacksModel` | 指名バック管理 |
 | `/Management/Pricing` | `PricingModel` | 時間料金管理 |
-| `/Settings/Index` | `SettingsModel` | 端末設定、キャッシュ、デバッグ削除 |
+| `/Settings/Index` | `SettingsModel` | 利用店舗設定、キャッシュ、デバッグ削除 |
 
 `/Attendance` は `/Closing/Attendance` にもマップされる。
 
