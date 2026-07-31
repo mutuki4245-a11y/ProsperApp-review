@@ -7,6 +7,146 @@
     const pendingStorageKey = 'prosper:receipt-reprints:v1';
     const successStorageKey = 'prosper:receipt-print-success:v1';
     const compact = (value, fallback = '') => String(value ?? fallback).trim();
+    const ESC = 0x1b;
+    const GS = 0x1d;
+
+    const toPositiveInteger = (value, fallback) => {
+        const number = Number(value);
+        return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+    };
+    const toInteger = (value, fallback) => {
+        const number = Number(value);
+        return Number.isFinite(number) ? Math.floor(number) : fallback;
+    };
+
+    const printableWidthDots = () => {
+        const configured = toPositiveInteger(config.printableWidthDots, 0);
+        if (configured > 0) return configured;
+        return toPositiveInteger(config.paperWidthMillimeters, 80) <= 58 ? 432 : 576;
+    };
+
+    const logoMaxWidthDots = () => Math.min(
+        printableWidthDots(),
+        toPositiveInteger(config.logoMaxWidthDots, Math.min(384, printableWidthDots())));
+    const logoMaxHeightDots = () => toPositiveInteger(config.logoMaxHeightDots, 160);
+    const logoThreshold = () => Math.min(255, Math.max(0, toInteger(config.logoThreshold, 180)));
+    const commandBlob = (bytes) => new Blob(
+        [bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)],
+        { type: 'application/octet-binary' });
+    const concatBytes = (...chunks) => {
+        const arrays = chunks.map((chunk) => chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+        const output = new Uint8Array(arrays.reduce((total, chunk) => total + chunk.length, 0));
+        let offset = 0;
+        arrays.forEach((chunk) => {
+            output.set(chunk, offset);
+            offset += chunk.length;
+        });
+        return output;
+    };
+    const alignmentByte = (alignment) => ({
+        center: 1,
+        right: 2
+    }[compact(alignment).toLowerCase()] ?? 0);
+    const characterSizeByte = (width = 1, height = 1) => {
+        const widthMultiplier = Math.min(8, Math.max(1, toPositiveInteger(width, 1)));
+        const heightMultiplier = Math.min(8, Math.max(1, toPositiveInteger(height, 1)));
+        return ((widthMultiplier - 1) << 4) | (heightMultiplier - 1);
+    };
+    const textModeCommand = (style = {}) => new Uint8Array([
+        ESC, 0x61, alignmentByte(style.alignment),
+        GS, 0x21, characterSizeByte(style.width, style.height),
+        ESC, 0x45, style.bold ? 1 : 0
+    ]);
+    const normalizeImageSource = (source) => {
+        const value = compact(source);
+        if (value.startsWith('~/')) {
+            return `${window.location.origin}/${value.slice(2)}`;
+        }
+
+        return value;
+    };
+    const loadImageElement = async (source) => {
+        if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+            throw new Error('ロゴ画像を処理できるブラウザ環境ではありません。');
+        }
+
+        const normalized = normalizeImageSource(source);
+        const response = await fetch(normalized, { cache: 'force-cache' });
+        if (!response.ok) {
+            throw new Error(`ロゴ画像を取得できませんでした。status=${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const image = new Image();
+        const loaded = new Promise((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error('ロゴ画像を読み込めませんでした。'));
+        });
+        image.src = objectUrl;
+        if (typeof image.decode === 'function') {
+            await image.decode().catch(() => loaded);
+        } else {
+            await loaded;
+        }
+
+        return {
+            image,
+            release: () => URL.revokeObjectURL(objectUrl)
+        };
+    };
+    const createRasterBitImageCommand = (bytesPerRow, height, rasterData) => {
+        const xL = bytesPerRow & 0xff;
+        const xH = (bytesPerRow >> 8) & 0xff;
+        const yL = height & 0xff;
+        const yH = (height >> 8) & 0xff;
+        return concatBytes([GS, 0x76, 0x30, 0x00, xL, xH, yL, yH], rasterData);
+    };
+    const rasterizeLogo = async (source) => {
+        const { image, release } = await loadImageElement(source);
+        try {
+            const naturalWidth = image.naturalWidth || image.width;
+            const naturalHeight = image.naturalHeight || image.height;
+            if (!naturalWidth || !naturalHeight) {
+                throw new Error('ロゴ画像のサイズを取得できませんでした。');
+            }
+
+            const scale = Math.min(1, logoMaxWidthDots() / naturalWidth, logoMaxHeightDots() / naturalHeight);
+            const width = Math.max(1, Math.round(naturalWidth * scale));
+            const height = Math.max(1, Math.round(naturalHeight * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            if (!context) {
+                throw new Error('ロゴ画像をラスター化できませんでした。');
+            }
+
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, width, height);
+            context.drawImage(image, 0, 0, width, height);
+            const pixels = context.getImageData(0, 0, width, height).data;
+            const bytesPerRow = Math.ceil(width / 8);
+            const rasterData = new Uint8Array(bytesPerRow * height);
+            const threshold = logoThreshold();
+            for (let y = 0; y < height; y += 1) {
+                for (let x = 0; x < width; x += 1) {
+                    const pixelOffset = (y * width + x) * 4;
+                    const alpha = pixels[pixelOffset + 3];
+                    const luminance = (pixels[pixelOffset] * 0.299) +
+                        (pixels[pixelOffset + 1] * 0.587) +
+                        (pixels[pixelOffset + 2] * 0.114);
+                    if (alpha > 127 && luminance < threshold) {
+                        rasterData[(y * bytesPerRow) + Math.floor(x / 8)] |= 0x80 >> (x % 8);
+                    }
+                }
+            }
+
+            return createRasterBitImageCommand(bytesPerRow, height, rasterData);
+        } finally {
+            release();
+        }
+    };
 
     const setStatus = (message, state) => {
         if (!statusElement) {
@@ -85,6 +225,8 @@
         start: 'SII Web SDK Server接続',
         setCodePage: 'コードページ設定',
         setInternationalCharacter: '国際文字設定',
+        appendBinary: '印字制御コマンド送信',
+        appendLogo: 'ロゴ画像送信',
         appendText: '印字データ送信',
         appendFeed: '紙送り',
         appendCut: 'カット指定',
@@ -113,6 +255,60 @@
 
             console.warn(`SII receipt printer optional step failed: ${label}`, error);
             return null;
+        }
+    };
+
+    const appendBinaryBytes = (manager, bytes, label = 'appendBinary') =>
+        trySdkCall(label, () => manager.appendBinary({ data: commandBlob(bytes) }));
+
+    const appendTextSection = async (manager, section) => {
+        const text = compact(section?.text);
+        if (!text) {
+            return;
+        }
+
+        // RP-F10 is ESC/POS compatible. GS ! selects character width/height magnification.
+        await appendBinaryBytes(manager, textModeCommand(section));
+        await trySdkCall('appendText', () => manager.appendText({ text: section.text }));
+        await appendBinaryBytes(manager, textModeCommand());
+    };
+
+    const appendRasterLogo = async (manager, section) => {
+        const source = compact(section?.source);
+        if (!source) {
+            return;
+        }
+
+        // GS v 0 prints the following 1-bit raster image data.
+        const rasterCommand = await rasterizeLogo(source);
+        await appendBinaryBytes(manager, textModeCommand({ alignment: section.alignment || 'center' }), 'appendLogo');
+        await appendBinaryBytes(manager, rasterCommand, 'appendLogo');
+        await appendBinaryBytes(manager, textModeCommand());
+        await trySdkCall('appendFeed', () => manager.appendFeed({ value: 1 }), false);
+    };
+
+    const appendReceiptSections = async (manager, request) => {
+        if (typeof receiptLayout.buildReceiptPrintPlan === 'function') {
+            const sections = receiptLayout.buildReceiptPrintPlan(request);
+            for (const section of sections) {
+                if (section?.type === 'image') {
+                    await appendRasterLogo(manager, section);
+                } else if (section?.type === 'text') {
+                    await appendTextSection(manager, section);
+                }
+            }
+            return;
+        }
+
+        const parts = typeof receiptLayout.buildReceiptParts === 'function'
+            ? receiptLayout.buildReceiptParts(request)
+            : { beforeTotal: receiptLayout.buildReceiptText(request), total: '', afterTotal: '' };
+        await appendTextSection(manager, { text: parts.beforeTotal });
+        if (parts.total) {
+            await appendTextSection(manager, { text: parts.total, alignment: 'center', width: 2, height: 2, bold: true });
+        }
+        if (parts.afterTotal) {
+            await appendTextSection(manager, { text: parts.afterTotal });
         }
     };
 
@@ -255,16 +451,7 @@
                     false);
             }
 
-            const parts = typeof receiptLayout.buildReceiptParts === 'function'
-                ? receiptLayout.buildReceiptParts(request)
-                : { beforeTotal: receiptLayout.buildReceiptText(request), total: '', afterTotal: '' };
-            await trySdkCall('appendText', () => manager.appendText({ text: parts.beforeTotal }));
-            if (parts.total) {
-                await trySdkCall('appendText', () => manager.appendText({ text: parts.total }));
-            }
-            if (parts.afterTotal) {
-                await trySdkCall('appendText', () => manager.appendText({ text: parts.afterTotal }));
-            }
+            await appendReceiptSections(manager, request);
             await trySdkCall('appendFeed', () => manager.appendFeed({ value: 2 }), false);
             await trySdkCall('appendCut', () => manager.appendCut({ cuttingMethod: 'partial' }), false);
             await trySdkCall('doPrint', () => manager.doPrint({}));

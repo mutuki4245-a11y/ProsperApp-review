@@ -68,7 +68,20 @@ public class IndexModel(
         storeName = StoreContext?.DepartmentName,
         lineWidth = _receiptPrinterOptions.LineWidth is >= 24 and <= 64
             ? _receiptPrinterOptions.LineWidth
-            : 48
+            : 48,
+        logoImageUrl = _receiptPrinterOptions.LogoImageUrl,
+        paperWidthMillimeters = _receiptPrinterOptions.PaperWidthMillimeters is 58 or 80
+            ? _receiptPrinterOptions.PaperWidthMillimeters
+            : 80,
+        logoMaxWidthDots = _receiptPrinterOptions.LogoMaxWidthDots > 0
+            ? _receiptPrinterOptions.LogoMaxWidthDots
+            : 384,
+        logoMaxHeightDots = _receiptPrinterOptions.LogoMaxHeightDots > 0
+            ? _receiptPrinterOptions.LogoMaxHeightDots
+            : 160,
+        logoThreshold = _receiptPrinterOptions.LogoThreshold is >= 0 and <= 255
+            ? _receiptPrinterOptions.LogoThreshold
+            : 180
     };
 
     public string ReceiptPrinterBrowserSdkScriptUrl => _receiptPrinterOptions.BrowserSdkScriptUrl;

@@ -13,4 +13,14 @@ public class ReceiptPrinterOptions
     public string BrowserInternationalCharacter { get; set; } = string.Empty;
 
     public int LineWidth { get; set; } = 48;
+
+    public string LogoImageUrl { get; set; } = string.Empty;
+
+    public int PaperWidthMillimeters { get; set; } = 80;
+
+    public int LogoMaxWidthDots { get; set; } = 384;
+
+    public int LogoMaxHeightDots { get; set; } = 160;
+
+    public int LogoThreshold { get; set; } = 180;
 }
