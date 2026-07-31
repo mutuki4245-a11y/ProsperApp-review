@@ -109,7 +109,9 @@ public class SupabaseReceiptRepository(
                 p_description = input.Description.Trim(),
                 p_group_code = input.GroupCode,
                 p_journal_payload = journalPayload,
-                p_status = _options.CompletedStatus
+                p_status = _options.CompletedStatus,
+                p_business_day_id = input.BusinessDayId,
+                p_advance_cast_id = input.AdvanceCastId
             },
             ct);
 

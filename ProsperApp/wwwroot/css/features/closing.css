@@ -873,3 +873,234 @@ a.closing-panel:focus {
   color: #6c757d;
   padding: 1rem;
 }
+
+.daily-report {
+  background: #fff;
+  border: 1px solid #cfd6dd;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(20 32 45 / 0.06);
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+}
+
+.daily-report__header {
+  align-items: flex-start;
+  border-bottom: 3px double #29323c;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.8rem;
+}
+
+.daily-report__header h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.daily-report__eyebrow {
+  color: #66717d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.daily-report__subtitle {
+  color: #66717d;
+  margin: 0.2rem 0 0;
+}
+
+.daily-report__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.daily-report__loading,
+.daily-report__warnings .alert {
+  margin-bottom: 0.75rem;
+}
+
+.daily-report__summary {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.daily-report__summary article {
+  border: 1px solid #bcc5ce;
+  margin: -1px 0 0 -1px;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+}
+
+.daily-report__summary span {
+  color: #5f6974;
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.daily-report__summary strong {
+  display: block;
+  font-size: 1.25rem;
+  margin-top: 0.15rem;
+}
+
+.daily-report__summary-emphasis {
+  background: #f2f7f3;
+}
+
+.daily-report__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.daily-report__card,
+.daily-report__notes {
+  border: 1px solid #bcc5ce;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+}
+
+.daily-report__card h3,
+.daily-report__notes h3 {
+  border-bottom: 1px solid #8f9aa5;
+  font-size: 1rem;
+  font-weight: 800;
+  margin: 0 0 0.55rem;
+  padding-bottom: 0.4rem;
+}
+
+.daily-report__table {
+  margin: 0;
+}
+
+.daily-report__table th {
+  background: #edf1f4;
+  color: #2d3742;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.daily-report__table td {
+  font-size: 0.84rem;
+  vertical-align: middle;
+}
+
+.daily-report__table--visits td:nth-child(4),
+.daily-report__table--visits td:nth-child(6),
+.daily-report__table--visits td:nth-child(7) {
+  min-width: 8rem;
+}
+
+.daily-report__notes p {
+  margin: 0;
+  min-height: 2.5rem;
+  white-space: pre-wrap;
+}
+
+.daily-report__footer {
+  color: #67717b;
+  display: flex;
+  font-size: 0.72rem;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+@media (max-width: 767.98px) {
+  .daily-report__header,
+  .daily-report__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .daily-report__actions {
+    justify-content: flex-start;
+  }
+
+  .daily-report__summary,
+  .daily-report__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@page {
+  margin: 9mm;
+  size: A4 portrait;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .daily-report,
+  .daily-report * {
+    visibility: visible !important;
+  }
+
+  .daily-report {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: #111;
+    left: 0;
+    margin: 0;
+    padding: 0;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+
+  .daily-report__actions,
+  .daily-report__loading {
+    display: none !important;
+  }
+
+  .daily-report__header {
+    margin-bottom: 4mm;
+    padding-bottom: 2mm;
+  }
+
+  .daily-report__header h2 {
+    font-size: 16pt;
+  }
+
+  .daily-report__summary {
+    margin-bottom: 3mm;
+  }
+
+  .daily-report__summary article {
+    padding: 2mm;
+  }
+
+  .daily-report__summary strong {
+    font-size: 10pt;
+  }
+
+  .daily-report__card,
+  .daily-report__notes {
+    break-inside: avoid;
+    margin-bottom: 3mm;
+    padding: 2mm;
+  }
+
+  .daily-report__table th,
+  .daily-report__table td {
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 7.5pt;
+    padding: 1mm 1.2mm;
+  }
+
+  .daily-report__footer {
+    font-size: 6.5pt;
+  }
+}

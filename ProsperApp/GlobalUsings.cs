@@ -4,6 +4,7 @@ global using ProsperApp.Features.BusinessHome;
 global using ProsperApp.Features.Catalog;
 global using ProsperApp.Features.Checkout;
 global using ProsperApp.Features.Closing;
+global using ProsperApp.Features.DailyReports;
 global using ProsperApp.Features.Drive;
 global using ProsperApp.Features.Orders;
 global using ProsperApp.Features.Pricing;

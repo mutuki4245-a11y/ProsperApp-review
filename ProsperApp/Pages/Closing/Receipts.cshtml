@@ -30,6 +30,12 @@
     {
         <div class="alert alert-warning" role="alert">@Model.DriveAuthWarning</div>
     }
+    @if (!string.IsNullOrWhiteSpace(Model.BusinessDayLoadError))
+    {
+        <div class="alert alert-warning" role="alert">
+            キャスト前渡金の営業日・出勤情報を取得できませんでした。@Model.BusinessDayLoadError
+        </div>
+    }
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     @if (!string.IsNullOrWhiteSpace(Model.PendingReceiptsLoadError))
@@ -80,6 +86,7 @@
                     <input type="hidden" asp-for="Index" />
                     <input type="hidden" asp-for="Input.DocumentId" value="@Model.CurrentReceipt.Id" />
                     <input type="hidden" asp-for="Input.DriveFileId" value="@Model.CurrentReceipt.DriveFileId" />
+                    <input type="hidden" asp-for="Input.BusinessDayId" />
 
                     <div class="mb-3">
                         <label asp-for="Input.PaymentDate" class="form-label"></label>
@@ -159,6 +166,30 @@
                         </div>
                     </div>
 
+                    @{
+                        var isCastAdvance = string.Equals(
+                            Model.Input.AccountSubject,
+                            "前渡金: キャスト",
+                            StringComparison.Ordinal);
+                    }
+                    <div class="mb-3 @(isCastAdvance ? string.Empty : "d-none")" data-cast-advance-field>
+                        <label asp-for="Input.AdvanceCastId" class="form-label"></label>
+                        <select asp-for="Input.AdvanceCastId"
+                                class="form-select form-select-lg"
+                                data-cast-advance-select>
+                            <option value="">当日出勤のキャストを選択</option>
+                            @foreach (var cast in Model.AdvanceCastOptions)
+                            {
+                                <option value="@cast.CastId">@cast.SearchDisplayName</option>
+                            }
+                        </select>
+                        @if (Model.AdvanceCastOptions.Count == 0)
+                        {
+                            <div class="form-text text-warning">選択できる出勤キャストがいません。先に勤怠を登録してください。</div>
+                        }
+                        <span asp-validation-for="Input.AdvanceCastId" class="text-danger"></span>
+                    </div>
+
                     <div class="mb-4">
                         <label asp-for="Input.Description" class="form-label"></label>
                         <textarea asp-for="Input.Description"
@@ -197,6 +228,20 @@
             const selected = document.getElementById('accountSubjectSelected');
             const buttons = document.querySelectorAll('[data-account-value]');
             const modalElement = document.getElementById('accountSubjectModal');
+            const castAdvanceField = document.querySelector('[data-cast-advance-field]');
+            const castAdvanceSelect = document.querySelector('[data-cast-advance-select]');
+            const castAdvanceAccount = '前渡金: キャスト';
+
+            const syncCastAdvanceField = () => {
+                const isCastAdvance = input?.value === castAdvanceAccount;
+                castAdvanceField?.classList.toggle('d-none', !isCastAdvance);
+                if (castAdvanceSelect) {
+                    castAdvanceSelect.disabled = !isCastAdvance;
+                    if (!isCastAdvance) {
+                        castAdvanceSelect.value = '';
+                    }
+                }
+            };
 
             buttons.forEach((button) => {
                 button.addEventListener('click', () => {
@@ -207,8 +252,11 @@
                     button.classList.add('is-selected');
                     const modal = bootstrap.Modal.getInstance(modalElement);
                     modal?.hide();
+                    syncCastAdvanceField();
                 });
             });
+
+            syncCastAdvanceField();
         })();
 
         (() => {

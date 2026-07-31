@@ -10,13 +10,16 @@ public class ReceiptsModel(
     IDriveFileService driveFileService,
     IGoogleDriveAuthService googleDriveAuthService,
     IFeatureGate featureGate,
-    IStoreClock storeClock) : PageModel
+    IStoreClock storeClock,
+    IBusinessDayRepository businessDayRepository) : PageModel
 {
+    private const string CastAdvanceAccountSubject = "前渡金: キャスト";
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IDriveFileService _driveFileService = driveFileService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
 
     [BindProperty]
     public QuickEntryInputModel Input { get; set; } = new();
@@ -33,6 +36,9 @@ public class ReceiptsModel(
     public int TotalCount => PendingReceipts.Count;
     public DateOnly PaymentDateMin => PaymentDateMax.AddYears(-1);
     public DateOnly PaymentDateMax => _storeClock.GetStoreToday();
+    public StoreBusinessDay? CurrentBusinessDay { get; private set; }
+    public IReadOnlyList<BusinessDayClosingAttendanceItem> AdvanceCastOptions { get; private set; } = [];
+    public string? BusinessDayLoadError { get; private set; }
     public IReadOnlyList<AccountSubjectGroup> AccountSubjectGroups { get; } =
     [
         new("前渡金", ["スタッフ", "キャスト"]),
@@ -189,6 +195,8 @@ public class ReceiptsModel(
 
     private async Task LoadCurrentAsync(int requestedIndex, CancellationToken cancellationToken)
     {
+        await LoadBusinessDayContextAsync(cancellationToken);
+
         var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
         PendingReceipts = pendingResult.Succeeded ? pendingResult.Value : [];
         PendingReceiptsLoadError = pendingResult.Succeeded ? null : pendingResult.ErrorMessage;
@@ -216,10 +224,50 @@ public class ReceiptsModel(
             {
                 DocumentId = CurrentReceipt.Id,
                 DriveFileId = CurrentReceipt.DriveFileId,
-                PaymentDate = CurrentReceipt.PaymentDate ?? PaymentDateMax,
+                BusinessDayId = CurrentBusinessDay?.BusinessDayId,
+                PaymentDate = CurrentReceipt.PaymentDate ??
+                    CurrentBusinessDay?.BusinessDate ??
+                    _storeClock.GetCurrentBusinessDate(),
                 Amount = CurrentReceipt.Amount
             };
         }
+    }
+
+    private async Task LoadBusinessDayContextAsync(CancellationToken cancellationToken)
+    {
+        var businessDayResult = await _businessDayRepository.GetCurrentAsync(
+            cancellationToken,
+            forceRefresh: true);
+        if (!businessDayResult.Succeeded)
+        {
+            CurrentBusinessDay = null;
+            AdvanceCastOptions = [];
+            BusinessDayLoadError = businessDayResult.ErrorMessage ?? "営業日を取得できませんでした。";
+            return;
+        }
+
+        CurrentBusinessDay = businessDayResult.Value;
+        BusinessDayLoadError = null;
+        if (CurrentBusinessDay is null)
+        {
+            AdvanceCastOptions = [];
+            return;
+        }
+
+        var attendanceResult = await _businessDayRepository.GetClosingAttendanceAsync(
+            CurrentBusinessDay.BusinessDayId,
+            cancellationToken);
+        if (!attendanceResult.Succeeded)
+        {
+            AdvanceCastOptions = [];
+            BusinessDayLoadError = attendanceResult.ErrorMessage ?? "出勤キャストを取得できませんでした。";
+            return;
+        }
+
+        AdvanceCastOptions = attendanceResult.Value
+            .Where(item => item.AttendanceStatus is "scheduled" or "checked_in" or "checked_out")
+            .OrderBy(item => item.DisplayName, StringComparer.CurrentCulture)
+            .ToList();
     }
 
     private void ApplyPendingFailure(Result<IReadOnlyList<PendingReceiptItem>> result)
@@ -312,6 +360,36 @@ public class ReceiptsModel(
         if (!string.IsNullOrWhiteSpace(Input.AccountSubject) && !AllowedAccountSubjects.Contains(Input.AccountSubject))
         {
             ModelState.AddModelError("Input.AccountSubject", "科目は画面の一覧から選択してください。");
+        }
+
+        if (string.Equals(Input.AccountSubject, CastAdvanceAccountSubject, StringComparison.Ordinal))
+        {
+            if (CurrentBusinessDay is null)
+            {
+                ModelState.AddModelError("Input.AdvanceCastId", "キャスト前渡金を保存するには営業中の営業日が必要です。");
+            }
+            else
+            {
+                if (Input.BusinessDayId != CurrentBusinessDay.BusinessDayId)
+                {
+                    ModelState.AddModelError("Input.AdvanceCastId", "営業日情報が更新されています。画面を再読み込みしてください。");
+                }
+
+                if (Input.PaymentDate != CurrentBusinessDay.BusinessDate)
+                {
+                    ModelState.AddModelError("Input.PaymentDate", "キャスト前渡金の支払日は現在の営業日に合わせてください。");
+                }
+            }
+
+            if (Input.AdvanceCastId is null ||
+                AdvanceCastOptions.All(item => item.CastId != Input.AdvanceCastId))
+            {
+                ModelState.AddModelError("Input.AdvanceCastId", "当日出勤のキャストを1名選択してください。");
+            }
+        }
+        else if (Input.AdvanceCastId is not null)
+        {
+            ModelState.AddModelError("Input.AdvanceCastId", "キャスト前渡金以外では前渡し対象を選択できません。");
         }
 
         if (string.IsNullOrWhiteSpace(Input.Description))

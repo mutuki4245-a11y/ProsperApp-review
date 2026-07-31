@@ -4,6 +4,11 @@ namespace ProsperApp.Features.Receipts;
 
 public class QuickEntryInputModel
 {
+    public long? BusinessDayId { get; set; }
+
+    [Display(Name = "前渡し対象キャスト")]
+    public long? AdvanceCastId { get; set; }
+
     [Required]
     public string DocumentId { get; set; } = string.Empty;
 

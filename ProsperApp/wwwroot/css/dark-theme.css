@@ -1188,6 +1188,39 @@
     background: #f7f7f4;
     color: #171a18;
   }
+
+  .daily-report,
+  .daily-report__card,
+  .daily-report__notes,
+  .daily-report__summary article {
+    background: var(--app-surface);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .daily-report__header,
+  .daily-report__card h3,
+  .daily-report__notes h3 {
+    border-color: var(--app-border-strong);
+  }
+
+  .daily-report__eyebrow,
+  .daily-report__subtitle,
+  .daily-report__summary span,
+  .daily-report__footer {
+    color: var(--app-text-muted);
+  }
+
+  .daily-report__summary-emphasis,
+  .daily-report__table th {
+    background: var(--app-surface-soft);
+    color: var(--app-text);
+  }
+
+  .daily-report__table td,
+  .daily-report__table th {
+    border-color: var(--app-border);
+  }
 }
 
 @media print {

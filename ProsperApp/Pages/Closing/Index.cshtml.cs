@@ -9,11 +9,16 @@ namespace ProsperApp.Pages;
 public class ClosingModel(
     IFeatureGate featureGate,
     IClosingApplicationService closingApplicationService,
-    IAdminModeService adminModeService) : PageModel
+    IAdminModeService adminModeService,
+    IDailyReportApplicationService dailyReportApplicationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IClosingApplicationService _closingApplicationService = closingApplicationService;
     private readonly IAdminModeService _adminModeService = adminModeService;
+    private readonly IDailyReportApplicationService _dailyReportApplicationService = dailyReportApplicationService;
+
+    [BindProperty(SupportsGet = true)]
+    public long? ReportBusinessDayId { get; set; }
 
     [BindProperty]
     public long? BusinessDayId { get; set; }
@@ -62,6 +67,10 @@ public class ClosingModel(
 
         BusinessDayId = CurrentBusinessDay?.BusinessDayId;
         ClosingMemo = CurrentBusinessDay?.Memo;
+        if (CurrentBusinessDay is not null)
+        {
+            ReportBusinessDayId = null;
+        }
         return Page();
     }
 
@@ -123,6 +132,38 @@ public class ClosingModel(
         });
     }
 
+    public async Task<IActionResult> OnGetDailyReportAsync(
+        long? businessDayId,
+        CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        var result = await _dailyReportApplicationService.LoadAsync(
+            businessDayId ?? ReportBusinessDayId,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            var statusCode = result.FailureKind switch
+            {
+                ResultFailureKind.InvalidInput => StatusCodes.Status400BadRequest,
+                ResultFailureKind.NotFound => StatusCodes.Status404NotFound,
+                ResultFailureKind.PermissionDenied => StatusCodes.Status403Forbidden,
+                _ => StatusCodes.Status503ServiceUnavailable
+            };
+            return StatusCode(statusCode, new
+            {
+                succeeded = false,
+                failureKind = result.FailureKind?.ToString(),
+                errorMessage = result.ErrorMessage
+            });
+        }
+
+        return new JsonResult(result.Value);
+    }
+
     public async Task<IActionResult> OnPostCloseBusinessDayAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
@@ -176,7 +217,10 @@ public class ClosingModel(
         }
 
         SuccessMessage = $"営業日 {result.Value.BusinessDate:yyyy-MM-dd} を締めました。";
-        return RedirectToPage("/Index");
+        return RedirectToPage("/Closing/Index", new
+        {
+            reportBusinessDayId = result.Value.BusinessDayId
+        });
     }
 
     private void ApplyState(ClosingPageState state)
