@@ -98,6 +98,7 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 | `/Closing/Index` | `Closing.IndexModel` | 締め前 readiness と営業日締め |
 | `/Closing/Attendance` | `AttendanceModel` | 締め導線の勤怠入力 |
 | `/Closing/DrinkCost` | `DrinkCostModel` | 酒代入力 |
+| `/Closing/ChampagneBacks` | `ClosingChampagneBacksModel` | シャンパン追加バック入力 |
 | `/Closing/Receipts` | `ReceiptsModel` | 領収書簡易入力 |
 | `/DrivePreview/{driveFileId}` | `DrivePreviewModel` | Drive 証憑プレビュー |
 | `/Closing/CastSalesAdjustment` | `CastSalesAdjustmentModel` | キャスト売上額調整 |
@@ -156,7 +157,7 @@ Repository は Supabase RPC を通じて、店舗文脈、マスタ、営業日�
 | 指名 | `store_slip_casts` |
 | 注文 | `store_order_lines`, `store_order_line_cast_backs` |
 | 自由入力・自動料金 | `store_slip_charge_lines`, `store_slip_pricing_lines` |
-| キャストバック | `store_slip_cast_backs` |
+| キャストバック | `store_order_line_cast_backs`, `store_slip_cast_backs`, `store_business_day_champagne_backs` |
 
 ### 8.3 会計・締め
 
@@ -229,6 +230,8 @@ Edge Function は allowlist 済みの `store.*` 関数のみを実行する。�
 - `store.save_business_day_drink_delivery_amount`
 - `store.get_business_day_closing_attendance`
 - `store.save_business_day_closing_attendance`
+- `store.get_business_day_champagne_back_overview`
+- `store.save_business_day_champagne_backs`
 - `store.get_business_day_closing_readiness`
 - `store.close_business_day`
 
@@ -335,7 +338,7 @@ SQL 内部ヘルパーには、時間料金計算、会計スナップショッ�
 ### 11.6 締め
 
 1. 締め画面は現在営業日の readiness を取得する。
-2. readiness は未会計、酒代、勤怠、キャスト売上額調整、未処理領収書を確認する。
+2. readiness は未会計、酒代、勤怠、キャスト売上額調整、シャンパン追加バック、未処理領収書を確認する。
 3. 条件達成時だけ営業日締めボタンを有効化する。
 4. `store.close_business_day` は readiness を再確認する。
 5. 締め成功時に営業日締めスナップショットを保存し、営業日を `closed` にする。

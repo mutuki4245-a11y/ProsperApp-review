@@ -47,6 +47,7 @@ builder.Services.AddScoped<IStoreSettingsRepository, SupabaseStoreSettingsReposi
 builder.Services.AddScoped<IReceiptRepository, SupabaseReceiptRepository>();
 builder.Services.AddScoped<IBusinessDayRepository, SupabaseBusinessDayRepository>();
 builder.Services.AddScoped<ICastSalesAdjustmentRepository, SupabaseCastSalesAdjustmentRepository>();
+builder.Services.AddScoped<IChampagneBackRepository, SupabaseChampagneBackRepository>();
 builder.Services.AddScoped<IStoreSlipRepository, SupabaseStoreSlipRepository>();
 builder.Services.AddScoped<IStoreOrderRepository, SupabaseStoreOrderRepository>();
 builder.Services.AddScoped<ICheckoutRepository, SupabaseCheckoutRepository>();

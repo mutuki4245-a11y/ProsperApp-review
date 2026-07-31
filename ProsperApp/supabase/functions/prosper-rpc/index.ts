@@ -178,6 +178,16 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.get_business_day_champagne_back_overview",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
     "store.get_cast_sales_adjustment_slips",
     {
       result: "rows",
@@ -545,6 +555,17 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_department_id", type: "bigint" },
         { name: "p_business_day_id", type: "bigint" },
         { name: "p_slips", type: "jsonb" },
+      ],
+    },
+  ],
+  [
+    "store.save_business_day_champagne_backs",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_backs", type: "jsonb" },
       ],
     },
   ],

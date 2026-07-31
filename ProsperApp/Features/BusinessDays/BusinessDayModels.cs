@@ -100,6 +100,14 @@ public class BusinessDayClosingReadiness
 
     public int CastSalesMissingSlipCount { get; init; }
 
+    public int ChampagneBackRequiredCastCount { get; init; }
+
+    public int ChampagneBackCompletedCastCount { get; init; }
+
+    public int ChampagneBackMissingCastCount { get; init; }
+
+    public decimal ChampagneBackTotalAmount { get; init; }
+
     public int PendingReceiptCount { get; init; }
 
     public bool ReceiptsEnabled { get; init; }
@@ -112,6 +120,8 @@ public class BusinessDayClosingReadiness
 
     public bool IsCastSalesAdjustmentCompleted => CastSalesMissingSlipCount == 0;
 
+    public bool IsChampagneBackCompleted => ChampagneBackMissingCastCount == 0;
+
     public bool CanClose => CanCloseFromStore ?? (
         BusinessDay is not null &&
         OpenSlipCount == 0 &&
@@ -119,6 +129,7 @@ public class BusinessDayClosingReadiness
         AttendanceCount > 0 &&
         MissingClockOutCount == 0 &&
         IsCastSalesAdjustmentCompleted &&
+        IsChampagneBackCompleted &&
         (!ReceiptsEnabled || PendingReceiptCount == 0));
 
     public IReadOnlyList<string> BlockReasons
@@ -159,6 +170,11 @@ public class BusinessDayClosingReadiness
             if (!IsCastSalesAdjustmentCompleted)
             {
                 reasons.Add("キャスト売上額調整が未完了です。");
+            }
+
+            if (!IsChampagneBackCompleted)
+            {
+                reasons.Add("シャンパンバックが未入力です。0円の場合も保存してください。");
             }
 
             if (ReceiptsEnabled && PendingReceiptCount > 0)

@@ -73,11 +73,20 @@
             <span class="closing-panel__action" data-closing-action>開く</span>
         </a>
 
+        <a class="closing-panel is-preparing" asp-page="/Closing/ChampagneBacks" data-closing-panel="champagneBack">
+            <span class="closing-panel__body">
+                <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">5</span><span>シャンパンバック入力</span></strong>
+                <small data-closing-message>状態を確認しています。</small>
+            </span>
+            <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
+            <span class="closing-panel__action" data-closing-action>開く</span>
+        </a>
+
         @if (Model.ReceiptsEnabled)
         {
             <a class="closing-panel is-preparing" asp-page="/Closing/Receipts" data-closing-panel="receipts">
                 <span class="closing-panel__body">
-                    <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">5</span><span>領収書入力</span></strong>
+                    <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">6</span><span>領収書入力</span></strong>
                     <small data-closing-message>状態を確認しています。</small>
                 </span>
                 <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
@@ -103,7 +112,7 @@
                 <input asp-for="BusinessDayId" type="hidden" />
                 <div class="closing-panel__form">
                     <div>
-                        <label asp-for="ClosingMemo" class="form-label"><span class="closing-panel__step" aria-hidden="true">@(Model.ReceiptsEnabled ? "6" : "5")</span><span>締めメモ・営業日締め</span></label>
+                        <label asp-for="ClosingMemo" class="form-label"><span class="closing-panel__step" aria-hidden="true">@(Model.ReceiptsEnabled ? "7" : "6")</span><span>締めメモ・営業日締め</span></label>
                         <input asp-for="ClosingMemo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら共有事項を入力" />
                         <span asp-validation-for="ClosingMemo" class="text-danger"></span>
                     </div>
@@ -149,12 +158,15 @@
                 attendanceLoadFailed: false,
                 castLoaded: false,
                 castLoadFailed: false,
+                champagneLoaded: false,
+                champagneLoadFailed: false,
                 receiptsLoaded: root.dataset.receiptsEnabled !== 'true',
                 receiptsLoadFailed: false,
                 openSlipCount: 0,
                 drink: { isEntered: false, amount: 0 },
                 attendance: { attendanceCount: 0, missingClockOutCount: 0 },
                 cast: { isCompleted: false, requiredSlipCount: 0, completedSlipCount: 0, missingSlipCount: 0 },
+                champagne: { isCompleted: false, requiredCastCount: 0, completedCastCount: 0, missingCastCount: 0, totalBackAmount: 0 },
                 receipts: { pendingReceiptCount: 0 },
                 checkedAt: null
             };
@@ -259,6 +271,7 @@
                     state.drinkLoadFailed ||
                     state.attendanceLoadFailed ||
                     state.castLoadFailed ||
+                    state.champagneLoadFailed ||
                     state.receiptsLoadFailed;
                 if (hasLoadFailure) {
                     setFinal('has-warning', true, '営業日を締める', '締め条件の一部を取得できませんでした。各手順を確認して、時間をおいて再表示してください。');
@@ -275,6 +288,7 @@
                     state.drinkLoaded &&
                     state.attendanceLoaded &&
                     state.castLoaded &&
+                    state.champagneLoaded &&
                     (!state.receiptsEnabled || state.receiptsLoaded);
 
                 if (!loaded) {
@@ -287,6 +301,7 @@
                     state.attendance.attendanceCount > 0 &&
                     state.attendance.missingClockOutCount === 0 &&
                     state.cast.isCompleted &&
+                    state.champagne.isCompleted &&
                     (!state.receiptsEnabled || state.receipts.pendingReceiptCount === 0);
                 const canSubmit = canClose;
                 const checkedTime = state.checkedAt
@@ -318,11 +333,11 @@
             };
 
             const setAllPanelErrors = () => {
-                ['openSlip', 'drinkDelivery', 'attendance', 'castSalesAdjustment', 'receipts'].forEach(setPanelError);
+                ['openSlip', 'drinkDelivery', 'attendance', 'castSalesAdjustment', 'champagneBack', 'receipts'].forEach(setPanelError);
             };
 
             const setAllPanelsBusinessDayChanged = () => {
-                ['openSlip', 'drinkDelivery', 'attendance', 'castSalesAdjustment', 'receipts'].forEach((name) => {
+                ['openSlip', 'drinkDelivery', 'attendance', 'castSalesAdjustment', 'champagneBack', 'receipts'].forEach((name) => {
                     setPanel(name, 'has-warning', '要再表示', '営業日情報が更新されています。画面を再読み込みしてください。');
                 });
             };
@@ -538,6 +553,13 @@
                         completedSlipCount: Number(result.castSalesCompletedSlipCount) || 0,
                         missingSlipCount: Number(result.castSalesMissingSlipCount) || 0
                     };
+                    state.champagne = {
+                        isCompleted: (Number(result.champagneBackMissingCastCount) || 0) === 0,
+                        requiredCastCount: Number(result.champagneBackRequiredCastCount) || 0,
+                        completedCastCount: Number(result.champagneBackCompletedCastCount) || 0,
+                        missingCastCount: Number(result.champagneBackMissingCastCount) || 0,
+                        totalBackAmount: Number(result.champagneBackTotalAmount) || 0
+                    };
                     state.receipts = {
                         pendingReceiptCount: Number(result.pendingReceiptCount) || 0
                     };
@@ -545,11 +567,13 @@
                     state.drinkLoaded = true;
                     state.attendanceLoaded = true;
                     state.castLoaded = true;
+                    state.champagneLoaded = true;
                     state.receiptsLoaded = true;
                     state.openSlipLoadFailed = false;
                     state.drinkLoadFailed = false;
                     state.attendanceLoadFailed = false;
                     state.castLoadFailed = false;
+                    state.champagneLoadFailed = false;
                     state.receiptsLoadFailed = false;
 
                     if (!result.hasBusinessDay) {
@@ -557,6 +581,7 @@
                         setPanel('drinkDelivery', 'has-warning', '要入力', '酒代保存時に営業日を自動作成できます。', '入力');
                         setPanel('attendance', 'has-warning', '要入力', '勤怠保存時に営業日を自動作成できます。', '入力');
                         setPanel('castSalesAdjustment', 'has-warning', '要入力', '会計済み伝票ができたら、指名キャストへの売上額を調整します。');
+                        setPanel('champagneBack', 'has-warning', '要入力', '勤怠保存後に出勤キャストごとの追加バックを入力します。');
                         if (state.receiptsEnabled) {
                             setPanel('receipts', 'is-ready', '入力済', '営業日作成後に未入力領収書を確認します。');
                         }
@@ -591,6 +616,14 @@
                         setPanel('castSalesAdjustment', 'has-warning', '要入力', `${state.cast.missingSlipCount}件の伝票で売上額調整が未完了です。`);
                     }
 
+                    if (state.champagne.requiredCastCount === 0) {
+                        setPanel('champagneBack', 'has-warning', '要入力', '出勤キャストを登録してから追加バックを入力します。');
+                    } else if (state.champagne.isCompleted) {
+                        setPanel('champagneBack', 'is-ready', '入力済', `${state.champagne.completedCastCount}名分の追加バックを保存済みです。合計 ${toYen(state.champagne.totalBackAmount)}`);
+                    } else {
+                        setPanel('champagneBack', 'has-warning', '要入力', `${state.champagne.missingCastCount}名分の追加バックが未入力です。`);
+                    }
+
                     if (state.receiptsEnabled) {
                         if (state.receipts.pendingReceiptCount > 0) {
                             setPanel('receipts', 'needs-action', '要入力', `未入力領収書が ${state.receipts.pendingReceiptCount} 件あります。`);
@@ -605,6 +638,8 @@
                     state.drinkLoaded = false;
                     state.attendanceLoaded = false;
                     state.castLoaded = false;
+                    state.champagneLoaded = false;
+                    state.champagneLoadFailed = true;
                     state.receiptsLoaded = !state.receiptsEnabled;
                     setAllPanelErrors();
                 } finally {

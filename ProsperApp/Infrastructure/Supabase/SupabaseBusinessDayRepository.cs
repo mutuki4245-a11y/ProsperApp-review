@@ -285,6 +285,10 @@ public class SupabaseBusinessDayRepository(
             CastSalesRequiredSlipCount = (int)(ReadLong(row, "cast_sales_required_slip_count") ?? 0),
             CastSalesCompletedSlipCount = (int)(ReadLong(row, "cast_sales_completed_slip_count") ?? 0),
             CastSalesMissingSlipCount = (int)(ReadLong(row, "cast_sales_missing_slip_count") ?? 0),
+            ChampagneBackRequiredCastCount = (int)(ReadLong(row, "champagne_back_required_cast_count") ?? 0),
+            ChampagneBackCompletedCastCount = (int)(ReadLong(row, "champagne_back_completed_cast_count") ?? 0),
+            ChampagneBackMissingCastCount = (int)(ReadLong(row, "champagne_back_missing_cast_count") ?? 0),
+            ChampagneBackTotalAmount = ReadDecimal(row, "champagne_back_total_amount") ?? 0,
             PendingReceiptCount = (int)(ReadLong(row, "pending_receipt_count") ?? 0),
             ReceiptsEnabled = includePendingReceipts,
             CanCloseFromStore = ReadBool(row, "can_close") ?? false,
@@ -739,6 +743,11 @@ public class SupabaseBusinessDayRepository(
         if (rawError.Contains("cast_sales_adjustment_required", StringComparison.OrdinalIgnoreCase))
         {
             return "キャスト売上額調整を完了してください。";
+        }
+
+        if (rawError.Contains("champagne_back_required", StringComparison.OrdinalIgnoreCase))
+        {
+            return "シャンパンバックを入力してください。0円の場合も保存してください。";
         }
 
         if (rawError.Contains("pending_receipts_exist", StringComparison.OrdinalIgnoreCase))
