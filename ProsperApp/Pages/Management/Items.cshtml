@@ -205,7 +205,7 @@
                         var isCastBackTargetInput = isInputCategory && Model.ItemInput.IsCastBackTarget;
                         var regularBackInput = isInputCategory && Model.ItemInput.CastBackRegularUnitAmount > 0 ? StoreUiText.NumberInputValue(Model.ItemInput.CastBackRegularUnitAmount) : string.Empty;
                         var nominationBackInput = isInputCategory && Model.ItemInput.CastBackNominationUnitAmount > 0 ? StoreUiText.NumberInputValue(Model.ItemInput.CastBackNominationUnitAmount) : string.Empty;
-                        <details class="item-admin__group" @(groupIndex == 0 || isInputCategory ? "open" : null)>
+                        <details class="item-admin__group" @(isInputCategory ? "open" : null)>
                             <summary>
                                 <span>@group.Category.CategoryName</span>
                                 <span>@group.Items.Count 件</span>

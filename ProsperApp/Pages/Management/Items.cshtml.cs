@@ -248,9 +248,7 @@ public class ManagementItemsModel(
 
         ItemInput = new StoreItemInputModel
         {
-            IsActive = true,
-            ItemCategoryId = Catalog.Categories.FirstOrDefault(x => x.IsActive)?.ItemCategoryId ??
-                             Catalog.Categories.FirstOrDefault()?.ItemCategoryId
+            IsActive = true
         };
     }
 
