@@ -44,4 +44,27 @@ update public.department_master
     or receipt_logo is null or trim(receipt_logo) = ''
     or trim(receipt_logo) = '【テストロゴ】';
 
+update public.store_checkouts checkout
+   set issuer_snapshot = jsonb_build_object(
+        'schema_version', 'issuer-v1',
+        'company_name', coalesce(nullif(trim(company.company_name), ''), '未設定'),
+        'invoice_registration_number', coalesce(nullif(trim(company.invoice_registration_number), ''), '未設定'),
+        'store_name', coalesce(nullif(trim(department.receipt_display_name), ''), '未設定'),
+        'address', coalesce(nullif(trim(department.receipt_address), ''), '未設定'),
+        'phone', coalesce(nullif(trim(department.receipt_phone), ''), '未設定'),
+        'logo', coalesce(department.receipt_logo, '')
+    )
+  from public.company_master company
+  join public.department_master department
+    on department.company_id = company.company_id
+ where checkout.company_id = company.company_id
+   and checkout.department_id = department.department_id
+   and (
+        checkout.issuer_snapshot->>'invoice_registration_number' = 'T1234567890123'
+     or checkout.issuer_snapshot->>'store_name' = '【テスト店舗】'
+     or checkout.issuer_snapshot->>'address' = '東京都テスト区テスト1-2-3'
+     or checkout.issuer_snapshot->>'phone' = '00-1234-5678'
+     or checkout.issuer_snapshot->>'logo' = '【テストロゴ】'
+   );
+
 commit;
