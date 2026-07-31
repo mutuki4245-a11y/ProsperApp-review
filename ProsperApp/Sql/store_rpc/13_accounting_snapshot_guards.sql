@@ -100,6 +100,12 @@ begin
                  where a.business_day_id = p_business_day_id
                    and a.status = 'confirmed'
             ), 0),
+            'champagne_back_total_amount', coalesce((
+                select sum(cb.back_amount)
+                  from public.store_business_day_champagne_backs cb
+                 where cb.business_day_id = p_business_day_id
+                   and cb.status = 'active'
+            ), 0),
             'drink_delivery_amount', v_business_day.drink_delivery_amount
         ),
         'payments', coalesce((
@@ -191,6 +197,22 @@ begin
               from public.store_slip_cast_sales_adjustments a
               join public.cast_master c on c.cast_id = a.cast_id
              where a.business_day_id = p_business_day_id
+        ), '[]'::jsonb),
+        'champagne_backs', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'business_day_champagne_back_id', cb.business_day_champagne_back_id,
+                'cast_id', cb.cast_id,
+                'cast_display_name', c.display_name,
+                'back_type', cb.back_type,
+                'quantity', cb.quantity,
+                'back_unit_amount', cb.back_unit_amount,
+                'back_amount', cb.back_amount,
+                'status', cb.status,
+                'memo', cb.memo
+            ) order by cb.business_day_champagne_back_id)
+              from public.store_business_day_champagne_backs cb
+              join public.cast_master c on c.cast_id = cb.cast_id
+             where cb.business_day_id = p_business_day_id
         ), '[]'::jsonb)
     )
       into v_closing_data
@@ -636,6 +658,7 @@ begin
         'store_order_lines',
         'store_order_line_cast_backs',
         'store_slip_cast_backs',
+        'store_business_day_champagne_backs',
         'store_slip_charge_lines',
         'store_checkouts',
         'store_checkout_payments',
@@ -661,6 +684,7 @@ $$;
 
 revoke all on table public.store_slip_accounting_snapshots from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_closing_snapshots from public, anon, authenticated, service_role;
+revoke all on table public.store_business_day_champagne_backs from public, anon, authenticated, service_role;
 revoke execute on function store.get_business_day_snapshot_at(bigint, bigint, timestamp with time zone) from public, anon, authenticated, service_role;
 revoke execute on function store.capture_business_day_closing_snapshot(bigint, bigint, timestamp with time zone, boolean) from public, anon, authenticated, service_role;
 revoke execute on function store.guard_closed_business_day_mutation() from public, anon, authenticated, service_role;

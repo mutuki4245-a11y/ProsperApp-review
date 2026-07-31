@@ -156,6 +156,14 @@ begin
     deleted_count := v_deleted;
     return next;
 
+    delete from public.store_business_day_champagne_backs b
+    where b.department_id = p_department_id
+       or b.business_day_id = any(v_business_day_ids);
+    get diagnostics v_deleted = row_count;
+    table_name := 'store_business_day_champagne_backs';
+    deleted_count := v_deleted;
+    return next;
+
     delete from public.store_order_line_cast_backs b
     where b.department_id = p_department_id
        or b.business_day_id = any(v_business_day_ids)

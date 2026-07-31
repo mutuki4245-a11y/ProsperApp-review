@@ -657,6 +657,10 @@ returns table (
     cast_sales_required_slip_count integer,
     cast_sales_completed_slip_count integer,
     cast_sales_missing_slip_count integer,
+    champagne_back_required_cast_count integer,
+    champagne_back_completed_cast_count integer,
+    champagne_back_missing_cast_count integer,
+    champagne_back_total_amount numeric,
     pending_receipt_count integer,
     can_close boolean,
     block_reasons jsonb,
@@ -674,6 +678,10 @@ declare
     v_cast_sales_required_slip_count integer := 0;
     v_cast_sales_completed_slip_count integer := 0;
     v_cast_sales_missing_slip_count integer := 0;
+    v_champagne_back_required_cast_count integer := 0;
+    v_champagne_back_completed_cast_count integer := 0;
+    v_champagne_back_missing_cast_count integer := 0;
+    v_champagne_back_total_amount numeric := 0;
     v_pending_receipt_count integer := 0;
     v_can_close boolean;
     v_block_reasons jsonb := '[]'::jsonb;
@@ -715,6 +723,20 @@ begin
         p_business_day_id
     ) s;
 
+    select
+        coalesce(s.required_cast_count, 0),
+        coalesce(s.completed_cast_count, 0),
+        coalesce(s.missing_cast_count, 0),
+        coalesce(s.total_back_amount, 0)
+      into v_champagne_back_required_cast_count,
+           v_champagne_back_completed_cast_count,
+           v_champagne_back_missing_cast_count,
+           v_champagne_back_total_amount
+    from store.get_business_day_champagne_back_status(
+        p_department_id,
+        p_business_day_id
+    ) s;
+
     if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
         select count(*)::integer
           into v_pending_receipt_count
@@ -747,6 +769,11 @@ begin
             jsonb_build_array('キャスト売上額調整が未完了です。');
     end if;
 
+    if coalesce(v_champagne_back_missing_cast_count, 0) > 0 then
+        v_block_reasons := v_block_reasons ||
+            jsonb_build_array('シャンパンバックが未入力です。0円の場合も保存してください。');
+    end if;
+
     if coalesce(v_pending_receipt_count, 0) > 0 then
         v_block_reasons := v_block_reasons ||
             jsonb_build_array(format('未入力領収書が %s 件あります。', v_pending_receipt_count));
@@ -758,6 +785,7 @@ begin
         coalesce(v_attendance_count, 0) > 0 and
         coalesce(v_missing_clock_out_count, 0) = 0 and
         coalesce(v_cast_sales_missing_slip_count, 0) = 0 and
+        coalesce(v_champagne_back_missing_cast_count, 0) = 0 and
         coalesce(v_pending_receipt_count, 0) = 0;
 
     return query
@@ -771,6 +799,10 @@ begin
         coalesce(v_cast_sales_required_slip_count, 0),
         coalesce(v_cast_sales_completed_slip_count, 0),
         coalesce(v_cast_sales_missing_slip_count, 0),
+        coalesce(v_champagne_back_required_cast_count, 0),
+        coalesce(v_champagne_back_completed_cast_count, 0),
+        coalesce(v_champagne_back_missing_cast_count, 0),
+        coalesce(v_champagne_back_total_amount, 0),
         coalesce(v_pending_receipt_count, 0),
         v_can_close,
         v_block_reasons,
@@ -855,6 +887,10 @@ begin
 
         if coalesce(v_readiness.cast_sales_missing_slip_count, 0) > 0 then
             raise exception 'cast_sales_adjustment_required:%', v_readiness.cast_sales_missing_slip_count;
+        end if;
+
+        if coalesce(v_readiness.champagne_back_missing_cast_count, 0) > 0 then
+            raise exception 'champagne_back_required:%', v_readiness.champagne_back_missing_cast_count;
         end if;
 
         if coalesce(v_readiness.pending_receipt_count, 0) > 0 then

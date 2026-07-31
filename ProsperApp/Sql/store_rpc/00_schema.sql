@@ -14,6 +14,9 @@ drop function if exists public.get_open_slip_count(bigint, bigint);
 drop function if exists public.get_business_day_drink_delivery_status(bigint, bigint);
 drop function if exists public.get_business_day_closing_attendance(bigint, bigint);
 drop function if exists public.get_business_day_cast_sales_adjustment_status(bigint, bigint);
+drop function if exists public.get_business_day_champagne_back_status(bigint, bigint);
+drop function if exists public.get_business_day_champagne_back_overview(bigint, bigint);
+drop function if exists public.save_business_day_champagne_backs(bigint, bigint, jsonb);
 drop function if exists public.get_cast_sales_adjustment_slips(bigint, bigint);
 drop function if exists public.get_cast_sales_adjustment_detail(bigint, bigint);
 drop function if exists public.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text);
@@ -65,5 +68,6 @@ drop function if exists public.save_quick_entry(bigint, numeric, text, text, tex
 drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
 drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
 drop function if exists public.mark_receipt_scan_mistake(bigint, text, text);
+drop function if exists store.get_business_day_closing_readiness(bigint, bigint, text);
 
 commit;
