@@ -102,6 +102,8 @@ assert.match(
 );
 
 const businessDaySource = read('Sql/store_rpc/01_business_day.sql');
+const closingPageModelSource = read('Pages/Closing/Index.cshtml.cs');
+const businessDayRepositorySource = read('Infrastructure/Supabase/SupabaseBusinessDayRepository.cs');
 assert.match(
     businessDaySource,
     /create\s+or\s+replace\s+function\s+store\.get_business_day_closing_readiness/i,
@@ -114,8 +116,33 @@ assert.match(
 );
 assert.match(
     businessDaySource,
-    /if\s+coalesce\(p_ignore_closing_requirements,\s*false\)\s+then[\s\S]*?raise\s+exception\s+'closing_override_disabled'/i,
-    '旧締め上書き引数は互換目的に限り、trueを拒否してください。'
+    /v_ignore_closing_requirements\s*:=\s*coalesce\(p_ignore_closing_requirements,\s*false\)\s+or\s+p_pending_receipt_status\s*=\s*'__ignore_closing_requirements__'/i,
+    '管理者締めでは新引数とEdge Function互換sentinelのどちらでも締め条件無視を扱えること。'
+);
+assert.match(
+    businessDaySource,
+    /if\s+v_ignore_closing_requirements\s*=\s*false\s+then[\s\S]*?from\s+store\.get_business_day_closing_readiness\s*\(/i,
+    '通常締めではDB側でも締め準備判定を再検証すること。'
+);
+assert.match(
+    closingPageModelSource,
+    /var\s+ignoreClosingRequirements\s*=\s*IgnoreClosingRequirements\s*&&\s*IsAdminMode;/,
+    '締め条件無視は管理者モード中だけ送信できること。'
+);
+assert.match(
+    closingPageModelSource,
+    /if\s*\(IgnoreClosingRequirements\s*&&\s*!IsAdminMode\)[\s\S]*?締め条件を無視するには管理者モードを有効にしてください。/,
+    '管理者モードなしの締め条件無視POSTはPageModelで拒否すること。'
+);
+assert.match(
+    businessDayRepositorySource,
+    /p_pending_receipt_status\s*=\s*ignoreClosingRequirements\s*\?\s*IgnoreClosingRequirementsStatus\s*:\s*includePendingReceipts\s*\?\s*_options\.PendingStatus\s*:\s*null/s,
+    '管理者締めではEdge Function互換sentinelも送ること。'
+);
+assert.match(
+    businessDayRepositorySource,
+    /p_ignore_closing_requirements\s*=\s*ignoreClosingRequirements/,
+    '管理者締めでは締め条件無視引数をRPC payloadへ含めること。'
 );
 
 const operationalSource = read('Sql/store_rpc/14_operational_read_models.sql');

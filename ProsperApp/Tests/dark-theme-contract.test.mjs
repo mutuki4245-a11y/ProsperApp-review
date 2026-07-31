@@ -80,7 +80,7 @@ test("the theme covers shared controls and every operational surface", async () 
   );
   assert.match(
     theme,
-    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#2f2426;[^}]*border-color:\s*#62494c;[^}]*color:\s*#e6c9c4/s,
+    /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#3a1f2f;[^}]*border-color:\s*#8b4367;[^}]*color:\s*#f9c7dc/s,
   );
   assert.match(
     theme,

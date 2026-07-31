@@ -59,7 +59,7 @@ assert.equal(businessHomeSource.includes('dataset.businessSlipNumber'), false, '
 assert.match(businessHomeSource, /header\.append\(identity,\s*meta,\s*headerActions\)/, '卓番・入店時刻・人数・在席時間・状態を統合ヘッダーに置くこと');
 assert.match(slipsCss, /\.business-slip-card__meta\s*\{[^}]*color:\s*#708088;[^}]*display:\s*flex/s, '統合ヘッダーの時刻・人数・在席時間を控えめに表示すること');
 assert.match(slipsCss, /\.business-slip-card__person\s*\{[^}]*background:\s*#f7f9f8;[^}]*border:\s*1px solid #cdd7d8/s, 'お客様チップをニュートラル配色にすること');
-assert.match(slipsCss, /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#faf4f3;[^}]*border-color:\s*#dbc1bd;[^}]*color:\s*#724942/s, '指名は控えめな赤系配色で区別すること');
+assert.match(slipsCss, /\.business-slip-card__person--nomination\s*\{[^}]*background:\s*#fff1f7;[^}]*border-color:\s*#f9a8d4;[^}]*color:\s*#9d174d/s, '指名は赤系配色で区別すること');
 assert.match(slipsCss, /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-money-color:\s*#806000/s, '金色を金額専用の変数として持つこと');
 assert.match(slipsCss, /\.business-slip-card \.slip-list__amount\s*\{[^}]*color:\s*var\(--business-slip-money-color\)/s, '伝票金額だけに金額色を使うこと');
 assert.match(indexMarkup, /data-slip-amount-toggle-container[\s\S]*?type="checkbox"[\s\S]*?role="switch"[\s\S]*?data-slip-amount-toggle/, '会計表示はツールバー内のトグルスイッチにすること');

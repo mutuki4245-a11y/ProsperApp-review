@@ -71,10 +71,11 @@ assert.match(settingsPageModel, /_adminModeService\.SetEnabled\(Input\.AdminMode
 assert.match(adminModeService, /Session\.GetString\(SessionKey\)/);
 assert.match(adminModeService, /session\.SetString\(SessionKey,\s*"1"\)/);
 
-for (const pageModel of [tablePageModel, itemPageModel]) {
-    assert.match(pageModel, /IAdminModeService/);
-    assert.match(pageModel, /変更するには管理者設定で管理者モードを有効にしてください/);
-}
+assert.doesNotMatch(tablePageModel, /IAdminModeService/, '卓番操作は通常運用で変更できること');
+assert.match(itemPageModel, /IAdminModeService/);
+assert.match(itemPageModel, /EnsureCategoryAdminModeAsync/);
+assert.match(itemPageModel, /カテゴリを変更するには管理者設定で管理者モードを有効にしてください/);
+assert.match(itemPage, /カテゴリの追加・編集・削除には[\s\S]*?管理者モードが必要です。/);
 
 assert.match(tablePage, /asp-page-handler="Save"/);
 assert.match(tablePage, /formaction="\?handler=Delete"/);
