@@ -23,6 +23,7 @@ public interface IBusinessDayRepository
         long businessDayId,
         string? memo,
         bool includePendingReceipts,
+        bool ignoreClosingRequirements,
         CancellationToken ct);
 
     Task<Result<BusinessDayClosingReadiness>> GetClosingReadinessAsync(

@@ -611,7 +611,7 @@
     color: var(--app-text);
   }
 
-  .business-slip-filter button > span {
+  .business-slip-filter__count {
     background: var(--app-surface-hover);
     color: var(--app-text-muted);
   }
@@ -621,12 +621,11 @@
     color: var(--app-on-accent);
   }
 
-  .business-slip-filter button.is-active > span {
+  .business-slip-filter button.is-active .business-slip-filter__count {
     background: rgb(7 23 39 / 0.3);
     color: #eef6ff;
   }
 
-  .business-floor__legend,
   .business-slip-category__divider,
   .business-slip-paid > summary,
   .business-slip-paid > summary small,
@@ -721,9 +720,15 @@
   }
 
   .business-slip-card__person--nomination {
-    background: #2f2426;
-    border-color: #62494c;
-    color: #e6c9c4;
+    background: #3a1f2f;
+    border-color: #8b4367;
+    color: #f9c7dc;
+  }
+
+  .closing-final__override {
+    background: #392515;
+    border-color: #9a5a20;
+    color: #fed7aa;
   }
 
   .business-slip-card .slip-list__action-buttons .btn {

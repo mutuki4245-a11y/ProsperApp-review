@@ -9,14 +9,12 @@ public class ManagementCastsModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     IStoreCastAdminRepository castAdminRepository,
-    IStoreClock storeClock,
-    IAdminModeService adminModeService) : PageModel
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreCastAdminRepository _castAdminRepository = castAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
-    private readonly IAdminModeService _adminModeService = adminModeService;
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
@@ -36,8 +34,6 @@ public class ManagementCastsModel(
     public string? SuccessMessage { get; set; }
     public PageLoadStatus? LoadStatus { get; private set; }
 
-    public bool IsAdminMode => _adminModeService.IsEnabled;
-
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
@@ -54,11 +50,6 @@ public class ManagementCastsModel(
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
-        }
-
-        if (!await EnsureAdminModeAsync(cancellationToken))
-        {
-            return Page();
         }
 
         if (!await LoadAsync(cancellationToken))
@@ -92,11 +83,6 @@ public class ManagementCastsModel(
             return NotFound();
         }
 
-        if (!await EnsureAdminModeAsync(cancellationToken))
-        {
-            return Page();
-        }
-
         if (!await LoadAsync(cancellationToken))
         {
             return Page();
@@ -126,11 +112,6 @@ public class ManagementCastsModel(
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
-        }
-
-        if (!await EnsureAdminModeAsync(cancellationToken))
-        {
-            return Page();
         }
 
         if (!await LoadAsync(cancellationToken))
@@ -190,15 +171,4 @@ public class ManagementCastsModel(
         return true;
     }
 
-    private async Task<bool> EnsureAdminModeAsync(CancellationToken cancellationToken)
-    {
-        if (IsAdminMode)
-        {
-            return true;
-        }
-
-        await LoadAsync(cancellationToken);
-        ModelState.AddModelError(string.Empty, "変更するには管理者設定で管理者モードを有効にしてください。");
-        return false;
-    }
 }

@@ -810,6 +810,7 @@ declare
     v_business_day public.store_business_days%rowtype;
     v_readiness record;
     v_closed_at timestamp with time zone;
+    v_ignore_closing_requirements boolean;
 begin
     select *
       into v_business_day
@@ -823,40 +824,42 @@ begin
         raise exception 'business_day_not_open';
     end if;
 
-    if coalesce(p_ignore_closing_requirements, false) then
-        raise exception 'closing_override_disabled';
-    end if;
+    v_ignore_closing_requirements :=
+        coalesce(p_ignore_closing_requirements, false) or
+        p_pending_receipt_status = '__ignore_closing_requirements__';
 
-    select *
-      into v_readiness
-    from store.get_business_day_closing_readiness(
-        p_department_id,
-        p_business_day_id,
-        p_pending_receipt_status
-    );
+    if v_ignore_closing_requirements = false then
+        select *
+          into v_readiness
+        from store.get_business_day_closing_readiness(
+            p_department_id,
+            p_business_day_id,
+            p_pending_receipt_status
+        );
 
-    if coalesce(v_readiness.open_slip_count, 0) > 0 then
-        raise exception 'open_slips_exist:%', v_readiness.open_slip_count;
-    end if;
+        if coalesce(v_readiness.open_slip_count, 0) > 0 then
+            raise exception 'open_slips_exist:%', v_readiness.open_slip_count;
+        end if;
 
-    if coalesce(v_readiness.is_drink_delivery_amount_entered, false) = false then
-        raise exception 'drink_delivery_required';
-    end if;
+        if coalesce(v_readiness.is_drink_delivery_amount_entered, false) = false then
+            raise exception 'drink_delivery_required';
+        end if;
 
-    if coalesce(v_readiness.attendance_count, 0) = 0 then
-        raise exception 'attendance_required';
-    end if;
+        if coalesce(v_readiness.attendance_count, 0) = 0 then
+            raise exception 'attendance_required';
+        end if;
 
-    if coalesce(v_readiness.missing_clock_out_count, 0) > 0 then
-        raise exception 'attendance_clock_out_required:%', v_readiness.missing_clock_out_count;
-    end if;
+        if coalesce(v_readiness.missing_clock_out_count, 0) > 0 then
+            raise exception 'attendance_clock_out_required:%', v_readiness.missing_clock_out_count;
+        end if;
 
-    if coalesce(v_readiness.cast_sales_missing_slip_count, 0) > 0 then
-        raise exception 'cast_sales_adjustment_required:%', v_readiness.cast_sales_missing_slip_count;
-    end if;
+        if coalesce(v_readiness.cast_sales_missing_slip_count, 0) > 0 then
+            raise exception 'cast_sales_adjustment_required:%', v_readiness.cast_sales_missing_slip_count;
+        end if;
 
-    if coalesce(v_readiness.pending_receipt_count, 0) > 0 then
-        raise exception 'pending_receipts_exist:%', v_readiness.pending_receipt_count;
+        if coalesce(v_readiness.pending_receipt_count, 0) > 0 then
+            raise exception 'pending_receipts_exist:%', v_readiness.pending_receipt_count;
+        end if;
     end if;
 
     v_closed_at := clock_timestamp();

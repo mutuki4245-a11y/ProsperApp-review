@@ -54,21 +54,18 @@ public sealed class ClosingApplicationService(
         long? submittedBusinessDayId,
         string? memo,
         bool includePendingReceipts,
+        bool ignoreClosingRequirements,
         CancellationToken ct)
     {
-        var state = await LoadAsync(
-            includeReadiness: true,
-            includePendingReceipts,
-            forceRefresh: true,
-            ct);
-        if (!state.Succeeded)
+        var businessDayResult = await _businessDayRepository.GetCurrentAsync(ct, forceRefresh: true);
+        if (!businessDayResult.Succeeded)
         {
             return Result<StoreBusinessDay>.Failure(
-                state.FailureKind ?? ResultFailureKind.Unavailable,
-                state.ErrorMessage ?? "締め条件を取得できませんでした。");
+                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
+                businessDayResult.ErrorMessage ?? "現在営業日を取得できませんでした。");
         }
 
-        var businessDay = state.Value.BusinessDay;
+        var businessDay = businessDayResult.Value;
         if (businessDay is null)
         {
             return Result<StoreBusinessDay>.Failure(
@@ -83,25 +80,33 @@ public sealed class ClosingApplicationService(
                 "営業日情報が更新されています。画面を再読み込みしてください。");
         }
 
-        var readiness = state.Value.Readiness;
-        if (readiness is null)
+        if (!ignoreClosingRequirements)
         {
-            return Result<StoreBusinessDay>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "締め条件を取得できませんでした。");
-        }
+            var readinessResult = await _businessDayRepository.GetClosingReadinessAsync(
+                businessDay,
+                includePendingReceipts,
+                ct);
+            if (!readinessResult.Succeeded)
+            {
+                return Result<StoreBusinessDay>.Failure(
+                    readinessResult.FailureKind ?? ResultFailureKind.Unavailable,
+                    readinessResult.ErrorMessage ?? "締め条件を取得できませんでした。");
+            }
 
-        if (!readiness.CanClose)
-        {
-            return Result<StoreBusinessDay>.Failure(
-                ResultFailureKind.Conflict,
-                string.Join(Environment.NewLine, readiness.BlockReasons));
+            var readiness = readinessResult.Value;
+            if (!readiness.CanClose)
+            {
+                return Result<StoreBusinessDay>.Failure(
+                    ResultFailureKind.Conflict,
+                    string.Join(Environment.NewLine, readiness.BlockReasons));
+            }
         }
 
         var closeResult = await _businessDayRepository.CloseAsync(
             businessDay.BusinessDayId,
             memo,
             includePendingReceipts,
+            ignoreClosingRequirements,
             ct);
         return closeResult.Succeeded && closeResult.BusinessDay is not null
             ? Result<StoreBusinessDay>.Success(closeResult.BusinessDay)

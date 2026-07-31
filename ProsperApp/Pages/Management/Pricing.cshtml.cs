@@ -8,21 +8,17 @@ namespace ProsperApp.Pages;
 public class ManagementPricingModel(
     IFeatureGate featureGate,
     IStorePricingPlanRepository pricingPlanRepository,
-    IStoreClock storeClock,
-    IAdminModeService adminModeService) : PageModel
+    IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStorePricingPlanRepository _pricingPlanRepository = pricingPlanRepository;
     private readonly IStoreClock _storeClock = storeClock;
-    private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
     public StorePricingPlanInputModel Plan { get; set; } = new();
 
     public string? SuccessMessage { get; private set; }
     public PageLoadStatus? LoadStatus { get; private set; }
-
-    public bool IsAdminMode => _adminModeService.IsEnabled;
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct)
     {
@@ -34,12 +30,6 @@ public class ManagementPricingModel(
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken ct)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening)) return NotFound();
-        if (!IsAdminMode)
-        {
-            ModelState.AddModelError(string.Empty, "変更するには管理者設定で管理者モードを有効にしてください。");
-            await LoadAsync(ct);
-            return Page();
-        }
 
         if (Plan.SetMinutes % 5 != 0)
         {

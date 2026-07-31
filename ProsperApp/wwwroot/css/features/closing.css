@@ -208,6 +208,24 @@ a.closing-panel:focus {
   font-weight: 700;
 }
 
+.closing-final__override {
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  color: #9a3412;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  width: fit-content;
+}
+
+.closing-final__override .form-check-input {
+  margin: 0;
+}
+
 .cast-sales-adjustment-list {
   margin-top: 0.15rem;
 }

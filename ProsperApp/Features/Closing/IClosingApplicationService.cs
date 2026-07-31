@@ -14,6 +14,7 @@ public interface IClosingApplicationService
         long? submittedBusinessDayId,
         string? memo,
         bool includePendingReceipts,
+        bool ignoreClosingRequirements,
         CancellationToken ct);
 }
 

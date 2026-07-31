@@ -53,15 +53,6 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
-    @if (!Model.IsAdminMode)
-    {
-        <div class="alert alert-warning">
-            現在は参照モードです。変更する場合は
-            <a asp-page="/Settings/Index">管理者設定</a>
-            で管理者モードを有効にしてください。
-        </div>
-    }
-
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     @if (Model.LoadStatus is { Succeeded: false } loadStatus)
@@ -77,13 +68,22 @@
         <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
     }
 
-    <fieldset class="border-0 p-0 m-0" @(!Model.IsAdminMode || Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
+    <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
     <div class="item-admin" data-item-admin>
         <section class="slip-create__panel">
                 <div class="slip-create__panel-title">
                     <h2>カテゴリ</h2>
                 </div>
+                @if (!Model.IsAdminMode)
+                {
+                    <div class="alert alert-warning py-2">
+                        カテゴリの追加・編集・削除には
+                        <a asp-page="/Settings/Index">管理者設定</a>
+                        の管理者モードが必要です。
+                    </div>
+                }
 
+                <fieldset class="border-0 p-0 m-0" @(!Model.IsAdminMode ? "disabled" : null)>
                 <form method="post" asp-page-handler="SaveCategory" class="item-admin__form item-admin__form--category">
                     <input type="hidden" asp-for="CategoryInput.ItemCategoryId" />
                     <div>
@@ -160,6 +160,7 @@
                         }
                     </div>
                 }
+                </fieldset>
         </section>
 
         <section class="slip-create__panel">

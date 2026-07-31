@@ -20,15 +20,6 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
-    @if (!Model.IsAdminMode)
-    {
-        <div class="alert alert-warning">
-            現在は参照モードです。変更する場合は
-            <a asp-page="/Settings/Index">管理者設定</a>
-            で管理者モードを有効にしてください。
-        </div>
-    }
-
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
     @if (Model.LoadStatus is { Succeeded: false } loadStatus)
@@ -44,7 +35,7 @@
         <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
     }
 
-    <fieldset class="border-0 p-0 m-0" @(!Model.IsAdminMode || Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
+    <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
         <div class="item-admin">
             <section class="slip-create__panel">
                 <div class="slip-create__panel-title">

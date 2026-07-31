@@ -521,23 +521,50 @@ body.sales-hub-page {
 }
 
 .business-slip-filter button {
+  align-items: center;
   background: transparent;
   border: 0;
   border-radius: 7px;
   color: #60717a;
+  display: inline-flex;
   font-size: 0.74rem;
   font-weight: 900;
+  gap: 0.32rem;
+  justify-content: center;
   min-height: 34px;
   padding: 0.35rem 0.7rem;
   white-space: nowrap;
 }
 
-.business-slip-filter button > span {
+.business-slip-filter__label {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.business-slip-filter button:not([data-business-slip-filter="all"]) .business-slip-filter__label::before {
+  background: #17a673;
+  border-radius: 50%;
+  content: "";
+  flex: 0 0 0.55rem;
+  height: 0.55rem;
+  width: 0.55rem;
+}
+
+.business-slip-filter button[data-business-slip-filter="checkout_ready"] .business-slip-filter__label::before {
+  background: #2688d8;
+}
+
+.business-slip-filter button[data-business-slip-filter="checked_out"] .business-slip-filter__label::before {
+  background: #78909a;
+}
+
+.business-slip-filter__count {
   background: #dbe4e9;
   border-radius: 999px;
   display: inline-block;
   font-size: 0.63rem;
-  margin-left: 0.25rem;
   min-width: 1.25rem;
   padding: 0.12rem 0.28rem;
 }
@@ -548,36 +575,8 @@ body.sales-hub-page {
   color: #fff;
 }
 
-.business-slip-filter button.is-active > span {
+.business-slip-filter button.is-active .business-slip-filter__count {
   background: rgb(255 255 255 / 0.2);
-}
-
-.business-floor__legend {
-  align-items: center;
-  color: #61727a;
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.68rem;
-  font-weight: 850;
-  gap: 0.8rem;
-}
-
-.business-floor__legend span::before {
-  background: #17a673;
-  border-radius: 50%;
-  content: "";
-  display: inline-block;
-  height: 0.55rem;
-  margin-right: 0.3rem;
-  width: 0.55rem;
-}
-
-.business-floor__legend .is-checkout-ready::before {
-  background: #2688d8;
-}
-
-.business-floor__legend .is-checked-out::before {
-  background: #78909a;
 }
 
 .business-floor__toolbar-meta {
@@ -1235,9 +1234,6 @@ body.sales-hub-page {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .business-floor__legend {
-    display: none;
-  }
 }
 
 @media (max-width: 767.98px) {
@@ -1338,9 +1334,12 @@ body.sales-hub-page {
     font-size: 0.67rem;
   }
 
-  .business-slip-filter button > span {
-    display: block;
-    margin: 0.12rem auto 0;
+  .business-slip-filter button {
+    flex-wrap: wrap;
+    gap: 0.1rem 0.25rem;
+  }
+
+  .business-slip-filter__count {
     width: max-content;
   }
 

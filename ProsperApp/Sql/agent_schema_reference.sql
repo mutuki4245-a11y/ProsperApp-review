@@ -686,7 +686,8 @@ create table if not exists public.store_business_day_closing_snapshots (
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo.
 --     rejects closing when open slips, missing drink delivery input, no attendance,
 --     missing clock-out, missing cast sales adjustment, or pending receipt documents remain.
---     p_ignore_closing_requirements is retained only for staged-deploy compatibility; true is rejected.
+--     p_ignore_closing_requirements skips the closing readiness checks for administrator override flows.
+--     p_pending_receipt_status = '__ignore_closing_requirements__' is retained as a four-argument Edge Function compatibility signal.
 
 -- Slip creation and listing:
 --   store.get_tables(p_department_id bigint)

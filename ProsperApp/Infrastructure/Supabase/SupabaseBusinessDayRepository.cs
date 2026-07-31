@@ -16,6 +16,7 @@ public class SupabaseBusinessDayRepository(
     IApplicationCache cache,
     IOptions<SupabaseOptions> options) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
 {
+    private const string IgnoreClosingRequirementsStatus = "__ignore_closing_requirements__";
     private readonly IStoreClock _storeClock = storeClock;
     private readonly IApplicationCache _cache = cache;
     private readonly SupabaseOptions _options = options.Value;
@@ -192,6 +193,7 @@ public class SupabaseBusinessDayRepository(
         long businessDayId,
         string? memo,
         bool includePendingReceipts,
+        bool ignoreClosingRequirements,
         CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -207,7 +209,10 @@ public class SupabaseBusinessDayRepository(
                 p_department_id = departmentId,
                 p_business_day_id = businessDayId,
                 p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
-                p_pending_receipt_status = includePendingReceipts ? _options.PendingStatus : null
+                p_pending_receipt_status = ignoreClosingRequirements
+                    ? IgnoreClosingRequirementsStatus
+                    : includePendingReceipts ? _options.PendingStatus : null,
+                p_ignore_closing_requirements = ignoreClosingRequirements
             },
             ct);
 
@@ -699,6 +704,11 @@ public class SupabaseBusinessDayRepository(
         if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
         {
             return "営業中の営業日がありません。";
+        }
+
+        if (rawError.Contains("closing_override_disabled", StringComparison.OrdinalIgnoreCase))
+        {
+            return "現在のDBでは締め条件無視が無効です。SQL定義を適用してください。";
         }
 
         if (rawError.Contains("invalid_drink_delivery_amount", StringComparison.OrdinalIgnoreCase))

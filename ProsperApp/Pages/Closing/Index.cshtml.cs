@@ -8,10 +8,12 @@ namespace ProsperApp.Pages;
 
 public class ClosingModel(
     IFeatureGate featureGate,
-    IClosingApplicationService closingApplicationService) : PageModel
+    IClosingApplicationService closingApplicationService,
+    IAdminModeService adminModeService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IClosingApplicationService _closingApplicationService = closingApplicationService;
+    private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
     public long? BusinessDayId { get; set; }
@@ -19,7 +21,12 @@ public class ClosingModel(
     [BindProperty]
     public string? ClosingMemo { get; set; }
 
+    [BindProperty]
+    public bool IgnoreClosingRequirements { get; set; }
+
     public bool ReceiptsEnabled => _featureGate.IsEnabled(FeatureNames.Receipts);
+
+    public bool IsAdminMode => _adminModeService.IsEnabled;
 
     public StoreBusinessDay? CurrentBusinessDay { get; private set; }
 
@@ -119,10 +126,29 @@ public class ClosingModel(
             return NotFound();
         }
 
+        var ignoreClosingRequirements = IgnoreClosingRequirements && IsAdminMode;
+        if (IgnoreClosingRequirements && !IsAdminMode)
+        {
+            ModelState.AddModelError(string.Empty, "締め条件を無視するには管理者モードを有効にしてください。");
+            var reload = await _closingApplicationService.LoadAsync(
+                includeReadiness: true,
+                ReceiptsEnabled,
+                forceRefresh: true,
+                cancellationToken);
+            if (reload.Succeeded)
+            {
+                ApplyState(reload.Value);
+                BusinessDayId = CurrentBusinessDay?.BusinessDayId;
+            }
+
+            return Page();
+        }
+
         var result = await _closingApplicationService.CloseAsync(
             BusinessDayId,
             ClosingMemo,
             ReceiptsEnabled,
+            ignoreClosingRequirements,
             cancellationToken);
         if (!result.Succeeded)
         {

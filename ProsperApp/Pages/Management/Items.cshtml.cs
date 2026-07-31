@@ -58,7 +58,7 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
-        if (!await EnsureAdminModeAsync(cancellationToken))
+        if (!await EnsureCategoryAdminModeAsync(cancellationToken))
         {
             return Page();
         }
@@ -93,11 +93,6 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
-        if (!await EnsureAdminModeAsync(cancellationToken))
-        {
-            return Page();
-        }
-
         ItemInput.ItemId = null;
         ItemInput.IsActive = true;
         ModelState.Clear();
@@ -130,11 +125,6 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
-        if (!await EnsureAdminModeAsync(cancellationToken))
-        {
-            return Page();
-        }
-
         if (DeleteItemId is null or <= 0)
         {
             ModelState.AddModelError(string.Empty, "削除する商品を選択してください。");
@@ -165,7 +155,7 @@ public class ManagementItemsModel(
             return NotFound();
         }
 
-        if (!await EnsureAdminModeAsync(cancellationToken))
+        if (!await EnsureCategoryAdminModeAsync(cancellationToken))
         {
             return Page();
         }
@@ -198,11 +188,6 @@ public class ManagementItemsModel(
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
             return NotFound();
-        }
-
-        if (!await EnsureAdminModeAsync(cancellationToken))
-        {
-            return Page();
         }
 
         ModelState.Clear();
@@ -240,14 +225,14 @@ public class ManagementItemsModel(
                 result.ErrorMessage ?? "商品マスタを取得できませんでした。");
     }
 
-    private async Task<bool> EnsureAdminModeAsync(CancellationToken cancellationToken)
+    private async Task<bool> EnsureCategoryAdminModeAsync(CancellationToken cancellationToken)
     {
         if (IsAdminMode)
         {
             return true;
         }
 
-        ModelState.AddModelError(string.Empty, "変更するには管理者設定で管理者モードを有効にしてください。");
+        ModelState.AddModelError(string.Empty, "カテゴリを変更するには管理者設定で管理者モードを有効にしてください。");
         await LoadCatalogAsync(cancellationToken);
         PrepareMissingInputs();
         return false;

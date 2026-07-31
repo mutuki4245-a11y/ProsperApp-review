@@ -9,7 +9,6 @@
     <div class="store-home__hero">
         <p class="store-home__eyebrow">管理者設定</p>
         <h1>管理者設定</h1>
-        <p>利用店舗をこの端末に保存します。このページだけをパスワードで保護します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -81,7 +80,7 @@
 
             <section class="settings-card">
                 <h2>管理者モード</h2>
-                <p class="text-muted mb-3">店舗設定のマスタ追加・編集・削除を一時的に許可します。ログアウトまたは明示ロックで自動的に解除されます。</p>
+                <p class="text-muted mb-3">商品カテゴリの操作と、締め作業での締め条件無視を一時的に許可します。ログアウトまたは明示ロックで自動的に解除されます。</p>
                 <div class="form-check form-switch">
                     <input asp-for="Input.AdminMode" class="form-check-input" type="checkbox" role="switch" />
                     <label asp-for="Input.AdminMode" class="form-check-label">管理者モードを有効にする</label>

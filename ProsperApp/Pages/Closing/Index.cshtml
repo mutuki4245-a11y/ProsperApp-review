@@ -107,6 +107,13 @@
                         <input asp-for="ClosingMemo" class="form-control form-control-lg" maxlength="500" placeholder="必要なら共有事項を入力" />
                         <span asp-validation-for="ClosingMemo" class="text-danger"></span>
                     </div>
+                    @if (Model.IsAdminMode)
+                    {
+                        <label class="form-check closing-final__override">
+                            <input asp-for="IgnoreClosingRequirements" class="form-check-input" type="checkbox" data-closing-override />
+                            <span class="form-check-label">締め条件を無視</span>
+                        </label>
+                    }
                 </div>
                 <button class="btn btn-danger closing-panel__submit" type="submit" data-closing-close-submit disabled>確認中</button>
                 <button class="btn btn-outline-secondary closing-final__retry" type="button" data-closing-retry>再取得</button>
@@ -221,6 +228,7 @@
                 }
 
                 const submit = finalPanel.querySelector('[data-closing-close-submit]');
+                const override = finalPanel.querySelector('[data-closing-override]');
                 const status = finalPanel.querySelector('[data-closing-final-status]');
                 const setFinal = (nextClass, disabled, buttonText, statusText) => {
                     setStateClass(finalPanel, nextClass);
@@ -238,6 +246,11 @@
 
                 if (state.businessDayChanged) {
                     setFinal('has-warning', true, '営業日を締める', '営業日情報が更新されています。画面を再読み込みしてください。');
+                    return;
+                }
+
+                if (override?.checked && state.hasBusinessDay) {
+                    setFinal('has-warning', false, '条件を無視して締める', '管理者モードで締め条件を無視します。');
                     return;
                 }
 
@@ -629,6 +642,13 @@
             }, refreshIntervalMs);
             document.querySelector('[data-closing-retry]')?.addEventListener('click', () => {
                 void loadPanels();
+            });
+            document.querySelector('[data-closing-override]')?.addEventListener('change', updateFinalPanel);
+            document.querySelector('[data-closing-final]')?.addEventListener('submit', (event) => {
+                const override = event.currentTarget.querySelector('[data-closing-override]');
+                if (override?.checked && !window.confirm('締め条件を無視して営業日を締めます。未完了の手順が残っていても続行しますか？')) {
+                    event.preventDefault();
+                }
             });
 
             updateFinalPanel();

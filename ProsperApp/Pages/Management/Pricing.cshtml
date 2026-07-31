@@ -15,15 +15,6 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
-    @if (!Model.IsAdminMode)
-    {
-        <div class="alert alert-warning">
-            現在は参照モードです。変更する場合は
-            <a asp-page="/Settings/Index">管理者設定</a>
-            で管理者モードを有効にしてください。
-        </div>
-    }
-
     @if (Model.LoadStatus is { Succeeded: false } loadStatus)
     {
         <div class="alert alert-danger" role="alert">
@@ -38,7 +29,7 @@
     }
 
     <form method="post" asp-page-handler="Save" class="slip-create__panel">
-        <fieldset class="border-0 p-0 m-0" @(!Model.IsAdminMode || Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
+        <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
         <div class="item-admin__table">
             <div class="item-admin__row item-admin__row--nomination-back">

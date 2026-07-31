@@ -110,24 +110,23 @@
                     <div class="business-floor__toolbar">
                         <nav class="business-slip-filter" aria-label="伝票の絞り込み">
                             <button class="is-active" type="button" data-business-slip-filter="all" aria-pressed="true">
-                                すべて <span data-business-filter-count="all">0</span>
+                                <span class="business-slip-filter__label">すべて</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="all">0</span>
                             </button>
                             <button type="button" data-business-slip-filter="open" aria-pressed="false">
-                                接客中 <span data-business-filter-count="open">0</span>
+                                <span class="business-slip-filter__label">接客中</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="open">0</span>
                             </button>
                             <button type="button" data-business-slip-filter="checkout_ready" aria-pressed="false">
-                                会計準備 <span data-business-filter-count="checkout_ready">0</span>
+                                <span class="business-slip-filter__label">会計準備</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="checkout_ready">0</span>
                             </button>
                             <button type="button" data-business-slip-filter="checked_out" aria-pressed="false">
-                                会計済み <span data-business-filter-count="checked_out">0</span>
+                                <span class="business-slip-filter__label">会計済み</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="checked_out">0</span>
                             </button>
                         </nav>
                         <div class="business-floor__toolbar-meta">
-                            <div class="business-floor__legend" aria-label="伝票ステータス">
-                                <span class="is-open">接客中</span>
-                                <span class="is-checkout-ready">会計準備中</span>
-                                <span class="is-checked-out">会計済み</span>
-                            </div>
                             <label class="business-amount-toggle" data-slip-amount-toggle-container hidden>
                                 <span>会計表示</span>
                                 <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額を表示" />
