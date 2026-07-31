@@ -125,6 +125,9 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
 - `Sql/store_rpc/12_pricing_system_items.sql`
   - 固定料金行を帳票・明細用システム商品へ対応させるSQLです。
 
+- `Sql/store_rpc/12_daily_report.sql`
+  - 営業中の暫定日報、締め時に固定する日報、旧締めスナップショットの互換表示RPCです。
+
 - `Sql/store_rpc/13_accounting_snapshot_guards.sql`
   - 既存データのsnapshot backfill、日次締めsnapshot、締め後不変トリガー、マスタID不変トリガーです。
 
@@ -330,11 +333,12 @@ SQLファイルは現在のDB定義を確認するための参照資料です。
 13. `Sql/store_rpc/08_checkout_ready.sql`
 14. `Sql/store_rpc/09_business_home_snapshot.sql`
 15. `Sql/store_rpc/10_business_home_flush.sql`
-16. `Sql/store_rpc/13_accounting_snapshot_guards.sql`
-17. `Sql/store_rpc/14_operational_read_models.sql`
-18. `Sql/store_rpc/99_grants.sql`
-19. 必要に応じて `Sql/store_table_master_seed.sql`
-20. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
+16. `Sql/store_rpc/12_daily_report.sql`
+17. `Sql/store_rpc/13_accounting_snapshot_guards.sql`
+18. `Sql/store_rpc/14_operational_read_models.sql`
+19. `Sql/store_rpc/99_grants.sql`
+20. 必要に応じて `Sql/store_table_master_seed.sql`
+21. 必要に応じて `Sql/quick_entry_account_master_updates.sql`
 
 `agent_schema_reference.sql` と `store_rpc_functions.sql` は実行対象ではありません。
 

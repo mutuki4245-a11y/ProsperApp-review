@@ -2,6 +2,7 @@ begin;
 
 drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
 drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
+drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text, bigint, bigint);
 
 create or replace function store.get_pending_receipts(
     p_department_id bigint,
@@ -116,7 +117,9 @@ create or replace function store.quick_enter_receipt(
     p_description text,
     p_group_code text,
     p_journal_payload jsonb default null,
-    p_status text default 'quick_entered'
+    p_status text default 'quick_entered',
+    p_business_day_id bigint default null,
+    p_advance_cast_id bigint default null
 )
 returns table (
     document_id text
@@ -129,6 +132,8 @@ declare
     v_company_id bigint;
     v_entry_id text;
     v_save_result jsonb;
+    v_business_day public.store_business_days%rowtype;
+    v_is_cast_advance boolean;
 begin
     if nullif(trim(coalesce(p_document_id, '')), '') is null
        or p_payment_date is null
@@ -142,6 +147,11 @@ begin
         raise exception 'invalid_receipt_status';
     end if;
 
+    v_is_cast_advance := trim(p_account_subject) in ('前渡金: キャスト', '前渡金：キャスト');
+    if trunc(p_amount) <> p_amount then
+        raise exception 'receipt_amount_must_be_integer';
+    end if;
+
     select department.company_id
       into v_company_id
     from public.department_master department
@@ -150,6 +160,43 @@ begin
 
     if v_company_id is null then
         raise exception 'store_department_not_found';
+    end if;
+
+    if v_is_cast_advance then
+        if coalesce(p_business_day_id, 0) <= 0 or coalesce(p_advance_cast_id, 0) <= 0 then
+            raise exception 'cast_advance_attendance_required';
+        end if;
+
+        select business_day.*
+          into v_business_day
+          from public.store_business_days business_day
+         where business_day.business_day_id = p_business_day_id
+           and business_day.department_id = p_department_id
+           and business_day.company_id = v_company_id
+           and business_day.business_date = p_payment_date
+           and business_day.status = 'open'
+         for update;
+
+        if v_business_day.business_day_id is null then
+            raise exception 'cast_advance_business_day_not_open';
+        end if;
+
+        if not exists (
+            select 1
+              from public.store_cast_attendance attendance
+              join public.cast_master cast_member
+                on cast_member.cast_id = attendance.cast_id
+             where attendance.business_day_id = p_business_day_id
+               and attendance.department_id = p_department_id
+               and attendance.cast_id = p_advance_cast_id
+               and attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out')
+               and cast_member.company_id = v_company_id
+               and cast_member.is_active = true
+        ) then
+            raise exception 'cast_advance_attending_cast_required';
+        end if;
+    elsif p_advance_cast_id is not null then
+        raise exception 'unexpected_cast_advance_selection';
     end if;
 
     if not exists (
@@ -230,6 +277,16 @@ begin
         raise exception 'receipt_journal_amount_mismatch';
     end if;
 
+    if v_is_cast_advance and not exists (
+        select 1
+          from jsonb_array_elements(p_journal_payload->'journal_entry_lines') line
+         where upper(line->>'side') in ('DEBIT', 'D')
+           and trim(line->>'account_code') = '前渡金'
+           and coalesce(nullif(line->>'amount', '')::numeric, 0) = p_amount
+    ) then
+        raise exception 'cast_advance_journal_account_mismatch';
+    end if;
+
     select accounting.save_journal_payload(p_journal_payload)
       into v_save_result;
 
@@ -238,6 +295,29 @@ begin
        or coalesce((v_save_result->>'journal_entry_lines')::integer, 0) <> 2
        or coalesce((v_save_result->>'document_journal_links')::integer, 0) <> 1 then
         raise exception 'receipt_journal_save_incomplete';
+    end if;
+
+    if v_is_cast_advance then
+        insert into public.store_business_day_cast_advances (
+            business_day_id,
+            business_date,
+            company_id,
+            department_id,
+            cast_id,
+            journal_entry_id,
+            amount,
+            memo
+        )
+        values (
+            v_business_day.business_day_id,
+            v_business_day.business_date,
+            v_business_day.company_id,
+            v_business_day.department_id,
+            p_advance_cast_id,
+            v_entry_id::uuid,
+            p_amount,
+            trim(p_description)
+        );
     end if;
 
     return query select trim(p_document_id);
@@ -298,7 +378,7 @@ $$;
 
 revoke all on function store.get_pending_receipts(bigint, text)
     from public, anon, authenticated, service_role;
-revoke all on function store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text)
+revoke all on function store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text, bigint, bigint)
     from public, anon, authenticated, service_role;
 revoke all on function store.mark_receipt_scan_mistake(bigint, text, text)
     from public, anon, authenticated, service_role;

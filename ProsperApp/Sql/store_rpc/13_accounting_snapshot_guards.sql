@@ -15,6 +15,7 @@ as $$
 declare
     v_business_day public.store_business_days%rowtype;
     v_business_home_data jsonb;
+    v_daily_report jsonb;
     v_closing_data jsonb;
     v_snapshot_id bigint;
 begin
@@ -56,11 +57,19 @@ begin
         raise exception 'business_day_snapshot_not_found';
     end if;
 
+    v_daily_report := store.build_business_day_daily_report(
+        p_department_id,
+        p_business_day_id,
+        p_closed_at,
+        'closed'
+    );
+
     select jsonb_build_object(
-        'schema_version', 'business-day-closing-v1',
+        'schema_version', 'business-day-closing-v2',
         'accounting_snapshot_policy_version', 2,
         'captured_at', p_closed_at,
         'backfilled', coalesce(p_backfilled, false),
+        'daily_report', v_daily_report,
         'business_day', jsonb_build_object(
             'business_day_id', v_business_day.business_day_id,
             'business_date', v_business_day.business_date,
@@ -239,7 +248,7 @@ begin
         v_business_day.business_date,
         v_business_day.company_id,
         v_business_day.department_id,
-        1,
+        2,
         p_closed_at,
         coalesce(p_backfilled, false),
         v_business_home_data,
@@ -659,6 +668,7 @@ begin
         'store_order_line_cast_backs',
         'store_slip_cast_backs',
         'store_business_day_champagne_backs',
+        'store_business_day_cast_advances',
         'store_slip_charge_lines',
         'store_checkouts',
         'store_checkout_payments',
@@ -685,6 +695,7 @@ $$;
 revoke all on table public.store_slip_accounting_snapshots from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_closing_snapshots from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_champagne_backs from public, anon, authenticated, service_role;
+revoke all on table public.store_business_day_cast_advances from public, anon, authenticated, service_role;
 revoke execute on function store.get_business_day_snapshot_at(bigint, bigint, timestamp with time zone) from public, anon, authenticated, service_role;
 revoke execute on function store.capture_business_day_closing_snapshot(bigint, bigint, timestamp with time zone, boolean) from public, anon, authenticated, service_role;
 revoke execute on function store.guard_closed_business_day_mutation() from public, anon, authenticated, service_role;

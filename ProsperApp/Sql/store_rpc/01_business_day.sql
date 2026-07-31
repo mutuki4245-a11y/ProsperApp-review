@@ -899,6 +899,17 @@ begin
     end if;
 
     v_closed_at := clock_timestamp();
+    update public.store_business_days b
+       set memo = coalesce(nullif(trim(coalesce(p_memo, '')), ''), b.memo)
+     where b.business_day_id = p_business_day_id
+       and b.department_id = p_department_id
+       and b.status = 'open'
+    returning b.* into v_business_day;
+
+    if v_business_day.business_day_id is null then
+        raise exception 'business_day_not_open';
+    end if;
+
     perform store.capture_business_day_closing_snapshot(
         p_department_id,
         p_business_day_id,
@@ -906,23 +917,28 @@ begin
         false
     );
 
-    return query
     update public.store_business_days b
        set status = 'closed',
-           closed_at = v_closed_at,
-           memo = coalesce(nullif(trim(coalesce(p_memo, '')), ''), b.memo)
+           closed_at = v_closed_at
      where b.business_day_id = p_business_day_id
        and b.department_id = p_department_id
        and b.status = 'open'
-    returning
-        b.business_day_id,
-        b.company_id,
-        b.department_id,
-        b.business_date,
-        b.opened_at,
-        b.closed_at,
-        b.status,
-        b.memo;
+    returning b.* into v_business_day;
+
+    if v_business_day.business_day_id is null then
+        raise exception 'business_day_not_open';
+    end if;
+
+    return query
+    select
+        v_business_day.business_day_id,
+        v_business_day.company_id,
+        v_business_day.department_id,
+        v_business_day.business_date,
+        v_business_day.opened_at,
+        v_business_day.closed_at,
+        v_business_day.status,
+        v_business_day.memo;
 end;
 $$;
 
