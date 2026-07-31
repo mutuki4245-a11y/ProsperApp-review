@@ -164,6 +164,7 @@ as $$
 declare
     v_company_id bigint;
     v_business_day public.store_business_days%rowtype;
+    v_table public.store_table_master%rowtype;
     v_slip_id bigint;
     v_line_no integer;
     v_label text;
@@ -203,13 +204,14 @@ begin
         raise exception 'business_day_not_open';
     end if;
 
-    if not exists (
-        select 1
-        from public.store_table_master t
-        where t.table_id = p_table_id
-          and t.department_id = p_department_id
-          and t.is_active = true
-    ) then
+    select t.*
+      into v_table
+    from public.store_table_master t
+    where t.table_id = p_table_id
+      and t.department_id = p_department_id
+      and t.is_active = true;
+
+    if v_table.table_id is null then
         raise exception 'store_table_not_found';
     end if;
 
@@ -224,6 +226,8 @@ begin
         business_day_id,
         business_date,
         table_id,
+        table_code_snapshot,
+        table_name_snapshot,
         slip_no,
         opened_at,
         status,
@@ -236,6 +240,8 @@ begin
         v_business_day.business_day_id,
         v_business_day.business_date,
         p_table_id,
+        v_table.table_code,
+        v_table.table_name,
         v_slip_no,
         p_opened_at,
         'open',

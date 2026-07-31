@@ -167,7 +167,19 @@ begin
 
     select
         coalesce(nullif(trim(d.department_name), ''), nullif(trim(d.receipt_display_name), ''), '未設定'),
-        coalesce(nullif(trim(concat_ws(' ', t.table_code, t.table_name)), ''), '未設定')
+        coalesce(
+            nullif(
+                trim(
+                    case
+                        when v_slip.table_code_snapshot is not null
+                            then concat_ws(' ', v_slip.table_code_snapshot, v_slip.table_name_snapshot)
+                        else concat_ws(' ', t.table_code, t.table_name)
+                    end
+                ),
+                ''
+            ),
+            '未設定'
+        )
       into v_store_name, v_table_display_name
       from public.department_master d
       left join public.store_table_master t

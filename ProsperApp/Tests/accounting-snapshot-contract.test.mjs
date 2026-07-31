@@ -115,9 +115,39 @@ assert.doesNotMatch(
 );
 
 const deleteItem = functionBlock(masterSql, 'store.delete_item');
-assert.match(deleteItem, /set is_active = false/i);
-assert.doesNotMatch(deleteItem, /delete from public\.store_item_master/i);
+assert.match(deleteItem, /delete from public\.store_item_master/i);
+assert.doesNotMatch(deleteItem, /set is_active = false/i);
 assert.doesNotMatch(deleteItem, /set item_id = null/i);
+assert.match(schema, /store_order_lines[\s\S]*?item_id bigint,[\s\S]*?item_name_snapshot text not null/i);
+assert.match(schema, /item_category_id_snapshot bigint/i);
+assert.match(schema, /item_category_code_snapshot text/i);
+assert.match(schema, /item_category_name_snapshot text/i);
+assert.match(
+    schema,
+    /create trigger trg_store_order_lines_item_category_snapshot[\s\S]*before insert or update of item_id/i
+);
+assert.match(
+    schema,
+    /update public\.store_order_lines ol[\s\S]*item_category_code_snapshot = c\.category_code[\s\S]*item_category_name_snapshot = c\.category_name/i
+);
+assert.doesNotMatch(
+    schema,
+    /add constraint store_order_lines_item_id_fkey[\s\S]*?references public\.store_item_master/i
+);
+
+assert.match(schema, /table_code_snapshot text/i);
+assert.match(schema, /table_name_snapshot text/i);
+assert.match(schema, /drop constraint if exists store_slips_table_id_fkey/i);
+assert.match(schema, /disable trigger trg_store_slips_set_updated_at/i);
+assert.match(schema, /disable trigger trg_store_slips_business_ui_revision/i);
+assert.match(schema, /disable trigger trg_store_order_lines_set_updated_at/i);
+assert.match(schema, /disable trigger trg_store_order_lines_business_ui_revision/i);
+assert.match(cancelSql, /table_code_snapshot[\s\S]*?v_table\.table_code/i);
+assert.match(cancelSql, /table_name_snapshot[\s\S]*?v_table\.table_name/i);
+assert.match(
+    guardsSql,
+    /trg_store_table_master_identity_immutable[\s\S]*?before update on public\.store_table_master/i
+);
 
 const pricingOrder = rpcOrder.indexOf('Sql/store_rpc/11_pricing.sql');
 const checkoutOrder = rpcOrder.indexOf('Sql/store_rpc/08_checkout_ready.sql');

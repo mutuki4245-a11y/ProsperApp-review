@@ -53,6 +53,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_tables", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_table_admin_list", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_casts", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_casts_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
@@ -307,6 +308,31 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.upsert_table",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_table_id", type: "bigint" },
+        { name: "p_table_code", type: "text" },
+        { name: "p_table_name", type: "text" },
+        { name: "p_table_category_no", type: "integer" },
+        { name: "p_sort_order", type: "integer" },
+        { name: "p_is_active", type: "boolean" },
+      ],
+    },
+  ],
+  [
+    "store.delete_table",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_table_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
     "store.upsert_item_category",
     {
       result: "rows",
@@ -335,6 +361,16 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_cast_back_regular_unit_amount", type: "numeric" },
         { name: "p_cast_back_nomination_unit_amount", type: "numeric" },
         { name: "p_cast_back_type", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.delete_item_category",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_item_category_id", type: "bigint" },
       ],
     },
   ],

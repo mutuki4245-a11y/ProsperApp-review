@@ -22,6 +22,169 @@ as $$
     order by t.table_category_no asc, t.sort_order asc, t.table_code asc;
 $$;
 
+drop function if exists store.get_table_admin_list(bigint);
+
+create or replace function store.get_table_admin_list(p_department_id bigint)
+returns table (
+    table_id bigint,
+    table_code text,
+    table_name text,
+    table_category_no smallint,
+    sort_order integer,
+    is_active boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select
+        t.table_id,
+        t.table_code,
+        t.table_name,
+        t.table_category_no,
+        t.sort_order,
+        t.is_active
+    from public.store_table_master t
+    join public.department_master d
+      on d.department_id = t.department_id
+     and d.company_id = t.company_id
+     and d.is_active = true
+    where t.department_id = p_department_id
+    order by t.table_category_no, t.sort_order, t.table_code;
+$$;
+
+drop function if exists store.upsert_table(bigint, bigint, text, text, integer, integer, boolean);
+
+create or replace function store.upsert_table(
+    p_department_id bigint,
+    p_table_id bigint default null,
+    p_table_code text default null,
+    p_table_name text default null,
+    p_table_category_no integer default 0,
+    p_sort_order integer default 0,
+    p_is_active boolean default true
+)
+returns table (
+    table_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_table_code text;
+    v_table_name text;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    v_table_code := nullif(trim(coalesce(p_table_code, '')), '');
+    v_table_name := nullif(trim(coalesce(p_table_name, '')), '');
+
+    if v_table_code is null
+       or char_length(v_table_code) > 40
+       or char_length(coalesce(v_table_name, '')) > 100
+       or coalesce(p_table_category_no, -1) not between 0 and 9
+       or coalesce(p_sort_order, -1) not between 0 and 9999 then
+        raise exception 'invalid_store_table';
+    end if;
+
+    if coalesce(p_table_id, 0) > 0 then
+        return query
+        update public.store_table_master t
+           set table_code = v_table_code,
+               table_name = v_table_name,
+               table_category_no = p_table_category_no::smallint,
+               sort_order = p_sort_order,
+               is_active = coalesce(p_is_active, true),
+               updated_at = now()
+         where t.table_id = p_table_id
+           and t.company_id = v_company_id
+           and t.department_id = p_department_id
+        returning t.table_id;
+
+        if not found then
+            raise exception 'store_table_not_found';
+        end if;
+
+        return;
+    end if;
+
+    return query
+    insert into public.store_table_master (
+        company_id,
+        department_id,
+        table_code,
+        table_name,
+        table_category_no,
+        sort_order,
+        is_active
+    )
+    values (
+        v_company_id,
+        p_department_id,
+        v_table_code,
+        v_table_name,
+        p_table_category_no::smallint,
+        p_sort_order,
+        coalesce(p_is_active, true)
+    )
+    returning store_table_master.table_id;
+end;
+$$;
+
+drop function if exists store.delete_table(bigint, bigint);
+
+create or replace function store.delete_table(
+    p_department_id bigint,
+    p_table_id bigint
+)
+returns table (
+    table_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_deleted_table_id bigint;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    delete from public.store_table_master t
+     where t.table_id = p_table_id
+       and t.company_id = v_company_id
+       and t.department_id = p_department_id
+    returning t.table_id
+      into v_deleted_table_id;
+
+    if v_deleted_table_id is null then
+        raise exception 'store_table_not_found';
+    end if;
+
+    return query select v_deleted_table_id;
+end;
+$$;
+
 drop function if exists store.get_casts(bigint);
 
 create or replace function store.get_casts(p_department_id bigint)
@@ -273,8 +436,8 @@ as $$
         select
             s.slip_id,
             s.table_id,
-            t.table_code,
-            t.table_name,
+            case when s.table_code_snapshot is not null then s.table_code_snapshot else t.table_code end as table_code,
+            case when s.table_code_snapshot is not null then s.table_name_snapshot else t.table_name end as table_name,
             s.opened_at,
             s.customer_count,
             s.memo,
@@ -910,13 +1073,10 @@ begin
         raise exception 'store_item_not_found';
     end if;
 
-    -- 使用済み商品は伝票の集計軸としてIDを残すため、物理削除しません。
-    update public.store_item_master i
-       set is_active = false,
-           updated_at = now()
+    -- 注文明細はitem_idと商品・カテゴリ・単価snapshotを保持し、マスタ行だけを物理削除します。
+    delete from public.store_item_master i
      where i.department_id = p_department_id
        and i.item_id = p_item_id
-       and i.is_active = true
     returning i.item_id
       into v_deleted_item_id;
 
@@ -926,6 +1086,54 @@ begin
 
     return query
     select v_deleted_item_id;
+end;
+$$;
+
+drop function if exists store.delete_item_category(bigint, bigint);
+
+create or replace function store.delete_item_category(
+    p_department_id bigint,
+    p_item_category_id bigint
+)
+returns table (
+    item_category_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_deleted_category_id bigint;
+begin
+    if not exists (
+        select 1
+        from public.store_item_category_master c
+        where c.department_id = p_department_id
+          and c.item_category_id = p_item_category_id
+    ) then
+        raise exception 'store_item_category_not_found';
+    end if;
+
+    if exists (
+        select 1
+        from public.store_item_master i
+        where i.department_id = p_department_id
+          and i.item_category_id = p_item_category_id
+    ) then
+        raise exception 'store_item_category_in_use';
+    end if;
+
+    delete from public.store_item_category_master c
+     where c.department_id = p_department_id
+       and c.item_category_id = p_item_category_id
+    returning c.item_category_id
+      into v_deleted_category_id;
+
+    if v_deleted_category_id is null then
+        raise exception 'store_item_category_not_found';
+    end if;
+
+    return query select v_deleted_category_id;
 end;
 $$;
 

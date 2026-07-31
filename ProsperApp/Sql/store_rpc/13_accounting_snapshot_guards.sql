@@ -621,7 +621,7 @@ for each row execute function store.guard_immutable_master_identity();
 
 drop trigger if exists trg_store_table_master_identity_immutable on public.store_table_master;
 create trigger trg_store_table_master_identity_immutable
-before update or delete on public.store_table_master
+before update on public.store_table_master
 for each row execute function store.guard_immutable_master_identity();
 
 do $$
