@@ -406,6 +406,158 @@ begin
 end;
 $$;
 
+drop function if exists store.get_staffs(bigint);
+
+create or replace function store.get_staffs(p_department_id bigint)
+returns table (
+    staff_id bigint,
+    staff_code text,
+    display_name text,
+    department_name text
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select
+        s.staff_id,
+        s.staff_code,
+        s.display_name,
+        d.department_name
+    from public.store_staff_master s
+    join public.department_master d
+      on d.department_id = s.department_id
+    where s.department_id = p_department_id
+      and s.is_active = true
+      and s.status = 'active'
+      and d.is_active = true
+    order by s.sort_order asc, s.display_name asc, s.staff_id asc;
+$$;
+
+drop function if exists store.get_staffs_admin(bigint);
+
+create or replace function store.get_staffs_admin(p_department_id bigint)
+returns table (
+    staff_id bigint,
+    display_name text,
+    joined_on date
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select
+        s.staff_id,
+        s.display_name,
+        s.joined_on
+    from public.store_staff_master s
+    join public.department_master d
+      on d.department_id = s.department_id
+    where s.department_id = p_department_id
+      and d.is_active = true
+      and s.is_active = true
+      and s.status = 'active'
+    order by s.joined_on asc, s.staff_id asc;
+$$;
+
+drop function if exists store.create_staff(bigint, text);
+
+create or replace function store.create_staff(
+    p_department_id bigint,
+    p_display_name text
+)
+returns table (
+    staff_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_display_name text;
+    v_sort_order integer;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    v_display_name := nullif(trim(coalesce(p_display_name, '')), '');
+    if v_display_name is null then
+        raise exception 'invalid_store_staff';
+    end if;
+
+    select coalesce(max(s.sort_order), 0) + 10
+      into v_sort_order
+    from public.store_staff_master s
+    where s.company_id = v_company_id
+      and s.department_id = p_department_id;
+
+    return query
+    insert into public.store_staff_master (
+        company_id,
+        department_id,
+        display_name,
+        joined_on,
+        status,
+        sort_order,
+        is_active
+    )
+    values (
+        v_company_id,
+        p_department_id,
+        v_display_name,
+        (now() at time zone 'Asia/Tokyo')::date,
+        'active',
+        v_sort_order,
+        true
+    )
+    returning store_staff_master.staff_id;
+end;
+$$;
+
+drop function if exists store.delete_staff(bigint, bigint);
+
+create or replace function store.delete_staff(
+    p_department_id bigint,
+    p_staff_id bigint
+)
+returns table (
+    staff_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_deleted_staff_id bigint;
+begin
+    update public.store_staff_master s
+       set status = 'inactive',
+           is_active = false,
+           updated_at = now()
+     where s.department_id = p_department_id
+       and s.staff_id = p_staff_id
+       and s.is_active = true
+    returning s.staff_id
+      into v_deleted_staff_id;
+
+    if v_deleted_staff_id is null then
+        raise exception 'store_staff_not_found';
+    end if;
+
+    return query
+    select v_deleted_staff_id;
+end;
+$$;
+
 drop function if exists store.get_business_day_slips(bigint, bigint);
 
 -- store.get_business_day_slips was removed with the legacy /Slips/Edit module.

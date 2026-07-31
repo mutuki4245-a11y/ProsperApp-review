@@ -188,6 +188,25 @@ begin
               left join public.department_master cd on cd.department_id = c.department_id
              where a.business_day_id = p_business_day_id
         ), '[]'::jsonb),
+        'staff_attendance', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'staff_attendance_id', a.staff_attendance_id,
+                'staff_id', a.staff_id,
+                'staff_display_name', s.display_name,
+                'staff_department_id', s.department_id,
+                'staff_department_name', sd.department_name,
+                'attendance_status', a.attendance_status,
+                'clock_in_at', a.clock_in_at,
+                'clock_out_at', a.clock_out_at,
+                'uses_send_service', a.uses_send_service,
+                'source', a.source,
+                'memo', a.memo
+            ) order by a.staff_attendance_id)
+              from public.store_staff_attendance a
+              join public.store_staff_master s on s.staff_id = a.staff_id
+              left join public.department_master sd on sd.department_id = s.department_id
+             where a.business_day_id = p_business_day_id
+        ), '[]'::jsonb),
         'cast_sales_adjustments', coalesce((
             select jsonb_agg(jsonb_build_object(
                 'adjustment_id', a.adjustment_id,
@@ -622,6 +641,7 @@ begin
     if v_old->>'company_id' is distinct from v_new->>'company_id' or
        v_old->>'department_id' is distinct from v_new->>'department_id' or
        v_old->>'cast_id' is distinct from v_new->>'cast_id' or
+       v_old->>'staff_id' is distinct from v_new->>'staff_id' or
        v_old->>'table_id' is distinct from v_new->>'table_id' then
         raise exception 'master_identity_immutable';
     end if;
@@ -650,6 +670,11 @@ create trigger trg_cast_master_identity_immutable
 before update or delete on public.cast_master
 for each row execute function store.guard_immutable_master_identity();
 
+drop trigger if exists trg_store_staff_master_identity_immutable on public.store_staff_master;
+create trigger trg_store_staff_master_identity_immutable
+before update or delete on public.store_staff_master
+for each row execute function store.guard_immutable_master_identity();
+
 drop trigger if exists trg_store_table_master_identity_immutable on public.store_table_master;
 create trigger trg_store_table_master_identity_immutable
 before update on public.store_table_master
@@ -661,6 +686,7 @@ declare
 begin
     foreach v_table_name in array array[
         'store_cast_attendance',
+        'store_staff_attendance',
         'store_slips',
         'store_slip_customers',
         'store_slip_casts',
@@ -696,6 +722,8 @@ revoke all on table public.store_slip_accounting_snapshots from public, anon, au
 revoke all on table public.store_business_day_closing_snapshots from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_champagne_backs from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_cast_advances from public, anon, authenticated, service_role;
+revoke all on table public.store_staff_attendance from public, anon, authenticated, service_role;
+revoke all on table public.store_staff_master from public, anon, authenticated, service_role;
 revoke execute on function store.get_business_day_snapshot_at(bigint, bigint, timestamp with time zone) from public, anon, authenticated, service_role;
 revoke execute on function store.capture_business_day_closing_snapshot(bigint, bigint, timestamp with time zone, boolean) from public, anon, authenticated, service_role;
 revoke execute on function store.guard_closed_business_day_mutation() from public, anon, authenticated, service_role;

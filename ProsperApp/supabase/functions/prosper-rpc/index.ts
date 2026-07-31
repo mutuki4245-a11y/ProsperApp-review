@@ -66,6 +66,8 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_table_admin_list", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_casts", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_casts_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_staffs", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_staffs_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.get_business_day_snapshot",
     {
@@ -252,6 +254,17 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.save_business_day_staff_attendance",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_attendance_entries", type: "jsonb" },
+      ],
+    },
+  ],
+  [
     "store.get_open_slip_count",
     {
       result: "scalar",
@@ -274,6 +287,17 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ],
   [
     "store.save_business_day_closing_attendance",
+    {
+      result: "scalar",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_attendance_entries", type: "jsonb" },
+      ],
+    },
+  ],
+  [
+    "store.save_business_day_staff_closing_attendance",
     {
       result: "scalar",
       params: [
@@ -325,6 +349,26 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_cast_id", type: "bigint" },
+      ],
+    },
+  ],
+  [
+    "store.create_staff",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_display_name", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.delete_staff",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_staff_id", type: "bigint" },
       ],
     },
   ],

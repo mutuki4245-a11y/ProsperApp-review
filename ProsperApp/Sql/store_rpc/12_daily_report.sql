@@ -21,6 +21,7 @@ declare
     v_item_categories jsonb := '[]'::jsonb;
     v_visits jsonb := '[]'::jsonb;
     v_casts jsonb := '[]'::jsonb;
+    v_staffs jsonb := '[]'::jsonb;
     v_expense_accounts jsonb := '[]'::jsonb;
     v_confirmed_checkout_count integer := 0;
     v_slip_count integer := 0;
@@ -267,6 +268,20 @@ begin
      where attendance.business_day_id = p_business_day_id
        and attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out');
 
+    select coalesce(jsonb_agg(jsonb_build_object(
+        'staffId', attendance.staff_id,
+        'displayName', staff_member.display_name,
+        'clockInAt', attendance.clock_in_at,
+        'clockOutAt', attendance.clock_out_at,
+        'usesSendService', attendance.uses_send_service
+    ) order by staff_member.sort_order, staff_member.staff_id), '[]'::jsonb)
+      into v_staffs
+      from public.store_staff_attendance attendance
+      join public.store_staff_master staff_member
+        on staff_member.staff_id = attendance.staff_id
+     where attendance.business_day_id = p_business_day_id
+       and attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out');
+
     select
         coalesce(jsonb_agg(jsonb_build_object(
             'accountCode', grouped.account_code,
@@ -347,6 +362,7 @@ begin
         'itemCategories', v_item_categories,
         'visits', v_visits,
         'casts', v_casts,
+        'staffs', v_staffs,
         'expenseAccounts', v_expense_accounts,
         'warnings', v_warnings
     );
@@ -524,6 +540,18 @@ begin
                 'advanceAmount', null
             ) order by attendance.ordinality)
               from jsonb_array_elements(coalesce(v_snapshot.closing_data->'attendance', '[]'::jsonb))
+                   with ordinality attendance(value, ordinality)
+             where attendance.value->>'attendance_status' in ('scheduled', 'checked_in', 'checked_out')
+        ), '[]'::jsonb),
+        'staffs', coalesce((
+            select jsonb_agg(jsonb_build_object(
+                'staffId', nullif(attendance.value->>'staff_id', '')::bigint,
+                'displayName', attendance.value->>'staff_display_name',
+                'clockInAt', attendance.value->>'clock_in_at',
+                'clockOutAt', attendance.value->>'clock_out_at',
+                'usesSendService', coalesce((attendance.value->>'uses_send_service')::boolean, false)
+            ) order by attendance.ordinality)
+              from jsonb_array_elements(coalesce(v_snapshot.closing_data->'staff_attendance', '[]'::jsonb))
                    with ordinality attendance(value, ordinality)
              where attendance.value->>'attendance_status' in ('scheduled', 'checked_in', 'checked_out')
         ), '[]'::jsonb),
