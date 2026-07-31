@@ -1,27 +1,62 @@
--- セット・延長料金を、会計時に生成する編集不可のシステム商品として扱います。
--- 料金計算の正本は store_slip_pricing_lines に残し、注文行は帳票・明細表示用です。
+-- 商品管理のシステム商品カテゴリ統合。
+-- カラオケ、料金用の自動商品、カテゴリ未設定の商品を「システム」カテゴリへ移します。
+-- 実行後の戻し方: 対象商品の item_category_id を旧カテゴリIDへ更新し、
+-- category_code = 'karaoke' のカテゴリを再有効化します。注文行のスナップショットは変更しません。
 
-alter table public.store_item_master
-    drop constraint if exists chk_store_item_master_type;
+begin;
 
-alter table public.store_item_master
-    add constraint chk_store_item_master_type
-    check (item_type in ('standard', 'karaoke', 'nomination_fee', 'set_fee', 'extension_fee'));
+insert into public.store_item_category_master (
+    company_id,
+    department_id,
+    category_code,
+    category_name,
+    sort_order,
+    is_active
+)
+select
+    d.company_id,
+    d.department_id,
+    'system',
+    'システム',
+    9010,
+    true
+from public.department_master d
+where d.is_active = true
+on conflict (company_id, department_id, category_code)
+do update
+   set category_name = excluded.category_name,
+       sort_order = excluded.sort_order,
+       is_active = true,
+       updated_at = now();
 
-alter table public.store_order_lines
-    drop constraint if exists chk_store_order_lines_source_type;
+with system_categories as (
+    select
+        c.item_category_id,
+        c.company_id,
+        c.department_id
+    from public.store_item_category_master c
+    where c.category_code = 'system'
+)
+update public.store_item_master i
+   set item_category_id = sc.item_category_id,
+       updated_at = now()
+  from system_categories sc
+ where sc.company_id = i.company_id
+   and sc.department_id = i.department_id
+   and (
+       i.item_type <> 'standard'
+       or i.item_category_id is null
+   );
 
-alter table public.store_order_lines
-    add constraint chk_store_order_lines_source_type
-    check (source_type is null or source_type in ('nomination_fee', 'automatic_pricing'));
-
-create unique index if not exists ux_store_item_master_set_fee_active
-    on public.store_item_master(company_id, department_id)
-    where item_type = 'set_fee' and is_active = true;
-
-create unique index if not exists ux_store_item_master_extension_fee_active
-    on public.store_item_master(company_id, department_id)
-    where item_type = 'extension_fee' and is_active = true;
+update public.store_item_category_master c
+   set is_active = false,
+       updated_at = now()
+ where c.category_code = 'karaoke'
+   and not exists (
+       select 1
+       from public.store_item_master i
+       where i.item_category_id = c.item_category_id
+   );
 
 create or replace function store.ensure_pricing_system_items(p_department_id bigint)
 returns table (
@@ -112,4 +147,4 @@ begin
 end;
 $$;
 
-revoke execute on function store.ensure_pricing_system_items(bigint) from public, anon, authenticated, service_role;
+commit;

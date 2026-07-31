@@ -428,8 +428,8 @@ upsert_categories as (
     select
         td.company_id,
         td.department_id,
-        'karaoke',
-        'カラオケ',
+        'system',
+        'システム',
         9000,
         true
     from target_departments td
@@ -442,7 +442,7 @@ upsert_categories as (
            updated_at = now()
     returning item_category_id, company_id, department_id
 ),
-karaoke_categories as (
+system_categories as (
     select item_category_id, company_id, department_id from upsert_categories
     union
     select c.item_category_id, c.company_id, c.department_id
@@ -450,7 +450,7 @@ karaoke_categories as (
     join target_departments td
       on td.company_id = c.company_id
      and td.department_id = c.department_id
-    where c.category_code = 'karaoke'
+    where c.category_code = 'system'
 )
 insert into public.store_item_master (
     company_id,
@@ -468,9 +468,9 @@ insert into public.store_item_master (
     is_active
 )
 select
-    kc.company_id,
-    kc.department_id,
-    kc.item_category_id,
+    sc.company_id,
+    sc.department_id,
+    sc.item_category_id,
     'カラオケ',
     'karaoke',
     200,
@@ -481,7 +481,7 @@ select
     'other',
     9000,
     true
-from karaoke_categories kc
+from system_categories sc
 where true
 on conflict (company_id, department_id, item_name)
 do update
@@ -495,6 +495,38 @@ do update
        cast_back_type = 'other',
        is_active = true,
        updated_at = now();
+
+-- カラオケとカテゴリ未設定の商品は操作不可のシステム商品としてまとめます。
+-- 注文行のカテゴリスナップショットは商品マスタ更新時点の値を保持するため、過去の会計明細は変わりません。
+with system_categories as (
+    select
+        c.item_category_id,
+        c.company_id,
+        c.department_id
+    from public.store_item_category_master c
+    where c.category_code = 'system'
+)
+update public.store_item_master i
+   set item_category_id = sc.item_category_id,
+       updated_at = now()
+  from system_categories sc
+ where sc.company_id = i.company_id
+   and sc.department_id = i.department_id
+   and (
+       i.item_type <> 'standard'
+       or i.item_category_id is null
+   );
+
+-- 旧カラオケカテゴリは商品移動後に非表示にします。履歴と管理画面上の削除可否は残します。
+update public.store_item_category_master c
+   set is_active = false,
+       updated_at = now()
+ where c.category_code = 'karaoke'
+   and not exists (
+       select 1
+       from public.store_item_master i
+       where i.item_category_id = c.item_category_id
+   );
 
 with target_departments as (
     select
