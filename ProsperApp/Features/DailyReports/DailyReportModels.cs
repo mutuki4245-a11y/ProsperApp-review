@@ -122,6 +122,10 @@ public sealed class DailyReportCast
 
     public bool UsesSendService { get; init; }
 
+    public decimal? DrinkBackAmount { get; init; }
+
+    public decimal? AssignmentBackAmount { get; init; }
+
     public decimal CastSalesAmount { get; init; }
 
     public decimal ChampagneBackAmount { get; init; }

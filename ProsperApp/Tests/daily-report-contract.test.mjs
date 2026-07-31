@@ -56,6 +56,11 @@ assert.match(buildReport, /accounting\.document_journal_links/i);
 assert.match(buildReport, /'cashBalanceAmount', v_cash_total - v_expense_total/i);
 assert.match(buildReport, /'drinkDeliveryAmount', v_business_day\.drink_delivery_amount/i);
 assert.match(buildReport, /store_business_day_cast_advances/i);
+assert.match(buildReport, /from public\.store_order_line_cast_backs cast_back/i);
+assert.match(buildReport, /from public\.store_slip_cast_backs cast_back/i);
+assert.match(buildReport, /'drinkBackAmount'/i);
+assert.match(buildReport, /'assignmentBackAmount'/i);
+assert.match(buildReport, /daily-report-v2/i);
 assert.match(buildReport, /'itemCategories'/i);
 assert.match(buildReport, /'visits'/i);
 
@@ -90,7 +95,13 @@ assert.match(receiptModel, /Input\.PaymentDate != CurrentBusinessDay\.BusinessDa
 
 assert.match(closingPage, /data-daily-report/);
 assert.match(closingPage, /data-report-print/);
+assert.match(closingPage, /①日計表/);
+assert.match(closingPage, /③リスト/);
+assert.match(closingPage, /②支出内訳/);
+assert.match(closingPage, /ドリンクバック[\s\S]*担当バック[\s\S]*シャンパンバック[\s\S]*売上[\s\S]*前渡金[\s\S]*送り利用/);
 assert.match(reportScript, /refreshIntervalMs = 30000/);
 assert.match(reportScript, /window\.print\(\)/);
 assert.match(reportStyles, /size: A4 portrait/i);
 assert.match(reportStyles, /\.daily-report,[\s\S]*\.daily-report \*/i);
+assert.match(reportStyles, /\.daily-report__page \+ \.daily-report__page/);
+assert.match(reportStyles, /break-after:\s*page/i);

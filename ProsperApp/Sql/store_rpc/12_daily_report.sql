@@ -223,6 +223,22 @@ begin
         'clockInAt', attendance.clock_in_at,
         'clockOutAt', attendance.clock_out_at,
         'usesSendService', attendance.uses_send_service,
+        'drinkBackAmount', coalesce((
+            select sum(cast_back.back_amount)
+              from public.store_order_line_cast_backs cast_back
+             where cast_back.business_day_id = p_business_day_id
+               and cast_back.cast_id = attendance.cast_id
+               and cast_back.back_type = 'drink'
+               and cast_back.status = 'active'
+        ), 0),
+        'assignmentBackAmount', coalesce((
+            select sum(cast_back.back_amount)
+              from public.store_slip_cast_backs cast_back
+             where cast_back.business_day_id = p_business_day_id
+               and cast_back.cast_id = attendance.cast_id
+               and cast_back.back_type = 'nomination'
+               and cast_back.status = 'active'
+        ), 0),
         'castSalesAmount', coalesce((
             select sum(adjustment.sales_amount)
               from public.store_slip_cast_sales_adjustments adjustment
@@ -299,7 +315,7 @@ begin
     end if;
 
     return jsonb_build_object(
-        'schemaVersion', 'daily-report-v1',
+        'schemaVersion', 'daily-report-v2',
         'state', lower(coalesce(nullif(trim(p_state), ''), 'provisional')),
         'capturedAt', coalesce(p_captured_at, clock_timestamp()),
         'legacyUnavailableSections', '[]'::jsonb,
@@ -491,6 +507,8 @@ begin
                 'clockInAt', attendance.value->>'clock_in_at',
                 'clockOutAt', attendance.value->>'clock_out_at',
                 'usesSendService', coalesce((attendance.value->>'uses_send_service')::boolean, false),
+                'drinkBackAmount', null,
+                'assignmentBackAmount', null,
                 'castSalesAmount', coalesce((
                     select sum(coalesce(nullif(adjustment.value->>'sales_amount', '')::numeric, 0))
                       from jsonb_array_elements(coalesce(v_snapshot.closing_data->'cast_sales_adjustments', '[]'::jsonb)) adjustment(value)

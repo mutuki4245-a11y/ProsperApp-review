@@ -39,6 +39,13 @@
         hour: '2-digit',
         minute: '2-digit'
     });
+    const sheetDateFormatter = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', {
+        era: 'long',
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        weekday: 'short'
+    });
 
     const toYen = (value) => value === null || value === undefined
         ? '旧形式では未保存'
@@ -51,6 +58,14 @@
 
         const parsed = new Date(`${value}T00:00:00+09:00`);
         return Number.isNaN(parsed.valueOf()) ? value : dateFormatter.format(parsed);
+    };
+    const toSheetDate = (value) => {
+        if (!value) {
+            return '-';
+        }
+
+        const parsed = new Date(`${value}T00:00:00+09:00`);
+        return Number.isNaN(parsed.valueOf()) ? value : sheetDateFormatter.format(parsed);
     };
     const toTime = (value) => {
         if (!value) {
@@ -70,29 +85,46 @@
         return cell;
     };
 
-    const renderRows = (selector, rows, rowFactory, emptyMessage) => {
+    const renderRows = (selector, rows, rowFactory, emptyMessage, columnCount) => {
         const body = root.querySelector(selector);
         if (!body) {
             return;
         }
 
         body.replaceChildren();
-        if (!rows?.length) {
+        const sourceRows = rows ?? [];
+        if (!sourceRows.length) {
             const row = document.createElement('tr');
             const cell = makeCell(emptyMessage, 'text-muted');
-            cell.colSpan = 12;
+            cell.colSpan = columnCount;
             row.append(cell);
             body.append(row);
-            return;
+        } else {
+            sourceRows.forEach((item, index) => body.append(rowFactory(item, index)));
         }
 
-        rows.forEach((item) => body.append(rowFactory(item)));
+        const minimumRows = Number(body.dataset.minRows) || 0;
+        while (body.children.length < minimumRows) {
+            const row = document.createElement('tr');
+            row.className = 'daily-report__blank-row';
+            for (let index = 0; index < columnCount; index += 1) {
+                row.append(makeCell(''));
+            }
+            body.append(row);
+        }
     };
 
     const setTotal = (name, value) => {
         const element = root.querySelector(`[data-report-total="${name}"]`);
         if (element) {
             element.textContent = value;
+        }
+    };
+
+    const setCount = (name, value) => {
+        const element = root.querySelector(`[data-report-count="${name}"]`);
+        if (element) {
+            element.textContent = `${Number(value) || 0}`;
         }
     };
 
@@ -130,18 +162,25 @@
         const unavailable = new Set(report.legacyUnavailableSections ?? []);
 
         renderReportState(report);
+        const departmentName = businessDay.departmentName || '店舗';
         root.querySelector('[data-report-subtitle]').textContent =
-            `${businessDay.departmentName || '店舗'}　${toDate(businessDay.businessDate)}`;
+            `${departmentName}　${toDate(businessDay.businessDate)}`;
+        root.querySelectorAll('[data-report-department]').forEach((element) => {
+            element.textContent = departmentName;
+        });
+        root.querySelectorAll('[data-report-sheet-date]').forEach((element) => {
+            element.textContent = toSheetDate(businessDay.businessDate);
+        });
 
         setTotal('sales', toYen(totals.salesAmount));
         setTotal('cash', toYen(totals.cashAmount));
         setTotal('expense', toYen(totals.expenseAmount));
         setTotal('balance', toYen(totals.cashBalanceAmount));
         setTotal('drink', toYen(totals.drinkDeliveryAmount));
-        setTotal(
-            'counts',
-            `${Number(totals.confirmedCheckoutCount) || 0}会計 / ${Number(totals.slipCount) || 0}伝票 / ${Number(totals.customerCount) || 0}名`
-        );
+        setCount('checkouts', totals.confirmedCheckoutCount);
+        setCount('slips', totals.slipCount);
+        setCount('customers', totals.customerCount);
+        setCount('openSlips', totals.openSlipCount);
 
         renderRows(
             '[data-report-payments]',
@@ -154,7 +193,8 @@
                 );
                 return row;
             },
-            '確定した支払はありません。'
+            '確定した支払はありません。',
+            2
         );
 
         renderRows(
@@ -169,30 +209,34 @@
                 );
                 return row;
             },
-            unavailable.has('itemCategories') ? '旧形式では未保存です。' : '確定会計の商品はありません。'
+            unavailable.has('itemCategories') ? '旧形式では未保存です。' : '確定会計の商品はありません。',
+            3
         );
 
         renderRows(
             '[data-report-visits]',
             report.visits,
-            (visit) => {
+            (visit, index) => {
                 const row = document.createElement('tr');
                 const paymentText = (visit.payments ?? [])
                     .map((payment) => `${payment.name || payment.code} ${toYen(payment.amount)}`)
                     .join(' / ');
+                const note = [paymentText, visit.memo, visit.statusDisplay || visit.status]
+                    .filter((value) => value?.trim())
+                    .join(' / ');
                 row.append(
+                    makeCell(visit.slipNo || `${index + 1}`.padStart(2, '0')),
                     makeCell(visit.entryTime),
                     makeCell(visit.tableDisplay),
-                    makeCell(`${Number(visit.customerCount) || 0}名`),
+                    makeCell(`${Number(visit.customerCount) || 0}`),
                     makeCell(visit.customerNames),
                     makeCell(toYen(visit.amount), 'text-end'),
-                    makeCell(paymentText || '-'),
-                    makeCell(visit.memo),
-                    makeCell(visit.statusDisplay || visit.status)
+                    makeCell(note || '-')
                 );
                 return row;
             },
-            '伝票はありません。'
+            '伝票はありません。',
+            7
         );
 
         renderRows(
@@ -204,14 +248,17 @@
                     makeCell(cast.displayName),
                     makeCell(toTime(cast.clockInAt)),
                     makeCell(toTime(cast.clockOutAt)),
-                    makeCell(cast.usesSendService ? 'あり' : '-'),
-                    makeCell(toYen(cast.castSalesAmount), 'text-end'),
+                    makeCell(toYen(cast.drinkBackAmount), 'text-end'),
+                    makeCell(toYen(cast.assignmentBackAmount), 'text-end'),
                     makeCell(toYen(cast.champagneBackAmount), 'text-end'),
-                    makeCell(toYen(cast.advanceAmount), 'text-end')
+                    makeCell(toYen(cast.castSalesAmount), 'text-end'),
+                    makeCell(toYen(cast.advanceAmount), 'text-end'),
+                    makeCell(cast.usesSendService ? '利用' : '-')
                 );
                 return row;
             },
-            '出勤キャストはいません。'
+            '出勤キャストはいません。',
+            9
         );
 
         renderRows(
@@ -225,16 +272,18 @@
                 );
                 return row;
             },
-            unavailable.has('expenses') ? '旧形式では未保存です。' : '当日支払の領収書支出はありません。'
+            unavailable.has('expenses') ? '旧形式では未保存です。' : '当日支払の領収書支出はありません。',
+            2
         );
 
         root.querySelector('[data-report-memo]').textContent =
             businessDay.memo?.trim() || 'なし';
         const captured = report.capturedAt ? new Date(report.capturedAt) : null;
-        root.querySelector('[data-report-captured]').textContent =
-            captured && !Number.isNaN(captured.valueOf())
+        root.querySelectorAll('[data-report-captured]').forEach((element) => {
+            element.textContent = captured && !Number.isNaN(captured.valueOf())
                 ? `作成時刻 ${dateTimeFormatter.format(captured)}`
                 : '';
+        });
 
         renderWarnings(report.warnings ?? []);
         status.hidden = true;

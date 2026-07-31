@@ -155,85 +155,112 @@
         <div class="daily-report__warnings" data-report-warnings hidden></div>
 
         <div class="daily-report__content" data-report-content hidden>
-            <section class="daily-report__summary" aria-label="日計">
-                <article><span>総売上</span><strong data-report-total="sales"></strong></article>
-                <article><span>現金</span><strong data-report-total="cash"></strong></article>
-                <article><span>領収書支出</span><strong data-report-total="expense"></strong></article>
-                <article class="daily-report__summary-emphasis"><span>現金残高</span><strong data-report-total="balance"></strong></article>
-                <article><span>酒代納品</span><strong data-report-total="drink"></strong></article>
-                <article><span>会計 / 伝票 / 客数</span><strong data-report-total="counts"></strong></article>
-            </section>
+            <div class="daily-report__pages">
+                <article class="daily-report__page daily-report__page--summary" aria-label="1ページ目 日計表">
+                    <header class="daily-report__sheet-header">
+                        <div class="daily-report__store-name" data-report-department>店舗</div>
+                        <h3>①日計表</h3>
+                        <div class="daily-report__sheet-date" data-report-sheet-date></div>
+                        <span class="daily-report__page-number" aria-hidden="true">1 / 3</span>
+                    </header>
 
-            <div class="daily-report__grid">
-                <section class="daily-report__card">
-                    <h3>支払方法</h3>
-                    <div class="table-responsive">
-                        <table class="table table-sm daily-report__table">
-                            <thead><tr><th>方法</th><th class="text-end">金額</th></tr></thead>
+                    <div class="daily-report__ledger-grid">
+                        <table class="daily-report__form-table" aria-label="日計">
+                            <tbody>
+                                <tr><th>総売上</th><td data-report-total="sales"></td></tr>
+                                <tr><th>現金</th><td data-report-total="cash"></td></tr>
+                                <tr><th>支出</th><td data-report-total="expense"></td></tr>
+                                <tr class="daily-report__summary-emphasis"><th>現金残高</th><td data-report-total="balance"></td></tr>
+                                <tr><th>酒代納品</th><td data-report-total="drink"></td></tr>
+                            </tbody>
+                        </table>
+                        <table class="daily-report__form-table" aria-label="支払方法">
+                            <thead><tr><th>支払方法</th><th>金額</th></tr></thead>
                             <tbody data-report-payments></tbody>
                         </table>
                     </div>
-                </section>
-                <section class="daily-report__card">
-                    <h3>商品カテゴリ</h3>
-                    <div class="table-responsive">
-                        <table class="table table-sm daily-report__table">
-                            <thead><tr><th>カテゴリ</th><th class="text-end">数量</th><th class="text-end">金額</th></tr></thead>
-                            <tbody data-report-categories></tbody>
-                        </table>
+
+                    <section class="daily-report__special-notes">
+                        <h4>※特記事項</h4>
+                        <p data-report-memo>なし</p>
+                    </section>
+
+                    <div class="daily-report__ledger-grid daily-report__ledger-grid--details">
+                        <section>
+                            <h4 class="daily-report__block-title">商品内訳</h4>
+                            <table class="daily-report__form-table daily-report__form-table--compact">
+                                <thead><tr><th>カテゴリ</th><th>数量</th><th>金額</th></tr></thead>
+                                <tbody data-report-categories></tbody>
+                            </table>
+                        </section>
+                        <section>
+                            <h4 class="daily-report__block-title">営業件数</h4>
+                            <table class="daily-report__form-table daily-report__form-table--compact">
+                                <tbody>
+                                    <tr><th>会計</th><td data-report-count="checkouts"></td></tr>
+                                    <tr><th>伝票</th><td data-report-count="slips"></td></tr>
+                                    <tr><th>客数</th><td data-report-count="customers"></td></tr>
+                                    <tr><th>未会計</th><td data-report-count="openSlips"></td></tr>
+                                </tbody>
+                            </table>
+                        </section>
                     </div>
-                </section>
+
+                    <section class="daily-report__sheet-section daily-report__cast-section">
+                        <h4 class="daily-report__block-title">キャスト</h4>
+                        <div class="table-responsive">
+                            <table class="daily-report__form-table daily-report__cast-table">
+                                <thead>
+                                    <tr>
+                                        <th>名前</th><th>出勤</th><th>退勤</th><th>ドリンクバック</th>
+                                        <th>担当バック</th><th>シャンパンバック</th><th>売上</th>
+                                        <th>前渡金</th><th>送り利用</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-report-casts data-min-rows="18"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </article>
+
+                <article class="daily-report__page daily-report__page--visits" aria-label="2ページ目 リスト">
+                    <header class="daily-report__sheet-header">
+                        <div class="daily-report__store-name" data-report-department>店舗</div>
+                        <h3>③リスト</h3>
+                        <div class="daily-report__sheet-date" data-report-sheet-date></div>
+                        <span class="daily-report__page-number" aria-hidden="true">2 / 3</span>
+                    </header>
+                    <table class="daily-report__form-table daily-report__visit-table">
+                        <thead>
+                            <tr>
+                                <th>No</th><th>入店</th><th>卓</th><th>客</th>
+                                <th>お客様</th><th>会計</th><th>備考</th>
+                            </tr>
+                        </thead>
+                        <tbody data-report-visits data-min-rows="26"></tbody>
+                    </table>
+                </article>
+
+                <article class="daily-report__page daily-report__page--expenses" aria-label="3ページ目 支出内訳">
+                    <header class="daily-report__sheet-header">
+                        <div class="daily-report__store-name" data-report-department>店舗</div>
+                        <h3>②支出内訳</h3>
+                        <div class="daily-report__sheet-date" data-report-sheet-date></div>
+                        <span class="daily-report__page-number" aria-hidden="true">3 / 3</span>
+                    </header>
+                    <section class="daily-report__sheet-section">
+                        <h4 class="daily-report__block-title">支出内訳（勘定科目別）</h4>
+                        <table class="daily-report__form-table daily-report__expense-table">
+                            <thead><tr><th>勘定科目</th><th>金額</th></tr></thead>
+                            <tbody data-report-expenses data-min-rows="24"></tbody>
+                        </table>
+                    </section>
+                    <footer class="daily-report__footer">
+                        <span data-report-captured></span>
+                        <span>売上は確定会計のみ。現金残高 = 現金売上 − 領収書支出（酒代納品は別表示）</span>
+                    </footer>
+                </article>
             </div>
-
-            <section class="daily-report__card">
-                <h3>来店・会計一覧</h3>
-                <div class="table-responsive">
-                    <table class="table table-sm daily-report__table daily-report__table--visits">
-                        <thead>
-                            <tr>
-                                <th>入店</th><th>卓</th><th>客</th><th>お客様</th>
-                                <th class="text-end">会計</th><th>支払</th><th>備考</th><th>状態</th>
-                            </tr>
-                        </thead>
-                        <tbody data-report-visits></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="daily-report__card">
-                <h3>キャスト</h3>
-                <div class="table-responsive">
-                    <table class="table table-sm daily-report__table">
-                        <thead>
-                            <tr>
-                                <th>名前</th><th>出勤</th><th>退勤</th><th>送り</th>
-                                <th class="text-end">売上</th><th class="text-end">シャンパンバック</th><th class="text-end">前渡金</th>
-                            </tr>
-                        </thead>
-                        <tbody data-report-casts></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="daily-report__card">
-                <h3>支出内訳（勘定科目別）</h3>
-                <div class="table-responsive">
-                    <table class="table table-sm daily-report__table">
-                        <thead><tr><th>勘定科目</th><th class="text-end">金額</th></tr></thead>
-                        <tbody data-report-expenses></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="daily-report__notes">
-                <h3>特記事項</h3>
-                <p data-report-memo>なし</p>
-            </section>
-
-            <footer class="daily-report__footer">
-                <span data-report-captured></span>
-                <span>売上は確定会計のみ。現金残高 = 現金売上 − 領収書支出（酒代納品は別表示）</span>
-            </footer>
         </div>
     </section>
 </section>
