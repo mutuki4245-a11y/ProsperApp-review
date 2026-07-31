@@ -344,6 +344,52 @@ public class SupabaseBusinessDayRepository(
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }
 
+    public async Task<BusinessDayOperationResult> SaveStaffAttendanceAsync(
+        long businessDayId,
+        IReadOnlyCollection<BusinessDayStaffAttendanceInput> attendanceEntries,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を更新できません。");
+        }
+
+        var payload = attendanceEntries
+            .Where(x => x.StaffId > 0)
+            .GroupBy(x => x.StaffId)
+            .Select(x => x.Last())
+            .Select(x => new StaffAttendanceEntryPayload(x.StaffId, x.ClockInTime, x.IsSelected))
+            .ToArray();
+
+        if (payload.Length == 0)
+        {
+            return BusinessDayOperationResult.Failed("出勤スタッフを選択してください。");
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var result = await RpcClient.PostArrayAsync(
+            "store.save_business_day_staff_attendance",
+            new
+            {
+                p_department_id = departmentId,
+                p_business_day_id = businessDayId,
+                p_attendance_entries = payload
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return BusinessDayOperationResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        if (result.Rows.Count == 0)
+        {
+            return BusinessDayOperationResult.Failed("勤怠入力を更新できませんでした。");
+        }
+
+        return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
+    }
+
     public async Task<Result<int>> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct)
     {
         if (businessDayId <= 0)
@@ -535,8 +581,64 @@ public class SupabaseBusinessDayRepository(
         return BusinessDayAttendanceSaveResult.Success(savedCount);
     }
 
+    public async Task<BusinessDayAttendanceSaveResult> SaveStaffClosingAttendanceAsync(
+        long businessDayId,
+        IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return BusinessDayAttendanceSaveResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を保存できません。");
+        }
+
+        var payload = attendanceEntries
+            .Where(x => x.AttendanceId > 0)
+            .GroupBy(x => x.AttendanceId)
+            .Select(x => x.Last())
+            .Select(x => new ClosingAttendanceEntryPayload(
+                x.AttendanceId,
+                x.ClockInTime?.Trim() ?? string.Empty,
+                x.ClockOutTime?.Trim() ?? string.Empty,
+                x.UsesSendService))
+            .ToArray();
+
+        if (payload.Length == 0)
+        {
+            return BusinessDayAttendanceSaveResult.Failed("退勤情報を1名以上入力してください。");
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var result = await RpcClient.PostScalarAsync(
+            "store.save_business_day_staff_closing_attendance",
+            new
+            {
+                p_department_id = departmentId,
+                p_business_day_id = businessDayId,
+                p_attendance_entries = payload
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return BusinessDayAttendanceSaveResult.Failed(ToClosingAttendanceFriendlyError(result.ErrorMessage));
+        }
+
+        var value = NormalizeScalarBody(result.Body);
+        if (!int.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedCount))
+        {
+            return BusinessDayAttendanceSaveResult.Failed("勤怠入力を保存できませんでした。");
+        }
+
+        return BusinessDayAttendanceSaveResult.Success(savedCount);
+    }
+
     private sealed record AttendanceEntryPayload(
         [property: JsonPropertyName("cast_id")] long CastId,
+        [property: JsonPropertyName("clock_in_time")] string ClockInTime,
+        [property: JsonPropertyName("is_selected")] bool IsSelected);
+
+    private sealed record StaffAttendanceEntryPayload(
+        [property: JsonPropertyName("staff_id")] long StaffId,
         [property: JsonPropertyName("clock_in_time")] string ClockInTime,
         [property: JsonPropertyName("is_selected")] bool IsSelected);
 
@@ -568,12 +670,25 @@ public class SupabaseBusinessDayRepository(
 
     private static BusinessDayClosingAttendanceItem ParseClosingAttendanceItem(JsonElement row)
     {
+        var castId = ReadLong(row, "cast_id") ?? 0;
+        var staffId = ReadLong(row, "staff_id") ?? 0;
+        var personType = AttendancePersonTypes.Normalize(ReadString(row, "person_type") ??
+            (staffId > 0 ? AttendancePersonTypes.Staff : AttendancePersonTypes.Cast));
+        var personId = ReadLong(row, "person_id") ?? (personType == AttendancePersonTypes.Staff ? staffId : castId);
         return new BusinessDayClosingAttendanceItem
         {
             AttendanceId = ReadLong(row, "attendance_id") ?? 0,
-            CastId = ReadLong(row, "cast_id") ?? 0,
-            DisplayName = ReadString(row, "cast_display_name") ?? string.Empty,
-            DepartmentName = ReadString(row, "cast_department_name"),
+            PersonType = personType,
+            PersonId = personId,
+            CastId = castId,
+            StaffId = staffId,
+            DisplayName = ReadString(row, "display_name") ??
+                ReadString(row, "cast_display_name") ??
+                ReadString(row, "staff_display_name") ??
+                string.Empty,
+            DepartmentName = ReadString(row, "department_name") ??
+                ReadString(row, "cast_department_name") ??
+                ReadString(row, "staff_department_name"),
             AttendanceStatus = ReadString(row, "attendance_status") ?? string.Empty,
             ClockInAt = ReadDateTimeOffset(row, "clock_in_at"),
             ClockOutAt = ReadDateTimeOffset(row, "clock_out_at"),
@@ -732,12 +847,12 @@ public class SupabaseBusinessDayRepository(
 
         if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))
         {
-            return "出勤キャストを1名以上入力してください。";
+            return "出勤者を1名以上入力してください。";
         }
 
         if (rawError.Contains("attendance_clock_out_required", StringComparison.OrdinalIgnoreCase))
         {
-            return "退勤時刻が未入力のキャストがいます。";
+            return "退勤時刻が未入力の出勤者がいます。";
         }
 
         if (rawError.Contains("cast_sales_adjustment_required", StringComparison.OrdinalIgnoreCase))
@@ -761,9 +876,11 @@ public class SupabaseBusinessDayRepository(
         }
 
         if (rawError.Contains("store_attendance_cast_not_found", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("attendance_cast_required", StringComparison.OrdinalIgnoreCase))
+            rawError.Contains("attendance_cast_required", StringComparison.OrdinalIgnoreCase) ||
+            rawError.Contains("store_attendance_staff_not_found", StringComparison.OrdinalIgnoreCase) ||
+            rawError.Contains("attendance_staff_required", StringComparison.OrdinalIgnoreCase))
         {
-            return "出勤キャストの選択内容を確認してください。";
+            return "出勤者の選択内容を確認してください。";
         }
 
         if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||

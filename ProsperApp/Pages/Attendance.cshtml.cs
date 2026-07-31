@@ -113,9 +113,16 @@ public class AttendanceModel(
         Input = _pageState.Input;
         LoadIssues = _pageState.LoadIssues;
         LastUpdatedAt = _pageState.LastUpdatedAt;
-        CastLoadErrorMessage = _pageState.LoadIssues
-            .FirstOrDefault(issue => string.Equals(issue.Area, "キャスト", StringComparison.Ordinal))
-            ?.Message;
+        var memberLoadIssues = _pageState.LoadIssues
+            .Where(issue =>
+                string.Equals(issue.Area, "キャスト", StringComparison.Ordinal) ||
+                string.Equals(issue.Area, "スタッフ", StringComparison.Ordinal))
+            .Select(issue => issue.Message)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .ToList();
+        CastLoadErrorMessage = memberLoadIssues.Count == 0
+            ? null
+            : string.Join(" ", memberLoadIssues);
     }
 
     private void AddAttendanceErrors(IEnumerable<AttendanceValidationError> errors)

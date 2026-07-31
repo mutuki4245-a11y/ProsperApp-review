@@ -286,3 +286,10 @@ public class BusinessDayAttendanceInput
     public bool IsSelected { get; set; } = true;
     public string ClockInTime { get; set; } = string.Empty;
 }
+
+public class BusinessDayStaffAttendanceInput
+{
+    public long StaffId { get; set; }
+    public bool IsSelected { get; set; } = true;
+    public string ClockInTime { get; set; } = string.Empty;
+}

@@ -64,7 +64,7 @@
 
     <section class="settings-card">
         <h2>マスタ情報</h2>
-        <p class="text-muted mb-3">卓番、キャスト、商品、バック、時間料金を必要なタイミングで更新します。商品カテゴリの操作だけ管理者モードが必要です。</p>
+        <p class="text-muted mb-3">卓番、キャスト、スタッフ、商品、バック、時間料金を必要なタイミングで更新します。商品カテゴリの操作だけ管理者モードが必要です。</p>
         @if (Model.IsAdminMode)
         {
             <div class="alert alert-success py-2">管理者モードが有効です。商品カテゴリの操作と締め条件無視が使えます。</div>
@@ -82,6 +82,14 @@
                 <span class="closing-panel__body">
                     <strong>キャスト情報</strong>
                     <small>キャストの追加・確認を行います。</small>
+                </span>
+                <span class="closing-panel__badge is-ready">任意</span>
+                <span class="closing-panel__action">開く</span>
+            </a>
+            <a class="closing-panel is-ready" asp-page="/Management/Staffs">
+                <span class="closing-panel__body">
+                    <strong>スタッフ情報</strong>
+                    <small>スタッフの追加・確認を行います。</small>
                 </span>
                 <span class="closing-panel__badge is-ready">任意</span>
                 <span class="closing-panel__action">開く</span>

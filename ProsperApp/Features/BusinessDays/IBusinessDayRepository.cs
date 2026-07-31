@@ -19,6 +19,11 @@ public interface IBusinessDayRepository
         IReadOnlyCollection<BusinessDayAttendanceInput> attendanceEntries,
         CancellationToken ct);
 
+    Task<BusinessDayOperationResult> SaveStaffAttendanceAsync(
+        long businessDayId,
+        IReadOnlyCollection<BusinessDayStaffAttendanceInput> attendanceEntries,
+        CancellationToken ct);
+
     Task<BusinessDayOperationResult> CloseAsync(
         long businessDayId,
         string? memo,
@@ -40,6 +45,11 @@ public interface IBusinessDayRepository
     Task<Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>> GetClosingAttendanceAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessDayAttendanceSaveResult> SaveClosingAttendanceAsync(
+        long businessDayId,
+        IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
+        CancellationToken ct);
+
+    Task<BusinessDayAttendanceSaveResult> SaveStaffClosingAttendanceAsync(
         long businessDayId,
         IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
         CancellationToken ct);

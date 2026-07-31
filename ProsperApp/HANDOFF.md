@@ -30,6 +30,8 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
 
 2026-07-31の店舗設定改善では、`/Management/Tables` に卓番の追加・編集・無効化・物理削除を追加し、商品と商品カテゴリも物理削除方式へ変更しました。卓番表示は伝票作成時、商品名・単価・商品カテゴリID・コード・名称は注文時のsnapshotを使用し、削除可能マスタへのFKは持たず履歴IDを残します。カテゴリは配下商品が0件の場合だけ削除できます。`/Settings` にはサーバー側Sessionの管理者モードトグルを追加し、商品カテゴリ操作と締め条件無視だけ管理者モード中に許可します。明示ロックとログアウトで管理者モードを解除します。
 
+2026-07-31のスタッフ勤怠対応では、`store_staff_master` と `store_staff_attendance` を追加し、`/Management/Staffs` でスタッフ名の登録・削除、`/Attendance` で「出勤キャストを追加」と並べて「出勤スタッフを追加」を扱えるようにしました。スタッフ勤怠は締め勤怠人数・未退勤判定・日報・営業日締めsnapshotには含めますが、注文候補、指名、キャスト売上額調整、シャンパンバック、領収書前渡金のキャスト候補には含めません。対象Supabaseにはスタッフ用テーブル/RPC/ガードを適用し、`prosper-rpc` はスタッフRPC allowlistを含むversion 32でACTIVEです。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針

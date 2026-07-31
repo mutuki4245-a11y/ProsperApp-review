@@ -28,12 +28,19 @@ const reportScript = read('wwwroot/js/features/daily-report.js');
 const reportStyles = read('wwwroot/css/features/closing.css');
 
 assert.match(schema, /create table if not exists public\.store_business_day_cast_advances/i);
+assert.match(schema, /create table if not exists public\.store_staff_attendance/i);
 assert.match(schema, /journal_entry_id uuid not null references accounting\.journal_entries/i);
 assert.match(schema, /alter table public\.store_business_day_cast_advances enable row level security/i);
+assert.match(schema, /alter table public\.store_staff_attendance enable row level security/i);
 assert.match(guardsSql, /'store_business_day_cast_advances'/i);
+assert.match(guardsSql, /'store_staff_attendance'/i);
 assert.match(
     guardsSql,
     /revoke all on table public\.store_business_day_cast_advances from public, anon, authenticated, service_role/i
+);
+assert.match(
+    guardsSql,
+    /revoke all on table public\.store_staff_attendance from public, anon, authenticated, service_role/i
 );
 
 const quickEntry = functionBlock(receiptSql, 'store.quick_enter_receipt');
@@ -56,6 +63,8 @@ assert.match(buildReport, /accounting\.document_journal_links/i);
 assert.match(buildReport, /'cashBalanceAmount', v_cash_total - v_expense_total/i);
 assert.match(buildReport, /'drinkDeliveryAmount', v_business_day\.drink_delivery_amount/i);
 assert.match(buildReport, /store_business_day_cast_advances/i);
+assert.match(buildReport, /store_staff_attendance/i);
+assert.match(buildReport, /'staffs'/i);
 assert.match(buildReport, /from public\.store_order_line_cast_backs cast_back/i);
 assert.match(buildReport, /from public\.store_slip_cast_backs cast_back/i);
 assert.match(buildReport, /'drinkBackAmount'/i);
@@ -99,7 +108,9 @@ assert.match(closingPage, /①日計表/);
 assert.match(closingPage, /③リスト/);
 assert.match(closingPage, /②支出内訳/);
 assert.match(closingPage, /ドリンクバック[\s\S]*担当バック[\s\S]*シャンパンバック[\s\S]*売上[\s\S]*前渡金[\s\S]*送り利用/);
+assert.match(closingPage, /data-report-staffs/);
 assert.match(reportScript, /refreshIntervalMs = 30000/);
+assert.match(reportScript, /report\.staffs/);
 assert.match(reportScript, /window\.print\(\)/);
 assert.match(reportStyles, /size: A4 portrait/i);
 assert.match(reportStyles, /\.daily-report,[\s\S]*\.daily-report \*/i);

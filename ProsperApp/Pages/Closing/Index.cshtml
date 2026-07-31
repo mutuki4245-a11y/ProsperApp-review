@@ -221,6 +221,19 @@
                             </table>
                         </div>
                     </section>
+                    <section class="daily-report__sheet-section daily-report__staff-section">
+                        <h4 class="daily-report__block-title">スタッフ</h4>
+                        <div class="table-responsive">
+                            <table class="daily-report__form-table daily-report__staff-table">
+                                <thead>
+                                    <tr>
+                                        <th>名前</th><th>出勤</th><th>退勤</th><th>送り利用</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-report-staffs data-min-rows="6"></tbody>
+                            </table>
+                        </div>
+                    </section>
                 </article>
 
                 <article class="daily-report__page daily-report__page--visits" aria-label="2ページ目 リスト">
@@ -578,7 +591,7 @@
                     } else if (state.attendance.attendanceCount > 0) {
                         setPanel('attendance', 'is-ready', '確認済', `${state.attendance.attendanceCount}名の勤怠を入力済みです。`);
                     } else {
-                        setPanel('attendance', 'has-warning', '要入力', '出勤キャストが登録されていません。', '入力');
+                        setPanel('attendance', 'has-warning', '要入力', '出勤者が登録されていません。', '入力');
                     }
                 } catch {
                     state.attendanceLoaded = false;
@@ -739,7 +752,7 @@
                     } else if (state.attendance.attendanceCount > 0) {
                         setPanel('attendance', 'is-ready', '確認済', `${state.attendance.attendanceCount}名の勤怠を入力済みです。`);
                     } else {
-                        setPanel('attendance', 'has-warning', '要入力', '出勤キャストが登録されていません。', '入力');
+                        setPanel('attendance', 'has-warning', '要入力', '出勤者が登録されていません。', '入力');
                     }
 
                     if (state.cast.requiredSlipCount === 0) {
@@ -751,7 +764,11 @@
                     }
 
                     if (state.champagne.requiredCastCount === 0) {
-                        setPanel('champagneBack', 'has-warning', '要入力', '出勤キャストを登録してから追加バックを入力します。');
+                        if (state.attendance.attendanceCount > 0) {
+                            setPanel('champagneBack', 'is-ready', '入力済', '追加バック対象の出勤キャストはいません。');
+                        } else {
+                            setPanel('champagneBack', 'has-warning', '要入力', '出勤キャストを登録してから追加バックを入力します。');
+                        }
                     } else if (state.champagne.isCompleted) {
                         setPanel('champagneBack', 'is-ready', '入力済', `${state.champagne.completedCastCount}名分の追加バックを保存済みです。合計 ${toYen(state.champagne.totalBackAmount)}`);
                     } else {

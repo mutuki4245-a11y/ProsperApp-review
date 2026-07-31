@@ -17,11 +17,15 @@ internal static class StoreMasterCacheKeys
 
     public static string StoreCasts(long departmentId) => $"store-master:{departmentId}:casts";
 
+    public static string StoreStaffs(long departmentId) => $"store-master:{departmentId}:staffs";
+
     public static string OrderItems(long departmentId) => $"store-master:{departmentId}:order-items";
 
     public static string ItemAdminCatalog(long departmentId) => $"store-master:{departmentId}:item-admin-catalog";
 
     public static string CastAdminList(long departmentId) => $"store-master:{departmentId}:cast-admin-list";
+
+    public static string StaffAdminList(long departmentId) => $"store-master:{departmentId}:staff-admin-list";
 
     public static string NominationBackMaster(long departmentId) => $"store-runtime:{departmentId}:nomination-back-master";
 
@@ -63,6 +67,12 @@ internal static class StoreMasterCacheKeys
     {
         cache.Remove(StoreCasts(departmentId));
         cache.Remove(CastAdminList(departmentId));
+    }
+
+    public static void ClearStaffs(IApplicationCache cache, long departmentId)
+    {
+        cache.Remove(StoreStaffs(departmentId));
+        cache.Remove(StaffAdminList(departmentId));
     }
 
     public static void ClearNominationBacks(IApplicationCache cache, long departmentId)

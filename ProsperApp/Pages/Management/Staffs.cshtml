@@ -1,0 +1,89 @@
+@page
+@model ManagementStaffsModel
+@{
+    ViewData["Title"] = "スタッフ情報";
+    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
+}
+
+<section class="opening-page">
+    <div class="page-section-heading">
+        <h1>スタッフ情報</h1>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="alert alert-success">@Model.SuccessMessage</div>
+    }
+
+    @if (Model.LoadStatus is { Succeeded: false } loadStatus)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>@loadStatus.FailureTitle</strong>
+            <div>@loadStatus.ErrorMessage</div>
+            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Management/Staffs">再試行</a>
+        </div>
+    }
+    else if (Model.LoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
+    {
+        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
+    }
+
+    <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
+        <form method="post" asp-page-handler="Create" class="slip-create__panel cast-admin-form">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div>
+                <label asp-for="Input.DisplayName" class="form-label"></label>
+                <input asp-for="Input.DisplayName" class="form-control form-control-lg" placeholder="スタッフ名" />
+                <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
+            </div>
+            <button class="btn btn-primary btn-lg" type="submit">登録</button>
+        </form>
+
+        <div class="slip-create__panel">
+            <div class="opening-attendance__header">
+                <div>
+                    <h2>登録済みスタッフ</h2>
+                    <p class="text-muted mb-0">加入日は登録日で自動設定されます。</p>
+                </div>
+                @if (Model.Staffs.Count > 0)
+                {
+                    <span class="opening-attendance__count">@Model.Staffs.Count 名</span>
+                }
+            </div>
+
+            @if (Model.Staffs.Count == 0)
+            {
+                <p class="text-muted mb-0">スタッフが未登録です。</p>
+            }
+            else
+            {
+                <div class="cast-admin-table">
+                    <div class="cast-admin-table__row cast-admin-table__row--header">
+                        <span>ID</span>
+                        <span>スタッフ名</span>
+                        <span>加入日</span>
+                        <span></span>
+                    </div>
+                    @foreach (var staff in Model.Staffs)
+                    {
+                        <div class="cast-admin-table__row">
+                            <span>@staff.StaffId</span>
+                            <strong>@staff.DisplayName</strong>
+                            <span>@staff.JoinedOn.ToString("yyyy-MM-dd")</span>
+                            <div class="cast-admin-table__actions">
+                                <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このスタッフを削除しますか？');">
+                                    <input type="hidden" asp-for="DeleteStaffId" value="@staff.StaffId" />
+                                    <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </fieldset>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

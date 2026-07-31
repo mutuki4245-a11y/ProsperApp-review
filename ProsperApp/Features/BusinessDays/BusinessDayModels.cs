@@ -160,11 +160,11 @@ public class BusinessDayClosingReadiness
 
             if (AttendanceCount == 0)
             {
-                reasons.Add("勤怠入力に出勤キャストが登録されていません。");
+                reasons.Add("勤怠入力に出勤者が登録されていません。");
             }
             else if (MissingClockOutCount > 0)
             {
-                reasons.Add($"退勤時刻が未入力のキャストが {MissingClockOutCount} 名います。");
+                reasons.Add($"退勤時刻が未入力の出勤者が {MissingClockOutCount} 名います。");
             }
 
             if (!IsCastSalesAdjustmentCompleted)
@@ -191,7 +191,13 @@ public class BusinessDayClosingAttendanceItem
 {
     public long AttendanceId { get; set; }
 
+    public string PersonType { get; set; } = AttendancePersonTypes.Cast;
+
+    public long PersonId { get; set; }
+
     public long CastId { get; set; }
+
+    public long StaffId { get; set; }
 
     public string DisplayName { get; set; } = string.Empty;
 
@@ -208,11 +214,19 @@ public class BusinessDayClosingAttendanceItem
     public string SearchDisplayName => string.IsNullOrWhiteSpace(DepartmentName)
         ? DisplayName
         : $"{DisplayName}：{DepartmentName}";
+
+    public bool IsCast => AttendancePersonTypes.Normalize(PersonType) == AttendancePersonTypes.Cast;
+
+    public bool IsStaff => AttendancePersonTypes.Normalize(PersonType) == AttendancePersonTypes.Staff;
+
+    public string PersonKey => AttendancePersonKey.Create(PersonType, PersonId);
 }
 
 public class BusinessDayClosingAttendanceInput
 {
     public long AttendanceId { get; set; }
+
+    public string PersonType { get; set; } = AttendancePersonTypes.Cast;
 
     public string DisplayName { get; set; } = string.Empty;
 

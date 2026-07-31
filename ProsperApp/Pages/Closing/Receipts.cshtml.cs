@@ -266,6 +266,7 @@ public class ReceiptsModel(
 
         AdvanceCastOptions = attendanceResult.Value
             .Where(item => item.AttendanceStatus is "scheduled" or "checked_in" or "checked_out")
+            .Where(item => item.IsCast)
             .OrderBy(item => item.DisplayName, StringComparer.CurrentCulture)
             .ToList();
     }

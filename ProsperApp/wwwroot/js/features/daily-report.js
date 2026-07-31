@@ -262,6 +262,23 @@
         );
 
         renderRows(
+            '[data-report-staffs]',
+            report.staffs,
+            (staff) => {
+                const row = document.createElement('tr');
+                row.append(
+                    makeCell(staff.displayName),
+                    makeCell(toTime(staff.clockInAt)),
+                    makeCell(toTime(staff.clockOutAt)),
+                    makeCell(staff.usesSendService ? '利用' : '-')
+                );
+                return row;
+            },
+            '出勤スタッフはいません。',
+            4
+        );
+
+        renderRows(
             '[data-report-expenses]',
             report.expenseAccounts,
             (expense) => {

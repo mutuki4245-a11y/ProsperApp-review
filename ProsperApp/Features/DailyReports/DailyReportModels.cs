@@ -22,6 +22,8 @@ public sealed class DailyReportDocument
 
     public IReadOnlyList<DailyReportCast> Casts { get; init; } = [];
 
+    public IReadOnlyList<DailyReportStaff> Staffs { get; init; } = [];
+
     public IReadOnlyList<DailyReportExpenseAccount> ExpenseAccounts { get; init; } = [];
 
     public IReadOnlyList<string> Warnings { get; init; } = [];
@@ -131,6 +133,19 @@ public sealed class DailyReportCast
     public decimal ChampagneBackAmount { get; init; }
 
     public decimal? AdvanceAmount { get; init; }
+}
+
+public sealed class DailyReportStaff
+{
+    public long StaffId { get; init; }
+
+    public string DisplayName { get; init; } = string.Empty;
+
+    public DateTimeOffset? ClockInAt { get; init; }
+
+    public DateTimeOffset? ClockOutAt { get; init; }
+
+    public bool UsesSendService { get; init; }
 }
 
 public sealed class DailyReportExpenseAccount

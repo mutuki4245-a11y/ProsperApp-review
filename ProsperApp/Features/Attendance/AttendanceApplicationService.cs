@@ -6,10 +6,12 @@ namespace ProsperApp.Features.Attendance;
 public sealed class AttendanceApplicationService(
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
+    IStoreStaffAdminRepository staffAdminRepository,
     IStoreClock storeClock) : IAttendanceApplicationService
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
+    private readonly IStoreStaffAdminRepository _staffAdminRepository = staffAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
 
     public async Task<AttendancePageState> LoadAsync(
@@ -20,15 +22,18 @@ public sealed class AttendanceApplicationService(
         var contextTask = _slipRepository.GetStoreContextAsync(ct);
         var businessDayTask = _businessDayRepository.GetCurrentAsync(ct);
         var castsTask = _slipRepository.GetCastsAsync(ct);
-        await Task.WhenAll(contextTask, businessDayTask, castsTask);
+        var staffsTask = _staffAdminRepository.GetStaffOptionsAsync(ct);
+        await Task.WhenAll(contextTask, businessDayTask, castsTask, staffsTask);
 
         var context = await contextTask;
         var businessDay = await businessDayTask;
         var casts = await castsTask;
+        var staffs = await staffsTask;
         var issues = new List<PageLoadIssue>();
         AddIssue(issues, "店舗設定", context);
         AddIssue(issues, "営業日", businessDay);
         AddIssue(issues, "キャスト", casts);
+        AddIssue(issues, "スタッフ", staffs);
 
         var minuteStep = context.Succeeded ? context.Value.AttendanceMinuteStep : 15;
         var clockInOptions = AttendanceEditor.BuildTimeOptions(19, 0, minuteStep);
@@ -51,6 +56,7 @@ public sealed class AttendanceApplicationService(
             preserveInput,
             currentBusinessDay,
             casts.Succeeded ? casts.Value : [],
+            staffs.Succeeded ? staffs.Value : [],
             attendance.Succeeded ? attendance.Value : [],
             defaultClockIn);
 
@@ -121,7 +127,8 @@ public sealed class AttendanceApplicationService(
         }
 
         var attendanceEntries = input.Entries
-            .Where(x => x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime)))
+            .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Cast)
+            .Where(x => x.CastId > 0 && (x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime))))
             .Select(x => new BusinessDayAttendanceInput
             {
                 CastId = x.CastId,
@@ -129,15 +136,44 @@ public sealed class AttendanceApplicationService(
                 ClockInTime = x.ClockInTime?.Trim() ?? string.Empty
             })
             .ToArray();
-        var attendanceResult = await _businessDayRepository.SaveAttendanceAsync(
-            businessDay.BusinessDayId,
-            attendanceEntries,
-            ct);
-        if (!attendanceResult.Succeeded)
+
+        if (attendanceEntries.Length > 0)
         {
-            return Result<AttendanceSaveOutput>.Failure(
-                ResultFailureKind.Unavailable,
-                attendanceResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
+            var attendanceResult = await _businessDayRepository.SaveAttendanceAsync(
+                businessDay.BusinessDayId,
+                attendanceEntries,
+                ct);
+            if (!attendanceResult.Succeeded)
+            {
+                return Result<AttendanceSaveOutput>.Failure(
+                    ResultFailureKind.Unavailable,
+                    attendanceResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
+            }
+        }
+
+        var staffAttendanceEntries = input.Entries
+            .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Staff)
+            .Where(x => x.StaffId > 0 && (x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime))))
+            .Select(x => new BusinessDayStaffAttendanceInput
+            {
+                StaffId = x.StaffId,
+                IsSelected = x.IsSelected,
+                ClockInTime = x.ClockInTime?.Trim() ?? string.Empty
+            })
+            .ToArray();
+
+        if (staffAttendanceEntries.Length > 0)
+        {
+            var staffAttendanceResult = await _businessDayRepository.SaveStaffAttendanceAsync(
+                businessDay.BusinessDayId,
+                staffAttendanceEntries,
+                ct);
+            if (!staffAttendanceResult.Succeeded)
+            {
+                return Result<AttendanceSaveOutput>.Failure(
+                    ResultFailureKind.Unavailable,
+                    staffAttendanceResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
+            }
         }
 
         var savedAttendance = await _businessDayRepository.GetClosingAttendanceAsync(
@@ -150,17 +186,19 @@ public sealed class AttendanceApplicationService(
                 savedAttendance.ErrorMessage ?? "保存後の勤怠入力を取得できませんでした。");
         }
 
-        var attendanceIdByCastId = savedAttendance.Value
-            .GroupBy(x => x.CastId)
+        var attendanceIdByPersonKey = savedAttendance.Value
+            .Where(x => x.PersonId > 0)
+            .GroupBy(x => x.PersonKey)
             .ToDictionary(x => x.Key, x => x.Last().AttendanceId);
         var clockOutEntries = input.Entries
             .Where(x => x.IsSelected && !string.IsNullOrWhiteSpace(x.ClockOutTime))
             .Select(x =>
             {
-                attendanceIdByCastId.TryGetValue(x.CastId, out var attendanceId);
+                attendanceIdByPersonKey.TryGetValue(AttendancePersonKey.Create(x), out var attendanceId);
                 return new BusinessDayClosingAttendanceInput
                 {
                     AttendanceId = attendanceId,
+                    PersonType = AttendancePersonTypes.Normalize(x.PersonType),
                     DisplayName = x.DisplayName,
                     DepartmentName = x.DepartmentName,
                     ClockInTime = x.ClockInTime?.Trim(),
@@ -172,11 +210,14 @@ public sealed class AttendanceApplicationService(
             .ToArray();
 
         var savedClockOutCount = 0;
-        if (clockOutEntries.Length > 0)
+        var castClockOutEntries = clockOutEntries
+            .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Cast)
+            .ToArray();
+        if (castClockOutEntries.Length > 0)
         {
             var closingResult = await _businessDayRepository.SaveClosingAttendanceAsync(
                 businessDay.BusinessDayId,
-                clockOutEntries,
+                castClockOutEntries,
                 ct);
             if (!closingResult.Succeeded)
             {
@@ -185,7 +226,26 @@ public sealed class AttendanceApplicationService(
                     closingResult.ErrorMessage ?? "退勤時刻を保存できませんでした。");
             }
 
-            savedClockOutCount = closingResult.SavedCount;
+            savedClockOutCount += closingResult.SavedCount;
+        }
+
+        var staffClockOutEntries = clockOutEntries
+            .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Staff)
+            .ToArray();
+        if (staffClockOutEntries.Length > 0)
+        {
+            var closingResult = await _businessDayRepository.SaveStaffClosingAttendanceAsync(
+                businessDay.BusinessDayId,
+                staffClockOutEntries,
+                ct);
+            if (!closingResult.Succeeded)
+            {
+                return Result<AttendanceSaveOutput>.Failure(
+                    ResultFailureKind.Unavailable,
+                    closingResult.ErrorMessage ?? "退勤時刻を保存できませんでした。");
+            }
+
+            savedClockOutCount += closingResult.SavedCount;
         }
 
         return Result<AttendanceSaveOutput>.Success(new AttendanceSaveOutput(
@@ -199,26 +259,38 @@ public sealed class AttendanceApplicationService(
         bool preserveInput,
         StoreBusinessDay? businessDay,
         IReadOnlyList<CastOption> casts,
+        IReadOnlyList<StaffOption> staffs,
         IReadOnlyList<BusinessDayClosingAttendanceItem> attendanceItems,
         string defaultClockIn)
     {
-        var postedByCastId = preserveInput
+        foreach (var entry in input.Entries)
+        {
+            entry.PersonType = AttendancePersonTypes.Normalize(entry.PersonType);
+        }
+
+        var postedByPersonKey = preserveInput
             ? input.Entries
-                .Where(x => x.CastId > 0)
-                .GroupBy(x => x.CastId)
-                .ToDictionary(x => x.Key, x => x.Last())
-            : [];
+                .Where(x => x.PersonId > 0)
+                .GroupBy(AttendancePersonKey.Create)
+                .ToDictionary(x => x.Key, x => x.Last(), StringComparer.Ordinal)
+            : new Dictionary<string, BusinessDayAttendanceEntryInput>(StringComparer.Ordinal);
         var postedSelectedCastIds = preserveInput
             ? AttendanceEditor.ParseSelectedCastIds(input.SelectedCastIds)
             : [];
-        var attendanceByCastId = attendanceItems
-            .GroupBy(x => x.CastId)
-            .ToDictionary(x => x.Key, x => x.Last());
-        var entries = casts
-            .Select(cast =>
+        var postedSelectedAttendanceKeys = preserveInput
+            ? AttendanceEditor.ParseSelectedAttendanceKeys(input.SelectedAttendanceKeys)
+            : [];
+        var attendanceByPersonKey = attendanceItems
+            .Where(x => x.PersonId > 0)
+            .GroupBy(x => x.PersonKey)
+            .ToDictionary(x => x.Key, x => x.Last(), StringComparer.Ordinal);
+
+        var entries = new List<BusinessDayAttendanceEntryInput>();
+        entries.AddRange(casts.Select(cast =>
             {
-                postedByCastId.TryGetValue(cast.CastId, out var posted);
-                attendanceByCastId.TryGetValue(cast.CastId, out var attendance);
+                var personKey = AttendancePersonKey.Create(AttendancePersonTypes.Cast, cast.CastId);
+                postedByPersonKey.TryGetValue(personKey, out var posted);
+                attendanceByPersonKey.TryGetValue(personKey, out var attendance);
                 var clockInTime = posted?.ClockInTime ??
                     _storeClock.FormatStoreTime(attendance?.ClockInAt, string.Empty);
                 if (attendance is null && posted is null && string.IsNullOrWhiteSpace(clockInTime))
@@ -228,6 +300,7 @@ public sealed class AttendanceApplicationService(
 
                 return new BusinessDayAttendanceEntryInput
                 {
+                    PersonType = AttendancePersonTypes.Cast,
                     CastId = cast.CastId,
                     AttendanceId = attendance?.AttendanceId ?? posted?.AttendanceId ?? 0,
                     DisplayName = cast.SearchDisplayName,
@@ -239,17 +312,47 @@ public sealed class AttendanceApplicationService(
                         _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty),
                     UsesSendService = posted?.UsesSendService ?? attendance?.UsesSendService ?? false
                 };
-            })
-            .ToList();
-        var listedCastIds = entries.Select(x => x.CastId).ToHashSet();
-        entries.AddRange(attendanceItems
-            .Where(item => !listedCastIds.Contains(item.CastId))
-            .Select(item =>
+            }));
+        entries.AddRange(staffs.Select(staff =>
             {
-                postedByCastId.TryGetValue(item.CastId, out var posted);
+                var personKey = AttendancePersonKey.Create(AttendancePersonTypes.Staff, staff.StaffId);
+                postedByPersonKey.TryGetValue(personKey, out var posted);
+                attendanceByPersonKey.TryGetValue(personKey, out var attendance);
+                var clockInTime = posted?.ClockInTime ??
+                    _storeClock.FormatStoreTime(attendance?.ClockInAt, string.Empty);
+                if (attendance is null && posted is null && string.IsNullOrWhiteSpace(clockInTime))
+                {
+                    clockInTime = defaultClockIn;
+                }
+
                 return new BusinessDayAttendanceEntryInput
                 {
+                    PersonType = AttendancePersonTypes.Staff,
+                    StaffId = staff.StaffId,
+                    AttendanceId = attendance?.AttendanceId ?? posted?.AttendanceId ?? 0,
+                    DisplayName = staff.SearchDisplayName,
+                    DepartmentName = staff.DepartmentName,
+                    IsSelected = posted?.IsSelected ?? (attendance is not null && !string.IsNullOrWhiteSpace(clockInTime)),
+                    IsRegistered = attendance is not null,
+                    ClockInTime = clockInTime,
+                    ClockOutTime = posted?.ClockOutTime ??
+                        _storeClock.FormatStoreTime(attendance?.ClockOutAt, string.Empty),
+                    UsesSendService = posted?.UsesSendService ?? attendance?.UsesSendService ?? false
+                };
+            }));
+        var listedPersonKeys = entries
+            .Select(AttendancePersonKey.Create)
+            .ToHashSet(StringComparer.Ordinal);
+        entries.AddRange(attendanceItems
+            .Where(item => !listedPersonKeys.Contains(item.PersonKey))
+            .Select(item =>
+            {
+                postedByPersonKey.TryGetValue(item.PersonKey, out var posted);
+                return new BusinessDayAttendanceEntryInput
+                {
+                    PersonType = AttendancePersonTypes.Normalize(item.PersonType),
                     CastId = item.CastId,
+                    StaffId = item.StaffId,
                     AttendanceId = item.AttendanceId,
                     DisplayName = item.SearchDisplayName,
                     DepartmentName = item.DepartmentName,
@@ -265,18 +368,27 @@ public sealed class AttendanceApplicationService(
                 };
             }));
 
-        if (postedSelectedCastIds.Count > 0)
+        if (postedSelectedCastIds.Count > 0 || postedSelectedAttendanceKeys.Count > 0)
         {
             foreach (var entry in entries)
             {
-                entry.IsSelected = entry.IsSelected || postedSelectedCastIds.Contains(entry.CastId);
+                entry.PersonType = AttendancePersonTypes.Normalize(entry.PersonType);
+                entry.IsSelected = entry.IsSelected ||
+                    postedSelectedAttendanceKeys.Contains(AttendancePersonKey.Create(entry)) ||
+                    (entry.PersonType == AttendancePersonTypes.Cast && postedSelectedCastIds.Contains(entry.CastId));
             }
         }
 
         return new ClosingAttendanceInputModel
         {
             BusinessDayId = businessDay?.BusinessDayId,
-            SelectedCastIds = string.Join(',', entries.Where(x => x.IsSelected).Select(x => x.CastId)),
+            SelectedCastIds = string.Join(
+                ',',
+                entries.Where(x => x.IsSelected && x.PersonType == AttendancePersonTypes.Cast)
+                    .Select(x => x.CastId)),
+            SelectedAttendanceKeys = string.Join(
+                ',',
+                entries.Where(x => x.IsSelected).Select(AttendancePersonKey.Create)),
             SelectedEntriesJson = input.SelectedEntriesJson,
             Entries = entries
         };

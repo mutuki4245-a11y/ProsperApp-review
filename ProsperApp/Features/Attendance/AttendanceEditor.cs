@@ -26,20 +26,42 @@ public static class AttendanceEditor
                 "選択した勤怠行を読み取れませんでした。画面を再読み込みしてください。");
         }
 
-        var inputByCastId = input.Entries
-            .Where(x => x.CastId > 0)
-            .GroupBy(x => x.CastId)
-            .ToDictionary(x => x.Key, x => x.Last());
+        var inputByPersonKey = input.Entries
+            .Where(x => x.PersonId > 0)
+            .GroupBy(AttendancePersonKey.Create)
+            .ToDictionary(x => x.Key, x => x.Last(), StringComparer.Ordinal);
 
-        foreach (var posted in selectedEntries.Where(x => x.CastId > 0))
+        foreach (var posted in selectedEntries)
         {
-            if (!inputByCastId.TryGetValue(posted.CastId, out var entry))
+            var personType = AttendancePersonTypes.Normalize(posted.PersonType);
+            var personId = ResolvePostedPersonId(posted, personType);
+            if (personId <= 0)
             {
-                entry = new BusinessDayAttendanceEntryInput { CastId = posted.CastId };
-                input.Entries.Add(entry);
-                inputByCastId[posted.CastId] = entry;
+                continue;
             }
 
+            var personKey = AttendancePersonKey.Create(personType, personId);
+            if (!inputByPersonKey.TryGetValue(personKey, out var entry))
+            {
+                entry = new BusinessDayAttendanceEntryInput
+                {
+                    PersonType = personType,
+                    CastId = personType == AttendancePersonTypes.Cast ? personId : 0,
+                    StaffId = personType == AttendancePersonTypes.Staff ? personId : 0
+                };
+                input.Entries.Add(entry);
+                inputByPersonKey[personKey] = entry;
+            }
+
+            entry.PersonType = personType;
+            if (personType == AttendancePersonTypes.Staff)
+            {
+                entry.StaffId = personId;
+            }
+            else
+            {
+                entry.CastId = personId;
+            }
             entry.IsSelected = true;
             entry.AttendanceId = posted.AttendanceId > 0 ? posted.AttendanceId : entry.AttendanceId;
             entry.DisplayName = FirstNonEmpty(posted.DisplayName, entry.DisplayName);
@@ -51,12 +73,25 @@ public static class AttendanceEditor
         }
 
         var selectedCastIds = ParseSelectedCastIds(input.SelectedCastIds);
-        foreach (var castId in selectedEntries.Select(x => x.CastId).Where(x => x > 0))
+        var selectedAttendanceKeys = AttendancePersonKey.ParseMany(input.SelectedAttendanceKeys);
+        foreach (var posted in selectedEntries)
         {
-            selectedCastIds.Add(castId);
+            var personType = AttendancePersonTypes.Normalize(posted.PersonType);
+            var personId = ResolvePostedPersonId(posted, personType);
+            if (personId <= 0)
+            {
+                continue;
+            }
+
+            selectedAttendanceKeys.Add(AttendancePersonKey.Create(personType, personId));
+            if (personType == AttendancePersonTypes.Cast)
+            {
+                selectedCastIds.Add(personId);
+            }
         }
 
         input.SelectedCastIds = string.Join(',', selectedCastIds);
+        input.SelectedAttendanceKeys = string.Join(',', selectedAttendanceKeys);
         return Result<ClosingAttendanceInputModel>.Success(input);
     }
 
@@ -109,6 +144,11 @@ public static class AttendanceEditor
             .ToHashSet();
     }
 
+    public static HashSet<string> ParseSelectedAttendanceKeys(string? value)
+    {
+        return AttendancePersonKey.ParseMany(value);
+    }
+
     public static IReadOnlyList<AttendanceValidationError> Validate(
         ClosingAttendanceInputModel input,
         IReadOnlyList<AttendanceTimeOption> clockInOptions,
@@ -118,9 +158,13 @@ public static class AttendanceEditor
         string? castLoadErrorMessage)
     {
         var selectedCastIds = ParseSelectedCastIds(input.SelectedCastIds);
+        var selectedAttendanceKeys = ParseSelectedAttendanceKeys(input.SelectedAttendanceKeys);
         foreach (var entry in input.Entries)
         {
-            entry.IsSelected = entry.IsSelected || selectedCastIds.Contains(entry.CastId);
+            entry.PersonType = AttendancePersonTypes.Normalize(entry.PersonType);
+            entry.IsSelected = entry.IsSelected ||
+                selectedAttendanceKeys.Contains(AttendancePersonKey.Create(entry)) ||
+                (entry.PersonType == AttendancePersonTypes.Cast && selectedCastIds.Contains(entry.CastId));
         }
 
         if (input.Entries.Count == 0)
@@ -130,14 +174,14 @@ public static class AttendanceEditor
                 new AttendanceValidationError(
                     string.Empty,
                     string.IsNullOrWhiteSpace(castLoadErrorMessage)
-                        ? "キャスト情報が未登録です。先にキャスト情報を登録してください。"
+                        ? "キャストまたはスタッフ情報が未登録です。先にマスタ情報を登録してください。"
                         : castLoadErrorMessage)
             ];
         }
 
         if (input.Entries.All(x => !x.IsSelected))
         {
-            return [new AttendanceValidationError(nameof(input.Entries), "出勤キャストを1名以上選択してください。")];
+            return [new AttendanceValidationError(nameof(input.Entries), "出勤者を1名以上選択してください。")];
         }
 
         var errors = new List<AttendanceValidationError>();
@@ -146,9 +190,9 @@ public static class AttendanceEditor
         for (var index = 0; index < input.Entries.Count; index++)
         {
             var entry = input.Entries[index];
-            if (entry.CastId <= 0)
+            if (entry.PersonId <= 0)
             {
-                errors.Add(new AttendanceValidationError(string.Empty, "キャストの選択内容を確認してください。"));
+                errors.Add(new AttendanceValidationError(string.Empty, "出勤者の選択内容を確認してください。"));
                 continue;
             }
 
@@ -206,6 +250,18 @@ public static class AttendanceEditor
         return string.IsNullOrWhiteSpace(primary)
             ? fallback ?? string.Empty
             : primary.Trim();
+    }
+
+    private static long ResolvePostedPersonId(PostedAttendanceEntry entry, string personType)
+    {
+        if (entry.PersonId > 0)
+        {
+            return entry.PersonId;
+        }
+
+        return personType == AttendancePersonTypes.Staff
+            ? entry.StaffId
+            : entry.CastId;
     }
 }
 
