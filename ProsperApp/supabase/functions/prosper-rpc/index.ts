@@ -159,16 +159,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.get_business_day_cast_sales_adjustment_status",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
     "store.get_business_day_closing_readiness",
     {
       result: "rows",
@@ -196,26 +186,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_cast_sales_adjustment_slips",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_cast_sales_adjustment_detail",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
       ],
     },
   ],

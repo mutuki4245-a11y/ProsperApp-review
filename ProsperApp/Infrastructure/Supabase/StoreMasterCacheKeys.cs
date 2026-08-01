@@ -23,6 +23,10 @@ internal static class StoreMasterCacheKeys
 
     public static string ItemAdminCatalog(long departmentId) => $"store-master:{departmentId}:item-admin-catalog";
 
+    public static string PaymentMethods(long departmentId) => $"store-master:{departmentId}:payment-methods";
+
+    public static string PricingPlan(long departmentId) => $"store-master:{departmentId}:pricing-plan";
+
     public static string CastAdminList(long departmentId) => $"store-master:{departmentId}:cast-admin-list";
 
     public static string StaffAdminList(long departmentId) => $"store-master:{departmentId}:staff-admin-list";

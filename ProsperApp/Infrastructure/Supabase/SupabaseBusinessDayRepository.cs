@@ -263,7 +263,9 @@ public class SupabaseBusinessDayRepository(
 
         if (!result.Succeeded)
         {
-            return await GetLegacyClosingReadinessAsync(businessDay, includePendingReceipts, ct);
+            return Result<BusinessDayClosingReadiness>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "締め条件を確認できませんでした。");
         }
 
         if (result.Value.Count == 0)
@@ -701,89 +703,6 @@ public class SupabaseBusinessDayRepository(
         return string.IsNullOrWhiteSpace(body)
             ? null
             : body.Trim().Trim('"');
-    }
-
-    private async Task<Result<BusinessDayClosingReadiness>> GetLegacyClosingReadinessAsync(
-        StoreBusinessDay businessDay,
-        bool includePendingReceipts,
-        CancellationToken ct)
-    {
-        var departmentId = CurrentStoreDepartmentId;
-        var openSlipsTask = RpcClient.PostScalarAsync(
-            "store.get_open_slip_count",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var drinkTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_drink_delivery_status",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var attendanceTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_closing_attendance",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var castTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_cast_sales_adjustment_status",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var receiptsTask = includePendingReceipts
-            ? RpcClient.PostArrayAsync(
-                "store.get_pending_receipts",
-                new { p_department_id = departmentId, p_status = _options.PendingStatus },
-                ct)
-            : Task.FromResult(SupabaseRpcResult.Success("[]") with { Rows = [] });
-
-        await Task.WhenAll(openSlipsTask, drinkTask, attendanceTask, castTask, receiptsTask);
-
-        var openSlips = await openSlipsTask;
-        var drink = await drinkTask;
-        var attendance = await attendanceTask;
-        var cast = await castTask;
-        var receipts = await receiptsTask;
-        if (!openSlips.Succeeded ||
-            !drink.Succeeded ||
-            !attendance.Succeeded ||
-            !cast.Succeeded ||
-            !receipts.Succeeded)
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.Unavailable,
-                "締め条件の一部を取得できませんでした。時間をおいて再表示してください。");
-        }
-
-        if (!int.TryParse(
-                NormalizeScalarBody(openSlips.Body),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var openSlipCount))
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "未会計伝票数を確認できませんでした。");
-        }
-
-        var drinkRow = drink.Rows.FirstOrDefault();
-        var castRow = cast.Rows.FirstOrDefault();
-        if (drink.Rows.Count == 0 || cast.Rows.Count == 0)
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "締め条件の応答が不足しています。");
-        }
-
-        return Result<BusinessDayClosingReadiness>.Success(new BusinessDayClosingReadiness
-        {
-            BusinessDay = businessDay,
-            OpenSlipCount = openSlipCount,
-            DrinkDeliveryAmount = ReadDecimal(drinkRow, "drink_delivery_amount") ?? 0,
-            IsDrinkDeliveryAmountEntered = ReadBool(drinkRow, "is_entered") ?? false,
-            AttendanceCount = attendance.Rows.Count,
-            MissingClockOutCount = attendance.Rows.Count(row => ReadDateTimeOffset(row, "clock_out_at") is null),
-            CastSalesRequiredSlipCount = (int)(ReadLong(castRow, "required_slip_count") ?? 0),
-            CastSalesCompletedSlipCount = (int)(ReadLong(castRow, "completed_slip_count") ?? 0),
-            CastSalesMissingSlipCount = (int)(ReadLong(castRow, "missing_slip_count") ?? 0),
-            PendingReceiptCount = receipts.Rows.Count,
-            ReceiptsEnabled = includePendingReceipts
-        });
     }
 
     private static IReadOnlyList<string> ReadStringArray(JsonElement row, string propertyName)

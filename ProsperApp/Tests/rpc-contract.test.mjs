@@ -28,7 +28,7 @@ const repositorySource = walk('Infrastructure/Supabase', '.cs')
     .join('\n');
 const csharpRpcNames = new Set(
     [...repositorySource.matchAll(
-        /(?:PostRpcArrayAsync|PostRpcArrayResultAsync|PostArrayAsync|PostScalarAsync)\s*\(\s*"(store\.[a-z0-9_]+)"/g
+        /(?:PostRpcArrayAsync|PostRpcArrayResultAsync|PostRpcScalarResultAsync|PostArrayAsync|PostScalarAsync)\s*\(\s*"(store\.[a-z0-9_]+)"/g
     )].map((match) => match[1])
 );
 

@@ -16,7 +16,6 @@ public class SettingsModel(
 {
     private const string SettingsPassword = "4245";
     private const string SaveTokenSessionKey = "SettingsSaveToken";
-    private const string LegacyAdminCookieName = "ProsperApp.AdminSession";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IFeatureGate _featureGate = featureGate;
@@ -63,7 +62,6 @@ public class SettingsModel(
             return NotFound();
         }
 
-        DeleteLegacyAdminCookie();
         LoadCurrentSettings();
         LockSettings();
         await LoadDepartmentsAsync(ct);
@@ -288,25 +286,6 @@ public class SettingsModel(
             {
                 Expires = DateTimeOffset.UtcNow.AddYears(1),
                 HttpOnly = false,
-                IsEssential = true,
-                SameSite = SameSiteMode.Lax,
-                Secure = Request.IsHttps,
-                Path = "/"
-            });
-    }
-
-    private void DeleteLegacyAdminCookie()
-    {
-        if (!Request.Cookies.ContainsKey(LegacyAdminCookieName))
-        {
-            return;
-        }
-
-        Response.Cookies.Delete(
-            LegacyAdminCookieName,
-            new CookieOptions
-            {
-                HttpOnly = true,
                 IsEssential = true,
                 SameSite = SameSiteMode.Lax,
                 Secure = Request.IsHttps,

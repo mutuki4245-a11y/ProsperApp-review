@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.Slips;
 using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Options;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
@@ -192,6 +193,12 @@ public class SupabaseReceiptRepository(
 
     private async Task<Result<long?>> GetCompanyIdAsync(CancellationToken ct)
     {
+        if (_cache.TryGetValue(StoreMasterCacheKeys.StoreContext(CurrentStoreDepartmentId), out StoreContext? cachedContext) &&
+            cachedContext?.CompanyId > 0)
+        {
+            return Result<long?>.Success(cachedContext.CompanyId);
+        }
+
         var result = await PostRpcArrayResultAsync(
             "store.get_context",
             new { p_department_id = CurrentStoreDepartmentId },

@@ -1,13 +1,17 @@
 using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
 namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStorePricingPlanRepository(
     ISupabaseRpcClient rpcClient,
-    ILocalSettingsProvider localSettingsProvider)
+    ILocalSettingsProvider localSettingsProvider,
+    IApplicationCache cache)
     : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStorePricingPlanRepository
 {
+    private readonly IApplicationCache _cache = cache;
+
     public async Task<Result<StorePricingPlanInputModel>> GetAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -17,9 +21,17 @@ public class SupabaseStorePricingPlanRepository(
                 "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.PricingPlan(departmentId);
+        if (_cache.TryGetValue(cacheKey, out StorePricingPlanInputModel? cachedPlan) &&
+            cachedPlan is not null)
+        {
+            return Result<StorePricingPlanInputModel>.Success(cachedPlan);
+        }
+
         var result = await RpcClient.PostArrayAsync(
             "store.get_pricing_plan",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
 
         if (!result.Succeeded)
@@ -31,11 +43,13 @@ public class SupabaseStorePricingPlanRepository(
 
         if (result.Rows.Count == 0)
         {
-            return Result<StorePricingPlanInputModel>.Success(new StorePricingPlanInputModel());
+            var emptyPlan = new StorePricingPlanInputModel();
+            StoreMasterCacheKeys.SetMaster(_cache, cacheKey, emptyPlan, "料金設定");
+            return Result<StorePricingPlanInputModel>.Success(emptyPlan);
         }
 
         var row = result.Rows[0];
-        return Result<StorePricingPlanInputModel>.Success(new StorePricingPlanInputModel
+        var plan = new StorePricingPlanInputModel
         {
             SetMinutes = (int)(ReadLong(row, "set_minutes") ?? 60),
             SetUnitPriceSingle = ReadDecimal(row, "set_unit_price_single") ?? 0,
@@ -43,7 +57,9 @@ public class SupabaseStorePricingPlanRepository(
             ExtensionUnitPriceSingle = ReadDecimal(row, "extension_unit_price_single") ?? 0,
             ExtensionUnitPricePerCustomer = ReadDecimal(row, "extension_unit_price_per_customer") ?? 0,
             IsActive = ReadBool(row, "is_active") ?? false
-        });
+        };
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, plan, "料金設定");
+        return Result<StorePricingPlanInputModel>.Success(plan);
     }
 
     public async Task<StorePricingPlanSaveResult> SaveAsync(StorePricingPlanInputModel plan, CancellationToken ct)
@@ -78,9 +94,13 @@ public class SupabaseStorePricingPlanRepository(
         }
 
         var version = (int)(ReadLong(result.Rows[0], "plan_version") ?? 0);
-        return version > 0
-            ? StorePricingPlanSaveResult.Success(version)
-            : StorePricingPlanSaveResult.Failed("料金設定を保存できませんでした。");
+        if (version <= 0)
+        {
+            return StorePricingPlanSaveResult.Failed("料金設定を保存できませんでした。");
+        }
+
+        _cache.Remove(StoreMasterCacheKeys.PricingPlan(CurrentStoreDepartmentId));
+        return StorePricingPlanSaveResult.Success(version);
     }
 
     private static string ToFriendlyError(string? rawError)

@@ -1,19 +1,30 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
+using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
 namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseCheckoutRepository(
     ISupabaseRpcClient rpcClient,
-    ILocalSettingsProvider localSettingsProvider) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), ICheckoutRepository
+    ILocalSettingsProvider localSettingsProvider,
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), ICheckoutRepository
 {
+    private readonly IApplicationCache _cache = cache;
+
     public async Task<Result<IReadOnlyList<CheckoutPaymentMethod>>> GetPaymentMethodsAsync(CancellationToken ct)
     {
+        var departmentId = CurrentStoreDepartmentId;
+        var cacheKey = StoreMasterCacheKeys.PaymentMethods(departmentId);
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<CheckoutPaymentMethod>? cachedMethods))
+        {
+            return Result<IReadOnlyList<CheckoutPaymentMethod>>.Success(cachedMethods ?? []);
+        }
+
         var result = await PostRpcArrayResultAsync(
             "store.get_payment_methods",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new { p_department_id = departmentId },
             ct);
         if (!result.Succeeded)
         {
@@ -37,6 +48,7 @@ public class SupabaseCheckoutRepository(
             .ThenBy(method => method.MethodCode, StringComparer.Ordinal)
             .ToList();
 
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, methods, "決済方法");
         return Result<IReadOnlyList<CheckoutPaymentMethod>>.Success(methods);
     }
 

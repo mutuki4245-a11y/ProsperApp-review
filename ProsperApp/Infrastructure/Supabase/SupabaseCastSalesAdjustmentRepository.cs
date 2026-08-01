@@ -38,7 +38,9 @@ public class SupabaseCastSalesAdjustmentRepository(
             ct);
         if (!result.Succeeded)
         {
-            return await GetLegacyOverviewAsync(businessDayId, ct);
+            return Result<CastSalesAdjustmentOverview>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "キャスト売上額調整を取得できませんでした。");
         }
 
         if (result.Value.Count == 0)
@@ -172,23 +174,6 @@ public class SupabaseCastSalesAdjustmentRepository(
             ct);
         if (!result.Succeeded)
         {
-            if (IsMissingBatchRpc(result.ErrorMessage))
-            {
-                var savedCount = 0;
-                foreach (var input in inputs)
-                {
-                    var legacyResult = await SaveAsync(input, ct);
-                    if (!legacyResult.Succeeded)
-                    {
-                        return legacyResult;
-                    }
-
-                    savedCount += legacyResult.SavedCount;
-                }
-
-                return CastSalesAdjustmentSaveResult.Success(savedCount);
-            }
-
             return CastSalesAdjustmentSaveResult.Failed(ToFriendlyError(result.ErrorMessage));
         }
 
@@ -225,55 +210,6 @@ public class SupabaseCastSalesAdjustmentRepository(
                casts.Any(x => x.SalesAmount < 0 || decimal.Truncate(x.SalesAmount) != x.SalesAmount)
             ? null
             : casts;
-    }
-
-    private async Task<Result<CastSalesAdjustmentOverview>> GetLegacyOverviewAsync(
-        long businessDayId,
-        CancellationToken ct)
-    {
-        var departmentId = CurrentStoreDepartmentId;
-        var statusTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_cast_sales_adjustment_status",
-            new { p_department_id = departmentId, p_business_day_id = businessDayId },
-            ct);
-        var slipsTask = RpcClient.PostArrayAsync(
-            "store.get_cast_sales_adjustment_slips",
-            new { p_department_id = departmentId, p_business_day_id = businessDayId },
-            ct);
-        await Task.WhenAll(statusTask, slipsTask);
-
-        var status = await statusTask;
-        var slips = await slipsTask;
-        if (!status.Succeeded || status.Rows.Count == 0 || !slips.Succeeded)
-        {
-            return Result<CastSalesAdjustmentOverview>.Failure(
-                ResultFailureKind.Unavailable,
-                "キャスト売上額調整を取得できませんでした。時間をおいて再表示してください。");
-        }
-
-        var parsedSlips = ParseSlips(slips.Rows);
-        var detailResults = await Task.WhenAll(parsedSlips.Select(slip =>
-            RpcClient.PostArrayAsync(
-                "store.get_cast_sales_adjustment_detail",
-                new { p_department_id = departmentId, p_slip_id = slip.SlipId },
-                ct)));
-        if (detailResults.Any(result => !result.Succeeded))
-        {
-            return Result<CastSalesAdjustmentOverview>.Failure(
-                ResultFailureKind.Unavailable,
-                "キャスト売上額調整の明細を取得できませんでした。");
-        }
-
-        return Result<CastSalesAdjustmentOverview>.Success(new CastSalesAdjustmentOverview
-        {
-            Status = ParseStatus(status.Rows[0]),
-            Slips = parsedSlips,
-            Details = detailResults
-                .Select(result => ParseDetail(result.Rows))
-                .Where(detail => detail is not null)
-                .Select(detail => detail!)
-                .ToList()
-        });
     }
 
     private static CastSalesAdjustmentStatus ParseStatus(JsonElement row)
@@ -383,17 +319,6 @@ public class SupabaseCastSalesAdjustmentRepository(
 
         value = default;
         return false;
-    }
-
-    private static bool IsMissingBatchRpc(string? rawError)
-    {
-        return !string.IsNullOrWhiteSpace(rawError) &&
-               (rawError.Contains("invalid_function_name", StringComparison.OrdinalIgnoreCase) ||
-                rawError.Contains("PGRST202", StringComparison.OrdinalIgnoreCase) ||
-                rawError.Contains(
-                    "store.save_business_day_cast_sales_adjustments",
-                    StringComparison.OrdinalIgnoreCase) &&
-                rawError.Contains("does not exist", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string NormalizeSourceAmountType(string? value)
