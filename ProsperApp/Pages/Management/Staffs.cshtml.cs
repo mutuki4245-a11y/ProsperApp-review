@@ -29,6 +29,12 @@ public class ManagementStaffsModel(
     [BindProperty]
     public long? DeleteStaffId { get; set; }
 
+    [BindProperty]
+    public long? UpdateStaffId { get; set; }
+
+    [BindProperty]
+    public string EmploymentType { get; set; } = StoreStaffEmploymentTypes.Employee;
+
     public string? SuccessMessage { get; set; }
 
     public PageLoadStatus? LoadStatus { get; private set; }
@@ -104,6 +110,41 @@ public class ManagementStaffsModel(
         ModelState.Clear();
         Input = new StoreStaffCreateInputModel();
         SuccessMessage = "スタッフを削除しました。";
+        await LoadAsync(cancellationToken);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostUpdateEmploymentTypeAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        if (!await LoadAsync(cancellationToken))
+        {
+            return Page();
+        }
+
+        if (UpdateStaffId is null or <= 0 || !StoreStaffEmploymentTypes.IsValid(EmploymentType))
+        {
+            ModelState.AddModelError(string.Empty, "変更するスタッフと雇用区分を確認してください。");
+            return Page();
+        }
+
+        var result = await _staffAdminRepository.UpdateStaffEmploymentTypeAsync(
+            UpdateStaffId.Value,
+            EmploymentType,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "雇用区分を変更できませんでした。");
+            return Page();
+        }
+
+        ModelState.Clear();
+        Input = new StoreStaffCreateInputModel();
+        SuccessMessage = "雇用区分を変更しました。";
         await LoadAsync(cancellationToken);
         return Page();
     }

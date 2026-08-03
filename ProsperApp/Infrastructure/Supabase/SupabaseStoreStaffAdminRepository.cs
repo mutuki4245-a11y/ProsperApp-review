@@ -43,7 +43,8 @@ public class SupabaseStoreStaffAdminRepository(
                 StaffId = ReadLong(row, "staff_id") ?? 0,
                 StaffCode = ReadString(row, "staff_code"),
                 DepartmentName = ReadString(row, "department_name"),
-                DisplayName = ReadString(row, "display_name") ?? string.Empty
+                DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(row, "employment_type"))
             })
             .Where(x => x.StaffId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
@@ -79,7 +80,8 @@ public class SupabaseStoreStaffAdminRepository(
             {
                 StaffId = ReadLong(row, "staff_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
-                JoinedOn = ReadDateOnly(row, "joined_on") ?? DateOnly.MinValue
+                JoinedOn = ReadDateOnly(row, "joined_on") ?? DateOnly.MinValue,
+                EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(row, "employment_type"))
             })
             .Where(x => x.StaffId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
             .ToList();
@@ -99,7 +101,8 @@ public class SupabaseStoreStaffAdminRepository(
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
-                p_display_name = input.DisplayName.Trim()
+                p_display_name = input.DisplayName.Trim(),
+                p_employment_type = input.EmploymentType
             },
             ct);
 
@@ -117,6 +120,47 @@ public class SupabaseStoreStaffAdminRepository(
         return staffId > 0
             ? StoreStaffSaveResult.Success(staffId)
             : StoreStaffSaveResult.Failed("スタッフを登録できませんでした。");
+    }
+
+    public async Task<StoreStaffSaveResult> UpdateStaffEmploymentTypeAsync(
+        long staffId,
+        string employmentType,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return StoreStaffSaveResult.Failed("Supabase Edge Function設定が未設定です。雇用区分を変更できません。");
+        }
+
+        if (staffId <= 0 || !StoreStaffEmploymentTypes.IsValid(employmentType))
+        {
+            return StoreStaffSaveResult.Failed("変更するスタッフと雇用区分を確認してください。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.update_staff_employment_type",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_staff_id = staffId,
+                p_employment_type = employmentType
+            },
+            ct);
+
+        if (!result.Succeeded)
+        {
+            return StoreStaffSaveResult.Failed(ToFriendlyError(result.ErrorMessage));
+        }
+
+        var updatedStaffId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "staff_id") ?? 0 : 0;
+        if (updatedStaffId > 0)
+        {
+            StoreMasterCacheKeys.ClearStaffs(_cache, CurrentStoreDepartmentId);
+        }
+
+        return updatedStaffId > 0
+            ? StoreStaffSaveResult.Success(updatedStaffId)
+            : StoreStaffSaveResult.Failed("雇用区分を変更できませんでした。");
     }
 
     public async Task<StoreStaffSaveResult> DeleteStaffAsync(long staffId, CancellationToken ct)
@@ -166,6 +210,11 @@ public class SupabaseStoreStaffAdminRepository(
         if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
         {
             return "店舗設定を確認してください。";
+        }
+
+        if (rawError.Contains("invalid_store_staff_employment_type", StringComparison.OrdinalIgnoreCase))
+        {
+            return "雇用区分を確認してください。";
         }
 
         if (rawError.Contains("invalid_store_staff", StringComparison.OrdinalIgnoreCase))

@@ -177,10 +177,9 @@
         setTotal('expense', toYen(totals.expenseAmount));
         setTotal('balance', toYen(totals.cashBalanceAmount));
         setTotal('drink', toYen(totals.drinkDeliveryAmount));
-        setCount('checkouts', totals.confirmedCheckoutCount);
-        setCount('slips', totals.slipCount);
+        setCount('attendance', Array.isArray(report.casts) ? report.casts.length : 0);
+        setCount('groups', totals.slipCount);
         setCount('customers', totals.customerCount);
-        setCount('openSlips', totals.openSlipCount);
 
         renderRows(
             '[data-report-payments]',
@@ -195,22 +194,6 @@
             },
             '確定した支払はありません。',
             2
-        );
-
-        renderRows(
-            '[data-report-categories]',
-            report.itemCategories,
-            (category) => {
-                const row = document.createElement('tr');
-                row.append(
-                    makeCell(category.name || category.code),
-                    makeCell(toNumber(category.quantity), 'text-end'),
-                    makeCell(toYen(category.amount), 'text-end')
-                );
-                return row;
-            },
-            unavailable.has('itemCategories') ? '旧形式では未保存です。' : '確定会計の商品はありません。',
-            3
         );
 
         renderRows(
@@ -261,22 +244,26 @@
             9
         );
 
-        renderRows(
-            '[data-report-staffs]',
-            report.staffs,
+        const staffs = Array.isArray(report.staffs) ? report.staffs : [];
+        const employeeStaffs = staffs.filter((staff) => staff.employmentType !== 'part_time');
+        const partTimeStaffs = staffs.filter((staff) => staff.employmentType === 'part_time');
+        const renderStaffs = (selector, rows, emptyMessage) => renderRows(
+            selector,
+            rows,
             (staff) => {
                 const row = document.createElement('tr');
                 row.append(
                     makeCell(staff.displayName),
                     makeCell(toTime(staff.clockInAt)),
-                    makeCell(toTime(staff.clockOutAt)),
-                    makeCell(staff.usesSendService ? '利用' : '-')
+                    makeCell(toTime(staff.clockOutAt))
                 );
                 return row;
             },
-            '出勤スタッフはいません。',
-            4
+            emptyMessage,
+            3
         );
+        renderStaffs('[data-report-staffs="employee"]', employeeStaffs, '出勤社員はいません。');
+        renderStaffs('[data-report-staffs="part_time"]', partTimeStaffs, '出勤バイトはいません。');
 
         renderRows(
             '[data-report-expenses]',

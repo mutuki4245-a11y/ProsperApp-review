@@ -171,13 +171,22 @@
                                 <tr><th>現金</th><td data-report-total="cash"></td></tr>
                                 <tr><th>支出</th><td data-report-total="expense"></td></tr>
                                 <tr class="daily-report__summary-emphasis"><th>現金残高</th><td data-report-total="balance"></td></tr>
-                                <tr><th>酒代納品</th><td data-report-total="drink"></td></tr>
                             </tbody>
                         </table>
-                        <table class="daily-report__form-table" aria-label="支払方法">
-                            <thead><tr><th>支払方法</th><th>金額</th></tr></thead>
-                            <tbody data-report-payments></tbody>
-                        </table>
+                        <div class="daily-report__summary-side">
+                            <div class="daily-report__count-grid" aria-label="営業集計">
+                                <div><span>出勤人数</span><strong data-report-count="attendance"></strong></div>
+                                <div><span>組数</span><strong data-report-count="groups"></strong></div>
+                                <div><span>客数</span><strong data-report-count="customers"></strong></div>
+                            </div>
+                            <table class="daily-report__form-table daily-report__payment-table" aria-label="酒代・支払方法">
+                                <tbody>
+                                    <tr><th>酒代</th><td data-report-total="drink"></td></tr>
+                                    <tr><th>支払方法</th><th>金額</th></tr>
+                                </tbody>
+                                <tbody data-report-payments></tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <section class="daily-report__special-notes">
@@ -185,54 +194,37 @@
                         <p data-report-memo>なし</p>
                     </section>
 
-                    <div class="daily-report__ledger-grid daily-report__ledger-grid--details">
-                        <section>
-                            <h4 class="daily-report__block-title">商品内訳</h4>
-                            <table class="daily-report__form-table daily-report__form-table--compact">
-                                <thead><tr><th>カテゴリ</th><th>数量</th><th>金額</th></tr></thead>
-                                <tbody data-report-categories></tbody>
-                            </table>
-                        </section>
-                        <section>
-                            <h4 class="daily-report__block-title">営業件数</h4>
-                            <table class="daily-report__form-table daily-report__form-table--compact">
-                                <tbody>
-                                    <tr><th>会計</th><td data-report-count="checkouts"></td></tr>
-                                    <tr><th>伝票</th><td data-report-count="slips"></td></tr>
-                                    <tr><th>客数</th><td data-report-count="customers"></td></tr>
-                                    <tr><th>未会計</th><td data-report-count="openSlips"></td></tr>
-                                </tbody>
-                            </table>
-                        </section>
-                    </div>
+                    <section class="daily-report__sheet-section daily-report__staff-section">
+                        <div class="daily-report__staff-grid">
+                            <section>
+                                <h4 class="daily-report__block-title">社員勤怠</h4>
+                                <table class="daily-report__form-table daily-report__staff-table">
+                                    <thead><tr><th>名前</th><th>出勤</th><th>退勤</th></tr></thead>
+                                    <tbody data-report-staffs="employee" data-min-rows="4"></tbody>
+                                </table>
+                            </section>
+                            <section>
+                                <h4 class="daily-report__block-title">バイト勤怠</h4>
+                                <table class="daily-report__form-table daily-report__staff-table">
+                                    <thead><tr><th>名前</th><th>出勤</th><th>退勤</th></tr></thead>
+                                    <tbody data-report-staffs="part_time" data-min-rows="4"></tbody>
+                                </table>
+                            </section>
+                        </div>
+                    </section>
 
                     <section class="daily-report__sheet-section daily-report__cast-section">
                         <h4 class="daily-report__block-title">キャスト</h4>
-                        <div class="table-responsive">
-                            <table class="daily-report__form-table daily-report__cast-table">
-                                <thead>
-                                    <tr>
-                                        <th>名前</th><th>出勤</th><th>退勤</th><th>ドリンクバック</th>
-                                        <th>担当バック</th><th>シャンパンバック</th><th>売上</th>
-                                        <th>前渡金</th><th>送り利用</th>
-                                    </tr>
-                                </thead>
-                                <tbody data-report-casts data-min-rows="18"></tbody>
-                            </table>
-                        </div>
-                    </section>
-                    <section class="daily-report__sheet-section daily-report__staff-section">
-                        <h4 class="daily-report__block-title">スタッフ</h4>
-                        <div class="table-responsive">
-                            <table class="daily-report__form-table daily-report__staff-table">
-                                <thead>
-                                    <tr>
-                                        <th>名前</th><th>出勤</th><th>退勤</th><th>送り利用</th>
-                                    </tr>
-                                </thead>
-                                <tbody data-report-staffs data-min-rows="6"></tbody>
-                            </table>
-                        </div>
+                        <table class="daily-report__form-table daily-report__cast-table">
+                            <thead>
+                                <tr>
+                                    <th>名前</th><th>出勤</th><th>退勤</th><th>ドリンクバック</th>
+                                    <th>担当バック</th><th>シャンパンバック</th><th>売上</th>
+                                    <th>前渡金</th><th>送り利用</th>
+                                </tr>
+                            </thead>
+                            <tbody data-report-casts data-min-rows="18"></tbody>
+                        </table>
                     </section>
                 </article>
 

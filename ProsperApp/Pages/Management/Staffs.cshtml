@@ -36,6 +36,14 @@
                 <input asp-for="Input.DisplayName" class="form-control form-control-lg" placeholder="スタッフ名" />
                 <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
             </div>
+            <div>
+                <label asp-for="Input.EmploymentType" class="form-label"></label>
+                <select asp-for="Input.EmploymentType" class="form-select form-select-lg">
+                    <option value="employee">社員</option>
+                    <option value="part_time">バイト</option>
+                </select>
+                <span asp-validation-for="Input.EmploymentType" class="text-danger"></span>
+            </div>
             <button class="btn btn-primary btn-lg" type="submit">登録</button>
         </form>
 
@@ -57,20 +65,30 @@
             }
             else
             {
-                <div class="cast-admin-table">
-                    <div class="cast-admin-table__row cast-admin-table__row--header">
+                <div class="cast-admin-table staff-admin-table">
+                    <div class="cast-admin-table__row cast-admin-table__row--header staff-admin-table__row">
                         <span>ID</span>
                         <span>スタッフ名</span>
                         <span>加入日</span>
-                        <span></span>
+                        <span>雇用区分</span>
+                        <span>操作</span>
                     </div>
                     @foreach (var staff in Model.Staffs)
                     {
-                        <div class="cast-admin-table__row">
+                        <div class="cast-admin-table__row staff-admin-table__row">
                             <span>@staff.StaffId</span>
                             <strong>@staff.DisplayName</strong>
                             <span>@staff.JoinedOn.ToString("yyyy-MM-dd")</span>
-                            <div class="cast-admin-table__actions">
+                            <form method="post" asp-page-handler="UpdateEmploymentType" class="staff-admin-table__employment-form">
+                                <input type="hidden" name="UpdateStaffId" value="@staff.StaffId" />
+                                <label class="visually-hidden" for="employment-type-@staff.StaffId">@staff.DisplayName の雇用区分</label>
+                                <select id="employment-type-@staff.StaffId" name="EmploymentType" class="form-select form-select-sm">
+                                    <option value="employee" selected="@(staff.EmploymentType == "employee" ? "selected" : null)">社員</option>
+                                    <option value="part_time" selected="@(staff.EmploymentType == "part_time" ? "selected" : null)">バイト</option>
+                                </select>
+                                <button class="btn btn-outline-primary btn-sm" type="submit">変更</button>
+                            </form>
+                            <div class="cast-admin-table__actions staff-admin-table__actions">
                                 <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このスタッフを削除しますか？');">
                                     <input type="hidden" asp-for="DeleteStaffId" value="@staff.StaffId" />
                                     <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>

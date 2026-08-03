@@ -10,5 +10,7 @@ public interface IStoreStaffAdminRepository
 
     Task<StoreStaffSaveResult> CreateStaffAsync(StoreStaffCreateInputModel input, CancellationToken ct);
 
+    Task<StoreStaffSaveResult> UpdateStaffEmploymentTypeAsync(long staffId, string employmentType, CancellationToken ct);
+
     Task<StoreStaffSaveResult> DeleteStaffAsync(long staffId, CancellationToken ct);
 }

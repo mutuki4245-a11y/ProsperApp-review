@@ -69,13 +69,15 @@ assert.match(buildReport, /from public\.store_order_line_cast_backs cast_back/i)
 assert.match(buildReport, /from public\.store_slip_cast_backs cast_back/i);
 assert.match(buildReport, /'drinkBackAmount'/i);
 assert.match(buildReport, /'assignmentBackAmount'/i);
-assert.match(buildReport, /daily-report-v2/i);
+assert.match(buildReport, /daily-report-v3/i);
+assert.match(buildReport, /'employmentType', staff_member\.employment_type/i);
 assert.match(buildReport, /'itemCategories'/i);
 assert.match(buildReport, /'visits'/i);
 
 const getReport = functionBlock(reportSql, 'store.get_business_day_daily_report');
 assert.match(getReport, /closing_data->'daily_report'/i);
 assert.match(getReport, /daily-report-legacy-v1/i);
+assert.match(getReport, /'employmentType',[\s\S]*?'employee'/i);
 assert.match(getReport, /legacyUnavailableSections/i);
 assert.match(getReport, /'expenses', 'castAdvances', 'itemCategories'/i);
 
@@ -83,6 +85,7 @@ const capture = functionBlock(guardsSql, 'store.capture_business_day_closing_sna
 assert.match(capture, /business-day-closing-v2/i);
 assert.match(capture, /store\.build_business_day_daily_report/i);
 assert.match(capture, /'daily_report', v_daily_report/i);
+assert.match(capture, /'employment_type', s\.employment_type/i);
 
 const closeBusinessDay = functionBlock(businessDaySql, 'store.close_business_day');
 assert.ok(
@@ -108,11 +111,29 @@ assert.match(closingPage, /①日計表/);
 assert.match(closingPage, /③リスト/);
 assert.match(closingPage, /②支出内訳/);
 assert.match(closingPage, /ドリンクバック[\s\S]*担当バック[\s\S]*シャンパンバック[\s\S]*売上[\s\S]*前渡金[\s\S]*送り利用/);
-assert.match(closingPage, /data-report-staffs/);
+assert.doesNotMatch(closingPage, /商品内訳/);
+assert.doesNotMatch(closingPage, /営業件数/);
+assert.match(closingPage, /data-report-count="attendance"/);
+assert.match(closingPage, /data-report-count="groups"/);
+assert.match(closingPage, /data-report-count="customers"/);
+assert.match(closingPage, /酒代[\s\S]*data-report-payments/);
+assert.match(closingPage, /社員勤怠[\s\S]*data-report-staffs="employee"[\s\S]*data-min-rows="4"/);
+assert.match(closingPage, /バイト勤怠[\s\S]*data-report-staffs="part_time"[\s\S]*data-min-rows="4"/);
+assert.ok(
+    closingPage.indexOf('社員勤怠') < closingPage.indexOf('ドリンクバック'),
+    'スタッフ勤怠表をキャスト表の上に表示してください。'
+);
 assert.match(reportScript, /refreshIntervalMs = 30000/);
 assert.match(reportScript, /report\.staffs/);
+assert.match(reportScript, /employmentType\s*===\s*'part_time'/);
+assert.match(reportScript, /setCount\('attendance',[\s\S]*report\.casts/);
+assert.match(reportScript, /setCount\('groups', totals\.slipCount\)/);
 assert.match(reportScript, /window\.print\(\)/);
 assert.match(reportStyles, /size: A4 portrait/i);
 assert.match(reportStyles, /\.daily-report,[\s\S]*\.daily-report \*/i);
 assert.match(reportStyles, /\.daily-report__page \+ \.daily-report__page/);
 assert.match(reportStyles, /break-after:\s*page/i);
+assert.match(reportStyles, /\.daily-report__cast-table th,[\s\S]*?font-size:\s*7\.2pt/i);
+assert.match(reportStyles, /\.daily-report__staff-table th,[\s\S]*?font-size:\s*8\.5pt/i);
+assert.match(reportStyles, /\.daily-report__cast-table th:nth-child\(1\)\s*\{\s*width:\s*16%/i);
+assert.match(reportStyles, /\.daily-report__staff-table th:nth-child\(1\)\s*\{\s*width:\s*56%/i);

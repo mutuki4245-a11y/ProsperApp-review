@@ -141,6 +141,8 @@ public sealed class DailyReportStaff
 
     public string DisplayName { get; init; } = string.Empty;
 
+    public string EmploymentType { get; init; } = StoreStaffEmploymentTypes.Employee;
+
     public DateTimeOffset? ClockInAt { get; init; }
 
     public DateTimeOffset? ClockOutAt { get; init; }

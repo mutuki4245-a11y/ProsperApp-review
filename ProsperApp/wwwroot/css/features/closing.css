@@ -926,6 +926,7 @@ a.closing-panel:focus {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  overflow-x: auto;
 }
 
 .daily-report__page {
@@ -938,7 +939,8 @@ a.closing-panel:focus {
   min-height: 297mm;
   padding: 10mm 8mm;
   position: relative;
-  width: min(100%, 210mm);
+  min-width: 210mm;
+  width: 210mm;
 }
 
 .daily-report__page + .daily-report__page {
@@ -989,6 +991,40 @@ a.closing-panel:focus {
 .daily-report__ledger-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.daily-report__summary-side {
+  min-width: 0;
+}
+
+.daily-report__count-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.daily-report__count-grid > div {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #111;
+  display: grid;
+  font-size: 8.5pt;
+  grid-template-columns: 1fr auto;
+  height: 7mm;
+  margin-left: -1px;
+  padding: 1mm 1.5mm;
+}
+
+.daily-report__count-grid span,
+.daily-report__count-grid strong {
+  white-space: nowrap;
+}
+
+.daily-report__count-grid strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-report__payment-table {
+  margin-top: -1px;
 }
 
 .daily-report__ledger-grid--details {
@@ -1085,11 +1121,22 @@ a.closing-panel:focus {
   margin-top: 3mm;
 }
 
+.daily-report__staff-grid {
+  display: grid;
+  gap: 3mm;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .daily-report__cast-table th,
-.daily-report__cast-table td,
+.daily-report__cast-table td {
+  font-size: 7.2pt;
+  height: 7.4mm;
+  padding: 0.8mm;
+}
+
 .daily-report__staff-table th,
 .daily-report__staff-table td {
-  font-size: 6.5pt;
+  font-size: 8.5pt;
   height: 7.4mm;
   padding: 0.8mm;
 }
@@ -1099,20 +1146,19 @@ a.closing-panel:focus {
   overflow-wrap: anywhere;
 }
 
-.daily-report__cast-table th:nth-child(1) { width: 15%; }
+.daily-report__cast-table th:nth-child(1) { width: 16%; }
 .daily-report__cast-table th:nth-child(2),
 .daily-report__cast-table th:nth-child(3) { width: 7%; }
 .daily-report__cast-table th:nth-child(4) { width: 12%; }
 .daily-report__cast-table th:nth-child(5) { width: 11%; }
 .daily-report__cast-table th:nth-child(6) { width: 13%; }
 .daily-report__cast-table th:nth-child(7),
-.daily-report__cast-table th:nth-child(8) { width: 11%; }
-.daily-report__cast-table th:nth-child(9) { width: 8%; }
+.daily-report__cast-table th:nth-child(8) { width: 12%; }
+.daily-report__cast-table th:nth-child(9) { width: 10%; }
 
-.daily-report__staff-table th:nth-child(1) { width: 46%; }
+.daily-report__staff-table th:nth-child(1) { width: 56%; }
 .daily-report__staff-table th:nth-child(2),
-.daily-report__staff-table th:nth-child(3) { width: 18%; }
-.daily-report__staff-table th:nth-child(4) { width: 18%; }
+.daily-report__staff-table th:nth-child(3) { width: 22%; }
 
 .daily-report__cast-table td:first-child,
 .daily-report__staff-table td:first-child,
@@ -1169,7 +1215,7 @@ a.closing-panel:focus {
   right: 8mm;
 }
 
-@media (max-width: 767.98px) {
+@media screen and (max-width: 767.98px) {
   .daily-report {
     margin-left: -0.5rem;
     margin-right: -0.5rem;
@@ -1187,8 +1233,8 @@ a.closing-panel:focus {
   }
 
   .daily-report__page {
-    min-height: 0;
-    padding: 6mm 4mm;
+    min-height: 297mm;
+    padding: 10mm 8mm;
   }
 
   .daily-report__sheet-header {
@@ -1199,10 +1245,6 @@ a.closing-panel:focus {
   .daily-report__sheet-date {
     grid-column: 1 / -1;
     text-align: left;
-  }
-
-  .daily-report__ledger-grid--details {
-    grid-template-columns: 1fr;
   }
 
   .daily-report__footer {
@@ -1248,6 +1290,7 @@ a.closing-panel:focus {
 
   .daily-report__pages {
     display: block;
+    overflow: visible;
   }
 
   .daily-report__page {

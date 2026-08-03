@@ -43,6 +43,7 @@ for (const rpc of [
     'store.delete_table',
     'store.delete_item_category',
     'store.create_staff',
+    'store.update_staff_employment_type',
     'store.delete_staff'
 ]) {
     assert.match(edge, new RegExp(`"${rpc.replace('.', '\\.')}"`), `${rpc} をEdge allowlistへ追加してください。`);
@@ -70,6 +71,8 @@ assert.match(schemaSql, /table_code_snapshot text/i);
 assert.match(schemaSql, /drop constraint if exists store_slips_table_id_fkey/i);
 assert.match(schemaSql, /drop constraint if exists store_order_lines_item_id_fkey/i);
 assert.match(schemaSql, /create table if not exists public\.store_staff_master/i);
+assert.match(schemaSql, /employment_type text not null default 'employee'/i);
+assert.match(schemaSql, /check \(employment_type in \('employee', 'part_time'\)\)/i);
 assert.match(schemaSql, /create table if not exists public\.store_staff_attendance/i);
 assert.match(schemaSql, /alter table public\.store_staff_master enable row level security/i);
 assert.match(schemaSql, /alter table public\.store_staff_attendance enable row level security/i);
@@ -87,8 +90,21 @@ assert.match(staffRepository, /IStoreMasterBootstrapper/);
 assert.match(staffRepository, /"staffs"/);
 assert.match(staffRepository, /"staffs_admin"/);
 assert.match(staffRepository, /store\.create_staff/);
+assert.match(staffRepository, /p_employment_type\s*=\s*input\.EmploymentType/);
+assert.match(staffRepository, /store\.update_staff_employment_type/);
 assert.match(staffRepository, /store\.delete_staff/);
 assert.match(staffRepository, /StoreMasterCacheKeys\.ClearStaffs/);
+
+const createStaff = functionBlock(masterSql, 'store.create_staff');
+assert.match(createStaff, /p_employment_type text default 'employee'/i);
+assert.match(createStaff, /invalid_store_staff_employment_type/i);
+assert.match(createStaff, /employment_type/i);
+
+const updateStaffEmploymentType = functionBlock(masterSql, 'store.update_staff_employment_type');
+assert.match(updateStaffEmploymentType, /p_staff_id bigint/i);
+assert.match(updateStaffEmploymentType, /p_employment_type text/i);
+assert.match(updateStaffEmploymentType, /update public\.store_staff_master/i);
+assert.match(updateStaffEmploymentType, /invalid_store_staff_employment_type/i);
 
 assert.match(settingsPage, /asp-for="Input\.AdminMode"/);
 assert.match(settingsPageModel, /_adminModeService\.SetEnabled\(Input\.AdminMode\)/);
@@ -102,7 +118,11 @@ assert.match(itemPageModel, /カテゴリを変更するには管理者設定で
 assert.match(itemPage, /カテゴリの追加・編集・削除には[\s\S]*?管理者モードが必要です。/);
 assert.doesNotMatch(staffPageModel, /IAdminModeService/, 'スタッフ操作は通常運用で変更できること');
 assert.match(staffPage, /asp-page-handler="Create"/);
+assert.match(staffPage, /Input\.EmploymentType/);
+assert.match(staffPage, /asp-page-handler="UpdateEmploymentType"/);
+assert.match(staffPage, /EmploymentType/);
 assert.match(staffPage, /asp-page-handler="Delete"/);
+assert.match(staffPageModel, /OnPostUpdateEmploymentTypeAsync/);
 assert.match(managementIndexPage, /asp-page="\/Management\/Staffs"/);
 assert.ok(
     managementIndexPage.indexOf('マスタ情報') < managementIndexPage.indexOf('画面設定') &&

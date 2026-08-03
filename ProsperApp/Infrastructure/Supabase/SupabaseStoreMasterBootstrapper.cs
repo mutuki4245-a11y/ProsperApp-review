@@ -171,7 +171,8 @@ public sealed class SupabaseStoreMasterBootstrapper(
                 StaffId = ReadLong(item, "staff_id") ?? 0,
                 StaffCode = ReadString(item, "staff_code"),
                 DepartmentName = ReadString(item, "department_name"),
-                DisplayName = ReadString(item, "display_name") ?? string.Empty
+                DisplayName = ReadString(item, "display_name") ?? string.Empty,
+                EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(item, "employment_type"))
             })
             .Where(item => item.StaffId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
             .ToList();
@@ -182,7 +183,8 @@ public sealed class SupabaseStoreMasterBootstrapper(
             {
                 StaffId = ReadLong(item, "staff_id") ?? 0,
                 DisplayName = ReadString(item, "display_name") ?? string.Empty,
-                JoinedOn = ReadDateOnly(item, "joined_on") ?? DateOnly.MinValue
+                JoinedOn = ReadDateOnly(item, "joined_on") ?? DateOnly.MinValue,
+                EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(item, "employment_type"))
             })
             .Where(item => item.StaffId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
             .ToList();
