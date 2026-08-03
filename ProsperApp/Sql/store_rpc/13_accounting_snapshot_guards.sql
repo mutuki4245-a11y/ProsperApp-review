@@ -193,6 +193,7 @@ begin
                 'staff_attendance_id', a.staff_attendance_id,
                 'staff_id', a.staff_id,
                 'staff_display_name', s.display_name,
+                'employment_type', s.employment_type,
                 'staff_department_id', s.department_id,
                 'staff_department_name', sd.department_name,
                 'attendance_status', a.attendance_status,

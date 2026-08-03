@@ -319,6 +319,18 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_display_name", type: "text" },
+        { name: "p_employment_type", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.update_staff_employment_type",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_staff_id", type: "bigint" },
+        { name: "p_employment_type", type: "text" },
       ],
     },
   ],

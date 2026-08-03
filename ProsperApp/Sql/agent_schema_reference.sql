@@ -207,6 +207,7 @@ create table if not exists public.store_staff_master (
     department_id bigint not null references public.department_master(department_id),
     staff_code text,
     display_name text not null,
+    employment_type text not null default 'employee',
     joined_on date not null default ((now() at time zone 'Asia/Tokyo')::date),
     status text not null default 'active', -- active / inactive / left
     sort_order integer not null default 0,
@@ -214,6 +215,7 @@ create table if not exists public.store_staff_master (
     created_at timestamp with time zone not null default now(),
     updated_at timestamp with time zone not null default now(),
     constraint chk_store_staff_master_status check (status in ('active', 'inactive', 'left')),
+    constraint chk_store_staff_master_employment_type check (employment_type in ('employee', 'part_time')),
     constraint uq_store_staff_master_code unique (company_id, department_id, staff_code)
 );
 
@@ -764,11 +766,13 @@ create table if not exists public.store_business_day_closing_snapshots (
 --   store.update_cast_drink_memo(p_department_id bigint, p_cast_id bigint, p_drink_memo text)
 --     updates a current-store active cast's nullable drink memo. Empty input is stored as null.
 --   store.get_staffs(p_department_id bigint)
---     returns staff_id, staff_code, display_name, department_name for active current-store staff.
+--     returns staff_id, staff_code, display_name, department_name, employment_type for active current-store staff.
 --   store.get_staffs_admin(p_department_id bigint)
---     returns staff_id, display_name, joined_on for current-store staff.
---   store.create_staff(p_department_id bigint, p_display_name text)
+--     returns staff_id, display_name, joined_on, employment_type for current-store staff.
+--   store.create_staff(p_department_id bigint, p_display_name text, p_employment_type text default 'employee')
 --     creates an active staff member for the current store. joined_on is set to the current Asia/Tokyo date.
+--   store.update_staff_employment_type(p_department_id bigint, p_staff_id bigint, p_employment_type text)
+--     changes a current-store active staff member between employee and part_time.
 --   store.delete_staff(p_department_id bigint, p_staff_id bigint)
 --     marks current-store staff inactive while preserving attendance history.
 --   store.get_business_day_snapshot(p_department_id bigint, p_business_day_id bigint)

@@ -413,7 +413,8 @@ returns table (
     staff_id bigint,
     staff_code text,
     display_name text,
-    department_name text
+    department_name text,
+    employment_type text
 )
 language sql
 security definer
@@ -423,7 +424,8 @@ as $$
         s.staff_id,
         s.staff_code,
         s.display_name,
-        d.department_name
+        d.department_name,
+        s.employment_type
     from public.store_staff_master s
     join public.department_master d
       on d.department_id = s.department_id
@@ -440,7 +442,8 @@ create or replace function store.get_staffs_admin(p_department_id bigint)
 returns table (
     staff_id bigint,
     display_name text,
-    joined_on date
+    joined_on date,
+    employment_type text
 )
 language sql
 security definer
@@ -449,7 +452,8 @@ as $$
     select
         s.staff_id,
         s.display_name,
-        s.joined_on
+        s.joined_on,
+        s.employment_type
     from public.store_staff_master s
     join public.department_master d
       on d.department_id = s.department_id
@@ -461,10 +465,12 @@ as $$
 $$;
 
 drop function if exists store.create_staff(bigint, text);
+drop function if exists store.create_staff(bigint, text, text);
 
 create or replace function store.create_staff(
     p_department_id bigint,
-    p_display_name text
+    p_display_name text,
+    p_employment_type text default 'employee'
 )
 returns table (
     staff_id bigint
@@ -476,6 +482,7 @@ as $$
 declare
     v_company_id bigint;
     v_display_name text;
+    v_employment_type text;
     v_sort_order integer;
 begin
     select d.company_id
@@ -494,6 +501,11 @@ begin
         raise exception 'invalid_store_staff';
     end if;
 
+    v_employment_type := lower(trim(coalesce(p_employment_type, 'employee')));
+    if v_employment_type not in ('employee', 'part_time') then
+        raise exception 'invalid_store_staff_employment_type';
+    end if;
+
     select coalesce(max(s.sort_order), 0) + 10
       into v_sort_order
     from public.store_staff_master s
@@ -505,6 +517,7 @@ begin
         company_id,
         department_id,
         display_name,
+        employment_type,
         joined_on,
         status,
         sort_order,
@@ -514,6 +527,7 @@ begin
         v_company_id,
         p_department_id,
         v_display_name,
+        v_employment_type,
         (now() at time zone 'Asia/Tokyo')::date,
         'active',
         v_sort_order,
@@ -522,6 +536,52 @@ begin
     returning store_staff_master.staff_id;
 end;
 $$;
+
+revoke execute on function store.create_staff(bigint, text, text) from public, anon, authenticated, service_role;
+
+drop function if exists store.update_staff_employment_type(bigint, bigint, text);
+
+create or replace function store.update_staff_employment_type(
+    p_department_id bigint,
+    p_staff_id bigint,
+    p_employment_type text
+)
+returns table (
+    staff_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_employment_type text;
+    v_updated_staff_id bigint;
+begin
+    v_employment_type := lower(trim(coalesce(p_employment_type, '')));
+    if v_employment_type not in ('employee', 'part_time') then
+        raise exception 'invalid_store_staff_employment_type';
+    end if;
+
+    update public.store_staff_master s
+       set employment_type = v_employment_type,
+           updated_at = now()
+     where s.department_id = p_department_id
+       and s.staff_id = p_staff_id
+       and s.is_active = true
+       and s.status = 'active'
+    returning s.staff_id
+      into v_updated_staff_id;
+
+    if v_updated_staff_id is null then
+        raise exception 'store_staff_not_found';
+    end if;
+
+    return query
+    select v_updated_staff_id;
+end;
+$$;
+
+revoke execute on function store.update_staff_employment_type(bigint, bigint, text) from public, anon, authenticated, service_role;
 
 drop function if exists store.delete_staff(bigint, bigint);
 

@@ -271,6 +271,7 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object(
         'staffId', attendance.staff_id,
         'displayName', staff_member.display_name,
+        'employmentType', staff_member.employment_type,
         'clockInAt', attendance.clock_in_at,
         'clockOutAt', attendance.clock_out_at,
         'usesSendService', attendance.uses_send_service
@@ -330,7 +331,7 @@ begin
     end if;
 
     return jsonb_build_object(
-        'schemaVersion', 'daily-report-v2',
+        'schemaVersion', 'daily-report-v3',
         'state', lower(coalesce(nullif(trim(p_state), ''), 'provisional')),
         'capturedAt', coalesce(p_captured_at, clock_timestamp()),
         'legacyUnavailableSections', '[]'::jsonb,
@@ -547,6 +548,7 @@ begin
             select jsonb_agg(jsonb_build_object(
                 'staffId', nullif(attendance.value->>'staff_id', '')::bigint,
                 'displayName', attendance.value->>'staff_display_name',
+                'employmentType', coalesce(nullif(attendance.value->>'employment_type', ''), 'employee'),
                 'clockInAt', attendance.value->>'clock_in_at',
                 'clockOutAt', attendance.value->>'clock_out_at',
                 'usesSendService', coalesce((attendance.value->>'uses_send_service')::boolean, false)
