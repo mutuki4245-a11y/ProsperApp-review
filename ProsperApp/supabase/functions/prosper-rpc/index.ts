@@ -52,7 +52,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ],
   ["store.get_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_business_home_bootstrap", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_store_bootstrap", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.get_business_day_daily_report",
     {
@@ -63,12 +63,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       ],
     },
   ],
-  ["store.get_tables", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_table_admin_list", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_casts", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_casts_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_staffs", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_staffs_admin", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.get_business_day_snapshot",
     {
@@ -89,11 +83,6 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       ],
     },
   ],
-  ["store.get_order_items", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_item_admin_catalog", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_nomination_back_master", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_pricing_plan", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_payment_methods", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.save_pricing_plan",
     {

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -9,9 +10,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseCheckoutRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), ICheckoutRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), ICheckoutRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<IReadOnlyList<CheckoutPaymentMethod>>> GetPaymentMethodsAsync(CancellationToken ct)
     {
@@ -22,18 +25,15 @@ public class SupabaseCheckoutRepository(
             return Result<IReadOnlyList<CheckoutPaymentMethod>>.Success(cachedMethods ?? []);
         }
 
-        var result = await PostRpcArrayResultAsync(
-            "store.get_payment_methods",
-            new { p_department_id = departmentId },
-            ct);
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
             return Result<IReadOnlyList<CheckoutPaymentMethod>>.Failure(
-                result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "決済方法を取得できませんでした。");
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "決済方法を取得できませんでした。");
         }
 
-        var methods = result.Value
+        var methods = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "payment_methods")
             .Select(row => new CheckoutPaymentMethod
             {
                 MethodCode = ReadString(row, "method_code") ?? string.Empty,

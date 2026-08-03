@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -8,9 +9,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseNominationBackAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), INominationBackAdminRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), INominationBackAdminRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<IReadOnlyList<NominationBackMasterItem>>> GetSettingsAsync(CancellationToken ct)
     {
@@ -28,19 +31,15 @@ public class SupabaseNominationBackAdminRepository(
             return Result<IReadOnlyList<NominationBackMasterItem>>.Success(cachedSettings ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_nomination_back_master",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return RpcFailure<IReadOnlyList<NominationBackMasterItem>>(
-                result.ErrorMessage,
-                "指名バック設定を取得できませんでした。");
+            return Result<IReadOnlyList<NominationBackMasterItem>>.Failure(
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "指名バック設定を取得できませんでした。");
         }
 
-        var settings = result.Rows
+        var settings = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "nomination_options")
             .Select(row => new NominationBackMasterItem
             {
                 NominationKind = ReadString(row, "nomination_kind") ?? ReadString(row, "nomination_type") ?? string.Empty,
@@ -57,7 +56,7 @@ public class SupabaseNominationBackAdminRepository(
             .ThenBy(x => x.DisplayName)
             .ToList();
 
-        StoreMasterCacheKeys.SetRuntime(_cache, cacheKey, settings, "指名バック設定");
+        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, settings, "指名バック設定");
         return Result<IReadOnlyList<NominationBackMasterItem>>.Success(settings);
     }
 

@@ -19,10 +19,14 @@ const itemPageModel = read('Pages/Management/Items.cshtml.cs');
 const staffPage = read('Pages/Management/Staffs.cshtml');
 const staffPageModel = read('Pages/Management/Staffs.cshtml.cs');
 const managementIndexPage = read('Pages/Management/Index.cshtml');
+const managementIndexPageModel = read('Pages/Management/Index.cshtml.cs');
 const attendancePage = read('Pages/Attendance.cshtml');
 const settingsPage = read('Pages/Settings/Index.cshtml');
 const settingsPageModel = read('Pages/Settings/Index.cshtml.cs');
 const adminModeService = read('Services/AdminModeService.cs');
+const storeBootstrapper = read('Infrastructure/Supabase/SupabaseStoreMasterBootstrapper.cs');
+const masterCacheKeys = read('Infrastructure/Supabase/StoreMasterCacheKeys.cs');
+const businessDayRepository = read('Infrastructure/Supabase/SupabaseBusinessDayRepository.cs');
 
 const functionBlock = (source, name) => {
     const escapedName = name.replace('.', '\\.');
@@ -35,12 +39,9 @@ const functionBlock = (source, name) => {
 };
 
 for (const rpc of [
-    'store.get_table_admin_list',
     'store.upsert_table',
     'store.delete_table',
     'store.delete_item_category',
-    'store.get_staffs',
-    'store.get_staffs_admin',
     'store.create_staff',
     'store.delete_staff'
 ]) {
@@ -73,13 +74,18 @@ assert.match(schemaSql, /create table if not exists public\.store_staff_attendan
 assert.match(schemaSql, /alter table public\.store_staff_master enable row level security/i);
 assert.match(schemaSql, /alter table public\.store_staff_attendance enable row level security/i);
 
-assert.match(tableRepository, /store\.get_table_admin_list/);
+assert.match(tableRepository, /IStoreMasterBootstrapper/);
+assert.match(tableRepository, /EnsureAsync/);
+assert.match(tableRepository, /"table_admin_list"/);
 assert.match(tableRepository, /store\.upsert_table/);
 assert.match(tableRepository, /store\.delete_table/);
 assert.match(tableRepository, /StoreMasterCacheKeys\.ClearTables/);
 assert.match(itemRepository, /store\.delete_item_category/);
-assert.match(staffRepository, /store\.get_staffs/);
-assert.match(staffRepository, /store\.get_staffs_admin/);
+assert.match(itemRepository, /IStoreMasterBootstrapper/);
+assert.match(itemRepository, /"item_admin_catalog"/);
+assert.match(staffRepository, /IStoreMasterBootstrapper/);
+assert.match(staffRepository, /"staffs"/);
+assert.match(staffRepository, /"staffs_admin"/);
 assert.match(staffRepository, /store\.create_staff/);
 assert.match(staffRepository, /store\.delete_staff/);
 assert.match(staffRepository, /StoreMasterCacheKeys\.ClearStaffs/);
@@ -98,6 +104,19 @@ assert.doesNotMatch(staffPageModel, /IAdminModeService/, 'スタッフ操作は�
 assert.match(staffPage, /asp-page-handler="Create"/);
 assert.match(staffPage, /asp-page-handler="Delete"/);
 assert.match(managementIndexPage, /asp-page="\/Management\/Staffs"/);
+assert.ok(
+    managementIndexPage.indexOf('マスタ情報') < managementIndexPage.indexOf('画面設定') &&
+    managementIndexPage.indexOf('画面設定') < managementIndexPage.indexOf('アプリ内キャッシュ'),
+    '店舗設定パネルはマスタ情報、画面設定、アプリ内キャッシュの順に表示してください。'
+);
+assert.match(managementIndexPage, /asp-page-handler="ClearCache"/);
+assert.match(managementIndexPage, /更新時まで/);
+assert.match(managementIndexPageModel, /OnPostClearCacheAsync/);
+assert.match(managementIndexPageModel, /_applicationCache\.ClearAll\(\)/);
+assert.doesNotMatch(settingsPage, /アプリ内キャッシュ/);
+assert.doesNotMatch(settingsPage, /ClearCache/);
+assert.doesNotMatch(settingsPageModel, /IApplicationCache/);
+assert.doesNotMatch(settingsPageModel, /OnPostClearCacheAsync/);
 assert.match(attendancePage, /id="addAttendanceStaffButton"/);
 assert.match(attendancePage, /Input\.SelectedAttendanceKeys/);
 assert.match(attendancePage, /person_type/);
@@ -114,4 +133,16 @@ assert.doesNotMatch(
     itemPage,
     /onclick="[^"]*@category\./,
     'カテゴリの保存値をinline JavaScriptへ補間しないでください。'
+);
+
+assert.match(storeBootstrapper, /store\.get_store_bootstrap/);
+assert.match(storeBootstrapper, /HydrateCaches\(payload\)/);
+assert.match(storeBootstrapper, /StoreMasterCacheKeys\.SetRuntime/);
+assert.match(masterCacheKeys, /cache\.Set\(key, value, null, "マスタ", displayName\)/);
+assert.match(masterCacheKeys, /ClearBootstrapPayload\(cache, departmentId\)/);
+assert.match(masterCacheKeys, /ClearPricingPlan/);
+assert.doesNotMatch(
+    businessDayRepository,
+    /ClearNominationBacks/,
+    '営業日開始・締めで静的な指名バックマスタを削除しないでください。'
 );

@@ -1,15 +1,21 @@
 using System.Text.Json;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
 namespace ProsperApp.Infrastructure.Supabase;
 
-public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IApplicationCache cache)
-    : SupabaseRepositoryBase(rpcClient), IStoreSettingsRepository
+public class SupabaseStoreSettingsRepository(
+    ISupabaseRpcClient rpcClient,
+    ILocalSettingsProvider localSettingsProvider,
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper)
+    : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreSettingsRepository
 {
     private const string DebugDeleteConfirmation = "DELETE_NON_MASTER_RECORDS";
 
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<StoreSettingsLoadResult> GetDepartmentsAsync(CancellationToken ct)
     {
@@ -22,6 +28,28 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IAppl
             cachedDepartments is { Count: > 0 })
         {
             return StoreSettingsLoadResult.Success(cachedDepartments, $"cache: {cachedDepartments.Count}件");
+        }
+
+        if (CurrentStoreDepartmentId > 0)
+        {
+            var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+            if (!bootstrap.Succeeded)
+            {
+                return StoreSettingsLoadResult.Failed(
+                    BuildDiagnosticMessage(bootstrap.ErrorMessage ?? "RPC failed"),
+                    bootstrap.ErrorMessage ?? "RPC failed");
+            }
+
+            var departments = ParseDepartments(StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "departments"));
+            if (departments.Count > 0)
+            {
+                StoreMasterCacheKeys.SetMaster(
+                    _cache,
+                    StoreMasterCacheKeys.Departments,
+                    departments,
+                    "店舗一覧");
+                return StoreSettingsLoadResult.Success(departments, $"bootstrap cache: {departments.Count}件");
+            }
         }
 
         var rpcResult = await GetDepartmentsFromRpcAsync(ct);
@@ -66,7 +94,6 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IAppl
 
         var tableCounts = ParseDebugDeleteCounts(result.Rows);
         StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
-        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
         return DebugDeleteNonMasterRecordsResult.Success(tableCounts);
     }
 

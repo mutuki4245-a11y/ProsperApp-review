@@ -1,4 +1,5 @@
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -7,9 +8,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public sealed class SupabaseStoreTableAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreTableAdminRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreTableAdminRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<IReadOnlyList<StoreTableAdminItem>>> GetTablesAsync(CancellationToken ct)
     {
@@ -27,19 +30,15 @@ public sealed class SupabaseStoreTableAdminRepository(
             return Result<IReadOnlyList<StoreTableAdminItem>>.Success(cachedTables ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_table_admin_list",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return RpcFailure<IReadOnlyList<StoreTableAdminItem>>(
-                result.ErrorMessage,
-                "卓番マスタを取得できませんでした。");
+            return Result<IReadOnlyList<StoreTableAdminItem>>.Failure(
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "卓番マスタを取得できませんでした。");
         }
 
-        var tables = result.Rows
+        var tables = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "table_admin_list")
             .Select(row => new StoreTableAdminItem
             {
                 TableId = ReadLong(row, "table_id") ?? 0,

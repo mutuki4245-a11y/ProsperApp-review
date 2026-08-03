@@ -104,17 +104,35 @@ assert.match(
 const bootstrapSource = read('Sql/store_rpc/15_business_home_bootstrap.sql');
 assert.match(
     bootstrapSource,
+    /create\s+or\s+replace\s+function\s+store\.get_store_bootstrap/i,
+    '全画面マスタと営業中トップ初期表示はstore bootstrap RPCへ集約してください。'
+);
+assert.doesNotMatch(
+    bootstrapSource,
     /create\s+or\s+replace\s+function\s+store\.get_business_home_bootstrap/i,
-    '営業中トップ初期表示はbootstrap RPCへ集約してください。'
+    '旧business home bootstrap RPCは削除してください。'
+);
+assert.match(
+    bootstrapSource,
+    /drop\s+function\s+if\s+exists\s+store\.get_business_home_bootstrap\s*\(\s*bigint\s*\)/i,
+    '旧business home bootstrap RPCをDBから削除してください。'
 );
 for (const dependency of [
     'store.get_context',
     'store.get_current_business_day',
+    'store.get_departments',
     'store.get_tables',
+    'store.get_table_admin_list',
+    'store.get_casts',
+    'store.get_casts_admin',
+    'store.get_staffs',
+    'store.get_staffs_admin',
     'store.get_nomination_back_master',
     'store.get_order_items',
+    'store.get_item_admin_catalog',
     'store.get_order_attending_casts',
     'store.get_payment_methods',
+    'store.get_pricing_plan',
     'store.get_business_day_snapshot'
 ]) {
     assert.equal(
@@ -123,6 +141,11 @@ for (const dependency of [
         `bootstrap RPCは${dependency}を束ねて取得してください。`
     );
 }
+assert.match(
+    bootstrapSource,
+    /revoke\s+execute\s+on\s+function\s+store\.get_store_bootstrap\s*\(\s*bigint\s*\)\s+from\s+public,\s*anon,\s*authenticated,\s*service_role/i,
+    'store bootstrap RPCの直接実行権限を剥奪してください。'
+);
 
 const businessDaySource = read('Sql/store_rpc/01_business_day.sql');
 const closingPageModelSource = read('Pages/Closing/Index.cshtml.cs');

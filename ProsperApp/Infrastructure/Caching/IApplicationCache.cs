@@ -7,7 +7,7 @@ public interface IApplicationCache
     void Set<T>(
         string key,
         T value,
-        TimeSpan ttl,
+        TimeSpan? ttl,
         string category,
         string displayName);
 
@@ -24,4 +24,4 @@ public sealed record ApplicationCacheStatus(
     string DisplayName,
     bool IsCached,
     DateTimeOffset LastFetchedAt,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset? ExpiresAt);

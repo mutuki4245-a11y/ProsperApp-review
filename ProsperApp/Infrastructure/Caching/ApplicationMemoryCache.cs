@@ -27,24 +27,26 @@ public sealed class ApplicationMemoryCache(
     public void Set<T>(
         string key,
         T value,
-        TimeSpan ttl,
+        TimeSpan? ttl,
         string category,
         string displayName)
     {
         var fetchedAt = _timeProvider.GetUtcNow();
-        _memoryCache.Set(
-            key,
-            value,
-            new MemoryCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = ttl,
-                Priority = CacheItemPriority.Normal
-            });
+        var options = new MemoryCacheEntryOptions
+        {
+            Priority = CacheItemPriority.Normal
+        };
+        if (ttl is { } duration)
+        {
+            options.AbsoluteExpirationRelativeToNow = duration;
+        }
+
+        _memoryCache.Set(key, value, options);
         _registrations[key] = new CacheRegistration(
             category,
             displayName,
             fetchedAt,
-            fetchedAt.Add(ttl));
+            ttl is { } expiration ? fetchedAt.Add(expiration) : null);
     }
 
     public void Remove(string key)
@@ -88,5 +90,5 @@ public sealed class ApplicationMemoryCache(
         string Category,
         string DisplayName,
         DateTimeOffset LastFetchedAt,
-        DateTimeOffset ExpiresAt);
+        DateTimeOffset? ExpiresAt);
 }

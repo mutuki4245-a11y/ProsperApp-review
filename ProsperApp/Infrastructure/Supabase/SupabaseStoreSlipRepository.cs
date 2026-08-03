@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -11,11 +12,13 @@ public class SupabaseStoreSlipRepository(
     IBusinessDayRepository businessDayRepository,
     ILocalSettingsProvider localSettingsProvider,
     IApplicationCache cache,
-    IStoreClock storeClock)
+    IStoreClock storeClock,
+    IStoreMasterBootstrapper masterBootstrapper)
     : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreSlipRepository
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<StoreContext>> GetStoreContextAsync(CancellationToken ct)
     {
@@ -37,24 +40,15 @@ public class SupabaseStoreSlipRepository(
                     "店舗設定のキャッシュを読み取れませんでした。");
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_context",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return RpcFailure<StoreContext>(result.ErrorMessage, "店舗設定を取得できませんでした。");
-        }
-
-        if (result.Rows.Count == 0)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded || !StoreBootstrapJson.TryReadObject(bootstrap.Value.Row, "store_context", out var contextJson))
         {
             return Result<StoreContext>.Failure(
-                ResultFailureKind.NotConfigured,
-                "店舗マスタを取得できません。管理者設定で利用店舗を確認してください。");
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "店舗設定を取得できませんでした。");
         }
 
-        var context = ParseStoreContext(result.Rows[0], departmentId);
+        var context = ParseStoreContext(contextJson, departmentId);
         StoreMasterCacheKeys.SetMaster(_cache, cacheKey, context, "店舗コンテキスト");
         return Result<StoreContext>.Success(context);
     }
@@ -75,19 +69,15 @@ public class SupabaseStoreSlipRepository(
             return Result<IReadOnlyList<StoreTableOption>>.Success(cachedTables ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_tables",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
             return RpcFailure<IReadOnlyList<StoreTableOption>>(
-                result.ErrorMessage,
+                bootstrap.ErrorMessage,
                 "卓番一覧を取得できませんでした。");
         }
 
-        var tables = ParseTables(result.Rows);
+        var tables = ParseTables(StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "tables"));
         StoreMasterCacheKeys.SetMaster(_cache, cacheKey, tables, "卓番");
         return Result<IReadOnlyList<StoreTableOption>>.Success(tables);
     }
@@ -108,22 +98,18 @@ public class SupabaseStoreSlipRepository(
             return Result<IReadOnlyList<CastOption>>.Success(cachedCasts ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_casts",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
             var failure = RpcFailure<IReadOnlyList<CastOption>>(
-                result.ErrorMessage,
+                bootstrap.ErrorMessage,
                 "出勤候補のキャスト情報を取得できません。");
             return Result<IReadOnlyList<CastOption>>.Failure(
                 failure.FailureKind ?? ResultFailureKind.Unavailable,
                 ToCastLoadFriendlyError(failure.ErrorMessage));
         }
 
-        var casts = result.Rows.Select(row => new CastOption
+        var casts = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "casts").Select(row => new CastOption
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 CastCode = ReadString(row, "cast_code"),
@@ -144,17 +130,13 @@ public class SupabaseStoreSlipRepository(
         }
 
         var departmentId = CurrentStoreDepartmentId;
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_business_home_bootstrap",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded || result.Rows.Count == 0)
+        var bootstrap = await _masterBootstrapper.GetStoreBootstrapAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return BusinessHomeBootstrapResult.Failed(ToBootstrapFriendlyError(result.ErrorMessage));
+            return BusinessHomeBootstrapResult.Failed(ToBootstrapFriendlyError(bootstrap.ErrorMessage));
         }
 
-        var row = result.Rows[0];
+        var row = bootstrap.Value.Row;
         if (!TryReadObject(row, "store_context", out var contextJson))
         {
             return BusinessHomeBootstrapResult.Failed("店舗設定の応答形式が正しくありません。");
@@ -169,11 +151,11 @@ public class SupabaseStoreSlipRepository(
             businessDay = null;
         }
 
-        var tables = ParseTables(ReadArray(row, "tables"));
-        var nominationOptions = ParseNominationOptions(ReadArray(row, "nomination_options"));
-        var orderItems = ParseOrderItems(ReadArray(row, "order_items"));
-        var attendanceCasts = ParseAttendanceCasts(ReadArray(row, "attendance_casts"));
-        var paymentMethods = ParsePaymentMethods(ReadArray(row, "payment_methods"));
+        var tables = ParseTables(StoreBootstrapJson.ReadArray(row, "tables"));
+        var nominationOptions = ParseNominationOptions(StoreBootstrapJson.ReadArray(row, "nomination_options"));
+        var orderItems = ParseOrderItems(StoreBootstrapJson.ReadArray(row, "order_items"));
+        var attendanceCasts = ParseAttendanceCasts(StoreBootstrapJson.ReadArray(row, "attendance_casts"));
+        var paymentMethods = ParsePaymentMethods(StoreBootstrapJson.ReadArray(row, "payment_methods"));
         var snapshot = TryReadObject(row, "snapshot", out var snapshotJson)
             ? snapshotJson.Clone()
             : (JsonElement?)null;
@@ -184,7 +166,7 @@ public class SupabaseStoreSlipRepository(
             context,
             "店舗コンテキスト");
         StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.Tables(departmentId), tables, "卓番");
-        StoreMasterCacheKeys.SetRuntime(
+        StoreMasterCacheKeys.SetMaster(
             _cache,
             StoreMasterCacheKeys.NominationBackMaster(departmentId),
             nominationOptions,

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -9,12 +10,14 @@ public class ManagementCastsModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
     IStoreCastAdminRepository castAdminRepository,
-    IStoreClock storeClock) : PageModel
+    IStoreClock storeClock,
+    IStoreMasterBootstrapper masterBootstrapper) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreCastAdminRepository _castAdminRepository = castAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
@@ -146,6 +149,7 @@ public class ManagementCastsModel(
 
     private async Task<bool> LoadAsync(CancellationToken cancellationToken)
     {
+        await _masterBootstrapper.EnsureAsync(cancellationToken);
         var businessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
         var castsTask = _castAdminRepository.GetCastsAsync(cancellationToken);
         await Task.WhenAll(businessDayTask, castsTask);

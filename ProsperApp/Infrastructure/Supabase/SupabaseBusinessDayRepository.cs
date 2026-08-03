@@ -184,7 +184,6 @@ public class SupabaseBusinessDayRepository(
             StoreMasterCacheKeys.CurrentBusinessDay(departmentId),
             businessDay,
             "現在営業日");
-        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
         StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDay.BusinessDayId);
         return BusinessDayOperationResult.Success(businessDay);
     }
@@ -227,7 +226,6 @@ public class SupabaseBusinessDayRepository(
         }
 
         StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
-        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
         StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
         return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
     }

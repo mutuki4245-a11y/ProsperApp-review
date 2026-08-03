@@ -15,53 +15,6 @@
         <div class="alert alert-success">@successMessage</div>
     }
 
-    <section class="settings-card settings-card--display">
-        <h2>画面設定</h2>
-        <form method="post" asp-page-handler="SaveDisplaySettings" class="settings-form">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <h3 class="h5 mb-2">使用する画面</h3>
-            <div class="settings-radio-grid">
-                <label class="settings-radio">
-                    <input asp-for="ScreenMode" type="radio" value="sales-management" />
-                    <span>
-                        <strong>営業管理用画面</strong>
-                        <small>営業中、締め作業、店舗設定を使う店舗運用画面</small>
-                    </span>
-                </label>
-                <label class="settings-radio">
-                    <input asp-for="ScreenMode" type="radio" value="order-entry" />
-                    <span>
-                        <strong>オーダー登録用画面</strong>
-                        <small>卓と商品を選んで注文を登録する専用画面</small>
-                    </span>
-                </label>
-            </div>
-            <span asp-validation-for="ScreenMode" class="text-danger"></span>
-
-            <h3 class="h5 mt-4 mb-2">配色</h3>
-            <div class="settings-radio-grid settings-radio-grid--compact">
-                <label class="settings-radio">
-                    <input asp-for="ThemeMode" type="radio" value="@LocalSettings.ThemeModeQuietNavy" />
-                    <span>
-                        <strong>E案（夜レジ）</strong>
-                        <small>暗い青グレーに明るい水色を合わせた配色</small>
-                    </span>
-                </label>
-                <label class="settings-radio">
-                    <input asp-for="ThemeMode" type="radio" value="@LocalSettings.ThemeModeWhite" />
-                    <span>
-                        <strong>白ベース</strong>
-                        <small>明るい背景を使用した配色</small>
-                    </span>
-                </label>
-            </div>
-            <span asp-validation-for="ThemeMode" class="text-danger"></span>
-            <div class="settings-actions">
-                <button class="btn btn-primary" type="submit">画面設定を保存</button>
-            </div>
-        </form>
-    </section>
-
     <section class="settings-card">
         <h2>マスタ情報</h2>
         <p class="text-muted mb-3">卓番、キャスト、スタッフ、商品、バック、時間料金を必要なタイミングで更新します。商品カテゴリの操作だけ管理者モードが必要です。</p>
@@ -119,6 +72,94 @@
                 <span class="closing-panel__action">開く</span>
             </a>
         </div>
+    </section>
+
+    <section class="settings-card settings-card--display">
+        <h2>画面設定</h2>
+        <form method="post" asp-page-handler="SaveDisplaySettings" class="settings-form">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <h3 class="h5 mb-2">使用する画面</h3>
+            <div class="settings-radio-grid">
+                <label class="settings-radio">
+                    <input asp-for="ScreenMode" type="radio" value="sales-management" />
+                    <span>
+                        <strong>営業管理用画面</strong>
+                        <small>営業中、締め作業、店舗設定を使う店舗運用画面</small>
+                    </span>
+                </label>
+                <label class="settings-radio">
+                    <input asp-for="ScreenMode" type="radio" value="order-entry" />
+                    <span>
+                        <strong>オーダー登録用画面</strong>
+                        <small>卓と商品を選んで注文を登録する専用画面</small>
+                    </span>
+                </label>
+            </div>
+            <span asp-validation-for="ScreenMode" class="text-danger"></span>
+
+            <h3 class="h5 mt-4 mb-2">配色</h3>
+            <div class="settings-radio-grid settings-radio-grid--compact">
+                <label class="settings-radio">
+                    <input asp-for="ThemeMode" type="radio" value="@LocalSettings.ThemeModeQuietNavy" />
+                    <span>
+                        <strong>E案（夜レジ）</strong>
+                        <small>暗い青グレーに明るい水色を合わせた配色</small>
+                    </span>
+                </label>
+                <label class="settings-radio">
+                    <input asp-for="ThemeMode" type="radio" value="@LocalSettings.ThemeModeWhite" />
+                    <span>
+                        <strong>白ベース</strong>
+                        <small>明るい背景を使用した配色</small>
+                    </span>
+                </label>
+            </div>
+            <span asp-validation-for="ThemeMode" class="text-danger"></span>
+            <div class="settings-actions">
+                <button class="btn btn-primary" type="submit">画面設定を保存</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="settings-card">
+        <h2>アプリ内キャッシュ</h2>
+        @if (Model.CacheStatuses.Count == 0)
+        {
+            <p class="text-muted mb-3">現在までに取得したキャッシュはありません。</p>
+        }
+        else
+        {
+            <div class="table-responsive mb-3">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>区分</th>
+                            <th>対象</th>
+                            <th>状態</th>
+                            <th>最終取得</th>
+                            <th>期限</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cache in Model.CacheStatuses)
+                        {
+                            var fetchedAt = cache.LastFetchedAt.ToOffset(TimeSpan.FromHours(9));
+                            var expiresAt = cache.ExpiresAt?.ToOffset(TimeSpan.FromHours(9));
+                            <tr>
+                                <td>@cache.Category</td>
+                                <td>@cache.DisplayName</td>
+                                <td>@(cache.IsCached ? "保持中" : "破棄済み")</td>
+                                <td>@fetchedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td>@(expiresAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "更新時まで")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <form method="post" asp-page-handler="ClearCache">
+            <button class="btn btn-outline-secondary" type="submit">キャッシュをすべて削除</button>
+        </form>
     </section>
 </section>
 

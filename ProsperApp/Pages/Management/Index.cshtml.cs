@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -9,13 +10,15 @@ namespace ProsperApp.Pages;
 public class ManagementIndexModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
-    IAdminModeService adminModeService) : PageModel
+    IAdminModeService adminModeService,
+    IApplicationCache applicationCache) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IAdminModeService _adminModeService = adminModeService;
+    private readonly IApplicationCache _applicationCache = applicationCache;
 
     [BindProperty]
     [Display(Name = "使用する画面")]
@@ -27,6 +30,8 @@ public class ManagementIndexModel(
 
     public bool IsAdminMode => _adminModeService.IsEnabled;
 
+    public IReadOnlyList<ApplicationCacheStatus> CacheStatuses { get; private set; } = [];
+
     public IActionResult OnGet()
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
@@ -34,9 +39,7 @@ public class ManagementIndexModel(
             return NotFound();
         }
 
-        var currentSettings = _localSettingsProvider.GetCurrent();
-        ScreenMode = currentSettings.ScreenMode;
-        ThemeMode = currentSettings.ThemeMode;
+        LoadCurrentSettings();
         return Page();
     }
 
@@ -79,6 +82,27 @@ public class ManagementIndexModel(
         return ScreenMode == "order-entry"
             ? RedirectToPage("/Orders/Index")
             : RedirectToPage("/Index");
+    }
+
+    public Task<IActionResult> OnPostClearCacheAsync(CancellationToken ct)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return Task.FromResult<IActionResult>(NotFound());
+        }
+
+        ct.ThrowIfCancellationRequested();
+        var clearedCount = _applicationCache.ClearAll();
+        TempData["SuccessMessage"] = $"アプリ内キャッシュを {clearedCount} 件削除しました。";
+        return Task.FromResult<IActionResult>(RedirectToPage());
+    }
+
+    private void LoadCurrentSettings()
+    {
+        var currentSettings = _localSettingsProvider.GetCurrent();
+        ScreenMode = currentSettings.ScreenMode;
+        ThemeMode = currentSettings.ThemeMode;
+        CacheStatuses = _applicationCache.GetStatuses();
     }
 
     private void WriteSettingsCookie(LocalSettings settings)

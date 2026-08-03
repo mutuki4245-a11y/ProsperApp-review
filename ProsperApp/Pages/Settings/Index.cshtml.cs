@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -11,7 +10,6 @@ public class SettingsModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
     IStoreSettingsRepository storeSettingsRepository,
-    IApplicationCache applicationCache,
     IAdminModeService adminModeService) : PageModel
 {
     private const string SettingsPassword = "4245";
@@ -21,7 +19,6 @@ public class SettingsModel(
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreSettingsRepository _storeSettingsRepository = storeSettingsRepository;
-    private readonly IApplicationCache _applicationCache = applicationCache;
     private readonly IAdminModeService _adminModeService = adminModeService;
 
     [BindProperty]
@@ -52,8 +49,6 @@ public class SettingsModel(
     public string? StoreSettingsRpcStatus { get; private set; }
 
     public string? StoreSettingsTableStatus { get; private set; }
-
-    public IReadOnlyList<ApplicationCacheStatus> CacheStatuses { get; private set; } = [];
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct)
     {
@@ -195,32 +190,6 @@ public class SettingsModel(
         DebugDeletedTableCounts = result.TableCounts;
         Input.StoreName = selectedDepartment.DisplayName;
         SuccessMessage = $"{selectedDepartment.DisplayName} のマスタ以外のレコードを {result.DeletedCount} 件削除しました。";
-        LoadCacheStatuses();
-        return Page();
-    }
-
-    public async Task<IActionResult> OnPostClearCacheAsync(CancellationToken ct)
-    {
-        if (!_featureGate.IsEnabled(FeatureNames.Settings))
-        {
-            return NotFound();
-        }
-
-        IsUnlocked = IsValidSaveToken();
-        if (!IsUnlocked)
-        {
-            LockSettings();
-            LoadCurrentSettings();
-            await LoadDepartmentsAsync(ct);
-            ModelState.AddModelError(string.Empty, "キャッシュを削除するには、もう一度設定ページを開いてください。");
-            return Page();
-        }
-
-        await LoadDepartmentsAsync(ct);
-        var clearedCount = _applicationCache.ClearAll();
-        RefreshSaveToken();
-        LoadCacheStatuses();
-        SuccessMessage = $"アプリ内キャッシュを {clearedCount} 件削除しました。";
         return Page();
     }
 
@@ -231,12 +200,6 @@ public class SettingsModel(
         StoreSettingsDiagnosticMessage = result.DiagnosticMessage;
         StoreSettingsRpcStatus = result.RpcStatus;
         StoreSettingsTableStatus = result.TableStatus;
-        LoadCacheStatuses();
-    }
-
-    private void LoadCacheStatuses()
-    {
-        CacheStatuses = _applicationCache.GetStatuses();
     }
 
     private void LoadCurrentSettings()

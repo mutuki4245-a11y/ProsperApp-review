@@ -1,4 +1,5 @@
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -7,9 +8,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseStoreStaffAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreStaffAdminRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreStaffAdminRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<IReadOnlyList<StaffOption>>> GetStaffOptionsAsync(CancellationToken ct)
     {
@@ -27,22 +30,15 @@ public class SupabaseStoreStaffAdminRepository(
             return Result<IReadOnlyList<StaffOption>>.Success(cachedStaffs ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_staffs",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            var failure = RpcFailure<IReadOnlyList<StaffOption>>(
-                result.ErrorMessage,
-                "出勤候補のスタッフ情報を取得できません。");
             return Result<IReadOnlyList<StaffOption>>.Failure(
-                failure.FailureKind ?? ResultFailureKind.Unavailable,
-                ToStaffLoadFriendlyError(failure.ErrorMessage));
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                ToStaffLoadFriendlyError(bootstrap.ErrorMessage));
         }
 
-        var staffs = result.Rows.Select(row => new StaffOption
+        var staffs = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "staffs").Select(row => new StaffOption
             {
                 StaffId = ReadLong(row, "staff_id") ?? 0,
                 StaffCode = ReadString(row, "staff_code"),
@@ -71,19 +67,15 @@ public class SupabaseStoreStaffAdminRepository(
             return Result<IReadOnlyList<StoreStaffAdminItem>>.Success(cachedStaffs ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_staffs_admin",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return RpcFailure<IReadOnlyList<StoreStaffAdminItem>>(
-                result.ErrorMessage,
-                "スタッフ一覧を取得できませんでした。");
+            return Result<IReadOnlyList<StoreStaffAdminItem>>.Failure(
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "スタッフ一覧を取得できませんでした。");
         }
 
-        var staffs = result.Rows.Select(row => new StoreStaffAdminItem
+        var staffs = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "staffs_admin").Select(row => new StoreStaffAdminItem
             {
                 StaffId = ReadLong(row, "staff_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,

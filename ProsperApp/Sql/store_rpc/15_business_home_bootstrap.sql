@@ -1,14 +1,23 @@
 drop function if exists store.get_business_home_bootstrap(bigint);
+drop function if exists store.get_store_bootstrap(bigint);
 
-create or replace function store.get_business_home_bootstrap(p_department_id bigint)
+create or replace function store.get_store_bootstrap(p_department_id bigint)
 returns table (
     store_context jsonb,
     business_day jsonb,
+    departments jsonb,
     tables jsonb,
-    nomination_options jsonb,
+    table_admin_list jsonb,
+    casts jsonb,
+    casts_admin jsonb,
+    staffs jsonb,
+    staffs_admin jsonb,
     order_items jsonb,
-    attendance_casts jsonb,
+    item_admin_catalog jsonb,
+    nomination_options jsonb,
     payment_methods jsonb,
+    pricing_plan jsonb,
+    attendance_casts jsonb,
     snapshot jsonb
 )
 language plpgsql
@@ -20,11 +29,19 @@ declare
     v_business_day jsonb;
     v_business_day_id bigint;
     v_business_date date;
+    v_departments jsonb := '[]'::jsonb;
     v_tables jsonb := '[]'::jsonb;
-    v_nomination_options jsonb := '[]'::jsonb;
+    v_table_admin_list jsonb := '[]'::jsonb;
+    v_casts jsonb := '[]'::jsonb;
+    v_casts_admin jsonb := '[]'::jsonb;
+    v_staffs jsonb := '[]'::jsonb;
+    v_staffs_admin jsonb := '[]'::jsonb;
     v_order_items jsonb := '[]'::jsonb;
-    v_attendance_casts jsonb := '[]'::jsonb;
+    v_item_admin_catalog jsonb := '[]'::jsonb;
+    v_nomination_options jsonb := '[]'::jsonb;
     v_payment_methods jsonb := '[]'::jsonb;
+    v_pricing_plan jsonb;
+    v_attendance_casts jsonb := '[]'::jsonb;
     v_snapshot jsonb;
     v_current_business_date date := case
         when (now() at time zone 'Asia/Tokyo')::time < time '12:00'
@@ -44,46 +61,58 @@ begin
       into v_business_day, v_business_day_id, v_business_date
     from store.get_current_business_day(p_department_id) b;
 
-    select coalesce(
-        jsonb_agg(to_jsonb(t) - 'ordinality' order by t.ordinality),
-        '[]'::jsonb
-    )
+    select coalesce(jsonb_agg(to_jsonb(d)), '[]'::jsonb)
+      into v_departments
+    from store.get_departments() d;
+
+    select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)
       into v_tables
-    from store.get_tables(p_department_id) with ordinality
-      as t(table_id, table_code, table_name, table_category_no, ordinality);
+    from store.get_tables(p_department_id) t;
 
-    select coalesce(
-        jsonb_agg(to_jsonb(n) - 'ordinality' order by n.ordinality),
-        '[]'::jsonb
-    )
-      into v_nomination_options
-    from store.get_nomination_back_master(p_department_id) with ordinality
-      as n(nomination_kind, nomination_type, display_name, companion_time, back_type, back_unit_amount, sort_order, is_active, ordinality);
+    select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)
+      into v_table_admin_list
+    from store.get_table_admin_list(p_department_id) t;
 
-    select coalesce(
-        jsonb_agg(to_jsonb(i) - 'ordinality' order by i.ordinality),
-        '[]'::jsonb
-    )
+    select coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb)
+      into v_casts
+    from store.get_casts(p_department_id) c;
+
+    select coalesce(jsonb_agg(to_jsonb(c)), '[]'::jsonb)
+      into v_casts_admin
+    from store.get_casts_admin(p_department_id) c;
+
+    select coalesce(jsonb_agg(to_jsonb(s)), '[]'::jsonb)
+      into v_staffs
+    from store.get_staffs(p_department_id) s;
+
+    select coalesce(jsonb_agg(to_jsonb(s)), '[]'::jsonb)
+      into v_staffs_admin
+    from store.get_staffs_admin(p_department_id) s;
+
+    select coalesce(jsonb_agg(to_jsonb(i)), '[]'::jsonb)
       into v_order_items
-    from store.get_order_items(p_department_id) with ordinality
-      as i(item_id, item_name, item_type, default_price, category_code, category_name, is_cast_back_target, cast_back_regular_unit_amount, cast_back_nomination_unit_amount, cast_back_type, ordinality);
+    from store.get_order_items(p_department_id) i;
 
-    select coalesce(
-        jsonb_agg(to_jsonb(pm) - 'ordinality' order by pm.ordinality),
-        '[]'::jsonb
-    )
+    select coalesce(jsonb_agg(to_jsonb(i)), '[]'::jsonb)
+      into v_item_admin_catalog
+    from store.get_item_admin_catalog(p_department_id) i;
+
+    select coalesce(jsonb_agg(to_jsonb(n)), '[]'::jsonb)
+      into v_nomination_options
+    from store.get_nomination_back_master(p_department_id) n;
+
+    select coalesce(jsonb_agg(to_jsonb(pm)), '[]'::jsonb)
       into v_payment_methods
-    from store.get_payment_methods(p_department_id) with ordinality
-      as pm(method_code, method_name, requires_received_amount, sort_order, ordinality);
+    from store.get_payment_methods(p_department_id) pm;
+
+    select to_jsonb(p)
+      into v_pricing_plan
+    from store.get_pricing_plan(p_department_id) p;
 
     if v_business_day_id is not null then
-        select coalesce(
-            jsonb_agg(to_jsonb(a) - 'ordinality' order by a.ordinality),
-            '[]'::jsonb
-        )
+        select coalesce(jsonb_agg(to_jsonb(a)), '[]'::jsonb)
           into v_attendance_casts
-        from store.get_order_attending_casts(p_department_id, v_business_day_id) with ordinality
-          as a(cast_id, display_name, drink_memo, department_name, clock_in_time, ordinality);
+        from store.get_order_attending_casts(p_department_id, v_business_day_id) a;
 
         select s.snapshot
           into v_snapshot
@@ -106,13 +135,21 @@ begin
     select
         v_store_context,
         v_business_day,
+        v_departments,
         v_tables,
-        v_nomination_options,
+        v_table_admin_list,
+        v_casts,
+        v_casts_admin,
+        v_staffs,
+        v_staffs_admin,
         v_order_items,
-        v_attendance_casts,
+        v_item_admin_catalog,
+        v_nomination_options,
         v_payment_methods,
+        v_pricing_plan,
+        v_attendance_casts,
         v_snapshot;
 end;
 $$;
 
-revoke execute on function store.get_business_home_bootstrap(bigint) from public, anon, authenticated, service_role;
+revoke execute on function store.get_store_bootstrap(bigint) from public, anon, authenticated, service_role;

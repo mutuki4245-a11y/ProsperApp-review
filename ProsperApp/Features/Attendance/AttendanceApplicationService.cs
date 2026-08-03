@@ -1,4 +1,5 @@
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Services;
 
 namespace ProsperApp.Features.Attendance;
@@ -7,18 +8,21 @@ public sealed class AttendanceApplicationService(
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
     IStoreStaffAdminRepository staffAdminRepository,
-    IStoreClock storeClock) : IAttendanceApplicationService
+    IStoreClock storeClock,
+    IStoreMasterBootstrapper masterBootstrapper) : IAttendanceApplicationService
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreStaffAdminRepository _staffAdminRepository = staffAdminRepository;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<AttendancePageState> LoadAsync(
         ClosingAttendanceInputModel input,
         bool preserveInput,
         CancellationToken ct)
     {
+        await _masterBootstrapper.EnsureAsync(ct);
         var contextTask = _slipRepository.GetStoreContextAsync(ct);
         var businessDayTask = _businessDayRepository.GetCurrentAsync(ct);
         var castsTask = _slipRepository.GetCastsAsync(ct);

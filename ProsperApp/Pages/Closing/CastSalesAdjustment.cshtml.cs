@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
@@ -10,13 +11,15 @@ public class CastSalesAdjustmentModel(
     IBusinessDayRepository businessDayRepository,
     ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
     IStoreSlipRepository slipRepository,
-    IStoreClock storeClock) : PageModel
+    IStoreClock storeClock,
+    IStoreMasterBootstrapper masterBootstrapper) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     [BindProperty]
     public CastSalesAdjustmentSaveInput CastSalesAdjustmentInput { get; set; } = new();
@@ -164,6 +167,7 @@ public class CastSalesAdjustmentModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
+        await _masterBootstrapper.EnsureAsync(cancellationToken);
         var storeContextTask = _slipRepository.GetStoreContextAsync(cancellationToken);
         var currentBusinessDayTask = _businessDayRepository.GetCurrentAsync(cancellationToken);
         await Task.WhenAll(storeContextTask, currentBusinessDayTask);

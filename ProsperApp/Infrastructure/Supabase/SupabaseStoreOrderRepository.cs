@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -9,9 +10,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseStoreOrderRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreOrderRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreOrderRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<IReadOnlyList<StoreOrderSlipOption>>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct)
     {
@@ -71,19 +74,15 @@ public class SupabaseStoreOrderRepository(
             return Result<IReadOnlyList<StoreOrderItemOption>>.Success(cachedItems ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_order_items",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return RpcFailure<IReadOnlyList<StoreOrderItemOption>>(
-                result.ErrorMessage,
-                "商品一覧を取得できませんでした。");
+            return Result<IReadOnlyList<StoreOrderItemOption>>.Failure(
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "商品一覧を取得できませんでした。");
         }
 
-        var items = result.Rows.Select(row => new StoreOrderItemOption
+        var items = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "order_items").Select(row => new StoreOrderItemOption
             {
                 ItemId = ReadLong(row, "item_id") ?? 0,
                 ItemName = ReadString(row, "item_name") ?? string.Empty,

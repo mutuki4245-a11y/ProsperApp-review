@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -8,9 +9,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseStoreItemAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreItemAdminRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreItemAdminRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<StoreItemAdminCatalog>> GetCatalogAsync(CancellationToken ct)
     {
@@ -28,19 +31,16 @@ public class SupabaseStoreItemAdminRepository(
             return Result<StoreItemAdminCatalog>.Success(cachedCatalog ?? new StoreItemAdminCatalog());
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_item_admin_catalog",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return RpcFailure<StoreItemAdminCatalog>(
-                result.ErrorMessage,
-                "商品マスタを取得できませんでした。");
+            return Result<StoreItemAdminCatalog>.Failure(
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "商品マスタを取得できませんでした。");
         }
 
-        var categories = result.Rows
+        var rows = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "item_admin_catalog");
+        var categories = rows
             .Where(row => string.Equals(ReadString(row, "row_type"), "category", StringComparison.OrdinalIgnoreCase))
             .Select(row => new StoreItemCategoryAdminItem
             {
@@ -53,7 +53,7 @@ public class SupabaseStoreItemAdminRepository(
             .Where(x => x.ItemCategoryId > 0)
             .ToList();
 
-        var items = result.Rows
+        var items = rows
             .Where(row => string.Equals(ReadString(row, "row_type"), "item", StringComparison.OrdinalIgnoreCase))
             .Select(row => new StoreItemAdminItem
             {

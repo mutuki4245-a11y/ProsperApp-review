@@ -1,4 +1,5 @@
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Services;
 
 namespace ProsperApp.Features.Orders;
@@ -8,16 +9,19 @@ public sealed class OrderEntryApplicationService(
     IStoreOrderRepository orderRepository,
     IStoreSlipRepository slipRepository,
     IOrderQueueService orderQueueService,
-    IStoreClock storeClock) : IOrderEntryApplicationService
+    IStoreClock storeClock,
+    IStoreMasterBootstrapper masterBootstrapper) : IOrderEntryApplicationService
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IOrderQueueService _orderQueueService = orderQueueService;
     private readonly IStoreClock _storeClock = storeClock;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<OrderEntryPageState> LoadPageAsync(CancellationToken ct)
     {
+        await _masterBootstrapper.EnsureAsync(ct);
         var contextTask = _slipRepository.GetStoreContextAsync(ct);
         var businessDayTask = _businessDayRepository.GetCurrentAsync(ct);
         var itemsTask = _orderRepository.GetItemsAsync(ct);

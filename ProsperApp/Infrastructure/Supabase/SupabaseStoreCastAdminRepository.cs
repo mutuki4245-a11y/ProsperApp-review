@@ -1,4 +1,5 @@
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
@@ -7,9 +8,11 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseStoreCastAdminRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreCastAdminRepository
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreCastAdminRepository
 {
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<Result<IReadOnlyList<StoreCastAdminItem>>> GetCastsAsync(CancellationToken ct)
     {
@@ -27,19 +30,15 @@ public class SupabaseStoreCastAdminRepository(
             return Result<IReadOnlyList<StoreCastAdminItem>>.Success(cachedCasts ?? []);
         }
 
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_casts_admin",
-            new { p_department_id = departmentId },
-            ct);
-
-        if (!result.Succeeded)
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            return RpcFailure<IReadOnlyList<StoreCastAdminItem>>(
-                result.ErrorMessage,
-                "キャスト一覧を取得できませんでした。");
+            return Result<IReadOnlyList<StoreCastAdminItem>>.Failure(
+                bootstrap.FailureKind ?? ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "キャスト一覧を取得できませんでした。");
         }
 
-        var casts = result.Rows.Select(row => new StoreCastAdminItem
+        var casts = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "casts_admin").Select(row => new StoreCastAdminItem
             {
                 CastId = ReadLong(row, "cast_id") ?? 0,
                 DisplayName = ReadString(row, "display_name") ?? string.Empty,
