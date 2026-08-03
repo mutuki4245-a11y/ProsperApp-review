@@ -32,7 +32,7 @@ public class BusinessDayClosingReadinessTests
             [
                 "未会計伝票が 2 件あります。",
                 "酒代が未入力です。酒代がない場合も0円で保存してください。",
-                "退勤時刻が未入力のキャストが 1 名います。",
+                "退勤時刻が未入力の出勤者が 1 名います。",
                 "キャスト売上額調整が未完了です。",
                 "未入力領収書が 4 件あります。"
             ],
@@ -46,7 +46,7 @@ public class BusinessDayClosingReadinessTests
 
         Assert.False(readiness.CanClose);
         Assert.Equal(
-            ["勤怠入力に出勤キャストが登録されていません。"],
+            ["勤怠入力に出勤者が登録されていません。"],
             readiness.BlockReasons);
     }
 
