@@ -246,13 +246,14 @@
                     makeCell(visit.tableDisplay),
                     makeCell(`${Number(visit.customerCount) || 0}`),
                     makeCell(visit.customerNames),
+                    makeCell(visit.castNames || '-'),
                     makeCell(toYen(visit.amount), 'text-end'),
                     makeCell(note || '-')
                 );
                 return row;
             },
             '伝票はありません。',
-            7
+            8
         );
 
         renderRows(
@@ -266,7 +267,6 @@
                     makeCell(toTime(cast.clockOutAt)),
                     makeCell(toYen(cast.drinkBackAmount), 'text-end'),
                     makeCell(toYen(cast.assignmentBackAmount), 'text-end'),
-                    makeCell(toYen(cast.champagneBackAmount), 'text-end'),
                     makeCell(toYen(cast.castSalesAmount), 'text-end'),
                     makeCell(toYen(cast.advanceAmount), 'text-end'),
                     makeCell(cast.usesSendService ? '利用' : '-')
@@ -274,7 +274,7 @@
                 return row;
             },
             '出勤キャストはいません。',
-            9
+            8
         );
 
         const staffs = Array.isArray(report.staffs) ? report.staffs : [];

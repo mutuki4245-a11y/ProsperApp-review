@@ -101,6 +101,8 @@ public sealed class DailyReportVisit
 
     public string? CustomerNames { get; init; }
 
+    public string? CastNames { get; init; }
+
     public decimal Amount { get; init; }
 
     public IReadOnlyList<DailyReportPayment> Payments { get; init; } = [];
@@ -129,8 +131,6 @@ public sealed class DailyReportCast
     public decimal? AssignmentBackAmount { get; init; }
 
     public decimal CastSalesAmount { get; init; }
-
-    public decimal ChampagneBackAmount { get; init; }
 
     public decimal? AdvanceAmount { get; init; }
 }

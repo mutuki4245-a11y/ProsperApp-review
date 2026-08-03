@@ -185,6 +185,7 @@ begin
         'tableDisplay', visit.value->>'tableDisplay',
         'customerCount', coalesce(nullif(visit.value->>'customerCount', '')::integer, 0),
         'customerNames', visit.value->>'customerNames',
+        'castNames', visit.value->>'castNames',
         'amount', case
             when checkout.checkout_id is not null then checkout.total_amount
             else coalesce(nullif(visit.value->>'accountingAmount', '')::numeric, 0)
@@ -231,6 +232,12 @@ begin
                and cast_back.cast_id = attendance.cast_id
                and cast_back.back_type = 'drink'
                and cast_back.status = 'active'
+        ), 0) + coalesce((
+            select sum(back_amount.back_amount)
+              from public.store_business_day_champagne_backs back_amount
+             where back_amount.business_day_id = p_business_day_id
+               and back_amount.cast_id = attendance.cast_id
+               and back_amount.status = 'active'
         ), 0),
         'assignmentBackAmount', coalesce((
             select sum(cast_back.back_amount)
@@ -246,13 +253,6 @@ begin
              where adjustment.business_day_id = p_business_day_id
                and adjustment.cast_id = attendance.cast_id
                and adjustment.status = 'confirmed'
-        ), 0),
-        'champagneBackAmount', coalesce((
-            select sum(back_amount.back_amount)
-              from public.store_business_day_champagne_backs back_amount
-             where back_amount.business_day_id = p_business_day_id
-               and back_amount.cast_id = attendance.cast_id
-               and back_amount.status = 'active'
         ), 0),
         'advanceAmount', coalesce((
             select sum(advance.amount)
@@ -447,7 +447,53 @@ begin
     end if;
 
     if jsonb_typeof(v_snapshot.closing_data->'daily_report') = 'object' then
-        return query select v_snapshot.closing_data->'daily_report';
+        return query
+        select jsonb_set(
+            jsonb_set(
+                v_snapshot.closing_data->'daily_report',
+                '{visits}',
+                coalesce((
+                    select jsonb_agg(
+                        visit.value || jsonb_build_object(
+                            'castNames', coalesce(
+                                snapshot_visit.value->>'castNames',
+                                visit.value->>'castNames',
+                                ''
+                            )
+                        )
+                        order by visit.ordinality
+                    )
+                      from jsonb_array_elements(
+                          coalesce(v_snapshot.closing_data->'daily_report'->'visits', '[]'::jsonb)
+                      ) with ordinality visit(value, ordinality)
+                      left join lateral (
+                          select home_visit.value
+                            from jsonb_array_elements(
+                                coalesce(v_snapshot.business_home_data->'slips', '[]'::jsonb)
+                            ) home_visit(value)
+                           where nullif(home_visit.value->>'id', '')::bigint =
+                                 nullif(visit.value->>'slipId', '')::bigint
+                           limit 1
+                      ) snapshot_visit on true
+                ), '[]'::jsonb),
+                true
+            ),
+            '{casts}',
+            coalesce((
+                select jsonb_agg(
+                    (cast_row.value - 'champagneBackAmount') || jsonb_build_object(
+                        'drinkBackAmount',
+                        coalesce(nullif(cast_row.value->>'drinkBackAmount', '')::numeric, 0) +
+                        coalesce(nullif(cast_row.value->>'champagneBackAmount', '')::numeric, 0)
+                    )
+                    order by cast_row.ordinality
+                )
+                  from jsonb_array_elements(
+                      coalesce(v_snapshot.closing_data->'daily_report'->'casts', '[]'::jsonb)
+                  ) with ordinality cast_row(value, ordinality)
+            ), '[]'::jsonb),
+            true
+        );
         return;
     end if;
 
@@ -473,6 +519,7 @@ begin
         'tableDisplay', visit.value->>'tableDisplay',
         'customerCount', coalesce(nullif(visit.value->>'customerCount', '')::integer, 0),
         'customerNames', visit.value->>'customerNames',
+        'castNames', visit.value->>'castNames',
         'amount', coalesce(nullif(visit.value->>'accountingAmount', '')::numeric, 0),
         'payments', '[]'::jsonb,
         'memo', visit.value->>'memo',
@@ -524,19 +571,18 @@ begin
                 'clockInAt', attendance.value->>'clock_in_at',
                 'clockOutAt', attendance.value->>'clock_out_at',
                 'usesSendService', coalesce((attendance.value->>'uses_send_service')::boolean, false),
-                'drinkBackAmount', null,
+                'drinkBackAmount', coalesce((
+                    select sum(coalesce(nullif(back_amount.value->>'back_amount', '')::numeric, 0))
+                      from jsonb_array_elements(coalesce(v_snapshot.closing_data->'champagne_backs', '[]'::jsonb)) back_amount(value)
+                     where back_amount.value->>'cast_id' = attendance.value->>'cast_id'
+                       and back_amount.value->>'status' = 'active'
+                ), 0),
                 'assignmentBackAmount', null,
                 'castSalesAmount', coalesce((
                     select sum(coalesce(nullif(adjustment.value->>'sales_amount', '')::numeric, 0))
                       from jsonb_array_elements(coalesce(v_snapshot.closing_data->'cast_sales_adjustments', '[]'::jsonb)) adjustment(value)
                      where adjustment.value->>'cast_id' = attendance.value->>'cast_id'
                        and adjustment.value->>'status' = 'confirmed'
-                ), 0),
-                'champagneBackAmount', coalesce((
-                    select sum(coalesce(nullif(back_amount.value->>'back_amount', '')::numeric, 0))
-                      from jsonb_array_elements(coalesce(v_snapshot.closing_data->'champagne_backs', '[]'::jsonb)) back_amount(value)
-                     where back_amount.value->>'cast_id' = attendance.value->>'cast_id'
-                       and back_amount.value->>'status' = 'active'
                 ), 0),
                 'advanceAmount', null
             ) order by attendance.ordinality)

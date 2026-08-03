@@ -1146,15 +1146,14 @@ a.closing-panel:focus {
   overflow-wrap: anywhere;
 }
 
-.daily-report__cast-table th:nth-child(1) { width: 16%; }
+.daily-report__cast-table th:nth-child(1) { width: 17%; }
 .daily-report__cast-table th:nth-child(2),
-.daily-report__cast-table th:nth-child(3) { width: 7%; }
-.daily-report__cast-table th:nth-child(4) { width: 12%; }
-.daily-report__cast-table th:nth-child(5) { width: 11%; }
-.daily-report__cast-table th:nth-child(6) { width: 13%; }
-.daily-report__cast-table th:nth-child(7),
-.daily-report__cast-table th:nth-child(8) { width: 12%; }
-.daily-report__cast-table th:nth-child(9) { width: 10%; }
+.daily-report__cast-table th:nth-child(3) { width: 8%; }
+.daily-report__cast-table th:nth-child(4) { width: 14%; }
+.daily-report__cast-table th:nth-child(5),
+.daily-report__cast-table th:nth-child(6),
+.daily-report__cast-table th:nth-child(7) { width: 13%; }
+.daily-report__cast-table th:nth-child(8) { width: 14%; }
 
 .daily-report__staff-table th:nth-child(1) { width: 56%; }
 .daily-report__staff-table th:nth-child(2),
@@ -1174,18 +1173,19 @@ a.closing-panel:focus {
 
 .daily-report__visit-table th,
 .daily-report__visit-table td {
-  font-size: 7.5pt;
+  font-size: 7.2pt;
   height: 8.4mm;
   padding: 0.8mm 1mm;
 }
 
-.daily-report__visit-table th:nth-child(1) { width: 7%; }
-.daily-report__visit-table th:nth-child(2) { width: 9%; }
-.daily-report__visit-table th:nth-child(3) { width: 7%; }
-.daily-report__visit-table th:nth-child(4) { width: 6%; }
-.daily-report__visit-table th:nth-child(5) { width: 25%; }
-.daily-report__visit-table th:nth-child(6) { width: 14%; }
-.daily-report__visit-table th:nth-child(7) { width: 32%; }
+.daily-report__visit-table th:nth-child(1) { width: 6%; }
+.daily-report__visit-table th:nth-child(2) { width: 8%; }
+.daily-report__visit-table th:nth-child(3) { width: 6%; }
+.daily-report__visit-table th:nth-child(4) { width: 5%; }
+.daily-report__visit-table th:nth-child(5) { width: 20%; }
+.daily-report__visit-table th:nth-child(6) { width: 17%; }
+.daily-report__visit-table th:nth-child(7) { width: 13%; }
+.daily-report__visit-table th:nth-child(8) { width: 25%; }
 
 .daily-report__visit-table td:nth-child(1),
 .daily-report__visit-table td:nth-child(2),

@@ -69,6 +69,8 @@ assert.match(buildReport, /from public\.store_order_line_cast_backs cast_back/i)
 assert.match(buildReport, /from public\.store_slip_cast_backs cast_back/i);
 assert.match(buildReport, /'drinkBackAmount'/i);
 assert.match(buildReport, /'assignmentBackAmount'/i);
+assert.match(buildReport, /'castNames', visit\.value->>'castNames'/i);
+assert.doesNotMatch(buildReport, /'champagneBackAmount'/i);
 assert.match(buildReport, /daily-report-v3/i);
 assert.match(buildReport, /'employmentType', staff_member\.employment_type/i);
 assert.match(buildReport, /'itemCategories'/i);
@@ -80,6 +82,10 @@ assert.match(getReport, /daily-report-legacy-v1/i);
 assert.match(getReport, /'employmentType',[\s\S]*?'employee'/i);
 assert.match(getReport, /legacyUnavailableSections/i);
 assert.match(getReport, /'expenses', 'castAdvances', 'itemCategories'/i);
+assert.match(getReport, /jsonb_set\(/i);
+assert.match(getReport, /v_snapshot\.business_home_data/i);
+assert.match(getReport, /'castNames'/i);
+assert.match(getReport, /'champagneBackAmount'/i);
 
 const capture = functionBlock(guardsSql, 'store.capture_business_day_closing_snapshot');
 assert.match(capture, /business-day-closing-v2/i);
@@ -110,7 +116,12 @@ assert.match(closingPage, /data-report-print/);
 assert.match(closingPage, /①日計表/);
 assert.match(closingPage, /③リスト/);
 assert.match(closingPage, /②支出内訳/);
-assert.match(closingPage, /ドリンクバック[\s\S]*担当バック[\s\S]*シャンパンバック[\s\S]*売上[\s\S]*前渡金[\s\S]*送り利用/);
+assert.match(closingPage, /ドリンクバック[\s\S]*担当バック[\s\S]*売上[\s\S]*前渡金[\s\S]*送り利用/);
++assert.doesNotMatch(
+    closingPage.match(/<table class="daily-report__form-table daily-report__cast-table">[\s\S]*?<\/table>/i)?.[0] ?? '',
+    /シャンパンバック/
+);
+assert.match(closingPage, /お客様[\s\S]*担当キャスト[\s\S]*会計[\s\S]*備考/);
 assert.doesNotMatch(closingPage, /商品内訳/);
 assert.doesNotMatch(closingPage, /営業件数/);
 assert.match(closingPage, /data-report-count="attendance"/);
@@ -129,6 +140,8 @@ assert.match(reportScript, /report\.staffs/);
 assert.match(reportScript, /employmentType\s*===\s*'part_time'/);
 assert.match(reportScript, /setCount\('attendance',[\s\S]*report\.casts/);
 assert.match(reportScript, /setCount\('groups', totals\.slipCount\)/);
+assert.match(reportScript, /visit\.castNames/);
+assert.doesNotMatch(reportScript, /champagneBackAmount/);
 assert.match(reportScript, /preparePrintLayout/);
 assert.match(reportScript, /beforeprint/);
 assert.match(reportScript, /--daily-report-print-scale/);
@@ -142,5 +155,5 @@ assert.match(reportStyles, /overflow:\s*hidden/i);
 assert.match(reportStyles, /scale\(var\(--daily-report-print-scale/i);
 assert.match(reportStyles, /\.daily-report__cast-table th,[\s\S]*?font-size:\s*7\.2pt/i);
 assert.match(reportStyles, /\.daily-report__staff-table th,[\s\S]*?font-size:\s*8\.5pt/i);
-assert.match(reportStyles, /\.daily-report__cast-table th:nth-child\(1\)\s*\{\s*width:\s*16%/i);
+assert.match(reportStyles, /\.daily-report__cast-table th:nth-child\(1\)\s*\{\s*width:\s*17%/i);
 assert.match(reportStyles, /\.daily-report__staff-table th:nth-child\(1\)\s*\{\s*width:\s*56%/i);
