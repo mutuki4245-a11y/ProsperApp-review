@@ -157,6 +157,7 @@
         <div class="daily-report__content" data-report-content hidden>
             <div class="daily-report__pages">
                 <article class="daily-report__page daily-report__page--summary" aria-label="1ページ目 日計表">
+                    <div class="daily-report__page-content" data-report-page-content>
                     <header class="daily-report__sheet-header">
                         <div class="daily-report__store-name" data-report-department>店舗</div>
                         <h3>①日計表</h3>
@@ -226,9 +227,11 @@
                             <tbody data-report-casts data-min-rows="18"></tbody>
                         </table>
                     </section>
+                    </div>
                 </article>
 
                 <article class="daily-report__page daily-report__page--visits" aria-label="2ページ目 リスト">
+                    <div class="daily-report__page-content" data-report-page-content>
                     <header class="daily-report__sheet-header">
                         <div class="daily-report__store-name" data-report-department>店舗</div>
                         <h3>③リスト</h3>
@@ -244,9 +247,11 @@
                         </thead>
                         <tbody data-report-visits data-min-rows="26"></tbody>
                     </table>
+                    </div>
                 </article>
 
                 <article class="daily-report__page daily-report__page--expenses" aria-label="3ページ目 支出内訳">
+                    <div class="daily-report__page-content" data-report-page-content>
                     <header class="daily-report__sheet-header">
                         <div class="daily-report__store-name" data-report-department>店舗</div>
                         <h3>②支出内訳</h3>
@@ -260,6 +265,7 @@
                             <tbody data-report-expenses data-min-rows="24"></tbody>
                         </table>
                     </section>
+                    </div>
                     <footer class="daily-report__footer">
                         <span data-report-captured></span>
                         <span>売上は確定会計のみ。現金残高 = 現金売上 − 領収書支出（酒代納品は別表示）</span>

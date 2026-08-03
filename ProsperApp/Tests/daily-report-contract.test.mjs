@@ -119,6 +119,7 @@ assert.match(closingPage, /data-report-count="customers"/);
 assert.match(closingPage, /酒代[\s\S]*data-report-payments/);
 assert.match(closingPage, /社員勤怠[\s\S]*data-report-staffs="employee"[\s\S]*data-min-rows="4"/);
 assert.match(closingPage, /バイト勤怠[\s\S]*data-report-staffs="part_time"[\s\S]*data-min-rows="4"/);
+assert.equal((closingPage.match(/data-report-page-content/g) ?? []).length, 3);
 assert.ok(
     closingPage.indexOf('社員勤怠') < closingPage.indexOf('ドリンクバック'),
     'スタッフ勤怠表をキャスト表の上に表示してください。'
@@ -128,11 +129,17 @@ assert.match(reportScript, /report\.staffs/);
 assert.match(reportScript, /employmentType\s*===\s*'part_time'/);
 assert.match(reportScript, /setCount\('attendance',[\s\S]*report\.casts/);
 assert.match(reportScript, /setCount\('groups', totals\.slipCount\)/);
+assert.match(reportScript, /preparePrintLayout/);
+assert.match(reportScript, /beforeprint/);
+assert.match(reportScript, /--daily-report-print-scale/);
 assert.match(reportScript, /window\.print\(\)/);
 assert.match(reportStyles, /size: A4 portrait/i);
 assert.match(reportStyles, /\.daily-report,[\s\S]*\.daily-report \*/i);
 assert.match(reportStyles, /\.daily-report__page \+ \.daily-report__page/);
 assert.match(reportStyles, /break-after:\s*page/i);
+assert.match(reportStyles, /height:\s*297mm/i);
+assert.match(reportStyles, /overflow:\s*hidden/i);
+assert.match(reportStyles, /scale\(var\(--daily-report-print-scale/i);
 assert.match(reportStyles, /\.daily-report__cast-table th,[\s\S]*?font-size:\s*7\.2pt/i);
 assert.match(reportStyles, /\.daily-report__staff-table th,[\s\S]*?font-size:\s*8\.5pt/i);
 assert.match(reportStyles, /\.daily-report__cast-table th:nth-child\(1\)\s*\{\s*width:\s*16%/i);

@@ -1298,8 +1298,10 @@ a.closing-panel:focus {
     box-shadow: none;
     break-after: page;
     box-sizing: border-box;
+    height: 297mm;
     margin: 0;
     min-height: 297mm;
+    overflow: hidden;
     padding: 10mm 8mm;
     page-break-after: always;
     width: 210mm;
@@ -1312,6 +1314,11 @@ a.closing-panel:focus {
 
   .daily-report__page-number {
     display: none;
+  }
+
+  .daily-report__page-content {
+    transform: scale(var(--daily-report-print-scale, 1));
+    transform-origin: top left;
   }
 
   .daily-report__form-table th,

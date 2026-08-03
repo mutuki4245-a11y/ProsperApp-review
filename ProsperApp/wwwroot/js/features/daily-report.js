@@ -15,6 +15,39 @@
     let refreshInFlight = false;
     let lastReportState = null;
 
+    const resetPrintLayout = () => {
+        root.querySelectorAll('[data-report-page-content]').forEach((pageContent) => {
+            pageContent.style.removeProperty('--daily-report-print-scale');
+            pageContent.style.removeProperty('width');
+        });
+    };
+
+    const preparePrintLayout = () => {
+        resetPrintLayout();
+        root.querySelectorAll('.daily-report__page').forEach((page) => {
+            const pageContent = page.querySelector('[data-report-page-content]');
+            if (!pageContent) {
+                return;
+            }
+
+            const pageStyle = window.getComputedStyle(page);
+            const verticalPadding =
+                (Number.parseFloat(pageStyle.paddingTop) || 0) +
+                (Number.parseFloat(pageStyle.paddingBottom) || 0);
+            const footer = page.querySelector('.daily-report__footer');
+            const footerReserve = footer ? footer.offsetHeight + 24 : 0;
+            const availableHeight = page.clientHeight - verticalPadding - footerReserve;
+            const contentHeight = pageContent.scrollHeight;
+            if (availableHeight <= 0 || contentHeight <= availableHeight) {
+                return;
+            }
+
+            const scale = availableHeight / contentHeight;
+            pageContent.style.setProperty('--daily-report-print-scale', `${scale}`);
+            pageContent.style.width = `${100 / scale}%`;
+        });
+    };
+
     const yenFormatter = new Intl.NumberFormat('ja-JP', {
         style: 'currency',
         currency: 'JPY',
@@ -343,7 +376,12 @@
     };
 
     refreshButton.addEventListener('click', () => void load());
-    printButton.addEventListener('click', () => window.print());
+    printButton.addEventListener('click', () => {
+        preparePrintLayout();
+        window.print();
+    });
+    window.addEventListener('beforeprint', preparePrintLayout);
+    window.addEventListener('afterprint', resetPrintLayout);
     window.addEventListener('focus', () => {
         if (document.visibilityState === 'visible' && lastReportState !== 'closed' && lastReportState !== 'legacy') {
             void load();
