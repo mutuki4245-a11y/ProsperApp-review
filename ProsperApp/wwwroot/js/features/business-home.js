@@ -42,6 +42,9 @@
     );
     const tableCollator = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
     const businessSlipsUrl = config.businessSlipsUrl || '';
+    const initialSnapshot = config.initialSnapshot && typeof config.initialSnapshot === 'object'
+        ? config.initialSnapshot
+        : null;
     const flushBusinessHomeChangesUrl = config.flushBusinessHomeChangesUrl || '';
     const draftStorageKey = config.departmentId && config.businessDayId
         ? `prosper:business-home-draft:v1:${config.departmentId}:${config.businessDayId}`
@@ -2012,5 +2015,9 @@
         getSlip,
         buildSlipDetailContent
     });
-    void loadSlips();
+    if (initialSnapshot && applySnapshot(initialSnapshot, true)) {
+        markDirtyStatus();
+    } else {
+        void loadSlips();
+    }
 })();

@@ -32,6 +32,8 @@ Supabase適用後の実呼び出しで旧 `public.documents` 参照を検出し�
 
 2026-07-31のスタッフ勤怠対応では、`store_staff_master` と `store_staff_attendance` を追加し、`/Management/Staffs` でスタッフ名の登録・削除、`/Attendance` で「出勤キャストを追加」と並べて「出勤スタッフを追加」を扱えるようにしました。スタッフ勤怠は締め勤怠人数・未退勤判定・日報・営業日締めsnapshotには含めますが、注文候補、指名、キャスト売上額調整、シャンパンバック、領収書前渡金のキャスト候補には含めません。対象Supabaseにはスタッフ用テーブル/RPC/ガードを適用し、`prosper-rpc` はスタッフRPC allowlistを含むversion 32でACTIVEです。
 
+2026-08-03の営業中トップ初期ロード改善では、初回表示用に `store.get_business_home_bootstrap(p_department_id)` を追加し、店舗コンテキスト、現在営業日、卓番、指名区分、注文商品、出勤キャスト、決済方法、初回snapshotを1回のEdge RPCで取得するようにしました。C#側はbootstrap結果を既存のマスタ10分・営業中30秒キャッシュキーへ保存し、初回HTMLへ `initialSnapshot` を埋め込みます。JSの定期更新、focus復帰、online復帰は引き続き `store.get_business_day_snapshot` 経由の一覧更新を使います。対象Supabaseには `business_home_bootstrap_rpc` migrationを適用し、`prosper-rpc` はversion 34でACTIVEです。bootstrap RPCは `security definer` / `search_path=public`、`public`、`anon`、`authenticated`、`service_role` の直接実行不可、実データでのcontext・配列・snapshot応答を確認済みです。
+
 公開URLは `https://prosper-web-cuawe7gfgtcaewgj.eastasia-01.azurewebsites.net/` です。未認証アクセスはGoogle認証へリダイレクトされる前提で扱います。
 
 ## 重要方針

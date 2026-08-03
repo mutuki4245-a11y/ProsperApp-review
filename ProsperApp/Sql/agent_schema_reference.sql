@@ -705,6 +705,9 @@ create table if not exists public.store_business_day_closing_snapshots (
 --       attendance_minute_step, cast_sales_amount_basis, cast_sales_split_mode
 --   store.get_current_business_day(p_department_id bigint)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
+--   store.get_business_home_bootstrap(p_department_id bigint)
+--     returns store context, current business day, business-hub masters, attendance casts, payment methods,
+--     and the initial business-day snapshot in one read. Periodic refresh continues to use store.get_business_day_snapshot.
 --   store.open_business_day(p_department_id bigint, p_business_date date, p_memo text)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo
 --   store.open_business_day_with_attendance(p_department_id bigint, p_business_date date, p_attendance_entries jsonb, p_memo text)

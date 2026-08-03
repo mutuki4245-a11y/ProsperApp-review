@@ -54,16 +54,7 @@ public class SupabaseStoreSlipRepository(
                 "店舗マスタを取得できません。管理者設定で利用店舗を確認してください。");
         }
 
-        var row = result.Rows[0];
-        var context = new StoreContext
-        {
-            CompanyId = ReadLong(row, "company_id") ?? 0,
-            DepartmentId = ReadLong(row, "department_id") ?? departmentId,
-            DepartmentName = ReadString(row, "department_name"),
-            AttendanceMinuteStep = NormalizeAttendanceMinuteStep(ReadLong(row, "attendance_minute_step")),
-            CastSalesAmountBasis = NormalizeCastSalesAmountBasis(ReadString(row, "cast_sales_amount_basis")),
-            CastSalesSplitMode = NormalizeCastSalesSplitMode(ReadString(row, "cast_sales_split_mode"))
-        };
+        var context = ParseStoreContext(result.Rows[0], departmentId);
         StoreMasterCacheKeys.SetMaster(_cache, cacheKey, context, "店舗コンテキスト");
         return Result<StoreContext>.Success(context);
     }
@@ -96,15 +87,7 @@ public class SupabaseStoreSlipRepository(
                 "卓番一覧を取得できませんでした。");
         }
 
-        var tables = result.Rows.Select(row => new StoreTableOption
-            {
-                TableId = ReadLong(row, "table_id") ?? 0,
-                TableCode = ReadString(row, "table_code") ?? string.Empty,
-                TableName = ReadString(row, "table_name"),
-                TableCategoryNo = (int)(ReadLong(row, "table_category_no") ?? 0)
-            })
-            .Where(x => x.TableId > 0 && !string.IsNullOrWhiteSpace(x.TableCode))
-            .ToList();
+        var tables = ParseTables(result.Rows);
         StoreMasterCacheKeys.SetMaster(_cache, cacheKey, tables, "卓番");
         return Result<IReadOnlyList<StoreTableOption>>.Success(tables);
     }
@@ -151,6 +134,91 @@ public class SupabaseStoreSlipRepository(
             .ToList();
         StoreMasterCacheKeys.SetMaster(_cache, cacheKey, casts, "キャスト候補");
         return Result<IReadOnlyList<CastOption>>.Success(casts);
+    }
+
+    public async Task<BusinessHomeBootstrapResult> GetBusinessHomeBootstrapAsync(CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return BusinessHomeBootstrapResult.Failed("店舗設定またはSupabase Edge Function設定が未設定です。");
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var result = await RpcClient.PostArrayAsync(
+            "store.get_business_home_bootstrap",
+            new { p_department_id = departmentId },
+            ct);
+
+        if (!result.Succeeded || result.Rows.Count == 0)
+        {
+            return BusinessHomeBootstrapResult.Failed(ToBootstrapFriendlyError(result.ErrorMessage));
+        }
+
+        var row = result.Rows[0];
+        if (!TryReadObject(row, "store_context", out var contextJson))
+        {
+            return BusinessHomeBootstrapResult.Failed("店舗設定の応答形式が正しくありません。");
+        }
+
+        var context = ParseStoreContext(contextJson, departmentId);
+        var businessDay = TryReadObject(row, "business_day", out var businessDayJson)
+            ? ParseBusinessDay(businessDayJson)
+            : null;
+        if (businessDay is { BusinessDayId: <= 0 })
+        {
+            businessDay = null;
+        }
+
+        var tables = ParseTables(ReadArray(row, "tables"));
+        var nominationOptions = ParseNominationOptions(ReadArray(row, "nomination_options"));
+        var orderItems = ParseOrderItems(ReadArray(row, "order_items"));
+        var attendanceCasts = ParseAttendanceCasts(ReadArray(row, "attendance_casts"));
+        var paymentMethods = ParsePaymentMethods(ReadArray(row, "payment_methods"));
+        var snapshot = TryReadObject(row, "snapshot", out var snapshotJson)
+            ? snapshotJson.Clone()
+            : (JsonElement?)null;
+
+        StoreMasterCacheKeys.SetMaster(
+            _cache,
+            StoreMasterCacheKeys.StoreContext(departmentId),
+            context,
+            "店舗コンテキスト");
+        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.Tables(departmentId), tables, "卓番");
+        StoreMasterCacheKeys.SetRuntime(
+            _cache,
+            StoreMasterCacheKeys.NominationBackMaster(departmentId),
+            nominationOptions,
+            "指名バック設定");
+        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.OrderItems(departmentId), orderItems, "注文商品");
+        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.PaymentMethods(departmentId), paymentMethods, "決済方法");
+
+        if (businessDay is not null)
+        {
+            StoreMasterCacheKeys.SetRuntime(
+                _cache,
+                StoreMasterCacheKeys.CurrentBusinessDay(departmentId),
+                businessDay,
+                "現在営業日");
+            StoreMasterCacheKeys.SetRuntime(
+                _cache,
+                StoreMasterCacheKeys.OrderAttendingCasts(departmentId, businessDay.BusinessDayId),
+                attendanceCasts,
+                "注文用出勤キャスト");
+        }
+        else
+        {
+            StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
+        }
+
+        return BusinessHomeBootstrapResult.Success(
+            context,
+            businessDay,
+            tables,
+            nominationOptions,
+            orderItems,
+            attendanceCasts,
+            paymentMethods,
+            snapshot);
     }
 
 
@@ -293,6 +361,135 @@ public class SupabaseStoreSlipRepository(
         return slipId is null
             ? CreateSlipResult.Failed("作成した伝票IDを取得できません。")
             : CreateSlipResult.Success(slipId.Value);
+    }
+
+    private static StoreContext ParseStoreContext(JsonElement row, long fallbackDepartmentId)
+    {
+        return new StoreContext
+        {
+            CompanyId = ReadLong(row, "company_id") ?? 0,
+            DepartmentId = ReadLong(row, "department_id") ?? fallbackDepartmentId,
+            DepartmentName = ReadString(row, "department_name"),
+            AttendanceMinuteStep = NormalizeAttendanceMinuteStep(ReadLong(row, "attendance_minute_step")),
+            CastSalesAmountBasis = NormalizeCastSalesAmountBasis(ReadString(row, "cast_sales_amount_basis")),
+            CastSalesSplitMode = NormalizeCastSalesSplitMode(ReadString(row, "cast_sales_split_mode"))
+        };
+    }
+
+    private static IReadOnlyList<StoreTableOption> ParseTables(IEnumerable<JsonElement> rows)
+    {
+        return rows.Select(row => new StoreTableOption
+            {
+                TableId = ReadLong(row, "table_id") ?? 0,
+                TableCode = ReadString(row, "table_code") ?? string.Empty,
+                TableName = ReadString(row, "table_name"),
+                TableCategoryNo = (int)(ReadLong(row, "table_category_no") ?? 0)
+            })
+            .Where(x => x.TableId > 0 && !string.IsNullOrWhiteSpace(x.TableCode))
+            .ToList();
+    }
+
+    private static StoreBusinessDay ParseBusinessDay(JsonElement row)
+    {
+        return new StoreBusinessDay
+        {
+            BusinessDayId = ReadLong(row, "business_day_id") ?? 0,
+            CompanyId = ReadLong(row, "company_id") ?? 0,
+            DepartmentId = ReadLong(row, "department_id") ?? 0,
+            BusinessDate = ReadDateOnly(row, "business_date") ?? DateOnly.MinValue,
+            OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
+            ClosedAt = ReadDateTimeOffset(row, "closed_at"),
+            Status = ReadString(row, "status") ?? string.Empty,
+            Memo = ReadString(row, "memo")
+        };
+    }
+
+    private static IReadOnlyList<NominationBackMasterItem> ParseNominationOptions(IEnumerable<JsonElement> rows)
+    {
+        return rows.Select(row => new NominationBackMasterItem
+            {
+                NominationKind = ReadString(row, "nomination_kind") ?? ReadString(row, "nomination_type") ?? string.Empty,
+                NominationType = ReadString(row, "nomination_type") ?? string.Empty,
+                DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                CompanionTime = ReadString(row, "companion_time"),
+                BackType = ReadString(row, "back_type") ?? "nomination",
+                BackUnitAmount = ReadDecimal(row, "back_unit_amount") ?? 0,
+                SortOrder = (int)(ReadLong(row, "sort_order") ?? 0),
+                IsActive = ReadBool(row, "is_active") ?? true
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.NominationKind))
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.DisplayName)
+            .ToList();
+    }
+
+    private static IReadOnlyList<StoreOrderItemOption> ParseOrderItems(IEnumerable<JsonElement> rows)
+    {
+        return rows.Select(row => new StoreOrderItemOption
+            {
+                ItemId = ReadLong(row, "item_id") ?? 0,
+                ItemName = ReadString(row, "item_name") ?? string.Empty,
+                ItemType = ReadString(row, "item_type") ?? "standard",
+                DefaultPrice = ReadDecimal(row, "default_price") ?? 0,
+                CategoryCode = ReadString(row, "category_code"),
+                CategoryName = ReadString(row, "category_name") ?? "未分類",
+                IsCastBackTarget = ReadBool(row, "is_cast_back_target") ?? false,
+                CastBackRegularUnitAmount = ReadDecimal(row, "cast_back_regular_unit_amount") ?? 0,
+                CastBackNominationUnitAmount = ReadDecimal(row, "cast_back_nomination_unit_amount") ?? 0,
+                CastBackType = ReadString(row, "cast_back_type") ?? "drink"
+            })
+            .Where(x => x.ItemId > 0 && !string.IsNullOrWhiteSpace(x.ItemName))
+            .ToList();
+    }
+
+    private static IReadOnlyList<StoreOrderAttendanceCastOption> ParseAttendanceCasts(IEnumerable<JsonElement> rows)
+    {
+        return rows.Select(row => new StoreOrderAttendanceCastOption
+            {
+                CastId = ReadLong(row, "cast_id") ?? 0,
+                DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                DrinkMemo = ReadString(row, "drink_memo"),
+                DepartmentName = ReadString(row, "department_name"),
+                ClockInTime = ReadString(row, "clock_in_time")
+            })
+            .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
+            .ToList();
+    }
+
+    private static IReadOnlyList<CheckoutPaymentMethod> ParsePaymentMethods(IEnumerable<JsonElement> rows)
+    {
+        return rows.Select(row => new CheckoutPaymentMethod
+            {
+                MethodCode = ReadString(row, "method_code") ?? string.Empty,
+                MethodName = ReadString(row, "method_name") ?? string.Empty,
+                RequiresReceivedAmount = ReadBool(row, "requires_received_amount") ?? false,
+                SortOrder = (int)(ReadLong(row, "sort_order") ?? 0)
+            })
+            .Where(method =>
+                !string.IsNullOrWhiteSpace(method.MethodCode) &&
+                !string.IsNullOrWhiteSpace(method.MethodName))
+            .OrderBy(method => method.SortOrder)
+            .ThenBy(method => method.MethodCode, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static IReadOnlyList<JsonElement> ReadArray(JsonElement row, string propertyName)
+    {
+        return row.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray().Select(item => item.Clone()).ToList()
+            : [];
+    }
+
+    private static bool TryReadObject(JsonElement row, string propertyName, out JsonElement value)
+    {
+        value = default;
+        if (!row.TryGetProperty(propertyName, out var raw) || raw.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        value = raw.Clone();
+        return true;
     }
 
 
@@ -454,6 +651,27 @@ public class SupabaseStoreSlipRepository(
         }
 
         return $"伝票を作成できません。{rawError}";
+    }
+
+    private static string ToBootstrapFriendlyError(string? rawError)
+    {
+        if (string.IsNullOrWhiteSpace(rawError))
+        {
+            return "営業中トップの初期データを取得できませんでした。";
+        }
+
+        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "店舗設定を取得できません。設定画面で利用店舗を選択してください。";
+        }
+
+        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
+            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        {
+            return PermissionErrorMessage();
+        }
+
+        return $"営業中トップの初期データを取得できませんでした。{rawError}";
     }
 
     private static JsonElement EmptyJsonArray()

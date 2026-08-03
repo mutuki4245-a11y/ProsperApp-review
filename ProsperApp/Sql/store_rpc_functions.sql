@@ -20,7 +20,8 @@
 --  14. Sql/store_rpc/12_daily_report.sql
 --  15. Sql/store_rpc/13_accounting_snapshot_guards.sql
 --  16. Sql/store_rpc/14_operational_read_models.sql
---  17. Sql/store_rpc/99_grants.sql
+--  17. Sql/store_rpc/15_business_home_bootstrap.sql
+--  18. Sql/store_rpc/99_grants.sql
 --
 -- Keep function names, argument lists, return columns, and direct execute revokes
 -- in the split files aligned with the current C# RPC callers and prosper-rpc allowlist.

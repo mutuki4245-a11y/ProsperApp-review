@@ -52,6 +52,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ],
   ["store.get_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_business_home_bootstrap", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.get_business_day_daily_report",
     {

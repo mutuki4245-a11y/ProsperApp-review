@@ -251,6 +251,56 @@ public class BusinessDaySnapshotResult
     }
 }
 
+public class BusinessHomeBootstrapResult
+{
+    public bool Succeeded { get; init; }
+
+    public string? ErrorMessage { get; init; }
+
+    public StoreContext? StoreContext { get; init; }
+
+    public StoreBusinessDay? BusinessDay { get; init; }
+
+    public IReadOnlyList<StoreTableOption> Tables { get; init; } = [];
+
+    public IReadOnlyList<NominationBackMasterItem> NominationOptions { get; init; } = [];
+
+    public IReadOnlyList<StoreOrderItemOption> OrderItems { get; init; } = [];
+
+    public IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts { get; init; } = [];
+
+    public IReadOnlyList<CheckoutPaymentMethod> PaymentMethods { get; init; } = [];
+
+    public JsonElement? Snapshot { get; init; }
+
+    public static BusinessHomeBootstrapResult Success(
+        StoreContext storeContext,
+        StoreBusinessDay? businessDay,
+        IReadOnlyList<StoreTableOption> tables,
+        IReadOnlyList<NominationBackMasterItem> nominationOptions,
+        IReadOnlyList<StoreOrderItemOption> orderItems,
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts,
+        IReadOnlyList<CheckoutPaymentMethod> paymentMethods,
+        JsonElement? snapshot) => new()
+        {
+            Succeeded = true,
+            StoreContext = storeContext,
+            BusinessDay = businessDay,
+            Tables = tables,
+            NominationOptions = nominationOptions,
+            OrderItems = orderItems,
+            AttendanceCasts = attendanceCasts,
+            PaymentMethods = paymentMethods,
+            Snapshot = snapshot?.Clone()
+        };
+
+    public static BusinessHomeBootstrapResult Failed(string message) => new()
+    {
+        Succeeded = false,
+        ErrorMessage = message
+    };
+}
+
 public class StoreBusinessDay
 {
     public long BusinessDayId { get; set; }

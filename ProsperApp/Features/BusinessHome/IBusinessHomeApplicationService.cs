@@ -72,5 +72,6 @@ public sealed record BusinessHomePageState(
     IReadOnlyList<StoreOrderItemOption> OrderItems,
     IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts,
     IReadOnlyList<CheckoutPaymentMethod> PaymentMethods,
+    JsonElement? InitialSnapshot,
     IReadOnlyList<PageLoadIssue> LoadIssues,
     DateTimeOffset? LastUpdatedAt);

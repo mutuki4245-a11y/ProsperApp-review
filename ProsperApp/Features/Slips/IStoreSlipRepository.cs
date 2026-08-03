@@ -10,6 +10,8 @@ public interface IStoreSlipRepository
 
     Task<Result<IReadOnlyList<CastOption>>> GetCastsAsync(CancellationToken ct);
 
+    Task<BusinessHomeBootstrapResult> GetBusinessHomeBootstrapAsync(CancellationToken ct);
+
     Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(BusinessHomeChangeFlushInput input, long businessDayId, CancellationToken ct);

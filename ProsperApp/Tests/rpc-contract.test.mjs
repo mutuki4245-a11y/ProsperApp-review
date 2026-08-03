@@ -101,6 +101,29 @@ assert.match(
     '今後追加するstore関数もPUBLIC実行不可を既定にしてください。'
 );
 
+const bootstrapSource = read('Sql/store_rpc/15_business_home_bootstrap.sql');
+assert.match(
+    bootstrapSource,
+    /create\s+or\s+replace\s+function\s+store\.get_business_home_bootstrap/i,
+    '営業中トップ初期表示はbootstrap RPCへ集約してください。'
+);
+for (const dependency of [
+    'store.get_context',
+    'store.get_current_business_day',
+    'store.get_tables',
+    'store.get_nomination_back_master',
+    'store.get_order_items',
+    'store.get_order_attending_casts',
+    'store.get_payment_methods',
+    'store.get_business_day_snapshot'
+]) {
+    assert.equal(
+        bootstrapSource.includes(dependency),
+        true,
+        `bootstrap RPCは${dependency}を束ねて取得してください。`
+    );
+}
+
 const businessDaySource = read('Sql/store_rpc/01_business_day.sql');
 const closingPageModelSource = read('Pages/Closing/Index.cshtml.cs');
 const businessDayRepositorySource = read('Infrastructure/Supabase/SupabaseBusinessDayRepository.cs');

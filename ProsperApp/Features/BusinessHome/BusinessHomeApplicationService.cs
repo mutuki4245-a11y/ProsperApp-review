@@ -7,14 +7,12 @@ public sealed class BusinessHomeApplicationService(
     IBusinessDayRepository businessDayRepository,
     IStoreSlipRepository slipRepository,
     IStoreOrderRepository orderRepository,
-    INominationBackAdminRepository nominationBackRepository,
     ICheckoutRepository checkoutRepository,
     IStoreClock storeClock) : IBusinessHomeApplicationService
 {
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IStoreSlipRepository _slipRepository = slipRepository;
     private readonly IStoreOrderRepository _orderRepository = orderRepository;
-    private readonly INominationBackAdminRepository _nominationBackRepository = nominationBackRepository;
     private readonly ICheckoutRepository _checkoutRepository = checkoutRepository;
     private readonly IStoreClock _storeClock = storeClock;
 
@@ -51,62 +49,60 @@ public sealed class BusinessHomeApplicationService(
         bool includeAttendanceCasts,
         CancellationToken ct)
     {
-        var storeContextTask = _slipRepository.GetStoreContextAsync(ct);
-        var businessDayTask = _businessDayRepository.GetCurrentAsync(ct);
-        var tablesTask = _slipRepository.GetTablesAsync(ct);
-        var nominationsTask = _nominationBackRepository.GetSettingsAsync(ct);
-        var itemsTask = ordersEnabled
-            ? _orderRepository.GetItemsAsync(ct)
-            : Task.FromResult(Result<IReadOnlyList<StoreOrderItemOption>>.Success([]));
-        var paymentMethodsTask = checkoutEnabled
-            ? _checkoutRepository.GetPaymentMethodsAsync(ct)
-            : Task.FromResult(Result<IReadOnlyList<CheckoutPaymentMethod>>.Success([]));
-
-        await Task.WhenAll(
-            storeContextTask,
-            businessDayTask,
-            tablesTask,
-            nominationsTask,
-            itemsTask,
-            paymentMethodsTask);
-
-        var storeContext = await storeContextTask;
-        var businessDay = await businessDayTask;
-        var tables = await tablesTask;
-        var nominations = await nominationsTask;
-        var items = await itemsTask;
-        var paymentMethods = await paymentMethodsTask;
         var issues = new List<PageLoadIssue>();
-        AddIssue(issues, "店舗設定", storeContext);
-        AddIssue(issues, "営業日", businessDay);
-        AddIssue(issues, "卓番", tables);
-        AddIssue(issues, "指名区分", nominations);
-        AddIssue(issues, "商品", items);
-        AddIssue(issues, "決済方法", paymentMethods);
 
-        Result<IReadOnlyList<StoreOrderAttendanceCastOption>> attendance =
-            Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Success([]);
-        if (includeAttendanceCasts && businessDay.Succeeded && businessDay.Value is { } currentBusinessDay)
+        var bootstrap = await _slipRepository.GetBusinessHomeBootstrapAsync(ct);
+        if (!bootstrap.Succeeded)
         {
-            attendance = await _orderRepository.GetAttendanceCastsAsync(currentBusinessDay.BusinessDayId, ct);
-            AddIssue(issues, "出勤キャスト", attendance);
+            issues.Add(new PageLoadIssue(
+                "初期データ",
+                ResultFailureKind.Unavailable,
+                bootstrap.ErrorMessage ?? "営業中トップの初期データを取得できませんでした。"));
         }
 
+        if (bootstrap.Succeeded && bootstrap.StoreContext is null)
+        {
+            issues.Add(new PageLoadIssue(
+                "店舗設定",
+                ResultFailureKind.InvalidResponse,
+                "店舗設定の応答形式が正しくありません。"));
+        }
+
+        if (bootstrap.Succeeded && bootstrap.BusinessDay is not null && bootstrap.Snapshot is null)
+        {
+            issues.Add(new PageLoadIssue(
+                "営業中一覧",
+                ResultFailureKind.InvalidResponse,
+                "営業中一覧の初期データを取得できませんでした。"));
+        }
+
+        IReadOnlyList<NominationBackMasterItem> nominations = bootstrap.Succeeded
+            ? bootstrap.NominationOptions
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.SortOrder)
+                .ThenBy(x => x.DisplayName)
+                .ToList()
+            : [];
+        IReadOnlyList<StoreOrderItemOption> items = bootstrap.Succeeded && ordersEnabled
+            ? bootstrap.OrderItems.Where(x => x.IsStandard).ToList()
+            : [];
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendance = bootstrap.Succeeded && includeAttendanceCasts
+            ? bootstrap.AttendanceCasts
+            : [];
+        IReadOnlyList<CheckoutPaymentMethod> paymentMethods = bootstrap.Succeeded && checkoutEnabled
+            ? bootstrap.PaymentMethods
+            : [];
+
         return new BusinessHomePageState(
-            storeContext.Succeeded ? storeContext.Value : null,
-            businessDay.Succeeded ? businessDay.Value : null,
+            bootstrap.Succeeded ? bootstrap.StoreContext : null,
+            bootstrap.Succeeded ? bootstrap.BusinessDay : null,
             _storeClock.GetCurrentBusinessDate(),
-            tables.Succeeded ? tables.Value : [],
-            nominations.Succeeded
-                ? nominations.Value
-                    .Where(x => x.IsActive)
-                    .OrderBy(x => x.SortOrder)
-                    .ThenBy(x => x.DisplayName)
-                    .ToList()
-                : [],
-            items.Succeeded ? items.Value.Where(x => x.IsStandard).ToList() : [],
-            attendance.Succeeded ? attendance.Value : [],
-            paymentMethods.Succeeded ? paymentMethods.Value : [],
+            bootstrap.Succeeded ? bootstrap.Tables : [],
+            nominations,
+            items,
+            attendance,
+            paymentMethods,
+            bootstrap.Succeeded ? bootstrap.Snapshot : null,
             issues,
             issues.Count == 0
                 ? _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow())

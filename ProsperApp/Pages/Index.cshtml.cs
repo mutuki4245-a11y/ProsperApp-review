@@ -47,6 +47,8 @@ public class IndexModel(
 
     public DateTimeOffset? LastUpdatedAt { get; private set; }
 
+    public JsonElement? InitialSnapshot { get; private set; }
+
     public IReadOnlyList<string> TimeOptions { get; set; } = [];
 
     private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
@@ -436,6 +438,7 @@ public class IndexModel(
         OrderItems = state.OrderItems;
         AttendanceCasts = state.AttendanceCasts;
         PaymentMethods = state.PaymentMethods;
+        InitialSnapshot = state.InitialSnapshot;
         LoadIssues = state.LoadIssues;
         LastUpdatedAt = state.LastUpdatedAt;
         PaymentMethodsLoadError = state.LoadIssues

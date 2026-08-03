@@ -529,6 +529,7 @@
             businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
             departmentId = Model.StoreContext?.DepartmentId,
             businessDayId = Model.CurrentBusinessDayId,
+            initialSnapshot = Model.InitialSnapshot,
             receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
             editorOperationTypes = BusinessHomeOperationTypes.All,
             paymentMethods = Model.PaymentMethods.Select(method => new
