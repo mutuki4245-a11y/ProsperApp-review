@@ -108,10 +108,6 @@ public class BusinessDayClosingReadiness
 
     public decimal ChampagneBackTotalAmount { get; init; }
 
-    public int PendingReceiptCount { get; init; }
-
-    public bool ReceiptsEnabled { get; init; }
-
     public bool? CanCloseFromStore { get; init; }
 
     public IReadOnlyList<string> BlockReasonsFromStore { get; init; } = [];
@@ -129,8 +125,7 @@ public class BusinessDayClosingReadiness
         AttendanceCount > 0 &&
         MissingClockOutCount == 0 &&
         IsCastSalesAdjustmentCompleted &&
-        IsChampagneBackCompleted &&
-        (!ReceiptsEnabled || PendingReceiptCount == 0));
+        IsChampagneBackCompleted);
 
     public IReadOnlyList<string> BlockReasons
     {
@@ -175,11 +170,6 @@ public class BusinessDayClosingReadiness
             if (!IsChampagneBackCompleted)
             {
                 reasons.Add("シャンパンバックが未入力です。0円の場合も保存してください。");
-            }
-
-            if (ReceiptsEnabled && PendingReceiptCount > 0)
-            {
-                reasons.Add($"未入力領収書が {PendingReceiptCount} 件あります。");
             }
 
             return reasons;

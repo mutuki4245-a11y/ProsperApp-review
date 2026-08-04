@@ -149,6 +149,7 @@ assert.match(
 
 const businessDaySource = read('Sql/store_rpc/01_business_day.sql');
 const closingPageModelSource = read('Pages/Closing/Index.cshtml.cs');
+const closingPageSource = read('Pages/Closing/Index.cshtml');
 const businessDayRepositorySource = read('Infrastructure/Supabase/SupabaseBusinessDayRepository.cs');
 assert.match(
     businessDaySource,
@@ -182,8 +183,30 @@ assert.match(
 );
 assert.match(
     businessDayRepositorySource,
-    /p_pending_receipt_status\s*=\s*ignoreClosingRequirements\s*\?\s*IgnoreClosingRequirementsStatus\s*:\s*includePendingReceipts\s*\?\s*_options\.PendingStatus\s*:\s*null/s,
-    '管理者締めではEdge Function互換sentinelも送ること。'
+    /p_pending_receipt_status\s*=\s*ignoreClosingRequirements\s*\?\s*IgnoreClosingRequirementsStatus\s*:\s*null/s,
+    '通常締めは領収書を締め条件に含めず、管理者締めではEdge Function互換sentinelを送ること。'
+);
+const closingDecisionSource = businessDaySource.match(/v_can_close\s*:=([\s\S]*?)return\s+query/i)?.[1] ?? '';
+assert.doesNotMatch(
+    closingDecisionSource,
+    /pending_receipt/i,
+    '未入力領収書をDBの締め可否判定に含めないでください。'
+);
+assert.doesNotMatch(
+    businessDaySource,
+    /raise\s+exception\s+'pending_receipts_exist/i,
+    '未入力領収書をDBの締めエラーにしないでください。'
+);
+const closingPageDecisionSource = closingPageSource.match(/const\s+canClose\s*=([\s\S]*?);/i)?.[1] ?? '';
+assert.doesNotMatch(
+    closingPageDecisionSource,
+    /receipt/i,
+    '未入力領収書を画面の締め可否判定に含めないでください。'
+);
+assert.match(
+    closingPageSource,
+    /data-receipts-url[\s\S]*?loadReceiptsPanel\(\)/i,
+    '領収書件数は締め判定とは独立して取得してください。'
 );
 assert.match(
     businessDayRepositorySource,

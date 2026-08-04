@@ -6,14 +6,12 @@ public interface IClosingApplicationService
 {
     Task<Result<ClosingPageState>> LoadAsync(
         bool includeReadiness,
-        bool includePendingReceipts,
         bool forceRefresh,
         CancellationToken ct);
 
     Task<Result<StoreBusinessDay>> CloseAsync(
         long? submittedBusinessDayId,
         string? memo,
-        bool includePendingReceipts,
         bool ignoreClosingRequirements,
         CancellationToken ct);
 }

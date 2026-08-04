@@ -36,7 +36,8 @@
          data-current-business-day-id="@Model.CurrentBusinessDay?.BusinessDayId"
          data-has-business-day="@hasBusinessDay.ToString().ToLowerInvariant()"
          data-receipts-enabled="@Model.ReceiptsEnabled.ToString().ToLowerInvariant()"
-         data-readiness-url="@Url.Page("/Closing/Index", "Readiness")">
+         data-readiness-url="@Url.Page("/Closing/Index", "Readiness")"
+         data-receipts-url="@(Model.ReceiptsEnabled ? Url.Page("/Closing/Index", "Receipts") : null)">
         <a class="closing-panel is-preparing" asp-page="/Index" data-closing-panel="openSlip">
             <span class="closing-panel__body">
                 <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">1</span><span>会計確認</span></strong>
@@ -86,7 +87,7 @@
         {
             <a class="closing-panel is-preparing" asp-page="/Closing/Receipts" data-closing-panel="receipts">
                 <span class="closing-panel__body">
-                    <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">6</span><span>領収書入力</span></strong>
+                    <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">6</span><span>領収書入力（任意）</span></strong>
                     <small data-closing-message>状態を確認しています。</small>
                 </span>
                 <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
@@ -305,8 +306,6 @@
                 castLoadFailed: false,
                 champagneLoaded: false,
                 champagneLoadFailed: false,
-                receiptsLoaded: root.dataset.receiptsEnabled !== 'true',
-                receiptsLoadFailed: false,
                 openSlipCount: 0,
                 drink: { isEntered: false, amount: 0 },
                 attendance: { attendanceCount: 0, missingClockOutCount: 0 },
@@ -416,8 +415,7 @@
                     state.drinkLoadFailed ||
                     state.attendanceLoadFailed ||
                     state.castLoadFailed ||
-                    state.champagneLoadFailed ||
-                    state.receiptsLoadFailed;
+                    state.champagneLoadFailed;
                 if (hasLoadFailure) {
                     setFinal('has-warning', true, '営業日を締める', '締め条件の一部を取得できませんでした。各手順を確認して、時間をおいて再表示してください。');
                     return;
@@ -433,8 +431,7 @@
                     state.drinkLoaded &&
                     state.attendanceLoaded &&
                     state.castLoaded &&
-                    state.champagneLoaded &&
-                    (!state.receiptsEnabled || state.receiptsLoaded);
+                    state.champagneLoaded;
 
                 if (!loaded) {
                     setFinal('is-preparing', true, '確認中', '締め条件を確認しています。');
@@ -446,8 +443,7 @@
                     state.attendance.attendanceCount > 0 &&
                     state.attendance.missingClockOutCount === 0 &&
                     state.cast.isCompleted &&
-                    state.champagne.isCompleted &&
-                    (!state.receiptsEnabled || state.receipts.pendingReceiptCount === 0);
+                    state.champagne.isCompleted;
                 const canSubmit = canClose;
                 const checkedTime = state.checkedAt
                     ? new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -478,7 +474,7 @@
             };
 
             const setAllPanelErrors = () => {
-                ['openSlip', 'drinkDelivery', 'attendance', 'castSalesAdjustment', 'champagneBack', 'receipts'].forEach(setPanelError);
+                ['openSlip', 'drinkDelivery', 'attendance', 'castSalesAdjustment', 'champagneBack'].forEach(setPanelError);
             };
 
             const setAllPanelsBusinessDayChanged = () => {
@@ -637,36 +633,21 @@
 
             const loadReceiptsPanel = async () => {
                 if (!state.receiptsEnabled || !root.dataset.receiptsUrl) {
-                    state.receiptsLoaded = true;
-                    state.receiptsLoadFailed = false;
                     updateFinalPanel();
                     return;
                 }
 
                 try {
                     const result = await loadJson(root.dataset.receiptsUrl);
-                    if (!captureBusinessDay(result)) {
-                        setPanel('receipts', 'has-warning', '要入力', '営業日情報が更新されています。画面を再読み込みしてください。');
-                        return;
-                    }
-
                     state.receipts = {
                         pendingReceiptCount: Number(result.pendingReceiptCount) || 0
                     };
-                    state.checkedAt = result.checkedAt || null;
-                    state.receiptsLoaded = true;
-                    state.receiptsLoadFailed = false;
-
-                    if (!result.hasBusinessDay) {
-                        setPanel('receipts', 'is-ready', '入力済', '営業日作成後に未入力領収書を確認します。');
-                    } else if (state.receipts.pendingReceiptCount > 0) {
-                        setPanel('receipts', 'needs-action', '要入力', `未入力領収書が ${state.receipts.pendingReceiptCount} 件あります。`);
+                    if (state.receipts.pendingReceiptCount > 0) {
+                        setPanel('receipts', 'needs-action', '任意', `未入力領収書が ${state.receipts.pendingReceiptCount} 件あります。締め条件の対象外です。`);
                     } else {
                         setPanel('receipts', 'is-ready', '入力済', '未入力領収書はありません。');
                     }
                 } catch {
-                    state.receiptsLoaded = false;
-                    state.receiptsLoadFailed = true;
                     setPanelError('receipts');
                 } finally {
                     updateFinalPanel();
@@ -705,21 +686,16 @@
                         missingCastCount: Number(result.champagneBackMissingCastCount) || 0,
                         totalBackAmount: Number(result.champagneBackTotalAmount) || 0
                     };
-                    state.receipts = {
-                        pendingReceiptCount: Number(result.pendingReceiptCount) || 0
-                    };
                     state.openSlipLoaded = true;
                     state.drinkLoaded = true;
                     state.attendanceLoaded = true;
                     state.castLoaded = true;
                     state.champagneLoaded = true;
-                    state.receiptsLoaded = true;
                     state.openSlipLoadFailed = false;
                     state.drinkLoadFailed = false;
                     state.attendanceLoadFailed = false;
                     state.castLoadFailed = false;
                     state.champagneLoadFailed = false;
-                    state.receiptsLoadFailed = false;
 
                     if (!result.hasBusinessDay) {
                         setPanel('openSlip', 'is-preparing', '未開始', '営業中の営業日がありません。', '営業中を開く');
@@ -727,9 +703,6 @@
                         setPanel('attendance', 'has-warning', '要入力', '勤怠保存時に営業日を自動作成できます。', '入力');
                         setPanel('castSalesAdjustment', 'has-warning', '要入力', '会計済み伝票ができたら、指名キャストへの売上額を調整します。');
                         setPanel('champagneBack', 'has-warning', '要入力', '勤怠保存後に出勤キャストごとの追加バックを入力します。');
-                        if (state.receiptsEnabled) {
-                            setPanel('receipts', 'is-ready', '入力済', '営業日作成後に未入力領収書を確認します。');
-                        }
                         return;
                     }
 
@@ -773,13 +746,6 @@
                         setPanel('champagneBack', 'has-warning', '要入力', `${state.champagne.missingCastCount}名分の追加バックが未入力です。`);
                     }
 
-                    if (state.receiptsEnabled) {
-                        if (state.receipts.pendingReceiptCount > 0) {
-                            setPanel('receipts', 'needs-action', '要入力', `未入力領収書が ${state.receipts.pendingReceiptCount} 件あります。`);
-                        } else {
-                            setPanel('receipts', 'is-ready', '入力済', '未入力領収書はありません。');
-                        }
-                    }
                 } catch {
                     state.shellLoaded = false;
                     state.shellLoadFailed = true;
@@ -789,7 +755,6 @@
                     state.castLoaded = false;
                     state.champagneLoaded = false;
                     state.champagneLoadFailed = true;
-                    state.receiptsLoaded = !state.receiptsEnabled;
                     setAllPanelErrors();
                 } finally {
                     updateFinalPanel();
@@ -803,7 +768,10 @@
 
                 refreshInFlight = true;
                 try {
-                    await loadReadiness();
+                    await Promise.all([
+                        loadReadiness(),
+                        loadReceiptsPanel()
+                    ]);
                 } finally {
                     refreshInFlight = false;
                 }

@@ -191,7 +191,6 @@ public class SupabaseBusinessDayRepository(
     public async Task<BusinessDayOperationResult> CloseAsync(
         long businessDayId,
         string? memo,
-        bool includePendingReceipts,
         bool ignoreClosingRequirements,
         CancellationToken ct)
     {
@@ -210,7 +209,7 @@ public class SupabaseBusinessDayRepository(
                 p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
                 p_pending_receipt_status = ignoreClosingRequirements
                     ? IgnoreClosingRequirementsStatus
-                    : includePendingReceipts ? _options.PendingStatus : null,
+                    : null,
                 p_ignore_closing_requirements = ignoreClosingRequirements
             },
             ct);
@@ -232,7 +231,6 @@ public class SupabaseBusinessDayRepository(
 
     public async Task<Result<BusinessDayClosingReadiness>> GetClosingReadinessAsync(
         StoreBusinessDay businessDay,
-        bool includePendingReceipts,
         CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -255,7 +253,7 @@ public class SupabaseBusinessDayRepository(
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_business_day_id = businessDay.BusinessDayId,
-                p_pending_receipt_status = includePendingReceipts ? _options.PendingStatus : null
+                p_pending_receipt_status = (string?)null
             },
             ct);
 
@@ -289,8 +287,6 @@ public class SupabaseBusinessDayRepository(
             ChampagneBackCompletedCastCount = (int)(ReadLong(row, "champagne_back_completed_cast_count") ?? 0),
             ChampagneBackMissingCastCount = (int)(ReadLong(row, "champagne_back_missing_cast_count") ?? 0),
             ChampagneBackTotalAmount = ReadDecimal(row, "champagne_back_total_amount") ?? 0,
-            PendingReceiptCount = (int)(ReadLong(row, "pending_receipt_count") ?? 0),
-            ReceiptsEnabled = includePendingReceipts,
             CanCloseFromStore = ReadBool(row, "can_close") ?? false,
             BlockReasonsFromStore = ReadStringArray(row, "block_reasons"),
             CheckedAt = ReadDateTimeOffset(row, "checked_at")
@@ -780,11 +776,6 @@ public class SupabaseBusinessDayRepository(
         if (rawError.Contains("champagne_back_required", StringComparison.OrdinalIgnoreCase))
         {
             return "シャンパンバックを入力してください。0円の場合も保存してください。";
-        }
-
-        if (rawError.Contains("pending_receipts_exist", StringComparison.OrdinalIgnoreCase))
-        {
-            return "未入力領収書があります。領収書入力を確認してください。";
         }
 
         if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))

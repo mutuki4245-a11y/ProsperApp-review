@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Features.Closing;
+using ProsperApp.Features.Receipts;
 using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
@@ -9,11 +10,13 @@ namespace ProsperApp.Pages;
 public class ClosingModel(
     IFeatureGate featureGate,
     IClosingApplicationService closingApplicationService,
+    IReceiptRepository receiptRepository,
     IAdminModeService adminModeService,
     IDailyReportApplicationService dailyReportApplicationService) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IClosingApplicationService _closingApplicationService = closingApplicationService;
+    private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IAdminModeService _adminModeService = adminModeService;
     private readonly IDailyReportApplicationService _dailyReportApplicationService = dailyReportApplicationService;
 
@@ -51,7 +54,6 @@ public class ClosingModel(
 
         var result = await _closingApplicationService.LoadAsync(
             includeReadiness: false,
-            ReceiptsEnabled,
             forceRefresh: false,
             cancellationToken);
         if (!result.Succeeded)
@@ -83,7 +85,6 @@ public class ClosingModel(
 
         var result = await _closingApplicationService.LoadAsync(
             includeReadiness: true,
-            ReceiptsEnabled,
             forceRefresh: true,
             cancellationToken);
         if (!result.Succeeded)
@@ -125,10 +126,34 @@ public class ClosingModel(
             champagneBackCompletedCastCount = readiness.ChampagneBackCompletedCastCount,
             champagneBackMissingCastCount = readiness.ChampagneBackMissingCastCount,
             champagneBackTotalAmount = readiness.ChampagneBackTotalAmount,
-            pendingReceiptCount = readiness.PendingReceiptCount,
             canClose = readiness.CanClose,
             blockReasons = readiness.BlockReasons,
             checkedAt = readiness.CheckedAt
+        });
+    }
+
+    public async Task<IActionResult> OnGetReceiptsAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing) || !ReceiptsEnabled)
+        {
+            return NotFound();
+        }
+
+        var result = await _receiptRepository.GetPendingResultAsync(cancellationToken);
+        if (!result.Succeeded)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                failureKind = result.FailureKind?.ToString(),
+                errorMessage = result.ErrorMessage
+            });
+        }
+
+        return new JsonResult(new
+        {
+            succeeded = true,
+            pendingReceiptCount = result.Value.Count
         });
     }
 
@@ -177,7 +202,6 @@ public class ClosingModel(
             ModelState.AddModelError(string.Empty, "締め条件を無視するには管理者モードを有効にしてください。");
             var reload = await _closingApplicationService.LoadAsync(
                 includeReadiness: true,
-                ReceiptsEnabled,
                 forceRefresh: true,
                 cancellationToken);
             if (reload.Succeeded)
@@ -192,7 +216,6 @@ public class ClosingModel(
         var result = await _closingApplicationService.CloseAsync(
             BusinessDayId,
             ClosingMemo,
-            ReceiptsEnabled,
             ignoreClosingRequirements,
             cancellationToken);
         if (!result.Succeeded)
@@ -205,7 +228,6 @@ public class ClosingModel(
 
             var reload = await _closingApplicationService.LoadAsync(
                 includeReadiness: true,
-                ReceiptsEnabled,
                 forceRefresh: true,
                 cancellationToken);
             if (reload.Succeeded)

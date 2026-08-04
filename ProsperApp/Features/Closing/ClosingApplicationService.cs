@@ -12,7 +12,6 @@ public sealed class ClosingApplicationService(
 
     public async Task<Result<ClosingPageState>> LoadAsync(
         bool includeReadiness,
-        bool includePendingReceipts,
         bool forceRefresh,
         CancellationToken ct)
     {
@@ -34,7 +33,6 @@ public sealed class ClosingApplicationService(
 
         var readiness = await _businessDayRepository.GetClosingReadinessAsync(
             businessDay.Value,
-            includePendingReceipts,
             ct);
         if (!readiness.Succeeded)
         {
@@ -53,7 +51,6 @@ public sealed class ClosingApplicationService(
     public async Task<Result<StoreBusinessDay>> CloseAsync(
         long? submittedBusinessDayId,
         string? memo,
-        bool includePendingReceipts,
         bool ignoreClosingRequirements,
         CancellationToken ct)
     {
@@ -84,7 +81,6 @@ public sealed class ClosingApplicationService(
         {
             var readinessResult = await _businessDayRepository.GetClosingReadinessAsync(
                 businessDay,
-                includePendingReceipts,
                 ct);
             if (!readinessResult.Succeeded)
             {
@@ -105,7 +101,6 @@ public sealed class ClosingApplicationService(
         var closeResult = await _businessDayRepository.CloseAsync(
             businessDay.BusinessDayId,
             memo,
-            includePendingReceipts,
             ignoreClosingRequirements,
             ct);
         return closeResult.Succeeded && closeResult.BusinessDay is not null

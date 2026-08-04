@@ -27,13 +27,11 @@ public interface IBusinessDayRepository
     Task<BusinessDayOperationResult> CloseAsync(
         long businessDayId,
         string? memo,
-        bool includePendingReceipts,
         bool ignoreClosingRequirements,
         CancellationToken ct);
 
     Task<Result<BusinessDayClosingReadiness>> GetClosingReadinessAsync(
         StoreBusinessDay businessDay,
-        bool includePendingReceipts,
         CancellationToken ct);
 
     Task<Result<int>> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct);
