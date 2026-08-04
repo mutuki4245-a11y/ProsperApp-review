@@ -733,6 +733,7 @@ create table if not exists public.store_business_day_closing_snapshots (
 --     updates registered staff attendance rows with { attendance_id, clock_in_time, clock_out_time, uses_send_service }.
 --   store.get_business_day_closing_readiness(p_department_id bigint, p_business_day_id bigint, p_pending_receipt_status text default 'unprocessed')
 --     returns all closing counts, structured block reasons, can_close, and checked_at in one read.
+--     pending_receipt_count is informational and does not affect can_close or block_reasons.
 --   store.get_business_day_cast_sales_adjustment_status(p_department_id bigint, p_business_day_id bigint)
 --     returns required_slip_count, completed_slip_count, missing_slip_count.
 --   store.get_cast_sales_adjustment_slips(p_department_id bigint, p_business_day_id bigint)
@@ -749,7 +750,7 @@ create table if not exists public.store_business_day_closing_snapshots (
 --   store.close_business_day(p_department_id bigint, p_business_day_id bigint, p_memo text, p_pending_receipt_status text default 'unprocessed', p_ignore_closing_requirements boolean default false)
 --     returns business_day_id, company_id, department_id, business_date, opened_at, closed_at, status, memo.
 --     rejects closing when open slips, missing drink delivery input, no attendance,
---     missing clock-out, missing cast sales adjustment, or pending receipt documents remain.
+--     missing clock-out, missing cast sales adjustment, or missing champagne back input remains.
 --     p_ignore_closing_requirements skips the closing readiness checks for administrator override flows.
 --     p_pending_receipt_status = '__ignore_closing_requirements__' is retained as a four-argument Edge Function compatibility signal.
 

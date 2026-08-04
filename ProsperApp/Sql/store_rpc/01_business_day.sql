@@ -1109,19 +1109,13 @@ begin
             jsonb_build_array('シャンパンバックが未入力です。0円の場合も保存してください。');
     end if;
 
-    if coalesce(v_pending_receipt_count, 0) > 0 then
-        v_block_reasons := v_block_reasons ||
-            jsonb_build_array(format('未入力領収書が %s 件あります。', v_pending_receipt_count));
-    end if;
-
     v_can_close :=
         coalesce(v_open_slip_count, 0) = 0 and
         coalesce(v_business_day.drink_delivery_amount_entered, false) and
         coalesce(v_attendance_count, 0) > 0 and
         coalesce(v_missing_clock_out_count, 0) = 0 and
         coalesce(v_cast_sales_missing_slip_count, 0) = 0 and
-        coalesce(v_champagne_back_missing_cast_count, 0) = 0 and
-        coalesce(v_pending_receipt_count, 0) = 0;
+        coalesce(v_champagne_back_missing_cast_count, 0) = 0;
 
     return query
     select
@@ -1228,9 +1222,6 @@ begin
             raise exception 'champagne_back_required:%', v_readiness.champagne_back_missing_cast_count;
         end if;
 
-        if coalesce(v_readiness.pending_receipt_count, 0) > 0 then
-            raise exception 'pending_receipts_exist:%', v_readiness.pending_receipt_count;
-        end if;
     end if;
 
     v_closed_at := clock_timestamp();
