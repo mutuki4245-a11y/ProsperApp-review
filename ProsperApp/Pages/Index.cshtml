@@ -66,8 +66,11 @@
             <header class="sales-summary business-floor__header" aria-label="営業中サマリー">
                 <div class="sales-summary__items business-floor__summary">
                     <span class="sales-summary__item sales-summary__item--estimated business-floor__summary-item business-floor__summary-item--sales">
-                        <strong>見込み売上</strong>
-                        <span data-business-estimated-sales-amount>@(Model.HasCurrentBusinessDay ? "取得中" : StoreUiText.Yen(0))</span>
+                        <strong>見込み総売上</strong>
+                        <span class="sales-summary__amount" aria-label="見込み総売上" data-business-estimated-sales-amount-container>
+                            <span data-business-estimated-sales-amount-mask hidden>**** 円</span>
+                            <span data-business-estimated-sales-amount>@(Model.HasCurrentBusinessDay ? "取得中" : StoreUiText.Yen(0))</span>
+                        </span>
                     </span>
                     <span class="sales-summary__item business-floor__summary-item">
                         <strong>未会計伝票</strong>
@@ -129,7 +132,7 @@
                         <div class="business-floor__toolbar-meta">
                             <label class="business-amount-toggle" data-slip-amount-toggle-container hidden>
                                 <span>会計表示</span>
-                                <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額を表示" />
+                                <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額と見込み総売上を表示" />
                             </label>
                         </div>
                         <div class="slip-list-section__statusbar">

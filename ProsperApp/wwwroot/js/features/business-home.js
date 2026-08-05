@@ -17,6 +17,7 @@
     const openSlipCount = document.querySelector('[data-business-open-slip-count]');
     const checkedOutSlipCount = document.querySelector('[data-business-checked-out-slip-count]');
     const estimatedSalesAmount = document.querySelector('[data-business-estimated-sales-amount]');
+    const estimatedSalesAmountMask = document.querySelector('[data-business-estimated-sales-amount-mask]');
     const slipFilterButtons = Array.from(form.querySelectorAll('[data-business-slip-filter]'));
     const detailModalElement = document.querySelector('[data-business-slip-detail-modal]');
     const detailModalTitle = detailModalElement?.querySelector('[data-business-slip-detail-title]');
@@ -394,6 +395,15 @@
     const setAmountVisible = (visible) => {
         document.body.classList.toggle('slip-amounts-visible', visible);
         if (amountToggle) amountToggle.checked = visible;
+        syncEstimatedSalesAmountVisibility();
+    };
+
+    const syncEstimatedSalesAmountVisibility = () => {
+        if (!estimatedSalesAmount || !estimatedSalesAmountMask) return;
+        const shouldUseToggle = Boolean(amountToggleContainer && !amountToggleContainer.hidden);
+        const visible = Boolean(amountToggle?.checked);
+        estimatedSalesAmount.hidden = shouldUseToggle && !visible;
+        estimatedSalesAmountMask.hidden = !shouldUseToggle || visible;
     };
 
     const buildElement = (tagName, className, text) => {
@@ -727,6 +737,7 @@
         setText(row.querySelector('[data-business-empty-title]'), title);
         setText(row.querySelector('[data-business-empty-message]'), message);
         if (amountToggleContainer) amountToggleContainer.hidden = true;
+        syncEstimatedSalesAmountVisibility();
     };
 
     const buildAmountElement = (slip) => {
@@ -1551,6 +1562,7 @@
             cardPeopleResizeObserver?.observe(personList);
         });
         if (amountToggleContainer) amountToggleContainer.hidden = openSlips.length + paidSlips.length === 0;
+        syncEstimatedSalesAmountVisibility();
         syncDetailModal();
     };
 

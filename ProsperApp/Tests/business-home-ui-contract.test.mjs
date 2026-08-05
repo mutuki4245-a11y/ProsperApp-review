@@ -63,8 +63,10 @@ assert.match(slipsCss, /\.business-slip-card__person--nomination\s*\{[^}]*backgr
 assert.match(slipsCss, /\.business-slip-card\.slip-list__row\s*\{[^}]*--business-slip-money-color:\s*#806000/s, '金色を金額専用の変数として持つこと');
 assert.match(slipsCss, /\.business-slip-card \.slip-list__amount\s*\{[^}]*color:\s*var\(--business-slip-money-color\)/s, '伝票金額だけに金額色を使うこと');
 assert.match(indexMarkup, /data-slip-amount-toggle-container[\s\S]*?type="checkbox"[\s\S]*?role="switch"[\s\S]*?data-slip-amount-toggle/, '会計表示はツールバー内のトグルスイッチにすること');
+assert.match(indexMarkup, /data-business-estimated-sales-amount-mask[\s\S]*?data-business-estimated-sales-amount/, '見込み総売上も会計表示トグルで伏せられる構造を持つこと');
 assert.equal(indexMarkup.includes('data-slip-amount-reveal'), false, '会計額表示の固定オーバーレイを置かないこと');
 assert.match(businessHomeSource, /amountToggle\?\.addEventListener\('change', \(\) => setAmountVisible\(amountToggle\.checked\)\)/, '会計表示トグルの状態を保持すること');
+assert.match(businessHomeSource, /syncEstimatedSalesAmountVisibility\(\)/, '会計表示トグル変更時に見込み総売上の表示も同期すること');
 assert.match(businessHomeSource, /activity\.append\(\s*hero,\s*customerSummary/s, '伝票サマリーを詳細モーダルの左カラム上側へ置くこと');
 assert.match(slipsCss, /\.business-slip-detail-layout\s*\{[^}]*grid-template-columns:\s*minmax\(20rem,\s*0\.85fr\) minmax\(32rem,\s*1\.35fr\)/s, '詳細モーダルは右側の明細幅を広く確保すること');
 assert.equal(businessHomeSource.includes('business-slip-detail-karaoke__amount'), false, 'カラオケ行に会計額を重複表示しないこと');
