@@ -55,6 +55,24 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   ["store.get_store_bootstrap", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
+    "store.get_management_master_snapshot",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_known_revision", type: "text", defaultValue: null },
+      ],
+    },
+  ],
+  [
+    "store.get_current_business_home_snapshot",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
+    "store.get_current_order_entry_candidates",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
     "store.get_business_day_daily_report",
     {
       result: "rows",
@@ -127,6 +145,29 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_status", type: "text" },
+      ],
+    },
+  ],
+  [
+    "store.get_current_receipt_work_queue",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
+    "store.advance_receipt_work_queue_v2",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_action", type: "text" },
+        { name: "p_work_item_token", type: "text" },
+        { name: "p_document_id", type: "text" },
+        { name: "p_payment_date", type: "date", defaultValue: null },
+        { name: "p_amount", type: "numeric", defaultValue: null },
+        { name: "p_account_subject", type: "text", defaultValue: null },
+        { name: "p_description", type: "text", defaultValue: null },
+        { name: "p_group_code", type: "text", defaultValue: null },
+        { name: "p_advance_cast_id", type: "bigint", defaultValue: null },
       ],
     },
   ],
@@ -248,6 +289,18 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.save_current_business_day_drink_delivery_amount_v2",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_business_date", type: "date" },
+        { name: "p_drink_delivery_amount", type: "numeric" },
+      ],
+    },
+  ],
+  [
     "store.save_business_day_closing_attendance",
     {
       result: "scalar",
@@ -279,6 +332,19 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_memo", type: "text" },
         { name: "p_pending_receipt_status", type: "text" },
         { name: "p_ignore_closing_requirements", type: "boolean" },
+      ],
+    },
+  ],
+  [
+    "store.close_current_business_day",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_memo", type: "text", defaultValue: null },
+        { name: "p_pending_receipt_status", type: "text", defaultValue: null },
+        { name: "p_ignore_closing_requirements", type: "boolean", defaultValue: false },
       ],
     },
   ],
@@ -457,6 +523,31 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_client_batch_id", type: "text" },
         { name: "p_operations", type: "jsonb" },
         { name: "p_karaoke_lines", type: "jsonb" },
+      ],
+    },
+  ],
+  [
+    "store.flush_current_business_home_changes",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_client_batch_id", type: "text" },
+        { name: "p_operations", type: "jsonb" },
+        { name: "p_karaoke_lines", type: "jsonb" },
+      ],
+    },
+  ],
+  [
+    "store.save_current_business_day_attendance_v2",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_business_date", type: "date" },
+        { name: "p_cast_entries", type: "jsonb" },
+        { name: "p_staff_entries", type: "jsonb" },
       ],
     },
   ],

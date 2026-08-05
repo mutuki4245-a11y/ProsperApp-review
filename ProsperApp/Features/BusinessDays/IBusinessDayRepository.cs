@@ -24,8 +24,18 @@ public interface IBusinessDayRepository
         IReadOnlyCollection<BusinessDayStaffAttendanceInput> attendanceEntries,
         CancellationToken ct);
 
+    Task<Result<CurrentBusinessDayAttendanceSaveOutput>> SaveCurrentAttendanceAsync(
+        CurrentBusinessDayAttendanceMutation input,
+        CancellationToken ct);
+
     Task<BusinessDayOperationResult> CloseAsync(
         long businessDayId,
+        string? memo,
+        bool ignoreClosingRequirements,
+        CancellationToken ct);
+
+    Task<BusinessDayOperationResult> CloseCurrentAsync(
+        long? expectedBusinessDayId,
         string? memo,
         bool ignoreClosingRequirements,
         CancellationToken ct);
@@ -39,6 +49,12 @@ public interface IBusinessDayRepository
     Task<Result<BusinessDayDrinkDeliveryStatus>> GetDrinkDeliveryStatusAsync(long businessDayId, CancellationToken ct);
 
     Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(long businessDayId, decimal amount, CancellationToken ct);
+
+    Task<Result<CurrentBusinessDayDrinkDeliverySaveOutput>> SaveCurrentDrinkDeliveryAmountAsync(
+        long? expectedBusinessDayId,
+        DateOnly businessDate,
+        decimal amount,
+        CancellationToken ct);
 
     Task<Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>> GetClosingAttendanceAsync(long businessDayId, CancellationToken ct);
 

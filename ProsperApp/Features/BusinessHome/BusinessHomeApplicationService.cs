@@ -121,25 +121,8 @@ public sealed class BusinessHomeApplicationService(
                 validation.ErrorMessage ?? "保存内容を確認してください。");
         }
 
-        var businessDayResult = await _businessDayRepository.GetCurrentAsync(ct);
-        if (!businessDayResult.Succeeded)
-        {
-            return Result<BusinessHomeFlushOutput>.Failure(
-                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
-                businessDayResult.ErrorMessage ?? "現在営業日を取得できませんでした。");
-        }
-
-        var businessDay = businessDayResult.Value;
-        if (businessDay is null)
-        {
-            return Result<BusinessHomeFlushOutput>.Failure(
-                ResultFailureKind.Conflict,
-                "営業中の営業日がありません。");
-        }
-
         var result = await _slipRepository.FlushBusinessHomeChangesAsync(
             input,
-            businessDay.BusinessDayId,
             ct);
         return result.Succeeded
             ? Result<BusinessHomeFlushOutput>.Success(

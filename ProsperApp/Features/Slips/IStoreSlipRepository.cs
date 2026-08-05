@@ -16,7 +16,7 @@ public interface IStoreSlipRepository
 
     Task<Result<CurrentBusinessHomeSnapshotResult>> GetCurrentBusinessHomeSnapshotAsync(CancellationToken ct);
 
-    Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(BusinessHomeChangeFlushInput input, long businessDayId, CancellationToken ct);
+    Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(BusinessHomeChangeFlushInput input, CancellationToken ct);
 
     Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct);
 }

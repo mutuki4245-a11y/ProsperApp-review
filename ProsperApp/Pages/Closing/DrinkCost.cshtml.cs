@@ -46,19 +46,6 @@ public class ClosingDrinkCostModel(
             return NotFound();
         }
 
-        await LoadAsync(cancellationToken, preserveInput: true);
-        if (LoadStatus is { Succeeded: false })
-        {
-            ModelState.AddModelError(string.Empty, "必要な情報を取得できないため納品額を保存できません。再試行してください。");
-            return Page();
-        }
-
-        if (CurrentBusinessDay is not null && Input.BusinessDayId != CurrentBusinessDay.BusinessDayId)
-        {
-            ModelState.AddModelError(string.Empty, "営業日情報が更新されています。画面を再読み込みしてください。");
-            return Page();
-        }
-
         if (decimal.Truncate(Input.DrinkDeliveryAmount) != Input.DrinkDeliveryAmount)
         {
             ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.DrinkDeliveryAmount)}", "納品額は1円単位で入力してください。");
@@ -66,34 +53,24 @@ public class ClosingDrinkCostModel(
 
         if (!ModelState.IsValid)
         {
+            await LoadAsync(cancellationToken, preserveInput: true);
             return Page();
         }
 
-        if (CurrentBusinessDay is null)
-        {
-            var ensureResult = await _businessDayRepository.EnsureCurrentAsync(cancellationToken);
-            if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
-            {
-                ModelState.AddModelError(string.Empty, ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
-                return Page();
-            }
-
-            CurrentBusinessDay = ensureResult.BusinessDay;
-            Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;
-        }
-
-        var result = await _businessDayRepository.SaveDrinkDeliveryAmountAsync(
-            CurrentBusinessDay.BusinessDayId,
+        var result = await _businessDayRepository.SaveCurrentDrinkDeliveryAmountAsync(
+            Input.BusinessDayId,
+            _storeClock.GetCurrentBusinessDate(),
             Input.DrinkDeliveryAmount,
             cancellationToken);
 
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "納品額を保存できませんでした。");
+            await LoadAsync(cancellationToken, preserveInput: true);
             return Page();
         }
 
-        TempData["SuccessMessage"] = $"納品額 {StoreUiText.Yen(result.Amount)}を保存しました。";
+        TempData["SuccessMessage"] = $"納品額 {StoreUiText.Yen(result.Value.Amount)}を保存しました。";
         return RedirectToPage("/Closing/Index");
     }
 

@@ -280,7 +280,6 @@ public class SupabaseStoreSlipRepository(
 
     public async Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(
         BusinessHomeChangeFlushInput input,
-        long businessDayId,
         CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -288,18 +287,17 @@ public class SupabaseStoreSlipRepository(
             return BusinessHomeChangeFlushResult.Failed("Supabase Edge Function設定が未設定です。営業中の変更を保存できません。");
         }
 
-        if (businessDayId <= 0 || string.IsNullOrWhiteSpace(input.BatchId) || input.BatchId.Length > 100 ||
+        if (string.IsNullOrWhiteSpace(input.BatchId) || input.BatchId.Length > 100 ||
             input.Operations.Count > 100 || input.KaraokeLines.Count > 100)
         {
             return BusinessHomeChangeFlushResult.Failed("保存内容を確認してください。");
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "store.flush_business_home_changes",
+            "store.flush_current_business_home_changes",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId,
                 p_client_batch_id = input.BatchId,
                 p_operations = input.Operations.Select(operation => new
                 {

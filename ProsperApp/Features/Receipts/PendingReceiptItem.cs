@@ -10,4 +10,5 @@ public class PendingReceiptItem
     public string? PreviewUrl { get; init; }
     public DateOnly? PaymentDate { get; init; }
     public decimal? Amount { get; init; }
+    public string WorkItemToken { get; init; } = string.Empty;
 }

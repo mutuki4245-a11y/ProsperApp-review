@@ -35,6 +35,11 @@ public class BusinessDayDrinkDeliveryStatus
     public bool IsEntered { get; init; }
 }
 
+public sealed record CurrentBusinessDayDrinkDeliverySaveOutput(
+    StoreBusinessDay BusinessDay,
+    decimal Amount,
+    bool IsEntered);
+
 public class BusinessDayEnsureResult
 {
     public bool Succeeded { get; init; }
@@ -247,3 +252,21 @@ public class BusinessDayAttendanceSaveResult
         return new BusinessDayAttendanceSaveResult { Succeeded = false, ErrorMessage = message };
     }
 }
+
+public sealed record CurrentBusinessDayAttendanceMutation(
+    long? ExpectedBusinessDayId,
+    DateOnly BusinessDate,
+    IReadOnlyCollection<CurrentBusinessDayAttendanceEntry> CastEntries,
+    IReadOnlyCollection<CurrentBusinessDayAttendanceEntry> StaffEntries);
+
+public sealed record CurrentBusinessDayAttendanceEntry(
+    long PersonId,
+    bool IsSelected,
+    string ClockInTime,
+    string? ClockOutTime,
+    bool UsesSendService);
+
+public sealed record CurrentBusinessDayAttendanceSaveOutput(
+    StoreBusinessDay BusinessDay,
+    IReadOnlyList<BusinessDayClosingAttendanceItem> Attendance,
+    int SavedClockOutCount);

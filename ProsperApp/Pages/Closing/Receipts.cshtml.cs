@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Text.Json;
 using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
@@ -10,8 +11,7 @@ public class ReceiptsModel(
     IDriveFileService driveFileService,
     IGoogleDriveAuthService googleDriveAuthService,
     IFeatureGate featureGate,
-    IStoreClock storeClock,
-    IBusinessDayRepository businessDayRepository) : PageModel
+    IStoreClock storeClock) : PageModel
 {
     private const string CastAdvanceAccountSubject = "前渡金: キャスト";
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
@@ -19,7 +19,7 @@ public class ReceiptsModel(
     private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreClock _storeClock = storeClock;
-    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
+    private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
 
     [BindProperty]
     public QuickEntryInputModel Input { get; set; } = new();
@@ -127,19 +127,77 @@ public class ReceiptsModel(
             return NotFound();
         }
 
-        var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
-        if (!pendingResult.Succeeded)
+        var queueResult = await _receiptRepository.GetCurrentWorkQueueAsync(cancellationToken);
+        if (!queueResult.Succeeded)
         {
-            ApplyPendingFailure(pendingResult);
+            ApplyWorkQueueFailure(queueResult);
             return Page();
         }
 
-        if (Index + 1 >= pendingResult.Value.Count)
+        if (Index + 1 >= queueResult.Value.Items.Count)
         {
             return RedirectToPage("/Closing/Index");
         }
 
         return RedirectToPage(new { index = Index + 1 });
+    }
+
+    public async Task<IActionResult> OnPostQueueAdvanceAsync(CancellationToken cancellationToken)
+    {
+        if (!IsReceiptsEnabled())
+        {
+            return NotFound();
+        }
+
+        if (!Request.HasJsonContentType())
+        {
+            return BadRequest(new { succeeded = false, message = "送信内容を確認してください。" });
+        }
+
+        ReceiptWorkQueueAdvanceInput? input;
+        try
+        {
+            input = await JsonSerializer.DeserializeAsync<ReceiptWorkQueueAdvanceInput>(
+                Request.Body,
+                RequestJsonOptions,
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            input = null;
+        }
+
+        if (input is null || string.IsNullOrWhiteSpace(input.OperationId) ||
+            string.IsNullOrWhiteSpace(input.Action) || string.IsNullOrWhiteSpace(input.DocumentId) ||
+            string.IsNullOrWhiteSpace(input.WorkItemToken))
+        {
+            return BadRequest(new { succeeded = false, message = "送信内容を確認してください。" });
+        }
+
+        if (string.Equals(input.Action, "save", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(input.AccountSubject) &&
+            !AllowedAccountSubjects.Contains(input.AccountSubject.Trim()))
+        {
+            return BadRequest(new { succeeded = false, message = "科目は画面の一覧から選択してください。" });
+        }
+
+        var result = await _receiptRepository.AdvanceWorkQueueAsync(input, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                message = result.ErrorMessage ?? "領収書を保存できませんでした。"
+            });
+        }
+
+        return new JsonResult(new
+        {
+            succeeded = true,
+            status = result.Value.Status,
+            documentId = result.Value.DocumentId,
+            message = result.Value.Message
+        });
     }
 
     public async Task<IActionResult> OnPostDeleteScanMistakeAsync(CancellationToken cancellationToken)
@@ -177,34 +235,35 @@ public class ReceiptsModel(
 
     private async Task<IActionResult> RedirectAfterReceiptChangeAsync(int requestedIndex, CancellationToken cancellationToken)
     {
-        var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
-        if (!pendingResult.Succeeded)
+        var queueResult = await _receiptRepository.GetCurrentWorkQueueAsync(cancellationToken);
+        if (!queueResult.Succeeded)
         {
-            ApplyPendingFailure(pendingResult);
+            ApplyWorkQueueFailure(queueResult);
             return Page();
         }
 
-        if (pendingResult.Value.Count == 0)
+        if (queueResult.Value.Items.Count == 0)
         {
             return RedirectToPage("/Closing/Index");
         }
 
-        var nextIndex = Math.Clamp(requestedIndex, 0, pendingResult.Value.Count - 1);
+        var nextIndex = Math.Clamp(requestedIndex, 0, queueResult.Value.Items.Count - 1);
         return RedirectToPage(new { index = nextIndex });
     }
 
     private async Task LoadCurrentAsync(int requestedIndex, CancellationToken cancellationToken)
     {
-        await LoadBusinessDayContextAsync(cancellationToken);
-
-        var pendingResult = await _receiptRepository.GetPendingResultAsync(cancellationToken);
-        PendingReceipts = pendingResult.Succeeded ? pendingResult.Value : [];
-        PendingReceiptsLoadError = pendingResult.Succeeded ? null : pendingResult.ErrorMessage;
-        PendingReceiptsLoadStatus = pendingResult.Succeeded
+        var queueResult = await _receiptRepository.GetCurrentWorkQueueAsync(cancellationToken);
+        PendingReceipts = queueResult.Succeeded ? queueResult.Value.Items : [];
+        PendingReceiptsLoadError = queueResult.Succeeded ? null : queueResult.ErrorMessage;
+        PendingReceiptsLoadStatus = queueResult.Succeeded
             ? PageLoadStatus.Success(_storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()))
             : PageLoadStatus.Failure(
-                pendingResult.FailureKind ?? ResultFailureKind.Unavailable,
-                pendingResult.ErrorMessage ?? "未処理領収書を取得できませんでした。");
+                queueResult.FailureKind ?? ResultFailureKind.Unavailable,
+                queueResult.ErrorMessage ?? "領収書作業キューを取得できませんでした。");
+        CurrentBusinessDay = queueResult.Succeeded ? queueResult.Value.BusinessDay : null;
+        AdvanceCastOptions = queueResult.Succeeded ? queueResult.Value.AdvanceCastOptions : [];
+        BusinessDayLoadError = null;
         if (PendingReceipts.Count == 0)
         {
             CurrentReceipt = null;
@@ -233,50 +292,12 @@ public class ReceiptsModel(
         }
     }
 
-    private async Task LoadBusinessDayContextAsync(CancellationToken cancellationToken)
-    {
-        var businessDayResult = await _businessDayRepository.GetCurrentAsync(
-            cancellationToken,
-            forceRefresh: true);
-        if (!businessDayResult.Succeeded)
-        {
-            CurrentBusinessDay = null;
-            AdvanceCastOptions = [];
-            BusinessDayLoadError = businessDayResult.ErrorMessage ?? "営業日を取得できませんでした。";
-            return;
-        }
-
-        CurrentBusinessDay = businessDayResult.Value;
-        BusinessDayLoadError = null;
-        if (CurrentBusinessDay is null)
-        {
-            AdvanceCastOptions = [];
-            return;
-        }
-
-        var attendanceResult = await _businessDayRepository.GetClosingAttendanceAsync(
-            CurrentBusinessDay.BusinessDayId,
-            cancellationToken);
-        if (!attendanceResult.Succeeded)
-        {
-            AdvanceCastOptions = [];
-            BusinessDayLoadError = attendanceResult.ErrorMessage ?? "出勤キャストを取得できませんでした。";
-            return;
-        }
-
-        AdvanceCastOptions = attendanceResult.Value
-            .Where(item => item.AttendanceStatus is "scheduled" or "checked_in" or "checked_out")
-            .Where(item => item.IsCast)
-            .OrderBy(item => item.DisplayName, StringComparer.CurrentCulture)
-            .ToList();
-    }
-
-    private void ApplyPendingFailure(Result<IReadOnlyList<PendingReceiptItem>> result)
+    private void ApplyWorkQueueFailure(Result<ReceiptWorkQueue> result)
     {
         PendingReceipts = [];
         CurrentReceipt = null;
         CurrentIndex = 0;
-        PendingReceiptsLoadError = result.ErrorMessage ?? "未処理領収書を取得できませんでした。";
+        PendingReceiptsLoadError = result.ErrorMessage ?? "領収書作業キューを取得できませんでした。";
         PendingReceiptsLoadStatus = PageLoadStatus.Failure(
             result.FailureKind ?? ResultFailureKind.Unavailable,
             PendingReceiptsLoadError);

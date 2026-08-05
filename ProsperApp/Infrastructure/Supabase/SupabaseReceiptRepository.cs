@@ -57,6 +57,95 @@ public class SupabaseReceiptRepository(
         return Result<IReadOnlyList<PendingReceiptItem>>.Success(pending);
     }
 
+    public async Task<Result<ReceiptWorkQueue>> GetCurrentWorkQueueAsync(CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<ReceiptWorkQueue>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。領収書作業キューを取得できません。");
+        }
+
+        var result = await PostRpcArrayResultAsync(
+            "store.get_current_receipt_work_queue",
+            new { p_department_id = CurrentStoreDepartmentId },
+            ct);
+        if (!result.Succeeded || result.Value.Count == 0)
+        {
+            return Result<ReceiptWorkQueue>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                ToFriendlyError(result.ErrorMessage));
+        }
+
+        var row = result.Value[0];
+        var businessDay = row.TryGetProperty("business_day", out var businessDayJson) &&
+                          businessDayJson.ValueKind == JsonValueKind.Object
+            ? ParseBusinessDay(businessDayJson)
+            : null;
+        var items = row.TryGetProperty("receipts", out var receiptsJson) &&
+                    receiptsJson.ValueKind == JsonValueKind.Array
+            ? ParsePendingItems(receiptsJson.EnumerateArray().ToArray())
+            : [];
+        var advanceCastOptions = row.TryGetProperty("advance_casts", out var castsJson) &&
+                                 castsJson.ValueKind == JsonValueKind.Array
+            ? castsJson.EnumerateArray()
+                .Select(ParseClosingAttendanceItem)
+                .Where(item => item.IsCast && item.AttendanceStatus is "scheduled" or "checked_in" or "checked_out")
+                .OrderBy(item => item.DisplayName, StringComparer.CurrentCulture)
+                .ToList()
+            : [];
+
+        return Result<ReceiptWorkQueue>.Success(new ReceiptWorkQueue(
+            ReadString(row, "queue_revision") ?? string.Empty,
+            businessDay,
+            items,
+            advanceCastOptions));
+    }
+
+    public async Task<Result<ReceiptWorkQueueAdvanceResult>> AdvanceWorkQueueAsync(
+        ReceiptWorkQueueAdvanceInput input,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<ReceiptWorkQueueAdvanceResult>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。領収書を更新できません。");
+        }
+
+        var result = await PostRpcArrayResultAsync(
+            "store.advance_receipt_work_queue_v2",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_operation_id = input.OperationId,
+                p_action = input.Action,
+                p_work_item_token = input.WorkItemToken,
+                p_document_id = input.DocumentId,
+                p_payment_date = input.PaymentDate,
+                p_amount = input.Amount,
+                p_account_subject = input.AccountSubject?.Trim(),
+                p_description = input.Description?.Trim(),
+                p_group_code = input.GroupCode?.Trim(),
+                p_advance_cast_id = input.AdvanceCastId
+            },
+            ct);
+        if (!result.Succeeded || result.Value.Count == 0 ||
+            !result.Value[0].TryGetProperty("response", out var response) ||
+            response.ValueKind != JsonValueKind.Object)
+        {
+            return Result<ReceiptWorkQueueAdvanceResult>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                ToFriendlyError(result.ErrorMessage));
+        }
+
+        var output = new ReceiptWorkQueueAdvanceResult(
+            ReadString(response, "status") ?? "unavailable",
+            ReadString(response, "document_id"),
+            ReadString(response, "message"));
+        return Result<ReceiptWorkQueueAdvanceResult>.Success(output);
+    }
+
     public async Task<Result<bool>> IsPendingDriveFileAllowedAsync(string driveFileId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(driveFileId))
@@ -185,7 +274,8 @@ public class SupabaseReceiptRepository(
                 DriveFileId = ReadString(item, "drive_file_id"),
                 PreviewUrl = BuildPreviewUrl(ReadString(item, "drive_file_id")),
                 PaymentDate = ReadDateOnly(item, "document_date"),
-                Amount = ReadDecimal(item, "amount")
+                Amount = ReadDecimal(item, "amount"),
+                WorkItemToken = ReadString(item, "work_item_token") ?? string.Empty
             })
             .Where(x => !string.IsNullOrWhiteSpace(x.Id))
             .ToList();
@@ -223,6 +313,43 @@ public class SupabaseReceiptRepository(
             : Result<long?>.Failure(
                 ResultFailureKind.InvalidResponse,
                 "店舗の会社IDが正しくありません。");
+    }
+
+    private static StoreBusinessDay ParseBusinessDay(JsonElement row)
+    {
+        return new StoreBusinessDay
+        {
+            BusinessDayId = ReadLong(row, "business_day_id") ?? 0,
+            CompanyId = ReadLong(row, "company_id") ?? 0,
+            DepartmentId = ReadLong(row, "department_id") ?? 0,
+            BusinessDate = ReadDateOnly(row, "business_date") ?? DateOnly.MinValue,
+            OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
+            ClosedAt = ReadDateTimeOffset(row, "closed_at"),
+            Status = ReadString(row, "status") ?? string.Empty,
+            Memo = ReadString(row, "memo")
+        };
+    }
+
+    private static BusinessDayClosingAttendanceItem ParseClosingAttendanceItem(JsonElement row)
+    {
+        var castId = ReadLong(row, "cast_id") ?? 0;
+        var staffId = ReadLong(row, "staff_id") ?? 0;
+        var personType = AttendancePersonTypes.Normalize(ReadString(row, "person_type") ??
+            (staffId > 0 ? AttendancePersonTypes.Staff : AttendancePersonTypes.Cast));
+        return new BusinessDayClosingAttendanceItem
+        {
+            AttendanceId = ReadLong(row, "attendance_id") ?? 0,
+            PersonType = personType,
+            PersonId = ReadLong(row, "person_id") ?? (personType == AttendancePersonTypes.Staff ? staffId : castId),
+            CastId = castId,
+            StaffId = staffId,
+            DisplayName = ReadString(row, "display_name") ?? string.Empty,
+            DepartmentName = ReadString(row, "department_name"),
+            AttendanceStatus = ReadString(row, "attendance_status") ?? string.Empty,
+            ClockInAt = ReadDateTimeOffset(row, "clock_in_at"),
+            ClockOutAt = ReadDateTimeOffset(row, "clock_out_at"),
+            UsesSendService = ReadBool(row, "uses_send_service") ?? false
+        };
     }
 
     private static DocumentJournalSavePayload BuildJournalPayload(

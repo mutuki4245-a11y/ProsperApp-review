@@ -99,163 +99,45 @@ public sealed class AttendanceApplicationService(
         ClosingAttendanceInputModel input,
         CancellationToken ct)
     {
-        var businessDayResult = await _businessDayRepository.GetCurrentAsync(ct, forceRefresh: true);
-        if (!businessDayResult.Succeeded)
-        {
-            return Result<AttendanceSaveOutput>.Failure(
-                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
-                businessDayResult.ErrorMessage ?? "現在営業日を確認できませんでした。");
-        }
-
-        var businessDay = businessDayResult.Value;
-        if (businessDay is not null &&
-            input.BusinessDayId is { } postedBusinessDayId &&
-            postedBusinessDayId != businessDay.BusinessDayId)
-        {
-            return Result<AttendanceSaveOutput>.Failure(
-                ResultFailureKind.Conflict,
-                "営業日情報が更新されています。画面を再読み込みしてください。");
-        }
-
-        if (businessDay is null)
-        {
-            var ensureResult = await _businessDayRepository.EnsureCurrentAsync(ct);
-            if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
-            {
-                return Result<AttendanceSaveOutput>.Failure(
-                    ResultFailureKind.Unavailable,
-                    ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
-            }
-
-            businessDay = ensureResult.BusinessDay;
-        }
-
-        var attendanceEntries = input.Entries
+        var castEntries = input.Entries
             .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Cast)
             .Where(x => x.CastId > 0 && (x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime))))
-            .Select(x => new BusinessDayAttendanceInput
-            {
-                CastId = x.CastId,
-                IsSelected = x.IsSelected,
-                ClockInTime = x.ClockInTime?.Trim() ?? string.Empty
-            })
+            .Select(x => new CurrentBusinessDayAttendanceEntry(
+                x.CastId,
+                x.IsSelected,
+                x.ClockInTime?.Trim() ?? string.Empty,
+                x.ClockOutTime?.Trim(),
+                x.UsesSendService))
             .ToArray();
-
-        if (attendanceEntries.Length > 0)
-        {
-            var attendanceResult = await _businessDayRepository.SaveAttendanceAsync(
-                businessDay.BusinessDayId,
-                attendanceEntries,
-                ct);
-            if (!attendanceResult.Succeeded)
-            {
-                return Result<AttendanceSaveOutput>.Failure(
-                    ResultFailureKind.Unavailable,
-                    attendanceResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
-            }
-        }
-
-        var staffAttendanceEntries = input.Entries
+        var staffEntries = input.Entries
             .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Staff)
             .Where(x => x.StaffId > 0 && (x.IsSelected || (x.IsRegistered && !string.IsNullOrWhiteSpace(x.ClockInTime))))
-            .Select(x => new BusinessDayStaffAttendanceInput
-            {
-                StaffId = x.StaffId,
-                IsSelected = x.IsSelected,
-                ClockInTime = x.ClockInTime?.Trim() ?? string.Empty
-            })
+            .Select(x => new CurrentBusinessDayAttendanceEntry(
+                x.StaffId,
+                x.IsSelected,
+                x.ClockInTime?.Trim() ?? string.Empty,
+                x.ClockOutTime?.Trim(),
+                x.UsesSendService))
             .ToArray();
 
-        if (staffAttendanceEntries.Length > 0)
-        {
-            var staffAttendanceResult = await _businessDayRepository.SaveStaffAttendanceAsync(
-                businessDay.BusinessDayId,
-                staffAttendanceEntries,
-                ct);
-            if (!staffAttendanceResult.Succeeded)
-            {
-                return Result<AttendanceSaveOutput>.Failure(
-                    ResultFailureKind.Unavailable,
-                    staffAttendanceResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
-            }
-        }
-
-        var savedAttendance = await _businessDayRepository.GetClosingAttendanceAsync(
-            businessDay.BusinessDayId,
+        var result = await _businessDayRepository.SaveCurrentAttendanceAsync(
+            new CurrentBusinessDayAttendanceMutation(
+                input.BusinessDayId,
+                _storeClock.GetCurrentBusinessDate(),
+                castEntries,
+                staffEntries),
             ct);
-        if (!savedAttendance.Succeeded)
+        if (!result.Succeeded)
         {
             return Result<AttendanceSaveOutput>.Failure(
-                savedAttendance.FailureKind ?? ResultFailureKind.Unavailable,
-                savedAttendance.ErrorMessage ?? "保存後の勤怠入力を取得できませんでした。");
-        }
-
-        var attendanceIdByPersonKey = savedAttendance.Value
-            .Where(x => x.PersonId > 0)
-            .GroupBy(x => x.PersonKey)
-            .ToDictionary(x => x.Key, x => x.Last().AttendanceId);
-        var clockOutEntries = input.Entries
-            .Where(x => x.IsSelected && !string.IsNullOrWhiteSpace(x.ClockOutTime))
-            .Select(x =>
-            {
-                attendanceIdByPersonKey.TryGetValue(AttendancePersonKey.Create(x), out var attendanceId);
-                return new BusinessDayClosingAttendanceInput
-                {
-                    AttendanceId = attendanceId,
-                    PersonType = AttendancePersonTypes.Normalize(x.PersonType),
-                    DisplayName = x.DisplayName,
-                    DepartmentName = x.DepartmentName,
-                    ClockInTime = x.ClockInTime?.Trim(),
-                    ClockOutTime = x.ClockOutTime?.Trim(),
-                    UsesSendService = x.UsesSendService
-                };
-            })
-            .Where(x => x.AttendanceId > 0)
-            .ToArray();
-
-        var savedClockOutCount = 0;
-        var castClockOutEntries = clockOutEntries
-            .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Cast)
-            .ToArray();
-        if (castClockOutEntries.Length > 0)
-        {
-            var closingResult = await _businessDayRepository.SaveClosingAttendanceAsync(
-                businessDay.BusinessDayId,
-                castClockOutEntries,
-                ct);
-            if (!closingResult.Succeeded)
-            {
-                return Result<AttendanceSaveOutput>.Failure(
-                    ResultFailureKind.Unavailable,
-                    closingResult.ErrorMessage ?? "退勤時刻を保存できませんでした。");
-            }
-
-            savedClockOutCount += closingResult.SavedCount;
-        }
-
-        var staffClockOutEntries = clockOutEntries
-            .Where(x => AttendancePersonTypes.Normalize(x.PersonType) == AttendancePersonTypes.Staff)
-            .ToArray();
-        if (staffClockOutEntries.Length > 0)
-        {
-            var closingResult = await _businessDayRepository.SaveStaffClosingAttendanceAsync(
-                businessDay.BusinessDayId,
-                staffClockOutEntries,
-                ct);
-            if (!closingResult.Succeeded)
-            {
-                return Result<AttendanceSaveOutput>.Failure(
-                    ResultFailureKind.Unavailable,
-                    closingResult.ErrorMessage ?? "退勤時刻を保存できませんでした。");
-            }
-
-            savedClockOutCount += closingResult.SavedCount;
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "勤怠入力を保存できませんでした。");
         }
 
         return Result<AttendanceSaveOutput>.Success(new AttendanceSaveOutput(
-            businessDay,
+            result.Value.BusinessDay,
             input.Entries.Count(x => x.IsSelected),
-            savedClockOutCount));
+            result.Value.SavedClockOutCount));
     }
 
     private ClosingAttendanceInputModel RebuildInput(

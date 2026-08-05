@@ -54,52 +54,8 @@ public sealed class ClosingApplicationService(
         bool ignoreClosingRequirements,
         CancellationToken ct)
     {
-        var businessDayResult = await _businessDayRepository.GetCurrentAsync(ct, forceRefresh: true);
-        if (!businessDayResult.Succeeded)
-        {
-            return Result<StoreBusinessDay>.Failure(
-                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
-                businessDayResult.ErrorMessage ?? "現在営業日を取得できませんでした。");
-        }
-
-        var businessDay = businessDayResult.Value;
-        if (businessDay is null)
-        {
-            return Result<StoreBusinessDay>.Failure(
-                ResultFailureKind.Conflict,
-                "営業中の営業日がありません。");
-        }
-
-        if (submittedBusinessDayId != businessDay.BusinessDayId)
-        {
-            return Result<StoreBusinessDay>.Failure(
-                ResultFailureKind.Conflict,
-                "営業日情報が更新されています。画面を再読み込みしてください。");
-        }
-
-        if (!ignoreClosingRequirements)
-        {
-            var readinessResult = await _businessDayRepository.GetClosingReadinessAsync(
-                businessDay,
-                ct);
-            if (!readinessResult.Succeeded)
-            {
-                return Result<StoreBusinessDay>.Failure(
-                    readinessResult.FailureKind ?? ResultFailureKind.Unavailable,
-                    readinessResult.ErrorMessage ?? "締め条件を取得できませんでした。");
-            }
-
-            var readiness = readinessResult.Value;
-            if (!readiness.CanClose)
-            {
-                return Result<StoreBusinessDay>.Failure(
-                    ResultFailureKind.Conflict,
-                    string.Join(Environment.NewLine, readiness.BlockReasons));
-            }
-        }
-
-        var closeResult = await _businessDayRepository.CloseAsync(
-            businessDay.BusinessDayId,
+        var closeResult = await _businessDayRepository.CloseCurrentAsync(
+            submittedBusinessDayId,
             memo,
             ignoreClosingRequirements,
             ct);

@@ -2,6 +2,19 @@
 
 この文書は、画面操作別のRPC棚卸しを順にレビューしながら、合意した同期方針を記録する作業文書である。実装・SQL適用・コミットは、この文書の採否が確定するまで行わない。
 
+## 実装反映状況（2026-08-06）
+
+採用済みのうち、次を実装済みとしてこのリリースに含める。
+
+- 共通のbrowser `SyncStore`、管理master snapshot、営業中トップのcurrent snapshot、注文候補のcurrent read model。
+- 営業中編集の`flush`前に行っていたcurrent business day読取の廃止。`flush_current_business_home_changes`が同一RPC内で営業日を解決し、既存のbatch冪等性・snapshot応答を維持する。
+- 勤怠保存の現在営業日確認/作成、キャスト・スタッフの出退勤保存、確定勤怠返却を`save_current_business_day_attendance_v2`の1 transactionへ集約する。
+- 営業日締めのcurrent/readiness事前読取を廃止し、`close_current_business_day`のDB内検証・状態変更1 RPCへ集約する。
+- 納品額保存の営業日読取/作成を廃止し、`save_current_business_day_drink_delivery_amount_v2`の1 mutationへ集約する。
+- 領収書の初期読取を`get_current_receipt_work_queue`の1 RPCへ集約し、`advance_receipt_work_queue_v2`で保存・スキャンミス除外を`operation_id`付きで直列送信する。browserはlocalStorage outboxへ積んで次票を即時表示し、成否不明の通信失敗では同じ先頭commandを再送する。
+
+以下は設計を確定済みだが、この変更セットでは未移行である。注文登録のmutation応答による画面再構成、会計/締め/納品額/キャスト売上額調整/ドリンクバック調整のv2 mutation、管理画面のbrowser shell表示とmaster delta、領収書のfailed command再編集UIである。旧handlerをこれらの機能が未移行のまま削除しない。
+
 ## 0. 横断実装契約
 
 以下を全画面の共通前提として固定する。この節に反する画面固有の記述は、この節を優先する。

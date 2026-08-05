@@ -1,5 +1,6 @@
 ﻿@page
 @model ReceiptsModel
+@using System.Text.Json
 @{
     ViewData["Title"] = "領収書簡易入力";
 }
@@ -10,9 +11,9 @@
             <h1>領収書簡易入力</h1>
             @if (Model.CurrentReceipt is not null)
             {
-                <div class="tablet-entry__meta">
-                    @Model.CurrentPosition / @Model.TotalCount
-                    <span>@Model.CurrentReceipt.FileName</span>
+                <div class="tablet-entry__meta" data-receipt-queue-meta>
+                    <span data-receipt-queue-position>@Model.CurrentPosition / @Model.TotalCount</span>
+                    <span data-receipt-queue-file-name>@Model.CurrentReceipt.FileName</span>
                 </div>
             }
         </div>
@@ -37,6 +38,7 @@
         </div>
     }
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="alert alert-info d-none" role="status" data-receipt-queue-status></div>
 
     @if (!string.IsNullOrWhiteSpace(Model.PendingReceiptsLoadError))
     {
@@ -62,30 +64,33 @@
             <div class="tablet-entry__workspace">
                 <section class="tablet-entry__preview" aria-label="証憑プレビュー">
                     <div class="preview-toolbar">
-                        <span>@Model.CurrentReceipt.FileName</span>
+                        <span data-receipt-queue-preview-file-name>@Model.CurrentReceipt.FileName</span>
                         @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
                         {
                             <a class="btn btn-sm btn-outline-secondary"
+                               data-receipt-queue-preview-link
                                href="@Model.CurrentReceipt.PreviewUrl"
                                target="_blank"
                                rel="noopener noreferrer">別タブで開く</a>
                         }
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
-                    {
-                        <iframe id="receiptPreview"
-                                src="@(Model.CurrentReceipt.PreviewUrl)#toolbar=0&navpanes=0&view=Fit&zoom=page-fit"
-                                title="証憑プレビュー"></iframe>
-                    }
-                    else
-                    {
-                        <div class="preview-empty">プレビューできるファイルがありません。</div>
-                    }
+                    <div data-receipt-queue-preview>
+                        @if (!string.IsNullOrWhiteSpace(Model.CurrentReceipt.PreviewUrl))
+                        {
+                            <iframe id="receiptPreview"
+                                    src="@(Model.CurrentReceipt.PreviewUrl)#toolbar=0&navpanes=0&view=Fit&zoom=page-fit"
+                                    title="証憑プレビュー"></iframe>
+                        }
+                        else
+                        {
+                            <div class="preview-empty">プレビューできるファイルがありません。</div>
+                        }
+                    </div>
                 </section>
 
                 <section class="tablet-entry__form" aria-label="簡易入力フォーム">
-                    <form method="post" asp-page-handler="Next">
+                    <form method="post" asp-page-handler="Next" data-receipt-work-queue-form>
                         <input type="hidden" asp-for="Index" />
                         <input type="hidden" asp-for="Input.DocumentId" value="@Model.CurrentReceipt.Id" />
                         <input type="hidden" asp-for="Input.DriveFileId" value="@Model.CurrentReceipt.DriveFileId" />
@@ -202,17 +207,19 @@
                         </div>
 
                         <div class="tablet-entry__actions">
-                            <button type="submit" class="btn btn-primary btn-lg">保存して次へ</button>
+                            <button type="submit" class="btn btn-primary btn-lg" data-receipt-queue-action="save">保存して次へ</button>
                             <button type="submit"
                                     class="btn btn-outline-secondary btn-lg"
                                     formmethod="post"
                                     asp-page-handler="Skip"
-                                    formnovalidate>スキップ</button>
+                                    formnovalidate
+                                    data-receipt-queue-action="skip">スキップ</button>
                             <button type="submit"
                                     class="btn btn-outline-danger btn-lg tablet-entry__delete"
                                     formmethod="post"
                                     asp-page-handler="DeleteScanMistake"
                                     formnovalidate
+                                    data-receipt-queue-action="exclude_scan_mistake"
                                     onclick="return confirm('スキャンミスとしてDB上で対象外にします。実行しますか？');">
                                 スキャンミスとして対象外
                             </button>
@@ -226,6 +233,26 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        window.prosperReceiptWorkQueue = {
+            enabled: @(ViewData.ModelState.IsValid ? "true" : "false"),
+            advanceUrl: '@Url.Page("/Closing/Receipts", "QueueAdvance")',
+            currentIndex: @Model.CurrentPosition - 1,
+            totalCount: @Model.TotalCount,
+            businessDayId: @(Model.CurrentBusinessDay?.BusinessDayId ?? 0),
+            items: @Html.Raw(JsonSerializer.Serialize(Model.PendingReceipts.Select(item => new
+            {
+                id = item.Id,
+                fileName = item.FileName,
+                driveFileId = item.DriveFileId,
+                previewUrl = item.PreviewUrl,
+                paymentDate = item.PaymentDate?.ToString("yyyy-MM-dd"),
+                amount = item.Amount,
+                workItemToken = item.WorkItemToken
+            })))
+        };
+    </script>
+    <script src="~/js/features/receipt-work-queue.js" asp-append-version="true"></script>
     <script>
         (() => {
             const input = document.getElementById('accountSubjectInput');
