@@ -146,6 +146,17 @@
         })();
     </script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/sync-store.js" asp-append-version="true"></script>
+    @if (isManagementActive)
+    {
+        <script>
+            window.ProsperManagementMasterConfig = {
+                departmentId: @localSettings.StoreDepartmentId,
+                snapshotUrl: '@Url.Page("/Management/Index", "MasterSnapshot")'
+            };
+        </script>
+        <script src="~/js/features/management-master.js" asp-append-version="true"></script>
+    }
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

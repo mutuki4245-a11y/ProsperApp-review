@@ -58,6 +58,66 @@ public class SupabaseStoreOrderRepository(
         return Result<IReadOnlyList<StoreOrderSlipOption>>.Success(slips);
     }
 
+    public async Task<Result<OrderEntryCandidates>> GetCurrentCandidatesAsync(CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<OrderEntryCandidates>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.get_current_order_entry_candidates",
+            new { p_department_id = CurrentStoreDepartmentId },
+            ct);
+        if (!result.Succeeded || result.Rows.Count == 0)
+        {
+            var failure = RpcFailure<OrderEntryCandidates>(
+                result.ErrorMessage,
+                "注文対象の伝票を取得できませんでした。");
+            return Result<OrderEntryCandidates>.Failure(
+                failure.FailureKind ?? ResultFailureKind.Unavailable,
+                failure.ErrorMessage ?? "注文対象の伝票を取得できませんでした。");
+        }
+
+        var row = result.Rows[0];
+        var hasBusinessDay = ReadBool(row, "has_business_day") ?? false;
+        var businessDay = hasBusinessDay && TryReadJsonProperty(row, "business_day", JsonValueKind.Object, out var businessDayRow)
+            ? new StoreBusinessDay
+            {
+                BusinessDayId = ReadLong(businessDayRow, "business_day_id") ?? 0,
+                CompanyId = ReadLong(businessDayRow, "company_id") ?? 0,
+                DepartmentId = ReadLong(businessDayRow, "department_id") ?? CurrentStoreDepartmentId,
+                BusinessDate = ReadDateOnly(businessDayRow, "business_date") ?? DateOnly.MinValue,
+                OpenedAt = ReadDateTimeOffset(businessDayRow, "opened_at") ?? DateTimeOffset.MinValue,
+                ClosedAt = ReadDateTimeOffset(businessDayRow, "closed_at"),
+                Status = ReadString(businessDayRow, "status") ?? string.Empty,
+                Memo = ReadString(businessDayRow, "memo")
+            }
+            : null;
+        if (hasBusinessDay && businessDay is null)
+        {
+            return Result<OrderEntryCandidates>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "注文候補の営業日情報を取得できませんでした。");
+        }
+
+        var slips = TryReadJsonProperty(row, "slips", JsonValueKind.Array, out var slipRows)
+            ? ParseOpenSlips(slipRows.EnumerateArray())
+            : [];
+        var casts = TryReadJsonProperty(row, "attendance_casts", JsonValueKind.Array, out var castRows)
+            ? ParseAttendanceCasts(castRows.EnumerateArray())
+            : [];
+        var revision = ReadString(row, "revision") ?? string.Empty;
+
+        return Result<OrderEntryCandidates>.Success(new OrderEntryCandidates(
+            businessDay,
+            revision,
+            slips,
+            casts));
+    }
+
     public async Task<Result<IReadOnlyList<StoreOrderItemOption>>> GetItemsAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -208,6 +268,50 @@ public class SupabaseStoreOrderRepository(
         [property: JsonPropertyName("item_id")] long ItemId,
         [property: JsonPropertyName("quantity")] int Quantity,
         [property: JsonPropertyName("cast_back_cast_id")] long? CastBackCastId);
+
+    private static IReadOnlyList<StoreOrderSlipOption> ParseOpenSlips(IEnumerable<JsonElement> rows) =>
+        rows.Select(row => new StoreOrderSlipOption
+            {
+                SlipId = ReadLong(row, "slip_id") ?? 0,
+                TableId = ReadLong(row, "table_id"),
+                TableCode = ReadString(row, "table_code"),
+                TableName = ReadString(row, "table_name"),
+                OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
+                CustomerCount = (int)(ReadLong(row, "customer_count") ?? 0),
+                CustomerNames = ReadString(row, "customer_names"),
+                NominationCastIds = ReadString(row, "nomination_cast_ids"),
+                NominationCastNames = ReadString(row, "nomination_cast_names"),
+                Memo = ReadString(row, "memo")
+            })
+            .Where(x => x.SlipId > 0)
+            .ToList();
+
+    private static IReadOnlyList<StoreOrderAttendanceCastOption> ParseAttendanceCasts(IEnumerable<JsonElement> rows) =>
+        rows.Select(row => new StoreOrderAttendanceCastOption
+            {
+                CastId = ReadLong(row, "cast_id") ?? 0,
+                DisplayName = ReadString(row, "display_name") ?? string.Empty,
+                DrinkMemo = ReadString(row, "drink_memo"),
+                DepartmentName = ReadString(row, "department_name"),
+                ClockInTime = ReadString(row, "clock_in_time")
+            })
+            .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
+            .ToList();
+
+    private static bool TryReadJsonProperty(
+        JsonElement row,
+        string propertyName,
+        JsonValueKind expectedKind,
+        out JsonElement value)
+    {
+        if (row.TryGetProperty(propertyName, out value) && value.ValueKind == expectedKind)
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
 
     private static int ReadInsertedCount(SupabaseRpcResult result)
     {

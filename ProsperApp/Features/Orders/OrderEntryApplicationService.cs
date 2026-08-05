@@ -56,17 +56,12 @@ public sealed class OrderEntryApplicationService(
 
     public async Task<Result<IReadOnlyList<StoreOrderSlipOption>>> GetOpenSlipsAsync(CancellationToken ct)
     {
-        var businessDay = await _businessDayRepository.GetCurrentAsync(ct);
-        if (!businessDay.Succeeded)
-        {
-            return Result<IReadOnlyList<StoreOrderSlipOption>>.Failure(
-                businessDay.FailureKind ?? ResultFailureKind.Unavailable,
-                businessDay.ErrorMessage ?? "現在営業日を取得できませんでした。");
-        }
-
-        return businessDay.Value is null
-            ? Result<IReadOnlyList<StoreOrderSlipOption>>.Success([])
-            : await _orderRepository.GetOpenSlipsAsync(businessDay.Value.BusinessDayId, ct);
+        var candidates = await _orderRepository.GetCurrentCandidatesAsync(ct);
+        return candidates.Succeeded
+            ? Result<IReadOnlyList<StoreOrderSlipOption>>.Success(candidates.Value.Slips)
+            : Result<IReadOnlyList<StoreOrderSlipOption>>.Failure(
+                candidates.FailureKind ?? ResultFailureKind.Unavailable,
+                candidates.ErrorMessage ?? "注文対象の伝票を取得できませんでした。");
     }
 
     public IReadOnlyList<OrderQueueInputModel> ReadPostedQueue(

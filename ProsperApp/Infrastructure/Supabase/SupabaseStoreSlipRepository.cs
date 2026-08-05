@@ -230,6 +230,53 @@ public class SupabaseStoreSlipRepository(
         return BusinessDaySnapshotResult.Success(snapshot.Clone());
     }
 
+    public async Task<Result<CurrentBusinessHomeSnapshotResult>> GetCurrentBusinessHomeSnapshotAsync(
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<CurrentBusinessHomeSnapshotResult>.Failure(
+                ResultFailureKind.NotConfigured,
+                "店舗設定またはSupabase Edge Function設定が未設定です。");
+        }
+
+        var result = await RpcClient.PostArrayAsync(
+            "store.get_current_business_home_snapshot",
+            new { p_department_id = CurrentStoreDepartmentId },
+            ct);
+        if (!result.Succeeded || result.Rows.Count == 0)
+        {
+            var failure = RpcFailure<CurrentBusinessHomeSnapshotResult>(
+                result.ErrorMessage,
+                "営業中の伝票を取得できませんでした。");
+            return Result<CurrentBusinessHomeSnapshotResult>.Failure(
+                failure.FailureKind ?? ResultFailureKind.Unavailable,
+                failure.ErrorMessage ?? "営業中の伝票を取得できませんでした。");
+        }
+
+        var row = result.Rows[0];
+        var hasBusinessDay = ReadBool(row, "has_business_day") ?? false;
+        var businessDay = hasBusinessDay && TryReadObject(row, "business_day", out var businessDayJson)
+            ? ParseBusinessDay(businessDayJson)
+            : null;
+        var snapshot = row.TryGetProperty("snapshot", out var snapshotJson) &&
+                       snapshotJson.ValueKind == JsonValueKind.Object
+            ? snapshotJson.Clone()
+            : (JsonElement?)null;
+
+        if (hasBusinessDay && (businessDay is null || snapshot is null))
+        {
+            return Result<CurrentBusinessHomeSnapshotResult>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "営業中snapshotの応答形式が正しくありません。");
+        }
+
+        return Result<CurrentBusinessHomeSnapshotResult>.Success(new CurrentBusinessHomeSnapshotResult(
+            businessDay,
+            businessDay?.BusinessDate ?? storeClock.GetCurrentBusinessDate(),
+            snapshot));
+    }
+
 
     public async Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(
         BusinessHomeChangeFlushInput input,

@@ -14,7 +14,14 @@ public interface IStoreSlipRepository
 
     Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct);
 
+    Task<Result<CurrentBusinessHomeSnapshotResult>> GetCurrentBusinessHomeSnapshotAsync(CancellationToken ct);
+
     Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(BusinessHomeChangeFlushInput input, long businessDayId, CancellationToken ct);
 
     Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct);
 }
+
+public sealed record CurrentBusinessHomeSnapshotResult(
+    StoreBusinessDay? BusinessDay,
+    DateOnly BusinessDate,
+    System.Text.Json.JsonElement? Snapshot);

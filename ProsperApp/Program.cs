@@ -8,6 +8,7 @@ using ProsperApp.Features.Attendance;
 using ProsperApp.Features.Orders;
 using ProsperApp.Features.Closing;
 using ProsperApp.Features.StoreBootstrap;
+using ProsperApp.Features.Synchronization;
 using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Options;
 using ProsperApp.Services;
@@ -44,6 +45,7 @@ builder.Services.AddScoped<IAttendanceApplicationService, AttendanceApplicationS
 builder.Services.AddScoped<IClosingApplicationService, ClosingApplicationService>();
 builder.Services.AddScoped<IDailyReportApplicationService, DailyReportApplicationService>();
 builder.Services.AddScoped<IStoreMasterBootstrapper, SupabaseStoreMasterBootstrapper>();
+builder.Services.AddScoped<IManagementMasterSynchronization, SupabaseManagementMasterSynchronization>();
 builder.Services.AddHttpClient<ISupabaseRpcClient, SupabaseRpcClient>();
 builder.Services.AddScoped<IGoogleDriveAuthService, GoogleDriveAuthService>();
 builder.Services.AddScoped<IStoreSettingsRepository, SupabaseStoreSettingsRepository>();

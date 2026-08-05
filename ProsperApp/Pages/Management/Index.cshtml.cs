@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Synchronization;
 using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Services;
 
@@ -11,7 +12,8 @@ public class ManagementIndexModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
     IAdminModeService adminModeService,
-    IApplicationCache applicationCache) : PageModel
+    IApplicationCache applicationCache,
+    IManagementMasterSynchronization managementMasterSynchronization) : PageModel
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -19,6 +21,7 @@ public class ManagementIndexModel(
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IAdminModeService _adminModeService = adminModeService;
     private readonly IApplicationCache _applicationCache = applicationCache;
+    private readonly IManagementMasterSynchronization _managementMasterSynchronization = managementMasterSynchronization;
 
     [BindProperty]
     [Display(Name = "使用する画面")]
@@ -95,6 +98,37 @@ public class ManagementIndexModel(
         var clearedCount = _applicationCache.ClearAll();
         TempData["SuccessMessage"] = $"アプリ内キャッシュを {clearedCount} 件削除しました。";
         return Task.FromResult<IActionResult>(RedirectToPage());
+    }
+
+    public async Task<IActionResult> OnGetMasterSnapshotAsync(
+        string? knownRevision,
+        CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        var result = await _managementMasterSynchronization.GetSnapshotAsync(knownRevision, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                status = "unavailable",
+                message = result.ErrorMessage ?? "管理マスタを取得できませんでした。"
+            });
+        }
+
+        var snapshot = result.Value;
+        return new JsonResult(new
+        {
+            succeeded = true,
+            departmentId = snapshot.DepartmentId,
+            revision = snapshot.Revision,
+            unchanged = snapshot.Unchanged,
+            payload = snapshot.Payload
+        });
     }
 
     private void LoadCurrentSettings()

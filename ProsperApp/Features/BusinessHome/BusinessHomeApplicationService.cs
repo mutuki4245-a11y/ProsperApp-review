@@ -18,28 +18,12 @@ public sealed class BusinessHomeApplicationService(
 
     public async Task<Result<BusinessHomeSnapshotState>> GetSnapshotAsync(CancellationToken ct)
     {
-        var businessDayResult = await _businessDayRepository.GetCurrentAsync(ct);
-        if (!businessDayResult.Succeeded)
-        {
-            return Result<BusinessHomeSnapshotState>.Failure(
-                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
-                businessDayResult.ErrorMessage ?? "現在営業日を取得できませんでした。");
-        }
-
-        var businessDay = businessDayResult.Value;
-        var businessDate = businessDay?.BusinessDate ?? _storeClock.GetCurrentBusinessDate();
-        if (businessDay is null)
-        {
-            return Result<BusinessHomeSnapshotState>.Success(
-                new BusinessHomeSnapshotState(null, businessDate, null));
-        }
-
-        var result = await _slipRepository.GetBusinessDaySnapshotAsync(businessDay.BusinessDayId, ct);
+        var result = await _slipRepository.GetCurrentBusinessHomeSnapshotAsync(ct);
         return result.Succeeded
             ? Result<BusinessHomeSnapshotState>.Success(
-                new BusinessHomeSnapshotState(businessDay, businessDate, result.Snapshot))
+                new BusinessHomeSnapshotState(result.Value.BusinessDay, result.Value.BusinessDate, result.Value.Snapshot))
             : Result<BusinessHomeSnapshotState>.Failure(
-                ResultFailureKind.Unavailable,
+                result.FailureKind ?? ResultFailureKind.Unavailable,
                 result.ErrorMessage ?? "営業中の伝票を取得できませんでした。");
     }
 
