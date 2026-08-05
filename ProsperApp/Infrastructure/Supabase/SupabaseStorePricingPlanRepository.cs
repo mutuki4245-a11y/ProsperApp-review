@@ -50,6 +50,7 @@ public class SupabaseStorePricingPlanRepository(
         var plan = new StorePricingPlanInputModel
         {
             SetMinutes = (int)(ReadLong(row, "set_minutes") ?? 60),
+            ExtensionMinutes = (int)(ReadLong(row, "extension_minutes") ?? 30),
             SetUnitPriceSingle = ReadDecimal(row, "set_unit_price_single") ?? 0,
             SetUnitPricePerCustomer = ReadDecimal(row, "set_unit_price_per_customer") ?? 0,
             ExtensionUnitPriceSingle = ReadDecimal(row, "extension_unit_price_single") ?? 0,
@@ -68,11 +69,12 @@ public class SupabaseStorePricingPlanRepository(
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "store.save_pricing_plan",
+            "store.save_pricing_plan_v2",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_set_minutes = plan.SetMinutes,
+                p_extension_minutes = plan.ExtensionMinutes,
                 p_set_unit_price_single = plan.SetUnitPriceSingle,
                 p_set_unit_price_per_customer = plan.SetUnitPricePerCustomer,
                 p_extension_unit_price_single = plan.ExtensionUnitPriceSingle,

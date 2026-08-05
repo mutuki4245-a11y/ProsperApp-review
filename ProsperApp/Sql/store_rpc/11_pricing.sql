@@ -8,6 +8,7 @@ create table if not exists public.store_pricing_plan_master (
     pricing_mode text not null default 'set_extension_v1',
     plan_version integer not null default 1,
     set_minutes integer not null default 60,
+    extension_minutes integer not null default 30,
     set_unit_price_single numeric(12, 0) not null default 0,
     set_unit_price_per_customer numeric(12, 0) not null default 0,
     extension_unit_price_single numeric(12, 0) not null default 0,
@@ -18,11 +19,30 @@ create table if not exists public.store_pricing_plan_master (
     constraint chk_store_pricing_plan_mode check (pricing_mode ~ '^[a-z][a-z0-9_]{0,63}$'),
     constraint chk_store_pricing_plan_version check (plan_version >= 1),
     constraint chk_store_pricing_plan_set_minutes check (set_minutes between 5 and 480 and mod(set_minutes, 5) = 0),
+    constraint chk_store_pricing_plan_extension_minutes check (extension_minutes between 5 and 480 and mod(extension_minutes, 5) = 0),
     constraint chk_store_pricing_plan_set_single check (set_unit_price_single >= 0),
     constraint chk_store_pricing_plan_set_per_customer check (set_unit_price_per_customer >= 0),
     constraint chk_store_pricing_plan_extension_single check (extension_unit_price_single >= 0),
     constraint chk_store_pricing_plan_extension_per_customer check (extension_unit_price_per_customer >= 0)
 );
+
+alter table public.store_pricing_plan_master
+    add column if not exists extension_minutes integer not null default 30;
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint c
+        where c.conrelid = 'public.store_pricing_plan_master'::regclass
+          and c.conname = 'chk_store_pricing_plan_extension_minutes'
+    ) then
+        alter table public.store_pricing_plan_master
+            add constraint chk_store_pricing_plan_extension_minutes
+            check (extension_minutes between 5 and 480 and mod(extension_minutes, 5) = 0);
+    end if;
+end;
+$$;
 
 create unique index if not exists ux_store_pricing_plan_master_active_department
     on public.store_pricing_plan_master(department_id)
@@ -163,13 +183,22 @@ begin
         raise exception 'unsupported_pricing_mode';
     end if;
 
-    v_extension_count := floor(extract(epoch from (p_as_of - v_slip.opened_at)) / (v_plan.set_minutes * 60))::integer;
+    v_extension_count := case
+        when p_as_of < v_slip.opened_at + (v_plan.set_minutes * interval '1 minute') then 0
+        else floor(
+            extract(epoch from (p_as_of - v_slip.opened_at - (v_plan.set_minutes * interval '1 minute')))
+            / (v_plan.extension_minutes * 60)
+        )::integer + 1
+    end;
 
     return query
     with events as (
         select 0::integer as event_no, 'set'::text as pricing_code, v_slip.opened_at as occurred_at
         union all
-        select n, 'extension'::text, v_slip.opened_at + (n * v_plan.set_minutes) * interval '1 minute'
+        select
+            n,
+            'extension'::text,
+            v_slip.opened_at + (v_plan.set_minutes + ((n - 1) * v_plan.extension_minutes)) * interval '1 minute'
         from generate_series(1, greatest(v_extension_count, 0)) as n
     ), counts as (
         select
@@ -221,6 +250,7 @@ returns table (
     pricing_mode text,
     plan_version integer,
     set_minutes integer,
+    extension_minutes integer,
     set_unit_price_single numeric,
     set_unit_price_per_customer numeric,
     extension_unit_price_single numeric,
@@ -235,6 +265,7 @@ as $$
         coalesce(p.pricing_mode, 'set_extension_v1'),
         coalesce(p.plan_version, 1),
         coalesce(p.set_minutes, 60),
+        coalesce(p.extension_minutes, 30),
         coalesce(p.set_unit_price_single, 0),
         coalesce(p.set_unit_price_per_customer, 0),
         coalesce(p.extension_unit_price_single, 0),
@@ -331,6 +362,106 @@ begin
                pricing_mode = 'set_extension_v1',
                plan_version = case when v_changed then p.plan_version + 1 else p.plan_version end,
                set_minutes = p_set_minutes,
+               set_unit_price_single = p_set_unit_price_single,
+               set_unit_price_per_customer = p_set_unit_price_per_customer,
+               extension_unit_price_single = p_extension_unit_price_single,
+               extension_unit_price_per_customer = p_extension_unit_price_per_customer,
+               is_active = p_is_active,
+               updated_at = now()
+         where p.pricing_plan_id = v_plan.pricing_plan_id
+         returning * into v_plan;
+    end if;
+
+    if p_is_active then
+        update public.store_pricing_plan_master p
+           set is_active = false,
+               updated_at = now()
+         where p.department_id = p_department_id
+           and p.pricing_plan_id <> v_plan.pricing_plan_id
+           and p.is_active;
+    end if;
+
+    return query select v_plan.plan_version;
+end;
+$$;
+
+-- p_extension_minutes を持つクライアント用の保存APIです。
+-- 旧 save_pricing_plan は旧アプリの互換性のため維持します。
+drop function if exists store.save_pricing_plan_v2(bigint, integer, integer, numeric, numeric, numeric, numeric, boolean);
+
+create or replace function store.save_pricing_plan_v2(
+    p_department_id bigint,
+    p_set_minutes integer,
+    p_extension_minutes integer,
+    p_set_unit_price_single numeric,
+    p_set_unit_price_per_customer numeric,
+    p_extension_unit_price_single numeric,
+    p_extension_unit_price_per_customer numeric,
+    p_is_active boolean
+)
+returns table (plan_version integer)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_plan public.store_pricing_plan_master%rowtype;
+    v_changed boolean;
+begin
+    select d.company_id
+      into v_company_id
+      from public.department_master d
+     where d.department_id = p_department_id
+       and d.is_active = true;
+
+    if v_company_id is null or
+       p_set_minutes is null or p_set_minutes < 5 or p_set_minutes > 480 or mod(p_set_minutes, 5) <> 0 or
+       p_extension_minutes is null or p_extension_minutes < 5 or p_extension_minutes > 480 or mod(p_extension_minutes, 5) <> 0 or
+       coalesce(p_set_unit_price_single, -1) < 0 or
+       coalesce(p_set_unit_price_per_customer, -1) < 0 or
+       coalesce(p_extension_unit_price_single, -1) < 0 or
+       coalesce(p_extension_unit_price_per_customer, -1) < 0 or
+       p_set_unit_price_single <> trunc(p_set_unit_price_single) or
+       p_set_unit_price_per_customer <> trunc(p_set_unit_price_per_customer) or
+       p_extension_unit_price_single <> trunc(p_extension_unit_price_single) or
+       p_extension_unit_price_per_customer <> trunc(p_extension_unit_price_per_customer) or
+       greatest(p_set_unit_price_single, p_set_unit_price_per_customer, p_extension_unit_price_single, p_extension_unit_price_per_customer) > 99999999 then
+        raise exception 'invalid_pricing_plan';
+    end if;
+
+    select p.*
+      into v_plan
+      from public.store_pricing_plan_master p
+     where p.department_id = p_department_id
+     order by p.is_active desc, p.updated_at desc, p.pricing_plan_id desc
+     limit 1
+     for update;
+
+    if v_plan.pricing_plan_id is null then
+        insert into public.store_pricing_plan_master (
+            company_id, department_id, pricing_mode, plan_version,
+            set_minutes, extension_minutes, set_unit_price_single, set_unit_price_per_customer,
+            extension_unit_price_single, extension_unit_price_per_customer, is_active
+        ) values (
+            v_company_id, p_department_id, 'set_extension_v1', 1,
+            p_set_minutes, p_extension_minutes, p_set_unit_price_single, p_set_unit_price_per_customer,
+            p_extension_unit_price_single, p_extension_unit_price_per_customer, p_is_active
+        ) returning * into v_plan;
+    else
+        v_changed := v_plan.set_minutes is distinct from p_set_minutes or
+            v_plan.extension_minutes is distinct from p_extension_minutes or
+            v_plan.set_unit_price_single is distinct from p_set_unit_price_single or
+            v_plan.set_unit_price_per_customer is distinct from p_set_unit_price_per_customer or
+            v_plan.extension_unit_price_single is distinct from p_extension_unit_price_single or
+            v_plan.extension_unit_price_per_customer is distinct from p_extension_unit_price_per_customer;
+
+        update public.store_pricing_plan_master p
+           set company_id = v_company_id,
+               pricing_mode = 'set_extension_v1',
+               plan_version = case when v_changed then p.plan_version + 1 else p.plan_version end,
+               set_minutes = p_set_minutes,
+               extension_minutes = p_extension_minutes,
                set_unit_price_single = p_set_unit_price_single,
                set_unit_price_per_customer = p_set_unit_price_per_customer,
                extension_unit_price_single = p_extension_unit_price_single,

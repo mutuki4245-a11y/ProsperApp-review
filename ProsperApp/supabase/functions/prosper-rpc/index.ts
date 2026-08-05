@@ -21,6 +21,7 @@ type PgType =
 type RpcParam = {
   name: string;
   type: PgType;
+  defaultValue?: unknown;
 };
 
 type RpcDefinition = {
@@ -84,12 +85,13 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.save_pricing_plan",
+    "store.save_pricing_plan_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
         { name: "p_set_minutes", type: "integer" },
+        { name: "p_extension_minutes", type: "integer", defaultValue: 30 },
         { name: "p_set_unit_price_single", type: "numeric" },
         { name: "p_set_unit_price_per_customer", type: "numeric" },
         { name: "p_extension_unit_price_single", type: "numeric" },
@@ -652,7 +654,10 @@ Deno.serve(async (req) => {
 
 async function runRpc(rpcName: RpcName, definition: RpcDefinition, payload: unknown): Promise<unknown> {
   const source = isRecord(payload) ? payload : {};
-  const values = definition.params.map((param) => toSqlValue(source[param.name], param.type));
+  const values = definition.params.map((param) => toSqlValue(
+    source[param.name] === undefined ? param.defaultValue : source[param.name],
+    param.type
+  ));
   const args = definition.params
     .map((param, index) => `$${index + 1}::${param.type}`)
     .join(", ");

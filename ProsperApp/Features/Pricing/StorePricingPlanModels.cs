@@ -8,6 +8,10 @@ public class StorePricingPlanInputModel
     [Range(5, 480, ErrorMessage = "セット時間は5〜480分で入力してください。")]
     public int SetMinutes { get; set; } = 60;
 
+    [Display(Name = "延長時間")]
+    [Range(5, 480, ErrorMessage = "延長時間は5〜480分で入力してください。")]
+    public int ExtensionMinutes { get; set; } = 30;
+
     [Display(Name = "1人時セット料金")]
     [Range(0, 99999999, ErrorMessage = "料金は0〜99,999,999円で入力してください。")]
     public decimal SetUnitPriceSingle { get; set; }

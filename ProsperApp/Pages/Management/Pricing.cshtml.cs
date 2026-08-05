@@ -36,6 +36,11 @@ public class ManagementPricingModel(
             ModelState.AddModelError(nameof(Plan.SetMinutes), "セット時間は5分単位で入力してください。");
         }
 
+        if (Plan.ExtensionMinutes % 5 != 0)
+        {
+            ModelState.AddModelError(nameof(Plan.ExtensionMinutes), "延長時間は5分単位で入力してください。");
+        }
+
         if (!ModelState.IsValid) return Page();
 
         var result = await _pricingPlanRepository.SaveAsync(Plan, ct);

@@ -7,7 +7,7 @@
 <section class="opening-page">
     <div class="page-section-heading">
         <h1>時間料金設定</h1>
-        <p>セット料金と延長料金を店舗ごとに設定します。延長はセット終了時から同じ間隔で発生します。</p>
+        <p>セット料金と延長料金を店舗ごとに設定します。延長はセット終了後、延長時間ごとに発生します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -40,6 +40,14 @@
                         <span class="input-group-text">分</span>
                     </div>
                     <span asp-validation-for="Plan.SetMinutes" class="text-danger"></span>
+                </div>
+                <div class="item-admin__field">
+                    <label asp-for="Plan.ExtensionMinutes"></label>
+                    <div class="input-group">
+                        <input asp-for="Plan.ExtensionMinutes" class="form-control" type="number" min="5" max="480" step="5" inputmode="numeric" />
+                        <span class="input-group-text">分</span>
+                    </div>
+                    <span asp-validation-for="Plan.ExtensionMinutes" class="text-danger"></span>
                 </div>
                 <label class="item-admin__field item-admin__field--check">
                     <span>有効</span>

@@ -4,9 +4,18 @@ import { readFile } from 'node:fs/promises';
 const pricingSource = await readFile(new URL('../Sql/store_rpc/11_pricing.sql', import.meta.url), 'utf8');
 const snapshotSource = await readFile(new URL('../Sql/store_rpc/09_business_home_snapshot.sql', import.meta.url), 'utf8');
 const systemItemSource = await readFile(new URL('../Sql/store_rpc/12_pricing_system_items.sql', import.meta.url), 'utf8');
+const edgeFunctionSource = await readFile(new URL('../supabase/functions/prosper-rpc/index.ts', import.meta.url), 'utf8');
 
 assert.match(pricingSource, /pricing_mode = 'set_extension_v1'/, '標準料金実装を明示すること');
+assert.match(pricingSource, /extension_minutes integer not null default 30/, '延長時間は30分を初期値にすること');
+assert.match(pricingSource, /chk_store_pricing_plan_extension_minutes/, '延長時間は5分単位で制約すること');
+assert.match(pricingSource, /p_as_of < v_slip\.opened_at \+ \(v_plan\.set_minutes \* interval '1 minute'\)/, 'セット終了までは延長イベントを作らないこと');
+assert.match(pricingSource, /v_plan\.set_minutes \+ \(\(n - 1\) \* v_plan\.extension_minutes\)/, '延長イベントはセット終了後に延長時間ごとに作ること');
 assert.match(pricingSource, /from generate_series\(1, greatest\(v_extension_count, 0\)\)/, 'セット終了ちょうどから延長イベントを生成すること');
+assert.match(pricingSource, /create or replace function store\.save_pricing_plan_v2/, '延長時間を保存するRPCを持つこと');
+assert.match(pricingSource, /p_extension_minutes integer/, '延長時間を保存RPCの引数に含めること');
+assert.match(edgeFunctionSource, /"store\.save_pricing_plan_v2"/, 'Edge Functionは延長時間対応の保存RPCを呼び出すこと');
+assert.match(edgeFunctionSource, /p_extension_minutes", type: "integer", defaultValue: 30/, '旧アプリからの保存でも延長時間を30分で補うこと');
 assert.match(pricingSource, /c\.entered_at <= e\.occurred_at[\s\S]*c\.left_at > e\.occurred_at/, '入店を含み退店を含まない人数で計算すること');
 assert.match(pricingSource, /store_slip_pricing_lines/, '会計時に固定する自動料金明細テーブルを持つこと');
 assert.match(pricingSource, /slip_cast_id bigint references public\.store_slip_casts/, '将来のキャスト帰属余地を保持すること');

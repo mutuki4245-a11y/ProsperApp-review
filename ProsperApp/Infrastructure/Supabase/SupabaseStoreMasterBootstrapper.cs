@@ -282,6 +282,7 @@ public sealed class SupabaseStoreMasterBootstrapper(
             ? new StorePricingPlanInputModel
             {
                 SetMinutes = (int)(ReadLong(pricingPlanRow, "set_minutes") ?? 60),
+                ExtensionMinutes = (int)(ReadLong(pricingPlanRow, "extension_minutes") ?? 30),
                 SetUnitPriceSingle = ReadDecimal(pricingPlanRow, "set_unit_price_single") ?? 0,
                 SetUnitPricePerCustomer = ReadDecimal(pricingPlanRow, "set_unit_price_per_customer") ?? 0,
                 ExtensionUnitPriceSingle = ReadDecimal(pricingPlanRow, "extension_unit_price_single") ?? 0,
