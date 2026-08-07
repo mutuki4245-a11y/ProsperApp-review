@@ -12,7 +12,7 @@
 - 旧Razor handler、旧Repository/DTO、旧Edge allowlist、旧RPC定義を削除した。互換fallbackと二重writeはない。
 - 旧シャンパンバック物理モデルは既存行を新ドリンクバック調整へ一方向移行してから削除する。
 
-SQL適用順、非可逆移行、確認手順は `HANDOFF.md` と `Sql/store_rpc_functions.sql` を正とする。ソース実装と自動テストは完了しているが、本書更新時点では対象SupabaseへSQLを適用していない。
+SQL適用順、非可逆移行、確認手順は `HANDOFF.md` と `Sql/store_rpc_functions.sql` を正とする。2026-08-07に対象SupabaseへSQLを適用し、`prosper-rpc` v39をdeployしてv2 bootstrapの実呼び出しまで確認した。
 
 ## 0. 横断実装契約
 

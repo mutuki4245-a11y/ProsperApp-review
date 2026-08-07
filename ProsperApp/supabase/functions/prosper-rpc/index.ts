@@ -281,6 +281,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
         { name: "p_known_business_day_revision", type: "bigint", defaultValue: null },
       ],
     },
+  ],
   [
     "store.submit_current_order_entry_v2",
     {

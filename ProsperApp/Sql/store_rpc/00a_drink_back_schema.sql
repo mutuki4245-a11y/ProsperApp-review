@@ -77,6 +77,8 @@ create index if not exists idx_store_business_day_drink_back_adjustments_cast_da
     on public.store_business_day_drink_back_adjustments(company_id, department_id, cast_id, business_date, status);
 create index if not exists idx_store_business_day_drink_back_adjustments_day
     on public.store_business_day_drink_back_adjustments(department_id, business_day_id, status);
+create index if not exists idx_store_business_day_drink_back_adjustments_cast
+    on public.store_business_day_drink_back_adjustments(cast_id);
 alter table public.store_business_day_drink_back_adjustments enable row level security;
 revoke all on table public.store_business_day_drink_back_adjustments
     from public, anon, authenticated, service_role;

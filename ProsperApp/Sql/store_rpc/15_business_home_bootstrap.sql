@@ -43,9 +43,16 @@ begin
         raise exception 'store_department_not_found';
     end if;
 
-    select coalesce(jsonb_agg(to_jsonb(table_row) order by table_row.table_category_no, table_row.sort_order, table_row.table_code), '[]'::jsonb)
+    select coalesce(
+        jsonb_agg(
+            to_jsonb(table_row) - 'sort_order' - 'is_active'
+            order by table_row.table_category_no, table_row.sort_order, table_row.table_code
+        ),
+        '[]'::jsonb
+    )
       into v_tables
-      from store.get_tables(p_department_id) table_row;
+      from store.get_table_admin_list(p_department_id) table_row
+     where table_row.is_active = true;
 
     select coalesce(jsonb_agg(to_jsonb(item_row) order by item_row.category_name, item_row.item_name, item_row.item_id), '[]'::jsonb)
       into v_order_items

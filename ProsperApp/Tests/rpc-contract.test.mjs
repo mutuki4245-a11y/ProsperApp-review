@@ -117,4 +117,11 @@ const grants = read('Sql/store_rpc/99_grants.sql');
 assert.match(grants, /revoke\s+execute\s+on\s+all\s+functions\s+in\s+schema\s+store\s+from\s+public,\s*anon,\s*authenticated,\s*service_role/i);
 assert.match(grants, /alter\s+default\s+privileges\s+in\s+schema\s+store\s+revoke\s+execute\s+on\s+functions\s+from\s+public/i);
 
+const businessHomeBootstrap = read('Sql/store_rpc/15_business_home_bootstrap.sql');
+assert.match(
+    businessHomeBootstrap,
+    /to_jsonb\(table_row\)\s*-\s*'sort_order'\s*-\s*'is_active'[\s\S]*?from\s+store\.get_table_admin_list\(p_department_id\)\s+table_row[\s\S]*?where\s+table_row\.is_active\s*=\s*true/i,
+    '営業中bootstrapは管理用テーブル順を使い、返却JSONから管理用列を除くこと。'
+);
+
 console.log('RPC v2 contract checks passed.');

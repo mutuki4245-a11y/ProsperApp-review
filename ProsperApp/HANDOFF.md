@@ -4,7 +4,7 @@
 
 2026-08-07時点の正本です。RPC同期は `docs/rpc-synchronization-improvement-plan.md` の横断契約と画面別契約へ全面移行しました。旧RPC、旧Razor POST、旧DTO、旧Repository、旧payload変換、画面内fallbackは互換目的で残していません。
 
-実装と静的検証は完了していますが、この作業環境にはSupabaseへSQLを適用する接続手段がないため、下記SQLは対象DBへ未適用です。アプリをv2へ切り替える前に、同じリリース作業内でSQLと `prosper-rpc` Edge Functionを適用してください。
+本番Supabaseプロジェクト `zwdecfoecgpzpkallukh` へSQLを適用し、`prosper-rpc` Edge Function v39をdeploy済みです。旧RPCとの互換期間は設けず、Azureアプリ、DB、Edge Functionをv2契約へ切り替えました。
 
 確認済み:
 
@@ -12,6 +12,11 @@
 - `dotnet test ../ProsperApp.Tests/ProsperApp.Tests.csproj --no-restore`: 31/31成功
 - `node --test Tests/*.test.mjs`: 21/21成功
 - `node --check wwwroot/js/features/*.js`: 成功
+- Edge Function bundle検査: 成功
+- v2アプリ契約31 RPC: 各1定義、旧RPC: 0定義
+- `anon`、`authenticated`、`service_role` の `store` 関数直接実行権限: 0件
+- ドリンクバック移行: 旧12件から新12件、合計金額一致、旧テーブル削除済み
+- `prosper-rpc` v39: ACTIVE、`get_departments` と `get_business_home_bootstrap_v2` がHTTP 200
 
 ローカル開発サーバーは起動していません。
 
@@ -53,7 +58,7 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 
 ## SQL Apply Order
 
-`Sql/store_rpc_functions.sql` は説明用で実行しません。次を記載順に適用します。
+`Sql/store_rpc_functions.sql` は説明用で実行しません。DB再構築時は次を記載順に適用します。
 
 ```text
 00_schema.sql
@@ -91,7 +96,7 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 99_grants.sql
 ```
 
-その後、`supabase/functions/prosper-rpc/index.ts` を同じリリースのEdge Functionとしてdeployします。旧アプリと新DB、または新アプリと旧DBを混在させないでください。
+その後、`supabase/functions/prosper-rpc/index.ts` を同じリリースのEdge Functionとしてdeployします。本番では2026-08-07にv39まで適用済みです。旧アプリと新DB、または新アプリと旧DBを混在させないでください。
 
 ## Irreversible Migration
 
