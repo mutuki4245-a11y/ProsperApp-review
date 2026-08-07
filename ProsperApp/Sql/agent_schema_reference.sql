@@ -694,7 +694,55 @@ create table if not exists public.store_business_day_closing_snapshots (
 --   idx_store_slip_cast_sales_adjustments_cast_date: (company_id, department_id, cast_id, business_date, status)
 
 -- -----------------------------------------------------------------------------
--- RPC functions used by the application
+-- Current RPC functions used by the application (2026-08-07 v2)
+-- -----------------------------------------------------------------------------
+
+-- Settings:
+--   store.get_departments
+--   store.delete_non_master_records
+-- Business home and orders:
+--   store.get_business_home_bootstrap_v2
+--   store.get_current_business_home_snapshot
+--   store.sync_business_home_changes_v2
+--   store.get_current_order_entry_candidates
+--   store.submit_current_order_entry_v2
+-- Checkout:
+--   store.issue_checkout_statement_v2
+--   store.release_checkout_ready_v2
+--   store.confirm_checkout_v2
+--   store.cancel_checkout_v2
+--   store.get_checkout_statement_print_data
+--   store.get_checkout_receipt_print_data
+-- Attendance and closing:
+--   store.get_attendance_editor_bootstrap_v2
+--   store.get_current_attendance_editor_snapshot
+--   store.save_current_business_day_attendance_v2
+--   store.get_current_closing_dashboard
+--   store.close_business_day_v2
+--   store.get_current_drink_delivery_editor
+--   store.save_current_business_day_drink_delivery_amount_v2
+--   store.get_current_cast_sales_adjustment_overview
+--   store.save_current_cast_sales_adjustment_v2
+--   store.confirm_current_cast_sales_adjustments_v2
+--   store.get_current_drink_back_editor
+--   store.save_drink_back_adjustments_v2
+-- Receipts and reports:
+--   store.get_current_receipt_work_queue
+--   store.advance_receipt_work_queue_v2
+--   store.is_pending_receipt_drive_file_allowed
+--   store.get_business_day_daily_report
+-- Management:
+--   store.get_management_master_snapshot
+--   store.save_management_master_v2
+--
+-- The exact list is enforced by Tests/rpc-contract.test.mjs against C# callers,
+-- the Edge allowlist, and SQL definitions. Low-level SQL functions are internal
+-- only and are not application RPCs.
+
+-- -----------------------------------------------------------------------------
+-- Historical pre-v2 RPC reference (not callable by the current application)
+-- The names below are retained only as schema history. 00_legacy_rpc_cutover.sql
+-- drops these application-facing functions; do not add them to the Edge allowlist.
 -- -----------------------------------------------------------------------------
 
 -- Store settings:

@@ -5,23 +5,38 @@
 -- this order when applying the full RPC set:
 --
 --   1. Sql/store_rpc/00_schema.sql
---   2. Sql/store_rpc/01_business_day.sql
---   3. Sql/store_rpc/02_store_masters.sql
---   4. Sql/store_rpc/03_slips.sql
---   5. Sql/store_rpc/04_orders.sql
---   6. Sql/store_rpc/05_checkout.sql
---   7. Sql/store_rpc/06_receipts.sql
---   8. Sql/store_rpc/07_cast_sales_adjustments.sql
---   9. Sql/store_rpc/11_pricing.sql
---  10. Sql/store_rpc/12_pricing_system_items.sql
---  11. Sql/store_rpc/08_checkout_ready.sql
---  12. Sql/store_rpc/09_business_home_snapshot.sql
---  13. Sql/store_rpc/10_business_home_flush.sql
---  14. Sql/store_rpc/12_daily_report.sql
---  15. Sql/store_rpc/13_accounting_snapshot_guards.sql
---  16. Sql/store_rpc/14_operational_read_models.sql
---  17. Sql/store_rpc/15_business_home_bootstrap.sql
---  18. Sql/store_rpc/99_grants.sql
+--   2. Sql/store_rpc/00_legacy_rpc_cutover.sql
+--   3. Sql/store_rpc/00a_drink_back_schema.sql
+--   4. Sql/store_rpc/01_business_day.sql
+--   5. Sql/store_rpc/02_store_masters.sql
+--   6. Sql/store_rpc/03_slips.sql
+--   7. Sql/store_rpc/04_orders.sql
+--   8. Sql/store_rpc/05_checkout.sql
+--   9. Sql/store_rpc/06_receipts.sql
+--  10. Sql/store_rpc/07_cast_sales_adjustments.sql
+--  11. Sql/store_rpc/11_pricing.sql
+--  12. Sql/store_rpc/12_pricing_system_items.sql
+--  13. Sql/store_rpc/08_checkout_ready.sql
+--  14. Sql/store_rpc/09_business_home_snapshot.sql
+--  15. Sql/store_rpc/12_daily_report.sql
+--  16. Sql/store_rpc/13_accounting_snapshot_guards.sql
+--  17. Sql/store_rpc/30_current_drink_back_adjustments.sql
+--  18. Sql/store_rpc/14_operational_read_models.sql
+--  19. Sql/store_rpc/17_current_business_home_snapshot.sql
+--  20. Sql/store_rpc/15_business_home_bootstrap.sql
+--  21. Sql/store_rpc/16_management_master_snapshot.sql
+--  22. Sql/store_rpc/18_current_order_entry_candidates.sql
+--  23. Sql/store_rpc/19_current_business_home_flush.sql
+--  24. Sql/store_rpc/20_current_business_day_attendance.sql
+--  25. Sql/store_rpc/21_receipt_work_queue.sql
+--  26. Sql/store_rpc/23_current_business_day_drink_delivery.sql
+--  27. Sql/store_rpc/25_current_order_submit.sql
+--  28. Sql/store_rpc/26_current_checkout_mutations.sql
+--  29. Sql/store_rpc/27_current_attendance_editor.sql
+--  30. Sql/store_rpc/28_current_closing_dashboard.sql
+--  31. Sql/store_rpc/29_current_cast_sales_adjustment.sql
+--  32. Sql/store_rpc/22_current_business_day_close.sql
+--  33. Sql/store_rpc/99_grants.sql
 --
 -- Keep function names, argument lists, return columns, and direct execute revokes
 -- in the split files aligned with the current C# RPC callers and prosper-rpc allowlist.

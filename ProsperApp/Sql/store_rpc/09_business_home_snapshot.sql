@@ -448,7 +448,7 @@ as $$
     from target_day d;
 $$;
 
-create or replace function store.get_business_day_snapshot(
+create or replace function store.get_business_day_snapshot_internal(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -468,9 +468,7 @@ as $$
       ) s;
 $$;
 
-drop function if exists store.apply_business_slip_editor_operation(bigint, bigint, bigint, text, text, jsonb);
-
-create or replace function store.apply_business_slip_editor_operation(
+create or replace function store.apply_business_slip_editor_operation_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_slip_id bigint,
@@ -478,11 +476,7 @@ create or replace function store.apply_business_slip_editor_operation(
     p_operation_id text,
     p_payload jsonb default '{}'::jsonb
 )
-returns table (
-    operation_id text,
-    business_day_revision bigint,
-    snapshot jsonb
-)
+returns void
 language plpgsql
 security definer
 set search_path = public
@@ -502,8 +496,6 @@ declare
     v_order_item_id bigint;
     v_order_quantity integer;
     v_order_cast_back_cast_id bigint;
-    v_revision bigint;
-    v_snapshot jsonb;
 begin
     if p_operation_type not in (
         'add_customer', 'update_customer', 'leave_customer',
@@ -579,6 +571,20 @@ begin
         end if;
         perform store.leave_slip_customer(p_department_id, v_customer_id, v_operation_at);
     elsif p_operation_type = 'add_nomination' then
+        if coalesce(p_payload->>'cast_id', '') !~ '^[1-9][0-9]*$' or not exists (
+            select 1
+              from public.cast_master cast_member
+              join public.store_cast_attendance attendance
+                on attendance.cast_id = cast_member.cast_id
+               and attendance.department_id = p_department_id
+               and attendance.business_day_id = p_business_day_id
+               and attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out')
+             where cast_member.cast_id = (p_payload->>'cast_id')::bigint
+               and cast_member.department_id = p_department_id
+               and cast_member.is_active = true
+        ) then
+            raise exception 'nomination_cast_not_attending';
+        end if;
         v_nomination := jsonb_build_array(jsonb_build_object(
             'cast_id', p_payload->>'cast_id',
             'nomination_kind', p_payload->>'nomination_kind',
@@ -620,7 +626,7 @@ begin
             raise exception 'invalid_order_quantity';
         end if;
         v_order_cast_back_cast_id := nullif(p_payload->>'cast_back_cast_id', '')::bigint;
-        perform store.add_order_lines(
+        perform store.add_order_lines_internal(
             p_department_id,
             p_slip_id,
             jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
@@ -637,10 +643,9 @@ begin
         perform store.void_order_line(p_department_id, v_order_line_id);
     end if;
 
-    select s.business_day_revision, s.snapshot
-      into v_revision, v_snapshot
-    from store.get_business_day_snapshot(p_department_id, p_business_day_id) s;
-
-    return query select p_operation_id, v_revision, v_snapshot;
+    return;
 end;
 $$;
+
+revoke all on function store.apply_business_slip_editor_operation_internal(bigint, bigint, bigint, text, text, jsonb)
+    from public, anon, authenticated, service_role;

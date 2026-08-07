@@ -51,9 +51,7 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       ],
     },
   ],
-  ["store.get_context", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_current_business_day", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
-  ["store.get_store_bootstrap", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
+  ["store.get_business_home_bootstrap_v2", { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] }],
   [
     "store.get_management_master_snapshot",
     {
@@ -65,8 +63,29 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.save_management_master_v2",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_area", type: "text" },
+        { name: "p_action", type: "text" },
+        { name: "p_expected_area_revision", type: "text" },
+        { name: "p_payload", type: "jsonb" },
+        { name: "p_allow_admin_actions", type: "boolean", defaultValue: false },
+      ],
+    },
+  ],
+  [
     "store.get_current_business_home_snapshot",
-    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_known_revision", type: "bigint", defaultValue: null },
+      ],
+    },
   ],
   [
     "store.get_current_order_entry_candidates",
@@ -83,74 +102,24 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.get_business_day_snapshot",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_order_entry_slips",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.save_pricing_plan_v2",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_set_minutes", type: "integer" },
-        { name: "p_extension_minutes", type: "integer", defaultValue: 30 },
-        { name: "p_set_unit_price_single", type: "numeric" },
-        { name: "p_set_unit_price_per_customer", type: "numeric" },
-        { name: "p_extension_unit_price_single", type: "numeric" },
-        { name: "p_extension_unit_price_per_customer", type: "numeric" },
-        { name: "p_is_active", type: "boolean" },
-      ],
-    },
-  ],
-  [
-    "store.save_nomination_back_master",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_settings", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.get_order_attending_casts",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_pending_receipts",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_status", type: "text" },
-      ],
-    },
-  ],
-  [
     "store.get_current_receipt_work_queue",
-    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_resume_cursor", type: "text", defaultValue: null },
+      ],
+    },
+  ],
+  [
+    "store.is_pending_receipt_drive_file_allowed",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_drive_file_id", type: "text" },
+      ],
+    },
   ],
   [
     "store.advance_receipt_work_queue_v2",
@@ -172,367 +141,112 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.get_business_day_drink_delivery_status",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_business_day_closing_attendance",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_business_day_closing_readiness",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_pending_receipt_status", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.get_business_day_cast_sales_adjustment_overview",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.get_business_day_champagne_back_overview",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.open_business_day",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_date", type: "date" },
-        { name: "p_memo", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.open_business_day_with_attendance",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_date", type: "date" },
-        { name: "p_attendance_entries", type: "jsonb" },
-        { name: "p_memo", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.save_business_day_attendance",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_attendance_entries", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.save_business_day_staff_attendance",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_attendance_entries", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.get_open_slip_count",
-    {
-      result: "scalar",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.save_business_day_drink_delivery_amount",
-    {
-      result: "scalar",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_drink_delivery_amount", type: "numeric" },
-      ],
-    },
-  ],
-  [
     "store.save_current_business_day_drink_delivery_amount_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
         { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_expected_business_day_revision", type: "bigint", defaultValue: null },
         { name: "p_business_date", type: "date" },
         { name: "p_drink_delivery_amount", type: "numeric" },
       ],
     },
   ],
   [
-    "store.save_business_day_closing_attendance",
-    {
-      result: "scalar",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_attendance_entries", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.save_business_day_staff_closing_attendance",
-    {
-      result: "scalar",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_attendance_entries", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.close_business_day",
+    "store.get_current_closing_dashboard",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_memo", type: "text" },
-        { name: "p_pending_receipt_status", type: "text" },
-        { name: "p_ignore_closing_requirements", type: "boolean" },
+        { name: "p_known_cast_master_revision", type: "text", defaultValue: null },
       ],
     },
   ],
   [
-    "store.close_current_business_day",
+    "store.close_business_day_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
         { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_expected_business_day_revision", type: "bigint", defaultValue: null },
         { name: "p_memo", type: "text", defaultValue: null },
-        { name: "p_pending_receipt_status", type: "text", defaultValue: null },
         { name: "p_ignore_closing_requirements", type: "boolean", defaultValue: false },
       ],
     },
   ],
   [
-    "store.create_cast",
+    "store.get_current_drink_delivery_editor",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
+    "store.get_current_cast_sales_adjustment_overview",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
+    "store.get_current_drink_back_editor",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
+    "store.save_drink_back_adjustments_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
-        { name: "p_display_name", type: "text" },
-        { name: "p_drink_memo", type: "text" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
+        { name: "p_required_adjustments", type: "jsonb", defaultValue: [] },
+        { name: "p_optional_adjustments", type: "jsonb", defaultValue: [] },
+        { name: "p_remove_cast_ids", type: "jsonb", defaultValue: [] },
       ],
     },
   ],
   [
-    "store.update_cast_drink_memo",
+    "store.save_current_cast_sales_adjustment_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
-        { name: "p_cast_id", type: "bigint" },
-        { name: "p_drink_memo", type: "text" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
+        { name: "p_slip_id", type: "bigint" },
+        { name: "p_expected_slip_version", type: "timestamp with time zone" },
+        { name: "p_expected_checkout_id", type: "bigint" },
+        { name: "p_expected_checkout_version", type: "timestamp with time zone" },
+        { name: "p_adjustments", type: "jsonb" },
+        { name: "p_source_amount_type", type: "text" },
+        { name: "p_split_mode", type: "text" },
       ],
     },
   ],
   [
-    "store.delete_cast",
+    "store.confirm_current_cast_sales_adjustments_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
-        { name: "p_cast_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
+        { name: "p_slips", type: "jsonb" },
       ],
     },
   ],
   [
-    "store.create_staff",
+    "store.sync_business_home_changes_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
-        { name: "p_display_name", type: "text" },
-        { name: "p_employment_type", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.update_staff_employment_type",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_staff_id", type: "bigint" },
-        { name: "p_employment_type", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.delete_staff",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_staff_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.upsert_table",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_table_id", type: "bigint" },
-        { name: "p_table_code", type: "text" },
-        { name: "p_table_name", type: "text" },
-        { name: "p_table_category_no", type: "integer" },
-        { name: "p_sort_order", type: "integer" },
-        { name: "p_is_active", type: "boolean" },
-      ],
-    },
-  ],
-  [
-    "store.delete_table",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_table_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.upsert_item_category",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_item_category_id", type: "bigint" },
-        { name: "p_category_code", type: "text" },
-        { name: "p_category_name", type: "text" },
-        { name: "p_sort_order", type: "integer" },
-        { name: "p_is_active", type: "boolean" },
-      ],
-    },
-  ],
-  [
-    "store.upsert_item",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_item_id", type: "bigint" },
-        { name: "p_item_category_id", type: "bigint" },
-        { name: "p_item_name", type: "text" },
-        { name: "p_default_price", type: "numeric" },
-        { name: "p_is_active", type: "boolean" },
-        { name: "p_is_cast_back_target", type: "boolean" },
-        { name: "p_cast_back_regular_unit_amount", type: "numeric" },
-        { name: "p_cast_back_nomination_unit_amount", type: "numeric" },
-        { name: "p_cast_back_type", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.delete_item_category",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_item_category_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.delete_item",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_item_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.reorder_items",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_items", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.create_slip",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_table_id", type: "bigint" },
-        { name: "p_opened_at", type: "timestamp with time zone" },
-        { name: "p_customer_labels", type: "text[]" },
-        { name: "p_cast_nominations", type: "jsonb" },
-        { name: "p_memo", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.flush_business_home_changes",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_client_batch_id", type: "text" },
-        { name: "p_operations", type: "jsonb" },
-        { name: "p_karaoke_lines", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.flush_current_business_home_changes",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_client_batch_id", type: "text" },
+        { name: "p_client_batch_id", type: "uuid" },
+        { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_expected_business_day_revision", type: "bigint", defaultValue: null },
+        { name: "p_business_date", type: "date", defaultValue: null },
         { name: "p_operations", type: "jsonb" },
         { name: "p_karaoke_lines", type: "jsonb" },
       ],
@@ -544,7 +258,9 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
         { name: "p_expected_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_expected_business_day_revision", type: "bigint", defaultValue: null },
         { name: "p_business_date", type: "date" },
         { name: "p_cast_entries", type: "jsonb" },
         { name: "p_staff_entries", type: "jsonb" },
@@ -552,22 +268,41 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.add_order_lines",
+    "store.get_attendance_editor_bootstrap_v2",
+    { result: "rows", params: [{ name: "p_department_id", type: "bigint" }] },
+  ],
+  [
+    "store.get_current_attendance_editor_snapshot",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_order_lines", type: "jsonb" },
+        { name: "p_known_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_known_business_day_revision", type: "bigint", defaultValue: null },
+      ],
+    },
+  [
+    "store.submit_current_order_entry_v2",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
+        { name: "p_lines", type: "jsonb" },
       ],
     },
   ],
   [
-    "store.confirm_checkout",
+    "store.confirm_checkout_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
         { name: "p_slip_id", type: "bigint" },
         { name: "p_payments", type: "jsonb" },
         { name: "p_received_amount", type: "numeric" },
@@ -575,11 +310,14 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.issue_checkout_statement",
+    "store.issue_checkout_statement_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
         { name: "p_slip_id", type: "bigint" },
         { name: "p_closed_at", type: "timestamp with time zone" },
       ],
@@ -596,11 +334,14 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.release_checkout_ready",
+    "store.release_checkout_ready_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
         { name: "p_slip_id", type: "bigint" },
       ],
     },
@@ -616,77 +357,15 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
-    "store.cancel_checkout",
+    "store.cancel_checkout_v2",
     {
       result: "rows",
       params: [
         { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_expected_business_day_id", type: "bigint" },
+        { name: "p_expected_business_day_revision", type: "bigint" },
         { name: "p_slip_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.quick_enter_receipt",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_document_id", type: "text" },
-        { name: "p_payment_date", type: "date" },
-        { name: "p_amount", type: "numeric" },
-        { name: "p_account_subject", type: "text" },
-        { name: "p_description", type: "text" },
-        { name: "p_group_code", type: "text" },
-        { name: "p_journal_payload", type: "jsonb" },
-        { name: "p_status", type: "text" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_advance_cast_id", type: "bigint" },
-      ],
-    },
-  ],
-  [
-    "store.mark_receipt_scan_mistake",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_document_id", type: "text" },
-        { name: "p_status", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.save_cast_sales_adjustment",
-    {
-      result: "scalar",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_slip_id", type: "bigint" },
-        { name: "p_adjustments", type: "jsonb" },
-        { name: "p_source_amount_type", type: "text" },
-        { name: "p_split_mode", type: "text" },
-      ],
-    },
-  ],
-  [
-    "store.save_business_day_cast_sales_adjustments",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_slips", type: "jsonb" },
-      ],
-    },
-  ],
-  [
-    "store.save_business_day_champagne_backs",
-    {
-      result: "rows",
-      params: [
-        { name: "p_department_id", type: "bigint" },
-        { name: "p_business_day_id", type: "bigint" },
-        { name: "p_backs", type: "jsonb" },
       ],
     },
   ],

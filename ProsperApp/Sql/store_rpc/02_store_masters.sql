@@ -55,7 +55,7 @@ $$;
 
 drop function if exists store.upsert_table(bigint, bigint, text, text, integer, integer, boolean);
 
-create or replace function store.upsert_table(
+create or replace function store.upsert_table_internal(
     p_department_id bigint,
     p_table_id bigint default null,
     p_table_code text default null,
@@ -144,7 +144,7 @@ $$;
 
 drop function if exists store.delete_table(bigint, bigint);
 
-create or replace function store.delete_table(
+create or replace function store.delete_table_internal(
     p_department_id bigint,
     p_table_id bigint
 )
@@ -249,7 +249,7 @@ $$;
 drop function if exists store.create_cast(bigint, text);
 drop function if exists store.create_cast(bigint, text, text);
 
-create or replace function store.create_cast(
+create or replace function store.create_cast_internal(
     p_department_id bigint,
     p_display_name text,
     p_drink_memo text default null
@@ -318,7 +318,7 @@ $$;
 
 drop function if exists store.update_cast_drink_memo(bigint, bigint, text);
 
-create or replace function store.update_cast_drink_memo(
+create or replace function store.update_cast_drink_memo_internal(
     p_department_id bigint,
     p_cast_id bigint,
     p_drink_memo text default null
@@ -373,7 +373,7 @@ $$;
 
 drop function if exists store.delete_cast(bigint, bigint);
 
-create or replace function store.delete_cast(
+create or replace function store.delete_cast_internal(
     p_department_id bigint,
     p_cast_id bigint
 )
@@ -467,7 +467,7 @@ $$;
 drop function if exists store.create_staff(bigint, text);
 drop function if exists store.create_staff(bigint, text, text);
 
-create or replace function store.create_staff(
+create or replace function store.create_staff_internal(
     p_department_id bigint,
     p_display_name text,
     p_employment_type text default 'employee'
@@ -537,11 +537,11 @@ begin
 end;
 $$;
 
-revoke execute on function store.create_staff(bigint, text, text) from public, anon, authenticated, service_role;
+revoke execute on function store.create_staff_internal(bigint, text, text) from public, anon, authenticated, service_role;
 
 drop function if exists store.update_staff_employment_type(bigint, bigint, text);
 
-create or replace function store.update_staff_employment_type(
+create or replace function store.update_staff_employment_type_internal(
     p_department_id bigint,
     p_staff_id bigint,
     p_employment_type text
@@ -581,11 +581,11 @@ begin
 end;
 $$;
 
-revoke execute on function store.update_staff_employment_type(bigint, bigint, text) from public, anon, authenticated, service_role;
+revoke execute on function store.update_staff_employment_type_internal(bigint, bigint, text) from public, anon, authenticated, service_role;
 
 drop function if exists store.delete_staff(bigint, bigint);
 
-create or replace function store.delete_staff(
+create or replace function store.delete_staff_internal(
     p_department_id bigint,
     p_staff_id bigint
 )
@@ -624,7 +624,7 @@ drop function if exists store.get_business_day_slips(bigint, bigint);
 
 drop function if exists store.get_order_entry_slips(bigint, bigint);
 
-create or replace function store.get_order_entry_slips(
+create or replace function store.get_order_entry_slips_internal(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -714,7 +714,7 @@ as $$
     order by ts.sort_order asc nulls last, ts.table_code asc nulls last, ts.opened_at asc;
 $$;
 
-revoke execute on function store.get_order_entry_slips(bigint, bigint) from public, anon, authenticated;
+revoke execute on function store.get_order_entry_slips_internal(bigint, bigint) from public, anon, authenticated;
 
 drop function if exists store.get_order_items(bigint);
 
@@ -878,7 +878,7 @@ $$;
 
 drop function if exists store.save_nomination_back_master(bigint, jsonb);
 
-create or replace function store.save_nomination_back_master(
+create or replace function store.save_nomination_back_master_internal(
     p_department_id bigint,
     p_settings jsonb default '[]'::jsonb
 )
@@ -1025,7 +1025,7 @@ $$;
 
 drop function if exists store.upsert_item_category(bigint, bigint, text, text, integer, boolean);
 
-create or replace function store.upsert_item_category(
+create or replace function store.upsert_item_category_internal(
     p_department_id bigint,
     p_item_category_id bigint default null,
     p_category_code text default null,
@@ -1108,7 +1108,7 @@ drop function if exists store.upsert_item(bigint, bigint, bigint, text, text, nu
 drop function if exists store.upsert_item(bigint, bigint, bigint, text, text, numeric, integer, boolean, boolean, numeric, numeric, text);
 drop function if exists store.upsert_item(bigint, bigint, bigint, text, numeric, boolean, boolean, numeric, numeric, text);
 
-create or replace function store.upsert_item(
+create or replace function store.upsert_item_internal(
     p_department_id bigint,
     p_item_id bigint default null,
     p_item_category_id bigint default null,
@@ -1252,7 +1252,7 @@ $$;
 
 drop function if exists store.delete_item(bigint, bigint);
 
-create or replace function store.delete_item(
+create or replace function store.delete_item_internal(
     p_department_id bigint,
     p_item_id bigint
 )
@@ -1303,7 +1303,7 @@ $$;
 
 drop function if exists store.delete_item_category(bigint, bigint);
 
-create or replace function store.delete_item_category(
+create or replace function store.delete_item_category_internal(
     p_department_id bigint,
     p_item_category_id bigint
 )
@@ -1351,7 +1351,7 @@ $$;
 
 drop function if exists store.reorder_items(bigint, jsonb);
 
-create or replace function store.reorder_items(
+create or replace function store.reorder_items_internal(
     p_department_id bigint,
     p_items jsonb default '[]'::jsonb
 )

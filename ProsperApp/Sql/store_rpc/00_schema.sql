@@ -36,7 +36,6 @@ drop function if exists public.save_business_day_staff_closing_attendance(bigint
 drop function if exists public.get_store_tables(bigint);
 drop function if exists public.get_store_casts(bigint);
 drop function if exists public.get_store_cast_admin_list(bigint);
-drop function if exists store.get_cast_admin_list(bigint);
 drop function if exists public.create_store_cast(bigint, text);
 drop function if exists public.delete_store_cast(bigint, bigint);
 drop function if exists public.get_store_staffs(bigint);
@@ -74,6 +73,5 @@ drop function if exists public.save_quick_entry(bigint, numeric, text, text, tex
 drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
 drop function if exists public.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
 drop function if exists public.mark_receipt_scan_mistake(bigint, text, text);
-drop function if exists store.get_business_day_closing_readiness(bigint, bigint, text);
 
 commit;

@@ -2,18 +2,17 @@
 
 この文書は、画面操作別のRPC棚卸しを順にレビューしながら、合意した同期方針を記録する作業文書である。実装・SQL適用・コミットは、この文書の採否が確定するまで行わない。
 
-## 実装反映状況（2026-08-06）
+## 実装反映状況（2026-08-07）
 
-採用済みのうち、次を実装済みとしてこのリリースに含める。
+本書の採用事項はすべて実装済みである。共通 `SyncStore`、shell-first GET、領域別revision、single-flight、`operation_id` 冪等性、browser draft/outbox、mutation応答による画面再構成を全対象画面へ適用した。
 
-- 共通のbrowser `SyncStore`、管理master snapshot、営業中トップのcurrent snapshot、注文候補のcurrent read model。
-- 営業中編集の`flush`前に行っていたcurrent business day読取の廃止。`flush_current_business_home_changes`が同一RPC内で営業日を解決し、既存のbatch冪等性・snapshot応答を維持する。
-- 勤怠保存の現在営業日確認/作成、キャスト・スタッフの出退勤保存、確定勤怠返却を`save_current_business_day_attendance_v2`の1 transactionへ集約する。
-- 営業日締めのcurrent/readiness事前読取を廃止し、`close_current_business_day`のDB内検証・状態変更1 RPCへ集約する。
-- 納品額保存の営業日読取/作成を廃止し、`save_current_business_day_drink_delivery_amount_v2`の1 mutationへ集約する。
-- 領収書の初期読取を`get_current_receipt_work_queue`の1 RPCへ集約し、`advance_receipt_work_queue_v2`で保存・スキャンミス除外を`operation_id`付きで直列送信する。browserはlocalStorage outboxへ積んで次票を即時表示し、成否不明の通信失敗では同じ先頭commandを再送する。
+- 営業中、注文、会計、勤怠、締め、納品額、キャスト売上額、ドリンクバック、領収書、管理masterを各current/v2 read・mutation契約へ切り替えた。
+- 成功mutation直後のredirect GETと同画面全体readを通常経路から除去した。
+- 結果不明時は同じcommandと `operation_id` を保持し、確定した業務エラーだけを再編集可能状態へ移す。
+- 旧Razor handler、旧Repository/DTO、旧Edge allowlist、旧RPC定義を削除した。互換fallbackと二重writeはない。
+- 旧シャンパンバック物理モデルは既存行を新ドリンクバック調整へ一方向移行してから削除する。
 
-以下は設計を確定済みだが、この変更セットでは未移行である。注文登録のmutation応答による画面再構成、会計/締め/納品額/キャスト売上額調整/ドリンクバック調整のv2 mutation、管理画面のbrowser shell表示とmaster delta、領収書のfailed command再編集UIである。旧handlerをこれらの機能が未移行のまま削除しない。
+SQL適用順、非可逆移行、確認手順は `HANDOFF.md` と `Sql/store_rpc_functions.sql` を正とする。ソース実装と自動テストは完了しているが、本書更新時点では対象SupabaseへSQLを適用していない。
 
 ## 0. 横断実装契約
 
@@ -163,11 +162,11 @@ Razor GET
 - 10秒poll、focus、onlineが同時に起きてもsingle-flightにより同時snapshot要求を1本にする。
 - 既存の未送信編集ドラフトは、revisionの後退したsnapshotで失われない。
 
-### 未決事項
+### 実装決定
 
-- warm GETで伝票領域をskeleton表示にするか、最大30秒のruntime cacheを暫定表示してから差し替えるか。**推奨はskeleton**。古い会計状態を確定表示しないため。
-- 初回coldで現行 `get_store_bootstrap` を一時流用するか、最初からv2を作るか。payload削減まで同時に行うならv2、変更を小さくするなら現行関数を流用してからv2へ置換する。
-- snapshotの変更なし応答をHTTP 200の小JSONにするか、ETag/304にするか。Edge Function経由の実装・監視を確認してから決める。
+- warm GETはruntime cacheを確定表示せず、伝票領域を同期中表示にする。
+- cold GETは `get_business_home_bootstrap_v2` でmasterと同時点snapshotを1回で返す。旧bootstrapを流用しない。
+- revision変更なしはHTTP 200の小JSONで返し、ETag/304は使わない。
 
 ## 次に確認する画面
 

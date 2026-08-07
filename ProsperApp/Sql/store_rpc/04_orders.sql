@@ -1,6 +1,4 @@
-drop function if exists store.get_order_attending_casts(bigint, bigint);
-
-create or replace function store.get_order_attending_casts(
+create or replace function store.get_order_attending_casts_internal(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -38,7 +36,10 @@ as $$
     order by d.department_name asc, c.sort_order asc, c.display_name asc;
 $$;
 
-create or replace function store.add_order_lines(
+drop function if exists store.add_order_lines(bigint, bigint, jsonb);
+drop function if exists store.add_order_lines_internal(bigint, bigint, jsonb);
+
+create or replace function store.add_order_lines_internal(
     p_department_id bigint,
     p_slip_id bigint,
     p_order_lines jsonb default '[]'::jsonb

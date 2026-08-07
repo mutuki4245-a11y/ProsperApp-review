@@ -3,9 +3,7 @@ begin;
 alter table public.cast_master
     add column if not exists joined_on date not null default ((now() at time zone 'Asia/Tokyo')::date);
 
-drop function if exists store.get_context(bigint);
-
-create or replace function store.get_context(p_department_id bigint)
+create or replace function store.get_context_internal(p_department_id bigint)
 returns table (
     company_id bigint,
     department_id bigint,
@@ -40,7 +38,7 @@ as $$
     limit 1;
 $$;
 
-create or replace function store.get_current_business_day(p_department_id bigint)
+create or replace function store.get_current_business_day_internal(p_department_id bigint)
 returns table (
     business_day_id bigint,
     company_id bigint,
@@ -71,7 +69,7 @@ as $$
     limit 1;
 $$;
 
-create or replace function store.open_business_day(
+create or replace function store.open_business_day_internal(
     p_department_id bigint,
     p_business_date date,
     p_memo text default null
@@ -143,135 +141,9 @@ begin
 end;
 $$;
 
-drop function if exists store.open_business_day_with_attendance(bigint, date, bigint[], text);
-
-create or replace function store.open_business_day_with_attendance(
-    p_department_id bigint,
-    p_business_date date,
-    p_attendance_entries jsonb,
-    p_memo text default null
-)
-returns table (
-    business_day_id bigint,
-    company_id bigint,
-    department_id bigint,
-    business_date date,
-    opened_at timestamp with time zone,
-    closed_at timestamp with time zone,
-    status text,
-    memo text
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-    v_business_day record;
-    v_entry jsonb;
-    v_cast_id bigint;
-    v_clock_in_time time;
-    v_inserted_count integer := 0;
-begin
-    select *
-      into v_business_day
-    from store.open_business_day(p_department_id, p_business_date, p_memo)
-    limit 1;
-
-    if v_business_day.business_day_id is null then
-        raise exception 'business_day_not_opened';
-    end if;
-
-    for v_entry in
-        select value
-        from jsonb_array_elements(
-            case
-                when jsonb_typeof(p_attendance_entries) = 'array' then p_attendance_entries
-                else '[]'::jsonb
-            end
-        )
-    loop
-        v_cast_id := nullif(v_entry->>'cast_id', '')::bigint;
-
-        if v_cast_id is null then
-            raise exception 'attendance_cast_required';
-        end if;
-
-        begin
-            v_clock_in_time := nullif(v_entry->>'clock_in_time', '')::time;
-        exception when others then
-            raise exception 'invalid_attendance_clock_in_time';
-        end;
-
-        if v_clock_in_time is null then
-            raise exception 'invalid_attendance_clock_in_time';
-        end if;
-
-        if not exists (
-            select 1
-            from public.cast_master c
-            join public.department_master d
-              on d.department_id = c.department_id
-            where c.cast_id = v_cast_id
-              and c.company_id = v_business_day.company_id
-              and c.is_active = true
-              and c.status = 'active'
-              and d.is_active = true
-        ) then
-            raise exception 'store_attendance_cast_not_found';
-        end if;
-
-        insert into public.store_cast_attendance (
-            company_id,
-            department_id,
-            business_day_id,
-            business_date,
-            cast_id,
-            attendance_status,
-            clock_in_at,
-            source
-        )
-        values (
-            v_business_day.company_id,
-            v_business_day.department_id,
-            v_business_day.business_day_id,
-            v_business_day.business_date,
-            v_cast_id,
-            'checked_in',
-            (((v_business_day.business_date + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_in_time) at time zone 'Asia/Tokyo'),
-            'opening'
-        )
-        on conflict on constraint uq_store_cast_attendance_day_cast
-        do update set
-            attendance_status = excluded.attendance_status,
-            clock_in_at = excluded.clock_in_at,
-            source = excluded.source,
-            updated_at = now();
-
-        v_inserted_count := v_inserted_count + 1;
-    end loop;
-
-    if v_inserted_count = 0 then
-        raise exception 'attendance_required';
-    end if;
-
-    return query
-    select
-        v_business_day.business_day_id,
-        v_business_day.company_id,
-        v_business_day.department_id,
-        v_business_day.business_date,
-        v_business_day.opened_at,
-        v_business_day.closed_at,
-        v_business_day.status,
-        v_business_day.memo;
-end;
-$$;
-
 drop function if exists public.add_business_day_attendance(bigint, bigint, jsonb);
 
-drop function if exists store.save_business_day_attendance(bigint, bigint, jsonb);
-
-create or replace function store.save_business_day_attendance(
+create or replace function store.save_business_day_attendance_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_attendance_entries jsonb
@@ -412,7 +284,7 @@ $$;
 
 drop function if exists store.save_business_day_staff_attendance(bigint, bigint, jsonb);
 
-create or replace function store.save_business_day_staff_attendance(
+create or replace function store.save_business_day_staff_attendance_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_attendance_entries jsonb
@@ -552,7 +424,7 @@ begin
 end;
 $$;
 
-create or replace function store.get_business_day_closing_attendance(
+create or replace function store.get_business_day_closing_attendance_internal(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -666,7 +538,7 @@ as $$
         attendance_rows.attendance_id asc;
 $$;
 
-create or replace function store.save_business_day_closing_attendance(
+create or replace function store.save_business_day_closing_attendance_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_attendance_entries jsonb
@@ -779,7 +651,7 @@ $$;
 
 drop function if exists store.save_business_day_staff_closing_attendance(bigint, bigint, jsonb);
 
-create or replace function store.save_business_day_staff_closing_attendance(
+create or replace function store.save_business_day_staff_closing_attendance_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_attendance_entries jsonb
@@ -890,7 +762,7 @@ begin
 end;
 $$;
 
-create or replace function store.get_open_slip_count(
+create or replace function store.get_open_slip_count_internal(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -906,67 +778,9 @@ as $$
       and s.status in ('open', 'checkout_ready');
 $$;
 
-create or replace function store.get_business_day_drink_delivery_status(
-    p_department_id bigint,
-    p_business_day_id bigint
-)
-returns table (
-    drink_delivery_amount numeric,
-    is_entered boolean
-)
-language sql
-security definer
-set search_path = public
-as $$
-    select
-        coalesce(b.drink_delivery_amount, 0) as drink_delivery_amount,
-        coalesce(b.drink_delivery_amount_entered, false) as is_entered
-    from public.store_business_days b
-    where b.department_id = p_department_id
-      and b.business_day_id = p_business_day_id
-    limit 1;
-$$;
-
 drop function if exists public.get_business_day_drink_delivery_amount(bigint, bigint);
 
-create or replace function store.save_business_day_drink_delivery_amount(
-    p_department_id bigint,
-    p_business_day_id bigint,
-    p_drink_delivery_amount numeric
-)
-returns numeric
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-    v_drink_delivery_amount numeric(12, 0);
-begin
-    if p_drink_delivery_amount is null or
-       p_drink_delivery_amount < 0 or
-       p_drink_delivery_amount <> trunc(p_drink_delivery_amount) then
-        raise exception 'invalid_drink_delivery_amount';
-    end if;
-
-    update public.store_business_days b
-       set drink_delivery_amount = p_drink_delivery_amount,
-           drink_delivery_amount_entered = true,
-           updated_at = now()
-     where b.business_day_id = p_business_day_id
-       and b.department_id = p_department_id
-       and b.status = 'open'
-     returning b.drink_delivery_amount
-      into v_drink_delivery_amount;
-
-    if v_drink_delivery_amount is null then
-        raise exception 'business_day_not_open';
-    end if;
-
-    return v_drink_delivery_amount;
-end;
-$$;
-
-create or replace function store.get_business_day_closing_readiness(
+create or replace function store.get_business_day_closing_readiness_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_pending_receipt_status text default 'unprocessed'
@@ -981,10 +795,10 @@ returns table (
     cast_sales_required_slip_count integer,
     cast_sales_completed_slip_count integer,
     cast_sales_missing_slip_count integer,
-    champagne_back_required_cast_count integer,
-    champagne_back_completed_cast_count integer,
-    champagne_back_missing_cast_count integer,
-    champagne_back_total_amount numeric,
+    drink_back_required_cast_count integer,
+    drink_back_completed_cast_count integer,
+    drink_back_missing_cast_count integer,
+    drink_back_total_amount numeric,
     pending_receipt_count integer,
     can_close boolean,
     block_reasons jsonb,
@@ -1002,10 +816,10 @@ declare
     v_cast_sales_required_slip_count integer := 0;
     v_cast_sales_completed_slip_count integer := 0;
     v_cast_sales_missing_slip_count integer := 0;
-    v_champagne_back_required_cast_count integer := 0;
-    v_champagne_back_completed_cast_count integer := 0;
-    v_champagne_back_missing_cast_count integer := 0;
-    v_champagne_back_total_amount numeric := 0;
+    v_drink_back_required_cast_count integer := 0;
+    v_drink_back_completed_cast_count integer := 0;
+    v_drink_back_missing_cast_count integer := 0;
+    v_drink_back_total_amount numeric := 0;
     v_pending_receipt_count integer := 0;
     v_can_close boolean;
     v_block_reasons jsonb := '[]'::jsonb;
@@ -1022,7 +836,7 @@ begin
         return;
     end if;
 
-    select store.get_open_slip_count(p_department_id, p_business_day_id)
+    select store.get_open_slip_count_internal(p_department_id, p_business_day_id)
       into v_open_slip_count;
 
     select
@@ -1053,7 +867,7 @@ begin
       into v_cast_sales_required_slip_count,
            v_cast_sales_completed_slip_count,
            v_cast_sales_missing_slip_count
-    from store.get_business_day_cast_sales_adjustment_status(
+    from store.get_business_day_cast_sales_adjustment_status_internal(
         p_department_id,
         p_business_day_id
     ) s;
@@ -1062,12 +876,12 @@ begin
         coalesce(s.required_cast_count, 0),
         coalesce(s.completed_cast_count, 0),
         coalesce(s.missing_cast_count, 0),
-        coalesce(s.total_back_amount, 0)
-      into v_champagne_back_required_cast_count,
-           v_champagne_back_completed_cast_count,
-           v_champagne_back_missing_cast_count,
-           v_champagne_back_total_amount
-    from store.get_business_day_champagne_back_status(
+        coalesce(s.total_amount, 0)
+      into v_drink_back_required_cast_count,
+           v_drink_back_completed_cast_count,
+           v_drink_back_missing_cast_count,
+           v_drink_back_total_amount
+    from store.get_business_day_drink_back_status(
         p_department_id,
         p_business_day_id
     ) s;
@@ -1075,7 +889,7 @@ begin
     if nullif(trim(coalesce(p_pending_receipt_status, '')), '') is not null then
         select count(*)::integer
           into v_pending_receipt_count
-        from store.get_pending_receipts(
+        from store.get_pending_receipts_internal(
             p_department_id,
             p_pending_receipt_status
         );
@@ -1104,9 +918,9 @@ begin
             jsonb_build_array('キャスト売上額調整が未完了です。');
     end if;
 
-    if coalesce(v_champagne_back_missing_cast_count, 0) > 0 then
+    if coalesce(v_drink_back_missing_cast_count, 0) > 0 then
         v_block_reasons := v_block_reasons ||
-            jsonb_build_array('シャンパンバックが未入力です。0円の場合も保存してください。');
+            jsonb_build_array('ドリンクバック調整が未入力です。0円の場合も保存してください。');
     end if;
 
     v_can_close :=
@@ -1115,7 +929,7 @@ begin
         coalesce(v_attendance_count, 0) > 0 and
         coalesce(v_missing_clock_out_count, 0) = 0 and
         coalesce(v_cast_sales_missing_slip_count, 0) = 0 and
-        coalesce(v_champagne_back_missing_cast_count, 0) = 0;
+        coalesce(v_drink_back_missing_cast_count, 0) = 0;
 
     return query
     select
@@ -1128,10 +942,10 @@ begin
         coalesce(v_cast_sales_required_slip_count, 0),
         coalesce(v_cast_sales_completed_slip_count, 0),
         coalesce(v_cast_sales_missing_slip_count, 0),
-        coalesce(v_champagne_back_required_cast_count, 0),
-        coalesce(v_champagne_back_completed_cast_count, 0),
-        coalesce(v_champagne_back_missing_cast_count, 0),
-        coalesce(v_champagne_back_total_amount, 0),
+        coalesce(v_drink_back_required_cast_count, 0),
+        coalesce(v_drink_back_completed_cast_count, 0),
+        coalesce(v_drink_back_missing_cast_count, 0),
+        coalesce(v_drink_back_total_amount, 0),
         coalesce(v_pending_receipt_count, 0),
         v_can_close,
         v_block_reasons,
@@ -1139,14 +953,10 @@ begin
 end;
 $$;
 
-revoke all on function store.get_business_day_closing_readiness(bigint, bigint, text)
+revoke all on function store.get_business_day_closing_readiness_internal(bigint, bigint, text)
     from public, anon, authenticated, service_role;
 
-drop function if exists store.close_business_day(bigint, bigint, text);
-drop function if exists store.close_business_day(bigint, bigint, text, text);
-drop function if exists store.close_business_day(bigint, bigint, text, text, boolean);
-
-create or replace function store.close_business_day(
+create or replace function store.close_business_day_internal(
     p_department_id bigint,
     p_business_day_id bigint,
     p_memo text default null,
@@ -1192,7 +1002,7 @@ begin
     if v_ignore_closing_requirements = false then
         select *
           into v_readiness
-        from store.get_business_day_closing_readiness(
+        from store.get_business_day_closing_readiness_internal(
             p_department_id,
             p_business_day_id,
             p_pending_receipt_status
@@ -1218,8 +1028,8 @@ begin
             raise exception 'cast_sales_adjustment_required:%', v_readiness.cast_sales_missing_slip_count;
         end if;
 
-        if coalesce(v_readiness.champagne_back_missing_cast_count, 0) > 0 then
-            raise exception 'champagne_back_required:%', v_readiness.champagne_back_missing_cast_count;
+        if coalesce(v_readiness.drink_back_missing_cast_count, 0) > 0 then
+            raise exception 'drink_back_required:%', v_readiness.drink_back_missing_cast_count;
         end if;
 
     end if;
@@ -1267,5 +1077,8 @@ begin
         v_business_day.memo;
 end;
 $$;
+
+revoke all on function store.close_business_day_internal(bigint, bigint, text, text, boolean)
+    from public, anon, authenticated, service_role;
 
 commit;

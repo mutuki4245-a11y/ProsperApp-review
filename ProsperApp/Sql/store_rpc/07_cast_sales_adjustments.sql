@@ -1,6 +1,4 @@
-drop function if exists store.get_business_day_cast_sales_adjustment_status(bigint, bigint);
-
-create or replace function store.get_business_day_cast_sales_adjustment_status(
+create or replace function store.get_business_day_cast_sales_adjustment_status_internal(
     p_department_id bigint,
     p_business_day_id bigint
 )
@@ -46,6 +44,9 @@ as $$
         count(*) filter (where saved_cast_count < required_cast_count)::integer as missing_slip_count
     from slip_status;
 $$;
+
+revoke all on function store.get_business_day_cast_sales_adjustment_status_internal(bigint, bigint)
+    from public, anon, authenticated, service_role;
 
 drop function if exists store.get_cast_sales_adjustment_slips(bigint, bigint);
 
@@ -492,8 +493,9 @@ as $$
 $$;
 
 drop function if exists store.save_cast_sales_adjustment(bigint, bigint, jsonb, text, text);
+drop function if exists store.save_cast_sales_adjustment_internal(bigint, bigint, jsonb, text, text);
 
-create or replace function store.save_cast_sales_adjustment(
+create or replace function store.save_cast_sales_adjustment_internal(
     p_department_id bigint,
     p_slip_id bigint,
     p_adjustments jsonb default '[]'::jsonb,
@@ -716,3 +718,6 @@ begin
     return coalesce(v_saved_count, 0);
 end;
 $$;
+
+revoke all on function store.save_cast_sales_adjustment_internal(bigint, bigint, jsonb, text, text)
+    from public, anon, authenticated, service_role;

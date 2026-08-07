@@ -8,24 +8,36 @@ create table if not exists store.receipt_work_queue_operations (
     operation_id text not null,
     action text not null,
     document_id text not null,
+    request_hash text not null,
     response jsonb not null,
     created_at timestamp with time zone not null default now(),
     primary key (department_id, operation_id)
 );
+
+alter table store.receipt_work_queue_operations
+    add column if not exists request_hash text;
+delete from store.receipt_work_queue_operations where request_hash is null;
+alter table store.receipt_work_queue_operations
+    alter column request_hash set not null;
 
 revoke all on table store.receipt_work_queue_operations from public, anon, authenticated, service_role;
 create index if not exists receipt_work_queue_operations_created_at_idx
     on store.receipt_work_queue_operations (created_at);
 
 drop function if exists store.get_current_receipt_work_queue(bigint);
+drop function if exists store.get_current_receipt_work_queue(bigint, text);
 
 create or replace function store.get_current_receipt_work_queue(
-    p_department_id bigint
+    p_department_id bigint,
+    p_resume_cursor text default null
 )
 returns table (
     queue_revision text,
+    pending_count integer,
     business_day jsonb,
-    receipts jsonb,
+    work_item jsonb,
+    buffer jsonb,
+    resume_cursor text,
     advance_casts jsonb
 )
 language plpgsql
@@ -34,8 +46,12 @@ set search_path = pg_catalog, public
 as $$
 declare
     v_business_day public.store_business_days%rowtype;
-    v_receipts jsonb := '[]'::jsonb;
+    v_candidates jsonb := '[]'::jsonb;
+    v_buffer jsonb := '[]'::jsonb;
     v_advance_casts jsonb := '[]'::jsonb;
+    v_queue_revision text;
+    v_pending_count integer := 0;
+    v_resume_cursor text;
 begin
     if p_department_id <= 0 or not exists (
         select 1
@@ -48,23 +64,46 @@ begin
 
     select current_business_day.*
       into v_business_day
-      from store.get_current_business_day(p_department_id) current_business_day;
+      from store.get_current_business_day_internal(p_department_id) current_business_day;
 
-    select coalesce(jsonb_agg(
-        to_jsonb(receipt_row) || jsonb_build_object(
-            'work_item_token', md5(receipt_row.document_id || ':' || document.updated_at::text)
-        )
-        order by receipt_row.document_id
-    ), '[]'::jsonb)
-      into v_receipts
-      from store.get_pending_receipts(p_department_id, 'unprocessed') receipt_row
+    select count(*)::integer,
+           md5(coalesce(string_agg(
+               receipt_row.document_id || ':' || document.updated_at::text,
+               '|' order by receipt_row.document_id), ''))
+      into v_pending_count, v_queue_revision
+      from store.get_pending_receipts_internal(p_department_id, 'unprocessed') receipt_row
       join accounting.documents document
         on document.document_id = receipt_row.document_id;
+
+    select coalesce(jsonb_agg(candidate.payload order by candidate.document_id), '[]'::jsonb)
+      into v_candidates
+      from (
+          select receipt_row.document_id,
+                 to_jsonb(receipt_row) || jsonb_build_object(
+                     'work_item_token', md5(receipt_row.document_id || ':' || document.updated_at::text)
+                 ) as payload
+            from store.get_pending_receipts_internal(p_department_id, 'unprocessed') receipt_row
+            join accounting.documents document
+              on document.document_id = receipt_row.document_id
+           where nullif(p_resume_cursor, '') is null
+              or receipt_row.document_id > p_resume_cursor
+           order by receipt_row.document_id
+           limit 6
+      ) candidate;
+
+    select coalesce(jsonb_agg(candidate.value order by candidate.ordinal), '[]'::jsonb)
+      into v_buffer
+      from jsonb_array_elements(v_candidates) with ordinality candidate(value, ordinal)
+     where candidate.ordinal > 1;
+
+    if jsonb_array_length(v_candidates) = 6 then
+        v_resume_cursor := v_candidates->5->>'document_id';
+    end if;
 
     if v_business_day.business_day_id is not null then
         select coalesce(jsonb_agg(to_jsonb(attendance_row) order by attendance_row.display_name, attendance_row.attendance_id), '[]'::jsonb)
           into v_advance_casts
-          from store.get_business_day_closing_attendance(
+          from store.get_business_day_closing_attendance_internal(
               p_department_id,
               v_business_day.business_day_id) attendance_row
          where attendance_row.person_type = 'cast'
@@ -73,11 +112,34 @@ begin
 
     return query
     select
-        md5(coalesce(to_jsonb(v_business_day)::text, 'null') || ':' || v_receipts::text || ':' || v_advance_casts::text),
+        v_queue_revision,
+        v_pending_count,
         case when v_business_day.business_day_id is null then null else to_jsonb(v_business_day) end,
-        v_receipts,
+        case when jsonb_array_length(v_candidates) = 0 then null else v_candidates->0 end,
+        v_buffer,
+        v_resume_cursor,
         v_advance_casts;
 end;
+$$;
+
+drop function if exists store.is_pending_receipt_drive_file_allowed(bigint, text);
+
+create or replace function store.is_pending_receipt_drive_file_allowed(
+    p_department_id bigint,
+    p_drive_file_id text
+)
+returns table (
+    is_allowed boolean
+)
+language sql
+security definer
+set search_path = pg_catalog, public
+as $$
+    select exists (
+        select 1
+          from store.get_pending_receipts_internal(p_department_id, 'unprocessed') receipt
+         where receipt.drive_file_id = nullif(trim(p_drive_file_id), '')
+    ) as is_allowed;
 $$;
 
 drop function if exists store.advance_receipt_work_queue_v2(bigint, text, text, text, text, date, numeric, text, text, text, bigint);
@@ -106,6 +168,8 @@ declare
     v_document_id text := trim(coalesce(p_document_id, ''));
     v_existing_action text;
     v_existing_document_id text;
+    v_existing_request_hash text;
+    v_request_hash text;
     v_response jsonb;
     v_company_id bigint;
     v_business_day_id bigint;
@@ -115,6 +179,7 @@ declare
     v_work_item_token text;
     v_error_message text;
     v_error_state text;
+    v_queue jsonb;
 begin
     if p_department_id <= 0 or
        v_operation_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or
@@ -127,6 +192,18 @@ begin
         return;
     end if;
 
+    v_request_hash := md5(jsonb_build_object(
+        'action', v_action,
+        'work_item_token', coalesce(p_work_item_token, ''),
+        'document_id', v_document_id,
+        'payment_date', p_payment_date,
+        'amount', p_amount,
+        'account_subject', nullif(trim(coalesce(p_account_subject, '')), ''),
+        'description', nullif(trim(coalesce(p_description, '')), ''),
+        'group_code', nullif(trim(coalesce(p_group_code, '')), ''),
+        'advance_cast_id', p_advance_cast_id
+    )::text);
+
     perform pg_advisory_xact_lock(hashtextextended(
         format('receipt_work_queue:%s:%s', p_department_id, v_document_id),
         0));
@@ -134,14 +211,16 @@ begin
     delete from store.receipt_work_queue_operations
      where created_at < now() - interval '30 days';
 
-    select operation.action, operation.document_id, operation.response
-      into v_existing_action, v_existing_document_id, v_response
+    select operation.action, operation.document_id, operation.request_hash, operation.response
+      into v_existing_action, v_existing_document_id, v_existing_request_hash, v_response
       from store.receipt_work_queue_operations operation
      where operation.department_id = p_department_id
        and operation.operation_id = v_operation_id;
 
     if found then
-        if v_existing_action <> v_action or v_existing_document_id <> v_document_id then
+        if v_existing_action <> v_action or
+           v_existing_document_id <> v_document_id or
+           v_existing_request_hash <> v_request_hash then
             raise exception 'receipt_operation_id_reused';
         end if;
 
@@ -189,7 +268,7 @@ begin
                 if trim(p_account_subject) in ('前渡金: キャスト', '前渡金：キャスト') then
                     select current_business_day.business_day_id
                       into v_business_day_id
-                      from store.get_current_business_day(p_department_id) current_business_day;
+                      from store.get_current_business_day_internal(p_department_id) current_business_day;
                 else
                     v_business_day_id := null;
                 end if;
@@ -236,7 +315,7 @@ begin
                 );
 
                 perform 1
-                  from store.quick_enter_receipt(
+                  from store.quick_enter_receipt_internal(
                       p_department_id,
                       v_document_id,
                       p_payment_date,
@@ -253,7 +332,7 @@ begin
                 end if;
             else
                 perform 1
-                  from store.mark_receipt_scan_mistake(
+                  from store.mark_receipt_scan_mistake_internal(
                       p_department_id,
                       v_document_id,
                       'excluded');
@@ -294,17 +373,34 @@ begin
         end;
     end if;
 
+    select to_jsonb(queue_state)
+      into v_queue
+      from store.get_current_receipt_work_queue(p_department_id, null) queue_state;
+
+    v_response := v_response || jsonb_build_object(
+        'queue_revision', v_queue->>'queue_revision',
+        'pending_count', coalesce(nullif(v_queue->>'pending_count', '')::integer, 0),
+        'business_day', v_queue->'business_day',
+        'work_item', v_queue->'work_item',
+        'buffer', coalesce(v_queue->'buffer', '[]'::jsonb),
+        'resume_cursor', v_queue->>'resume_cursor',
+        'advance_casts', coalesce(v_queue->'advance_casts', '[]'::jsonb),
+        'pending_receipt_count', coalesce(nullif(v_queue->>'pending_count', '')::integer, 0)
+    );
+
     insert into store.receipt_work_queue_operations (
         department_id,
         operation_id,
         action,
         document_id,
+        request_hash,
         response
     ) values (
         p_department_id,
         v_operation_id,
         v_action,
         v_document_id,
+        v_request_hash,
         v_response
     );
 
@@ -312,7 +408,9 @@ begin
 end;
 $$;
 
-revoke all on function store.get_current_receipt_work_queue(bigint)
+revoke all on function store.get_current_receipt_work_queue(bigint, text)
+    from public, anon, authenticated, service_role;
+revoke all on function store.is_pending_receipt_drive_file_allowed(bigint, text)
     from public, anon, authenticated, service_role;
 revoke all on function store.advance_receipt_work_queue_v2(bigint, text, text, text, text, date, numeric, text, text, text, bigint)
     from public, anon, authenticated, service_role;

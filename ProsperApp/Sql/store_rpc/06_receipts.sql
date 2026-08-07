@@ -3,8 +3,10 @@ begin;
 drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, text);
 drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text);
 drop function if exists store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text, bigint, bigint);
+drop function if exists store.mark_receipt_scan_mistake(bigint, text, text);
+drop function if exists store.get_pending_receipts(bigint, text);
 
-create or replace function store.get_pending_receipts(
+create or replace function store.get_pending_receipts_internal(
     p_department_id bigint,
     p_status text default 'unprocessed'
 )
@@ -108,7 +110,7 @@ as $$
     order by document.uploaded_at asc, document.file_no asc, document.document_id asc;
 $$;
 
-create or replace function store.quick_enter_receipt(
+create or replace function store.quick_enter_receipt_internal(
     p_department_id bigint,
     p_document_id text,
     p_payment_date date,
@@ -324,7 +326,7 @@ begin
 end;
 $$;
 
-create or replace function store.mark_receipt_scan_mistake(
+create or replace function store.mark_receipt_scan_mistake_internal(
     p_department_id bigint,
     p_document_id text,
     p_status text default 'excluded'
@@ -376,11 +378,11 @@ begin
 end;
 $$;
 
-revoke all on function store.get_pending_receipts(bigint, text)
+revoke all on function store.get_pending_receipts_internal(bigint, text)
     from public, anon, authenticated, service_role;
-revoke all on function store.quick_enter_receipt(bigint, text, date, numeric, text, text, text, jsonb, text, bigint, bigint)
+revoke all on function store.quick_enter_receipt_internal(bigint, text, date, numeric, text, text, text, jsonb, text, bigint, bigint)
     from public, anon, authenticated, service_role;
-revoke all on function store.mark_receipt_scan_mistake(bigint, text, text)
+revoke all on function store.mark_receipt_scan_mistake_internal(bigint, text, text)
     from public, anon, authenticated, service_role;
 
 commit;

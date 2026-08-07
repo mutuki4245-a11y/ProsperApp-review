@@ -6,8 +6,9 @@ create unique index if not exists ux_store_checkouts_active_slip
     where status <> 'cancelled';
 
 drop function if exists store.cancel_checkout(bigint, bigint);
+drop function if exists store.cancel_checkout_internal(bigint, bigint);
 
-create or replace function store.cancel_checkout(
+create or replace function store.cancel_checkout_internal(
     p_department_id bigint,
     p_slip_id bigint
 )
@@ -145,8 +146,10 @@ end;
 $$;
 
 drop function if exists store.create_slip(bigint, bigint, timestamp with time zone, text[], bigint[], text);
+drop function if exists store.create_slip(bigint, bigint, timestamp with time zone, text[], jsonb, text);
+drop function if exists store.create_slip_internal(bigint, bigint, timestamp with time zone, text[], jsonb, text);
 
-create or replace function store.create_slip(
+create or replace function store.create_slip_internal(
     p_department_id bigint,
     p_table_id bigint,
     p_opened_at timestamp with time zone,

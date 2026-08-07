@@ -23,7 +23,7 @@ declare
 begin
     select business_day.*
       into v_business_day
-      from store.get_current_business_day(p_department_id) business_day;
+      from store.get_current_business_day_internal(p_department_id) business_day;
 
     if v_business_day.business_day_id is null then
         return query select false, null::jsonb, 'no-business-day', '[]'::jsonb, '[]'::jsonb;
@@ -32,11 +32,11 @@ begin
 
     select coalesce(jsonb_agg(to_jsonb(slip_row) order by slip_row.opened_at, slip_row.slip_id), '[]'::jsonb)
       into v_slips
-      from store.get_order_entry_slips(p_department_id, v_business_day.business_day_id) slip_row;
+      from store.get_order_entry_slips_internal(p_department_id, v_business_day.business_day_id) slip_row;
 
     select coalesce(jsonb_agg(to_jsonb(cast_row) order by cast_row.display_name, cast_row.cast_id), '[]'::jsonb)
       into v_attendance_casts
-      from store.get_order_attending_casts(p_department_id, v_business_day.business_day_id) cast_row;
+      from store.get_order_attending_casts_internal(p_department_id, v_business_day.business_day_id) cast_row;
 
     return query
     select

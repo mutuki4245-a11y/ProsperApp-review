@@ -1,11 +1,14 @@
 -- Checkout preparation is a DB state transition.  Printer progress remains on the terminal.
 
 drop function if exists store.issue_checkout_statement(bigint, bigint, timestamp with time zone);
+drop function if exists store.issue_checkout_statement_internal(bigint, bigint, timestamp with time zone);
 drop function if exists store.get_checkout_statement_print_data(bigint, bigint);
 drop function if exists store.release_checkout_ready(bigint, bigint);
+drop function if exists store.release_checkout_ready_internal(bigint, bigint);
 drop function if exists store.confirm_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric);
 drop function if exists store.confirm_checkout(bigint, bigint, timestamp with time zone, jsonb, numeric, jsonb);
 drop function if exists store.confirm_checkout(bigint, bigint, jsonb, numeric);
+drop function if exists store.confirm_checkout_legacy_internal(bigint, bigint, jsonb, numeric);
 drop function if exists store.get_checkout_receipt_print_data(bigint, bigint);
 
 create or replace function store.capture_slip_accounting_snapshot(
@@ -423,7 +426,7 @@ as $$
     );
 $$;
 
-create or replace function store.issue_checkout_statement(
+create or replace function store.issue_checkout_statement_internal(
     p_department_id bigint,
     p_slip_id bigint,
     p_closed_at timestamp with time zone
@@ -560,7 +563,7 @@ begin
 
     select s.snapshot
       into v_business_day_snapshot
-      from store.get_business_day_snapshot(p_department_id, v_slip.business_day_id) s;
+      from store.get_business_day_snapshot_internal(p_department_id, v_slip.business_day_id) s;
 
     select value
       into v_business_home_data
@@ -612,7 +615,7 @@ begin
 end;
 $$;
 
-create or replace function store.release_checkout_ready(
+create or replace function store.release_checkout_ready_internal(
     p_department_id bigint,
     p_slip_id bigint
 )
@@ -738,7 +741,7 @@ begin
 end;
 $$;
 
-create or replace function store.confirm_checkout(
+create or replace function store.confirm_checkout_legacy_internal(
     p_department_id bigint,
     p_slip_id bigint,
     p_payments jsonb default '[]'::jsonb,
