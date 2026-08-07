@@ -9,14 +9,12 @@ namespace ProsperApp.Infrastructure.Supabase;
 
 public class SupabaseStoreSlipRepository(
     ISupabaseRpcClient rpcClient,
-    IBusinessDayRepository businessDayRepository,
     ILocalSettingsProvider localSettingsProvider,
     IApplicationCache cache,
     IStoreClock storeClock,
     IStoreMasterBootstrapper masterBootstrapper)
     : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreSlipRepository
 {
-    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
     private readonly IApplicationCache _cache = cache;
     private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
@@ -82,46 +80,6 @@ public class SupabaseStoreSlipRepository(
         return Result<IReadOnlyList<StoreTableOption>>.Success(tables);
     }
 
-    public async Task<Result<IReadOnlyList<CastOption>>> GetCastsAsync(CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return Result<IReadOnlyList<CastOption>>.Failure(
-                ResultFailureKind.NotConfigured,
-                "店舗設定またはSupabase Edge Function設定が未設定です。管理者設定で利用店舗を保存し、RPCキー設定を確認してください。");
-        }
-
-        var departmentId = CurrentStoreDepartmentId;
-        var cacheKey = StoreMasterCacheKeys.StoreCasts(departmentId);
-        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<CastOption>? cachedCasts))
-        {
-            return Result<IReadOnlyList<CastOption>>.Success(cachedCasts ?? []);
-        }
-
-        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
-        if (!bootstrap.Succeeded)
-        {
-            var failure = RpcFailure<IReadOnlyList<CastOption>>(
-                bootstrap.ErrorMessage,
-                "出勤候補のキャスト情報を取得できません。");
-            return Result<IReadOnlyList<CastOption>>.Failure(
-                failure.FailureKind ?? ResultFailureKind.Unavailable,
-                ToCastLoadFriendlyError(failure.ErrorMessage));
-        }
-
-        var casts = StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "casts").Select(row => new CastOption
-            {
-                CastId = ReadLong(row, "cast_id") ?? 0,
-                CastCode = ReadString(row, "cast_code"),
-                DepartmentName = ReadString(row, "department_name"),
-                DisplayName = ReadString(row, "display_name") ?? string.Empty
-            })
-            .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
-            .ToList();
-        StoreMasterCacheKeys.SetMaster(_cache, cacheKey, casts, "キャスト候補");
-        return Result<IReadOnlyList<CastOption>>.Success(casts);
-    }
-
     public async Task<BusinessHomeBootstrapResult> GetBusinessHomeBootstrapAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -130,7 +88,7 @@ public class SupabaseStoreSlipRepository(
         }
 
         var departmentId = CurrentStoreDepartmentId;
-        var bootstrap = await _masterBootstrapper.GetStoreBootstrapAsync(ct);
+        var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
         if (!bootstrap.Succeeded)
         {
             return BusinessHomeBootstrapResult.Failed(ToBootstrapFriendlyError(bootstrap.ErrorMessage));
@@ -143,22 +101,25 @@ public class SupabaseStoreSlipRepository(
         }
 
         var context = ParseStoreContext(contextJson, departmentId);
-        var businessDay = TryReadObject(row, "business_day", out var businessDayJson)
-            ? ParseBusinessDay(businessDayJson)
-            : null;
-        if (businessDay is { BusinessDayId: <= 0 })
-        {
-            businessDay = null;
-        }
-
         var tables = ParseTables(StoreBootstrapJson.ReadArray(row, "tables"));
         var nominationOptions = ParseNominationOptions(StoreBootstrapJson.ReadArray(row, "nomination_options"));
         var orderItems = ParseOrderItems(StoreBootstrapJson.ReadArray(row, "order_items"));
-        var attendanceCasts = ParseAttendanceCasts(StoreBootstrapJson.ReadArray(row, "attendance_casts"));
         var paymentMethods = ParsePaymentMethods(StoreBootstrapJson.ReadArray(row, "payment_methods"));
-        var snapshot = TryReadObject(row, "snapshot", out var snapshotJson)
-            ? snapshotJson.Clone()
-            : (JsonElement?)null;
+        StoreBusinessDay? businessDay = null;
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts = [];
+        JsonElement? snapshot = null;
+        if (bootstrap.Value.WasFetched)
+        {
+            if (TryReadObject(row, "business_day", out var businessDayJson))
+            {
+                businessDay = ParseBusinessDay(businessDayJson);
+            }
+            attendanceCasts = ParseAttendanceCasts(StoreBootstrapJson.ReadArray(row, "attendance_casts"));
+            if (TryReadObject(row, "snapshot", out var snapshotJson))
+            {
+                snapshot = snapshotJson.Clone();
+            }
+        }
 
         StoreMasterCacheKeys.SetMaster(
             _cache,
@@ -174,24 +135,6 @@ public class SupabaseStoreSlipRepository(
         StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.OrderItems(departmentId), orderItems, "注文商品");
         StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.PaymentMethods(departmentId), paymentMethods, "決済方法");
 
-        if (businessDay is not null)
-        {
-            StoreMasterCacheKeys.SetRuntime(
-                _cache,
-                StoreMasterCacheKeys.CurrentBusinessDay(departmentId),
-                businessDay,
-                "現在営業日");
-            StoreMasterCacheKeys.SetRuntime(
-                _cache,
-                StoreMasterCacheKeys.OrderAttendingCasts(departmentId, businessDay.BusinessDayId),
-                attendanceCasts,
-                "注文用出勤キャスト");
-        }
-        else
-        {
-            StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
-        }
-
         return BusinessHomeBootstrapResult.Success(
             context,
             businessDay,
@@ -204,33 +147,8 @@ public class SupabaseStoreSlipRepository(
     }
 
 
-    public async Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct)
-    {
-        if (!HasRpcAccess() || businessDayId <= 0)
-        {
-            return BusinessDaySnapshotResult.Failed("営業日を取得できません。");
-        }
-
-        var result = await RpcClient.PostArrayAsync(
-            "store.get_business_day_snapshot",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-
-        if (!result.Succeeded || result.Rows.Count == 0 ||
-            !result.Rows[0].TryGetProperty("snapshot", out var snapshot) ||
-            snapshot.ValueKind is not JsonValueKind.Object)
-        {
-            return BusinessDaySnapshotResult.Failed(ToFriendlyError(result.ErrorMessage));
-        }
-
-        return BusinessDaySnapshotResult.Success(snapshot.Clone());
-    }
-
     public async Task<Result<CurrentBusinessHomeSnapshotResult>> GetCurrentBusinessHomeSnapshotAsync(
+        long? knownRevision,
         CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -242,7 +160,11 @@ public class SupabaseStoreSlipRepository(
 
         var result = await RpcClient.PostArrayAsync(
             "store.get_current_business_home_snapshot",
-            new { p_department_id = CurrentStoreDepartmentId },
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_known_revision = knownRevision
+            },
             ct);
         if (!result.Succeeded || result.Rows.Count == 0)
         {
@@ -256,6 +178,8 @@ public class SupabaseStoreSlipRepository(
 
         var row = result.Rows[0];
         var hasBusinessDay = ReadBool(row, "has_business_day") ?? false;
+        var revision = ReadLong(row, "business_day_revision") ?? 0;
+        var unchanged = ReadBool(row, "unchanged") ?? false;
         var businessDay = hasBusinessDay && TryReadObject(row, "business_day", out var businessDayJson)
             ? ParseBusinessDay(businessDayJson)
             : null;
@@ -264,7 +188,12 @@ public class SupabaseStoreSlipRepository(
             ? snapshotJson.Clone()
             : (JsonElement?)null;
 
-        if (hasBusinessDay && (businessDay is null || snapshot is null))
+        var attendanceCasts = row.TryGetProperty("attendance_casts", out var attendanceJson) &&
+                              attendanceJson.ValueKind == JsonValueKind.Array
+            ? attendanceJson.Clone()
+            : (JsonElement?)null;
+
+        if ((hasBusinessDay && businessDay is null) || (!unchanged && snapshot is null))
         {
             return Result<CurrentBusinessHomeSnapshotResult>.Failure(
                 ResultFailureKind.InvalidResponse,
@@ -274,6 +203,9 @@ public class SupabaseStoreSlipRepository(
         return Result<CurrentBusinessHomeSnapshotResult>.Success(new CurrentBusinessHomeSnapshotResult(
             businessDay,
             businessDay?.BusinessDate ?? storeClock.GetCurrentBusinessDate(),
+            revision,
+            unchanged,
+            attendanceCasts,
             snapshot));
     }
 
@@ -287,27 +219,32 @@ public class SupabaseStoreSlipRepository(
             return BusinessHomeChangeFlushResult.Failed("Supabase Edge Function設定が未設定です。営業中の変更を保存できません。");
         }
 
-        if (string.IsNullOrWhiteSpace(input.BatchId) || input.BatchId.Length > 100 ||
+        if (!Guid.TryParse(input.BatchId, out _) ||
             input.Operations.Count > 100 || input.KaraokeLines.Count > 100)
         {
             return BusinessHomeChangeFlushResult.Failed("保存内容を確認してください。");
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "store.flush_current_business_home_changes",
+            "store.sync_business_home_changes_v2",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
                 p_client_batch_id = input.BatchId,
+                p_expected_business_day_id = input.ExpectedBusinessDayId,
+                p_expected_business_day_revision = input.ExpectedBusinessDayRevision,
+                p_business_date = input.BusinessDate,
                 p_operations = input.Operations.Select(operation => new
                 {
                     operation_id = operation.OperationId,
+                    client_draft_id = operation.ClientDraftId,
                     slip_id = operation.SlipId,
                     operation_type = operation.OperationType,
                     payload = operation.Payload
                 }),
                 p_karaoke_lines = input.KaraokeLines.Select(line => new
                 {
+                    operation_id = line.DraftId,
                     draft_id = line.DraftId,
                     slip_id = line.SlipId,
                     quantity = line.Quantity
@@ -323,6 +260,16 @@ public class SupabaseStoreSlipRepository(
         }
 
         var row = result.Rows[0];
+        var status = row.TryGetProperty("status", out var statusJson)
+            ? statusJson.GetString() ?? "unavailable"
+            : "unavailable";
+        var businessDay = row.TryGetProperty("business_day", out var businessDayJson)
+            ? businessDayJson.Clone()
+            : default;
+        var revision = row.TryGetProperty("business_day_revision", out var revisionJson) &&
+                       revisionJson.TryGetInt64(out var parsedRevision)
+            ? parsedRevision
+            : 0;
         var operationResults = row.TryGetProperty("operation_results", out var operationRows) &&
             operationRows.ValueKind is JsonValueKind.Array
             ? operationRows.Clone()
@@ -332,63 +279,15 @@ public class SupabaseStoreSlipRepository(
             ? karaokeRows.Clone()
             : EmptyJsonArray();
 
-        return BusinessHomeChangeFlushResult.Success(snapshot.Clone(), operationResults, karaokeResults);
+        return BusinessHomeChangeFlushResult.Success(
+            status,
+            businessDay,
+            revision,
+            snapshot.Clone(),
+            operationResults,
+            karaokeResults);
     }
 
-
-    public async Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return CreateSlipResult.Failed("Supabase Edge Function設定が未設定です。伝票を作成できません。");
-        }
-
-        if (input.OpenedAt is null || input.TableId is null)
-        {
-            return CreateSlipResult.Failed("伝票作成に必要な入力が不足しています。");
-        }
-
-        var ensureResult = await _businessDayRepository.EnsureCurrentAsync(ct);
-        if (!ensureResult.Succeeded || ensureResult.BusinessDay is null)
-        {
-            return CreateSlipResult.Failed(ensureResult.ErrorMessage ?? "営業日を自動作成できませんでした。");
-        }
-
-        var openedAt = storeClock.ToStoreDateTimeOffset(input.OpenedAt.Value);
-        var customerLabels = input.CustomerLabels
-            .Select(x => string.IsNullOrWhiteSpace(x) ? null : x.Trim())
-            .ToArray();
-        var castNominations = input.CastNominations
-            .Where(x => x.CastId is not null && !string.IsNullOrWhiteSpace(x.NominationKind))
-            .Select(x => new CastNominationPayload(
-                x.CastId!.Value,
-                x.NominationKind!.Trim(),
-                x.NominationPrice))
-            .ToArray();
-
-        var result = await RpcClient.PostArrayAsync(
-            "store.create_slip",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_table_id = input.TableId.Value,
-                p_opened_at = openedAt,
-                p_customer_labels = customerLabels,
-                p_cast_nominations = castNominations,
-                p_memo = string.IsNullOrWhiteSpace(input.Memo) ? null : input.Memo.Trim()
-            },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return CreateSlipResult.Failed(ToFriendlyError(result.ErrorMessage));
-        }
-
-        var slipId = result.Rows.Count > 0 ? ReadLong(result.Rows[0], "slip_id") : null;
-        return slipId is null
-            ? CreateSlipResult.Failed("作成した伝票IDを取得できません。")
-            : CreateSlipResult.Success(slipId.Value);
-    }
 
     private static StoreContext ParseStoreContext(JsonElement row, long fallbackDepartmentId)
     {
@@ -427,7 +326,8 @@ public class SupabaseStoreSlipRepository(
             OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
             ClosedAt = ReadDateTimeOffset(row, "closed_at"),
             Status = ReadString(row, "status") ?? string.Empty,
-            Memo = ReadString(row, "memo")
+            Memo = ReadString(row, "memo"),
+            BusinessUiRevision = ReadLong(row, "business_ui_revision") ?? 0
         };
     }
 
@@ -707,24 +607,4 @@ public class SupabaseStoreSlipRepository(
         return document.RootElement.Clone();
     }
 
-    private static string ToCastLoadFriendlyError(string? rawError)
-    {
-        if (string.IsNullOrWhiteSpace(rawError))
-        {
-            return "出勤候補のキャスト情報を取得できません。Supabase RPC設定を確認してください。";
-        }
-
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
-        {
-            return "店舗設定を取得できません。管理者設定で利用店舗を選択してください。";
-        }
-
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
-        {
-            return PermissionErrorMessage();
-        }
-
-        return $"出勤候補のキャスト情報を取得できません。{rawError}";
-    }
 }

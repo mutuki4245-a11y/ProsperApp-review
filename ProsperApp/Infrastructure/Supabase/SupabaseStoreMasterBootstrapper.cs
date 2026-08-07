@@ -18,9 +18,6 @@ public sealed class SupabaseStoreMasterBootstrapper(
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IApplicationCache _cache = cache;
 
-    public Task<Result<StoreBootstrapPayload>> GetStoreBootstrapAsync(CancellationToken ct) =>
-        FetchAsync(GetCurrentDepartmentId(), ct);
-
     public async Task<Result<StoreBootstrapPayload>> EnsureAsync(CancellationToken ct)
     {
         var departmentId = GetCurrentDepartmentId();
@@ -32,7 +29,7 @@ public sealed class SupabaseStoreMasterBootstrapper(
         var cacheKey = StoreMasterCacheKeys.BootstrapPayload(departmentId);
         if (_cache.TryGetValue(cacheKey, out StoreBootstrapPayload? cached) && cached is not null)
         {
-            return Result<StoreBootstrapPayload>.Success(cached);
+            return Result<StoreBootstrapPayload>.Success(cached with { WasFetched = false });
         }
 
         var gate = DepartmentLocks.GetOrAdd(departmentId, static _ => new SemaphoreSlim(1, 1));
@@ -41,7 +38,7 @@ public sealed class SupabaseStoreMasterBootstrapper(
         {
             if (_cache.TryGetValue(cacheKey, out cached) && cached is not null)
             {
-                return Result<StoreBootstrapPayload>.Success(cached);
+                return Result<StoreBootstrapPayload>.Success(cached with { WasFetched = false });
             }
 
             return await FetchAsync(departmentId, ct);
@@ -60,7 +57,7 @@ public sealed class SupabaseStoreMasterBootstrapper(
         }
 
         var result = await _rpcClient.PostArrayAsync(
-            "store.get_store_bootstrap",
+            "store.get_business_home_bootstrap_v2",
             new { p_department_id = departmentId },
             ct);
         if (!result.Succeeded || result.Rows.Count == 0)
@@ -72,14 +69,14 @@ public sealed class SupabaseStoreMasterBootstrapper(
                 ToFriendlyError(result.ErrorMessage));
         }
 
-        var payload = new StoreBootstrapPayload(departmentId, result.Rows[0].Clone());
+        var payload = new StoreBootstrapPayload(departmentId, result.Rows[0].Clone(), false);
         StoreMasterCacheKeys.SetMaster(
             _cache,
             StoreMasterCacheKeys.BootstrapPayload(departmentId),
             payload,
             "店舗マスタ一括取得");
         HydrateCaches(payload);
-        return Result<StoreBootstrapPayload>.Success(payload);
+        return Result<StoreBootstrapPayload>.Success(payload with { WasFetched = true });
     }
 
     private void HydrateCaches(StoreBootstrapPayload payload)
@@ -100,21 +97,6 @@ public sealed class SupabaseStoreMasterBootstrapper(
             }, "店舗コンテキスト");
         }
 
-        var departments = StoreBootstrapJson.ReadArray(row, "departments")
-            .Select(item => new DepartmentOption
-            {
-                DepartmentId = ReadLong(item, "department_id") ?? 0,
-                CompanyId = ReadLong(item, "company_id") ?? 0,
-                DepartmentCode = ReadString(item, "department_code"),
-                DepartmentName = ReadString(item, "department_name") ?? string.Empty
-            })
-            .Where(item => item.DepartmentId > 0 && !string.IsNullOrWhiteSpace(item.DepartmentName))
-            .ToList();
-        if (departments.Count > 0)
-        {
-            StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.Departments, departments, "店舗一覧");
-        }
-
         var tables = StoreBootstrapJson.ReadArray(row, "tables")
             .Select(item => new StoreTableOption
             {
@@ -126,69 +108,6 @@ public sealed class SupabaseStoreMasterBootstrapper(
             .Where(item => item.TableId > 0 && !string.IsNullOrWhiteSpace(item.TableCode))
             .ToList();
         StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.Tables(departmentId), tables, "卓番");
-
-        var tableAdminList = StoreBootstrapJson.ReadArray(row, "table_admin_list")
-            .Select(item => new StoreTableAdminItem
-            {
-                TableId = ReadLong(item, "table_id") ?? 0,
-                TableCode = ReadString(item, "table_code") ?? string.Empty,
-                TableName = ReadString(item, "table_name"),
-                TableCategoryNo = (int)(ReadLong(item, "table_category_no") ?? 0),
-                SortOrder = (int)(ReadLong(item, "sort_order") ?? 0),
-                IsActive = ReadBool(item, "is_active") ?? false
-            })
-            .Where(item => item.TableId > 0)
-            .ToList();
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.TableAdminList(departmentId), tableAdminList, "卓番管理一覧");
-
-        var casts = StoreBootstrapJson.ReadArray(row, "casts")
-            .Select(item => new CastOption
-            {
-                CastId = ReadLong(item, "cast_id") ?? 0,
-                CastCode = ReadString(item, "cast_code"),
-                DepartmentName = ReadString(item, "department_name"),
-                DisplayName = ReadString(item, "display_name") ?? string.Empty
-            })
-            .Where(item => item.CastId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
-            .ToList();
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.StoreCasts(departmentId), casts, "キャスト候補");
-
-        var castAdminList = StoreBootstrapJson.ReadArray(row, "casts_admin")
-            .Select(item => new StoreCastAdminItem
-            {
-                CastId = ReadLong(item, "cast_id") ?? 0,
-                DisplayName = ReadString(item, "display_name") ?? string.Empty,
-                DrinkMemo = ReadString(item, "drink_memo"),
-                JoinedOn = ReadDateOnly(item, "joined_on") ?? DateOnly.MinValue
-            })
-            .Where(item => item.CastId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
-            .ToList();
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.CastAdminList(departmentId), castAdminList, "キャスト管理一覧");
-
-        var staffs = StoreBootstrapJson.ReadArray(row, "staffs")
-            .Select(item => new StaffOption
-            {
-                StaffId = ReadLong(item, "staff_id") ?? 0,
-                StaffCode = ReadString(item, "staff_code"),
-                DepartmentName = ReadString(item, "department_name"),
-                DisplayName = ReadString(item, "display_name") ?? string.Empty,
-                EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(item, "employment_type"))
-            })
-            .Where(item => item.StaffId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
-            .ToList();
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.StoreStaffs(departmentId), staffs, "スタッフ候補");
-
-        var staffAdminList = StoreBootstrapJson.ReadArray(row, "staffs_admin")
-            .Select(item => new StoreStaffAdminItem
-            {
-                StaffId = ReadLong(item, "staff_id") ?? 0,
-                DisplayName = ReadString(item, "display_name") ?? string.Empty,
-                JoinedOn = ReadDateOnly(item, "joined_on") ?? DateOnly.MinValue,
-                EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(item, "employment_type"))
-            })
-            .Where(item => item.StaffId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
-            .ToList();
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.StaffAdminList(departmentId), staffAdminList, "スタッフ管理一覧");
 
         var orderItems = StoreBootstrapJson.ReadArray(row, "order_items")
             .Select(item => new StoreOrderItemOption
@@ -207,44 +126,6 @@ public sealed class SupabaseStoreMasterBootstrapper(
             .Where(item => item.ItemId > 0 && !string.IsNullOrWhiteSpace(item.ItemName))
             .ToList();
         StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.OrderItems(departmentId), orderItems, "注文商品");
-
-        var catalogRows = StoreBootstrapJson.ReadArray(row, "item_admin_catalog");
-        var itemCatalog = new StoreItemAdminCatalog
-        {
-            Categories = catalogRows
-                .Where(item => string.Equals(ReadString(item, "row_type"), "category", StringComparison.OrdinalIgnoreCase))
-                .Select(item => new StoreItemCategoryAdminItem
-                {
-                    ItemCategoryId = ReadLong(item, "item_category_id") ?? 0,
-                    CategoryCode = ReadString(item, "category_code") ?? string.Empty,
-                    CategoryName = ReadString(item, "category_name") ?? string.Empty,
-                    SortOrder = (int)(ReadLong(item, "sort_order") ?? 0),
-                    IsActive = ReadBool(item, "is_active") ?? false
-                })
-                .Where(item => item.ItemCategoryId > 0)
-                .ToList(),
-            Items = catalogRows
-                .Where(item => string.Equals(ReadString(item, "row_type"), "item", StringComparison.OrdinalIgnoreCase))
-                .Select(item => new StoreItemAdminItem
-                {
-                    ItemId = ReadLong(item, "item_id") ?? 0,
-                    ItemCategoryId = ReadLong(item, "item_category_id"),
-                    CategoryCode = ReadString(item, "category_code") ?? string.Empty,
-                    CategoryName = ReadString(item, "category_name") ?? string.Empty,
-                    ItemName = ReadString(item, "item_name") ?? string.Empty,
-                    ItemType = ReadString(item, "item_type") ?? "standard",
-                    DefaultPrice = ReadDecimal(item, "default_price") ?? 0,
-                    SortOrder = (int)(ReadLong(item, "sort_order") ?? 0),
-                    IsActive = ReadBool(item, "is_active") ?? false,
-                    IsCastBackTarget = ReadBool(item, "is_cast_back_target") ?? false,
-                    CastBackRegularUnitAmount = ReadDecimal(item, "cast_back_regular_unit_amount") ?? 0,
-                    CastBackNominationUnitAmount = ReadDecimal(item, "cast_back_nomination_unit_amount") ?? 0,
-                    CastBackType = ReadString(item, "cast_back_type") ?? "drink"
-                })
-                .Where(item => item.ItemId > 0)
-                .ToList()
-        };
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.ItemAdminCatalog(departmentId), itemCatalog, "商品管理カタログ");
 
         var nominationOptions = StoreBootstrapJson.ReadArray(row, "nomination_options")
             .Select(item => new NominationBackMasterItem
@@ -278,58 +159,6 @@ public sealed class SupabaseStoreMasterBootstrapper(
             .ToList();
         StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.PaymentMethods(departmentId), paymentMethods, "決済方法");
 
-        var pricingPlan = StoreBootstrapJson.TryReadObject(row, "pricing_plan", out var pricingPlanRow)
-            ? new StorePricingPlanInputModel
-            {
-                SetMinutes = (int)(ReadLong(pricingPlanRow, "set_minutes") ?? 60),
-                ExtensionMinutes = (int)(ReadLong(pricingPlanRow, "extension_minutes") ?? 30),
-                SetUnitPriceSingle = ReadDecimal(pricingPlanRow, "set_unit_price_single") ?? 0,
-                SetUnitPricePerCustomer = ReadDecimal(pricingPlanRow, "set_unit_price_per_customer") ?? 0,
-                ExtensionUnitPriceSingle = ReadDecimal(pricingPlanRow, "extension_unit_price_single") ?? 0,
-                ExtensionUnitPricePerCustomer = ReadDecimal(pricingPlanRow, "extension_unit_price_per_customer") ?? 0,
-                IsActive = ReadBool(pricingPlanRow, "is_active") ?? false
-            }
-            : new StorePricingPlanInputModel();
-        StoreMasterCacheKeys.SetMaster(_cache, StoreMasterCacheKeys.PricingPlan(departmentId), pricingPlan, "料金設定");
-
-        if (StoreBootstrapJson.TryReadObject(row, "business_day", out var businessDayRow))
-        {
-            var businessDay = new StoreBusinessDay
-            {
-                BusinessDayId = ReadLong(businessDayRow, "business_day_id") ?? 0,
-                CompanyId = ReadLong(businessDayRow, "company_id") ?? 0,
-                DepartmentId = ReadLong(businessDayRow, "department_id") ?? departmentId,
-                BusinessDate = ReadDateOnly(businessDayRow, "business_date") ?? DateOnly.MinValue,
-                OpenedAt = ReadDateTimeOffset(businessDayRow, "opened_at") ?? DateTimeOffset.MinValue,
-                ClosedAt = ReadDateTimeOffset(businessDayRow, "closed_at"),
-                Status = ReadString(businessDayRow, "status") ?? string.Empty,
-                Memo = ReadString(businessDayRow, "memo")
-            };
-            if (businessDay.BusinessDayId > 0)
-            {
-                StoreMasterCacheKeys.SetRuntime(_cache, StoreMasterCacheKeys.CurrentBusinessDay(departmentId), businessDay, "現在営業日");
-                var attendanceCasts = StoreBootstrapJson.ReadArray(row, "attendance_casts")
-                    .Select(item => new StoreOrderAttendanceCastOption
-                    {
-                        CastId = ReadLong(item, "cast_id") ?? 0,
-                        DisplayName = ReadString(item, "display_name") ?? string.Empty,
-                        DrinkMemo = ReadString(item, "drink_memo"),
-                        DepartmentName = ReadString(item, "department_name"),
-                        ClockInTime = ReadString(item, "clock_in_time")
-                    })
-                    .Where(item => item.CastId > 0 && !string.IsNullOrWhiteSpace(item.DisplayName))
-                    .ToList();
-                StoreMasterCacheKeys.SetRuntime(
-                    _cache,
-                    StoreMasterCacheKeys.OrderAttendingCasts(departmentId, businessDay.BusinessDayId),
-                    attendanceCasts,
-                    "注文用出勤キャスト");
-            }
-        }
-        else
-        {
-            StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
-        }
     }
 
     private static int NormalizeAttendanceMinuteStep(long? value) =>

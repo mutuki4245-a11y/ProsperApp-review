@@ -16,48 +16,6 @@ public class SupabaseStoreOrderRepository(
     private readonly IApplicationCache _cache = cache;
     private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
-    public async Task<Result<IReadOnlyList<StoreOrderSlipOption>>> GetOpenSlipsAsync(long businessDayId, CancellationToken ct)
-    {
-        if (businessDayId <= 0)
-        {
-            return Result<IReadOnlyList<StoreOrderSlipOption>>.Failure(
-                ResultFailureKind.InvalidInput,
-                "営業日情報が正しくありません。");
-        }
-
-        var result = await PostRpcArrayResultAsync(
-            "store.get_order_entry_slips",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-        if (!result.Succeeded)
-        {
-            return Result<IReadOnlyList<StoreOrderSlipOption>>.Failure(
-                result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "注文対象の伝票を取得できませんでした。");
-        }
-
-        var slips = result.Value.Select(row => new StoreOrderSlipOption
-            {
-                SlipId = ReadLong(row, "slip_id") ?? 0,
-                TableId = ReadLong(row, "table_id"),
-                TableCode = ReadString(row, "table_code"),
-                TableName = ReadString(row, "table_name"),
-                OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
-                CustomerCount = (int)(ReadLong(row, "customer_count") ?? 0),
-                CustomerNames = ReadString(row, "customer_names"),
-                NominationCastIds = ReadString(row, "nomination_cast_ids"),
-                NominationCastNames = ReadString(row, "nomination_cast_names"),
-                Memo = ReadString(row, "memo")
-            })
-            .Where(x => x.SlipId > 0)
-            .ToList();
-        return Result<IReadOnlyList<StoreOrderSlipOption>>.Success(slips);
-    }
-
     public async Task<Result<OrderEntryCandidates>> GetCurrentCandidatesAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
@@ -93,7 +51,8 @@ public class SupabaseStoreOrderRepository(
                 OpenedAt = ReadDateTimeOffset(businessDayRow, "opened_at") ?? DateTimeOffset.MinValue,
                 ClosedAt = ReadDateTimeOffset(businessDayRow, "closed_at"),
                 Status = ReadString(businessDayRow, "status") ?? string.Empty,
-                Memo = ReadString(businessDayRow, "memo")
+                Memo = ReadString(businessDayRow, "memo"),
+                BusinessUiRevision = ReadLong(businessDayRow, "business_ui_revision") ?? 0
             }
             : null;
         if (hasBusinessDay && businessDay is null)
@@ -161,113 +120,75 @@ public class SupabaseStoreOrderRepository(
         return Result<IReadOnlyList<StoreOrderItemOption>>.Success(items);
     }
 
-    public async Task<Result<IReadOnlyList<StoreOrderAttendanceCastOption>>> GetAttendanceCastsAsync(
-        long businessDayId,
+    public async Task<Result<OrderEntrySubmitResult>> SubmitCurrentAsync(
+        OrderEntrySubmitInput input,
         CancellationToken ct)
     {
-        if (!HasRpcAccess())
+        if (!HasRpcAccess() ||
+            !Guid.TryParse(input.OperationId, out var operationId) ||
+            input.ExpectedBusinessDayId <= 0 ||
+            input.ExpectedBusinessDayRevision < 0 ||
+            input.Lines.Count is < 1 or > 200 ||
+            input.Lines.Any(line =>
+                !Guid.TryParse(line.ClientLineId, out _) ||
+                line.SlipId is null or <= 0 ||
+                line.ItemId <= 0 ||
+                line.Quantity <= 0))
         {
-            return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Failure(
-                ResultFailureKind.NotConfigured,
-                "店舗設定またはSupabase Edge Function設定が未設定です。");
-        }
-
-        if (businessDayId <= 0)
-        {
-            return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Failure(
+            return Result<OrderEntrySubmitResult>.Failure(
                 ResultFailureKind.InvalidInput,
-                "営業日情報が正しくありません。");
-        }
-
-        var departmentId = CurrentStoreDepartmentId;
-        var cacheKey = StoreMasterCacheKeys.OrderAttendingCasts(departmentId, businessDayId);
-        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<StoreOrderAttendanceCastOption>? cachedCasts))
-        {
-            return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Success(cachedCasts ?? []);
+                "注文内容を確認してください。");
         }
 
         var result = await RpcClient.PostArrayAsync(
-            "store.get_order_attending_casts",
-            new
-            {
-                p_department_id = departmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return RpcFailure<IReadOnlyList<StoreOrderAttendanceCastOption>>(
-                result.ErrorMessage,
-                "出勤キャストを取得できませんでした。");
-        }
-
-        var casts = result.Rows.Select(row => new StoreOrderAttendanceCastOption
-            {
-                CastId = ReadLong(row, "cast_id") ?? 0,
-                DisplayName = ReadString(row, "display_name") ?? string.Empty,
-                DrinkMemo = ReadString(row, "drink_memo"),
-                DepartmentName = ReadString(row, "department_name"),
-                ClockInTime = ReadString(row, "clock_in_time")
-            })
-            .Where(x => x.CastId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
-            .ToList();
-
-        StoreMasterCacheKeys.SetRuntime(_cache, cacheKey, casts, "注文用出勤キャスト");
-        return Result<IReadOnlyList<StoreOrderAttendanceCastOption>>.Success(casts);
-    }
-
-    public async Task<AddStoreOrderLinesResult> AddOrderLinesAsync(long slipId, IReadOnlyList<OrderQueueInputModel> lines, CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return AddStoreOrderLinesResult.Failed("Supabase Edge Function設定が未設定です。注文を登録できません。");
-        }
-
-        if ((slipId <= 0 && lines.All(x => x.SlipId is null or <= 0)) || lines.Count == 0)
-        {
-            return AddStoreOrderLinesResult.Failed("注文登録に必要な入力が不足しています。");
-        }
-
-        var payload = lines
-            .Where(x => x.ItemId > 0 && x.Quantity > 0)
-            .Select(x => new OrderLinePayload(x.SlipId, x.ItemId, x.Quantity, x.CastBackCastId))
-            .ToArray();
-
-        if (payload.Length == 0)
-        {
-            return AddStoreOrderLinesResult.Failed("注文キューに商品がありません。");
-        }
-
-        var result = await RpcClient.PostArrayAsync(
-            "store.add_order_lines",
+            "store.submit_current_order_entry_v2",
             new
             {
                 p_department_id = CurrentStoreDepartmentId,
-                p_slip_id = slipId > 0 ? slipId : (long?)null,
-                p_order_lines = payload
+                p_operation_id = operationId.ToString("D"),
+                p_expected_business_day_id = input.ExpectedBusinessDayId,
+                p_expected_business_day_revision = input.ExpectedBusinessDayRevision,
+                p_lines = input.Lines.Select(line => new
+                {
+                    client_line_id = Guid.Parse(line.ClientLineId).ToString("D"),
+                    slip_id = line.SlipId,
+                    item_id = line.ItemId,
+                    quantity = line.Quantity,
+                    cast_back_cast_id = line.CastBackCastId
+                })
             },
             ct);
-
-        if (!result.Succeeded)
+        if (!result.Succeeded || result.Rows.Count == 0)
         {
-            return AddStoreOrderLinesResult.Failed(ToFriendlyError(result.ErrorMessage));
+            var failure = RpcFailure<OrderEntrySubmitResult>(result.ErrorMessage, "注文を登録できませんでした。");
+            return Result<OrderEntrySubmitResult>.Failure(
+                failure.FailureKind ?? ResultFailureKind.Unavailable,
+                failure.ErrorMessage ?? "注文を登録できませんでした。");
         }
 
-        var insertedCount = ReadInsertedCount(result);
-        if (insertedCount <= 0)
+        var row = result.Rows[0];
+        if (!TryReadJsonProperty(row, "inserted_lines", JsonValueKind.Array, out var insertedLines))
         {
-            return AddStoreOrderLinesResult.Failed("注文をDBに登録できませんでした。画面を再読み込みして再度お試しください。");
+            return Result<OrderEntrySubmitResult>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "注文登録後の状態を取得できませんでした。");
         }
 
-        return AddStoreOrderLinesResult.Success(insertedCount);
+        var status = ReadString(row, "status") ?? "unavailable";
+        var recoveryCandidates = row.TryGetProperty("recovery_candidates", out var recoveryJson) &&
+                                 recoveryJson.ValueKind == JsonValueKind.Object
+            ? recoveryJson.Clone()
+            : (JsonElement?)null;
+        return Result<OrderEntrySubmitResult>.Success(new OrderEntrySubmitResult(
+            status,
+            operationId.ToString("D"),
+            (int)(ReadLong(row, "inserted_count") ?? 0),
+            insertedLines.Clone(),
+            ReadLong(row, "business_day_id"),
+            ReadLong(row, "business_day_revision") ?? 0,
+            ReadString(row, "message") ?? "注文を登録しました。",
+            recoveryCandidates));
     }
-
-    private sealed record OrderLinePayload(
-        [property: JsonPropertyName("slip_id")] long? SlipId,
-        [property: JsonPropertyName("item_id")] long ItemId,
-        [property: JsonPropertyName("quantity")] int Quantity,
-        [property: JsonPropertyName("cast_back_cast_id")] long? CastBackCastId);
 
     private static IReadOnlyList<StoreOrderSlipOption> ParseOpenSlips(IEnumerable<JsonElement> rows) =>
         rows.Select(row => new StoreOrderSlipOption
@@ -311,60 +232,6 @@ public class SupabaseStoreOrderRepository(
 
         value = default;
         return false;
-    }
-
-    private static int ReadInsertedCount(SupabaseRpcResult result)
-    {
-        if (result.Rows.Count > 0)
-        {
-            var rowCount = TryReadCount(result.Rows[0]);
-            if (rowCount is > 0)
-            {
-                return (int)rowCount.Value;
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(result.Body))
-        {
-            return 0;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(result.Body);
-            return TryReadCount(document.RootElement) is { } count ? (int)count : 0;
-        }
-        catch (JsonException)
-        {
-            return 0;
-        }
-    }
-
-    private static long? TryReadCount(JsonElement element)
-    {
-        if (element.ValueKind == JsonValueKind.Array)
-        {
-            return element.GetArrayLength() == 0 ? null : TryReadCount(element[0]);
-        }
-
-        if (element.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var propertyName in new[] { "inserted_count", "add_order_lines", "result", "data" })
-            {
-                if (element.TryGetProperty(propertyName, out var value))
-                {
-                    var count = TryReadCount(value);
-                    if (count is not null)
-                    {
-                        return count;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        return ReadLongValue(element);
     }
 
     private static string ToFriendlyError(string? rawError)

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Text.Json;
 using ProsperApp.Features.Shared;
@@ -8,15 +8,10 @@ namespace ProsperApp.Pages;
 
 public class ReceiptsModel(
     IReceiptRepository receiptRepository,
-    IDriveFileService driveFileService,
-    IGoogleDriveAuthService googleDriveAuthService,
     IFeatureGate featureGate,
     IStoreClock storeClock) : PageModel
 {
-    private const string CastAdvanceAccountSubject = "前渡金: キャスト";
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
-    private readonly IDriveFileService _driveFileService = driveFileService;
-    private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IStoreClock _storeClock = storeClock;
     private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
@@ -24,21 +19,9 @@ public class ReceiptsModel(
     [BindProperty]
     public QuickEntryInputModel Input { get; set; } = new();
 
-    [BindProperty(SupportsGet = true)]
-    public int Index { get; set; }
-
-    public IReadOnlyList<PendingReceiptItem> PendingReceipts { get; private set; } = [];
-    public PendingReceiptItem? CurrentReceipt { get; private set; }
-    public string? PendingReceiptsLoadError { get; private set; }
-    public PageLoadStatus? PendingReceiptsLoadStatus { get; private set; }
-    public string? NextPreviewUrl { get; private set; }
-    public int CurrentPosition => PendingReceipts.Count == 0 ? 0 : CurrentIndex + 1;
-    public int TotalCount => PendingReceipts.Count;
     public DateOnly PaymentDateMin => PaymentDateMax.AddYears(-1);
     public DateOnly PaymentDateMax => _storeClock.GetStoreToday();
-    public StoreBusinessDay? CurrentBusinessDay { get; private set; }
-    public IReadOnlyList<BusinessDayClosingAttendanceItem> AdvanceCastOptions { get; private set; } = [];
-    public string? BusinessDayLoadError { get; private set; }
+
     public IReadOnlyList<AccountSubjectGroup> AccountSubjectGroups { get; } =
     [
         new("前渡金", ["スタッフ", "キャスト"]),
@@ -60,86 +43,35 @@ public class ReceiptsModel(
         new("その他", ["福利厚生費", "著作権利用料", "雑費"])
     ];
 
-    [TempData]
-    public string? SuccessMessage { get; set; }
-
-    public string? ErrorMessage { get; set; }
-
-    public string? DriveAuthWarning { get; private set; }
-
-    private int CurrentIndex { get; set; }
-
-    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
+    public IActionResult OnGet()
     {
         if (!IsReceiptsEnabled())
         {
             return NotFound();
         }
 
-        await LoadCurrentAsync(Index, cancellationToken);
-        var authRedirect = await RedirectToGoogleLoginIfCurrentReceiptNeedsDriveAsync();
-        if (authRedirect is not null)
-        {
-            return authRedirect;
-        }
-
+        Input.PaymentDate = _storeClock.GetCurrentBusinessDate();
         return Page();
     }
 
-    public async Task<IActionResult> OnPostNextAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetWorkQueueAsync(string? resumeCursor, CancellationToken cancellationToken)
     {
         if (!IsReceiptsEnabled())
         {
             return NotFound();
         }
 
-        NormalizeInput();
-
-        if (string.IsNullOrWhiteSpace(Input.GroupCode))
-        {
-            Input.GroupCode = GenerateGroupCode();
-        }
-
-        await LoadCurrentAsync(Index, cancellationToken);
-        ValidateQuickEntryInput();
-
-        if (!ModelState.IsValid)
-        {
-            return Page();
-        }
-
-        var result = await _receiptRepository.SaveQuickEntryAsync(Input, cancellationToken);
+        var result = await _receiptRepository.GetCurrentWorkQueueAsync(resumeCursor, cancellationToken);
         if (!result.Succeeded)
         {
-            ErrorMessage = result.ErrorMessage ?? "保存に失敗しました。時間をおいて再実行してください。";
-            await LoadCurrentAsync(Index, cancellationToken);
-            return Page();
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                message = result.ErrorMessage ?? "領収書作業キューを取得できませんでした。"
+            });
         }
 
-        SuccessMessage = "保存しました。";
-        return await RedirectAfterReceiptChangeAsync(Index, cancellationToken);
-    }
-
-    public async Task<IActionResult> OnPostSkipAsync(CancellationToken cancellationToken)
-    {
-        if (!IsReceiptsEnabled())
-        {
-            return NotFound();
-        }
-
-        var queueResult = await _receiptRepository.GetCurrentWorkQueueAsync(cancellationToken);
-        if (!queueResult.Succeeded)
-        {
-            ApplyWorkQueueFailure(queueResult);
-            return Page();
-        }
-
-        if (Index + 1 >= queueResult.Value.Items.Count)
-        {
-            return RedirectToPage("/Closing/Index");
-        }
-
-        return RedirectToPage(new { index = Index + 1 });
+        return new JsonResult(ToQueuePayload(result.Value));
     }
 
     public async Task<IActionResult> OnPostQueueAdvanceAsync(CancellationToken cancellationToken)
@@ -151,7 +83,7 @@ public class ReceiptsModel(
 
         if (!Request.HasJsonContentType())
         {
-            return BadRequest(new { succeeded = false, message = "送信内容を確認してください。" });
+            return BadRequest(new { succeeded = false, status = "validation_error", message = "送信内容を確認してください。" });
         }
 
         ReceiptWorkQueueAdvanceInput? input;
@@ -167,18 +99,14 @@ public class ReceiptsModel(
             input = null;
         }
 
-        if (input is null || string.IsNullOrWhiteSpace(input.OperationId) ||
-            string.IsNullOrWhiteSpace(input.Action) || string.IsNullOrWhiteSpace(input.DocumentId) ||
-            string.IsNullOrWhiteSpace(input.WorkItemToken))
+        if (input is null ||
+            !Guid.TryParse(input.OperationId, out _) ||
+            input.Action is not ("save" or "exclude_scan_mistake") ||
+            string.IsNullOrWhiteSpace(input.DocumentId) ||
+            string.IsNullOrWhiteSpace(input.WorkItemToken) ||
+            (input.Action == "save" && !AllowedAccountSubjects.Contains(input.AccountSubject?.Trim() ?? string.Empty)))
         {
-            return BadRequest(new { succeeded = false, message = "送信内容を確認してください。" });
-        }
-
-        if (string.Equals(input.Action, "save", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(input.AccountSubject) &&
-            !AllowedAccountSubjects.Contains(input.AccountSubject.Trim()))
-        {
-            return BadRequest(new { succeeded = false, message = "科目は画面の一覧から選択してください。" });
+            return BadRequest(new { succeeded = false, status = "validation_error", message = "送信内容を確認してください。" });
         }
 
         var result = await _receiptRepository.AdvanceWorkQueueAsync(input, cancellationToken);
@@ -187,249 +115,64 @@ public class ReceiptsModel(
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
             {
                 succeeded = false,
+                status = "unavailable",
                 message = result.ErrorMessage ?? "領収書を保存できませんでした。"
             });
         }
 
+        var output = result.Value;
+        var queue = output.Queue;
         return new JsonResult(new
         {
             succeeded = true,
-            status = result.Value.Status,
-            documentId = result.Value.DocumentId,
-            message = result.Value.Message
+            status = output.Status,
+            documentId = output.DocumentId,
+            message = output.Message,
+            queueRevision = queue.Revision,
+            pendingCount = queue.PendingCount,
+            businessDay = queue.BusinessDay,
+            workItem = ToClientItem(queue.WorkItem),
+            buffer = queue.Buffer.Select(ToClientItem),
+            resumeCursor = queue.ResumeCursor,
+            advanceCasts = queue.AdvanceCastOptions.Select(item => new { id = item.CastId, name = item.SearchDisplayName }),
+            pendingReceiptCount = output.PendingReceiptCount
         });
     }
 
-    public async Task<IActionResult> OnPostDeleteScanMistakeAsync(CancellationToken cancellationToken)
+    private object ToQueuePayload(ReceiptWorkQueue queue) => new
     {
-        if (!IsReceiptsEnabled())
+        succeeded = true,
+        queueRevision = queue.Revision,
+        pendingCount = queue.PendingCount,
+        businessDay = queue.BusinessDay,
+        workItem = ToClientItem(queue.WorkItem),
+        buffer = queue.Buffer.Select(ToClientItem),
+        resumeCursor = queue.ResumeCursor,
+        advanceCasts = queue.AdvanceCastOptions.Select(item => new
         {
-            return NotFound();
-        }
+            id = item.CastId,
+            name = item.SearchDisplayName
+        })
+    };
 
-        ModelState.Clear();
-
-        if (string.IsNullOrWhiteSpace(Input.DocumentId))
-        {
-            ErrorMessage = "証憑IDが取得できません。";
-            await LoadCurrentAsync(Index, cancellationToken);
-            return Page();
-        }
-
-        var updateResult = await _receiptRepository.MarkScanMistakeAsync(Input.DocumentId, cancellationToken);
-        if (!updateResult.Succeeded)
-        {
-            ErrorMessage = updateResult.ErrorMessage ?? "DBステータス更新に失敗しました。";
-            await LoadCurrentAsync(Index, cancellationToken);
-            return Page();
-        }
-
-        if (!string.IsNullOrWhiteSpace(Input.DriveFileId))
-        {
-            _driveFileService.RemoveCachedFile(Input.DriveFileId);
-        }
-
-        SuccessMessage = "スキャンミスとして対象外にしました。";
-        return await RedirectAfterReceiptChangeAsync(Index, cancellationToken);
-    }
-
-    private async Task<IActionResult> RedirectAfterReceiptChangeAsync(int requestedIndex, CancellationToken cancellationToken)
+    private static object? ToClientItem(PendingReceiptItem? item) => item is null ? null : new
     {
-        var queueResult = await _receiptRepository.GetCurrentWorkQueueAsync(cancellationToken);
-        if (!queueResult.Succeeded)
-        {
-            ApplyWorkQueueFailure(queueResult);
-            return Page();
-        }
+        id = item.Id,
+        fileName = item.FileName,
+        driveFileId = item.DriveFileId,
+        previewUrl = item.PreviewUrl,
+        paymentDate = item.PaymentDate?.ToString("yyyy-MM-dd"),
+        amount = item.Amount,
+        workItemToken = item.WorkItemToken
+    };
 
-        if (queueResult.Value.Items.Count == 0)
-        {
-            return RedirectToPage("/Closing/Index");
-        }
+    private HashSet<string> AllowedAccountSubjects => AccountSubjectGroups
+        .SelectMany(group => group.Items.Select(item => $"{group.Name}: {item}"))
+        .ToHashSet(StringComparer.Ordinal);
 
-        var nextIndex = Math.Clamp(requestedIndex, 0, queueResult.Value.Items.Count - 1);
-        return RedirectToPage(new { index = nextIndex });
-    }
-
-    private async Task LoadCurrentAsync(int requestedIndex, CancellationToken cancellationToken)
-    {
-        var queueResult = await _receiptRepository.GetCurrentWorkQueueAsync(cancellationToken);
-        PendingReceipts = queueResult.Succeeded ? queueResult.Value.Items : [];
-        PendingReceiptsLoadError = queueResult.Succeeded ? null : queueResult.ErrorMessage;
-        PendingReceiptsLoadStatus = queueResult.Succeeded
-            ? PageLoadStatus.Success(_storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()))
-            : PageLoadStatus.Failure(
-                queueResult.FailureKind ?? ResultFailureKind.Unavailable,
-                queueResult.ErrorMessage ?? "領収書作業キューを取得できませんでした。");
-        CurrentBusinessDay = queueResult.Succeeded ? queueResult.Value.BusinessDay : null;
-        AdvanceCastOptions = queueResult.Succeeded ? queueResult.Value.AdvanceCastOptions : [];
-        BusinessDayLoadError = null;
-        if (PendingReceipts.Count == 0)
-        {
-            CurrentReceipt = null;
-            Input = new();
-            CurrentIndex = 0;
-            return;
-        }
-
-        CurrentIndex = Math.Clamp(requestedIndex, 0, PendingReceipts.Count - 1);
-        CurrentReceipt = PendingReceipts[CurrentIndex];
-        NextPreviewUrl = CurrentIndex + 1 < PendingReceipts.Count
-            ? PendingReceipts[CurrentIndex + 1].PreviewUrl
-            : null;
-        if (string.IsNullOrWhiteSpace(Input.DocumentId))
-        {
-            Input = new QuickEntryInputModel
-            {
-                DocumentId = CurrentReceipt.Id,
-                DriveFileId = CurrentReceipt.DriveFileId,
-                BusinessDayId = CurrentBusinessDay?.BusinessDayId,
-                PaymentDate = CurrentReceipt.PaymentDate ??
-                    CurrentBusinessDay?.BusinessDate ??
-                    _storeClock.GetCurrentBusinessDate(),
-                Amount = CurrentReceipt.Amount
-            };
-        }
-    }
-
-    private void ApplyWorkQueueFailure(Result<ReceiptWorkQueue> result)
-    {
-        PendingReceipts = [];
-        CurrentReceipt = null;
-        CurrentIndex = 0;
-        PendingReceiptsLoadError = result.ErrorMessage ?? "領収書作業キューを取得できませんでした。";
-        PendingReceiptsLoadStatus = PageLoadStatus.Failure(
-            result.FailureKind ?? ResultFailureKind.Unavailable,
-            PendingReceiptsLoadError);
-    }
-
-    private async Task<IActionResult?> RedirectToGoogleLoginIfCurrentReceiptNeedsDriveAsync()
-    {
-        if (string.IsNullOrWhiteSpace(CurrentReceipt?.DriveFileId))
-        {
-            return null;
-        }
-
-        var configurationError = _googleDriveAuthService.ConfigurationErrorMessage;
-        if (!string.IsNullOrWhiteSpace(configurationError))
-        {
-            DriveAuthWarning = configurationError;
-            return null;
-        }
-
-        if (await _googleDriveAuthService.HasAccessTokenAsync())
-        {
-            return null;
-        }
-
-        return RedirectToPage("/Login", new { returnUrl = BuildReceiptsReturnUrl(CurrentIndex) });
-    }
-
-    private string BuildReceiptsReturnUrl(int index)
-    {
-        return Url.Page("/Closing/Receipts", new { index }) ?? $"/Closing/Receipts?index={index}";
-    }
-
-    private static string GenerateGroupCode()
-    {
-        var now = DateTime.UtcNow;
-        var suffix = Guid.NewGuid().ToString("N")[..4].ToUpperInvariant();
-        return $"SP{now:yyMMdd}{suffix}";
-    }
-
-    private void NormalizeInput()
-    {
-        Input.DocumentId = Input.DocumentId?.Trim() ?? string.Empty;
-        Input.DriveFileId = Input.DriveFileId?.Trim();
-        Input.AccountSubject = Input.AccountSubject?.Trim() ?? string.Empty;
-        Input.Description = Input.Description?.Trim() ?? string.Empty;
-        Input.GroupCode = Input.GroupCode?.Trim();
-    }
-
-    private void ValidateQuickEntryInput()
-    {
-        if (CurrentReceipt is null)
-        {
-            ModelState.AddModelError(string.Empty, "保存対象の証憑が見つかりません。");
-            return;
-        }
-
-        if (!string.Equals(Input.DocumentId, CurrentReceipt.Id, StringComparison.Ordinal))
-        {
-            ModelState.AddModelError(string.Empty, "表示中の証憑と送信された証憑が一致しません。画面を再読み込みしてください。");
-        }
-
-        var expectedDriveFileId = CurrentReceipt.DriveFileId ?? string.Empty;
-        var postedDriveFileId = Input.DriveFileId ?? string.Empty;
-        if (!string.Equals(postedDriveFileId, expectedDriveFileId, StringComparison.Ordinal))
-        {
-            ModelState.AddModelError(string.Empty, "表示中のDriveファイルと送信されたDriveファイルが一致しません。画面を再読み込みしてください。");
-        }
-
-        if (Input.PaymentDate is { } paymentDate)
-        {
-            if (paymentDate < PaymentDateMin || paymentDate > PaymentDateMax)
-            {
-                ModelState.AddModelError("Input.PaymentDate", $"支払日は{PaymentDateMin:yyyy/MM/dd}から{PaymentDateMax:yyyy/MM/dd}までの日付を入力してください。");
-            }
-        }
-
-        if (Input.Amount is { } amount && decimal.Truncate(amount) != amount)
-        {
-            ModelState.AddModelError("Input.Amount", "金額は小数なしの整数円で入力してください。");
-        }
-
-        if (!string.IsNullOrWhiteSpace(Input.AccountSubject) && !AllowedAccountSubjects.Contains(Input.AccountSubject))
-        {
-            ModelState.AddModelError("Input.AccountSubject", "科目は画面の一覧から選択してください。");
-        }
-
-        if (string.Equals(Input.AccountSubject, CastAdvanceAccountSubject, StringComparison.Ordinal))
-        {
-            if (CurrentBusinessDay is null)
-            {
-                ModelState.AddModelError("Input.AdvanceCastId", "キャスト前渡金を保存するには営業中の営業日が必要です。");
-            }
-            else
-            {
-                if (Input.BusinessDayId != CurrentBusinessDay.BusinessDayId)
-                {
-                    ModelState.AddModelError("Input.AdvanceCastId", "営業日情報が更新されています。画面を再読み込みしてください。");
-                }
-
-                if (Input.PaymentDate != CurrentBusinessDay.BusinessDate)
-                {
-                    ModelState.AddModelError("Input.PaymentDate", "キャスト前渡金の支払日は現在の営業日に合わせてください。");
-                }
-            }
-
-            if (Input.AdvanceCastId is null ||
-                AdvanceCastOptions.All(item => item.CastId != Input.AdvanceCastId))
-            {
-                ModelState.AddModelError("Input.AdvanceCastId", "当日出勤のキャストを1名選択してください。");
-            }
-        }
-        else if (Input.AdvanceCastId is not null)
-        {
-            ModelState.AddModelError("Input.AdvanceCastId", "キャスト前渡金以外では前渡し対象を選択できません。");
-        }
-
-        if (string.IsNullOrWhiteSpace(Input.Description))
-        {
-            ModelState.AddModelError("Input.Description", "摘要を入力してください。");
-        }
-    }
-
-    private HashSet<string> AllowedAccountSubjects =>
-        AccountSubjectGroups
-            .SelectMany(group => group.Items.Select(item => $"{group.Name}: {item}"))
-            .ToHashSet(StringComparer.Ordinal);
-
-    private bool IsReceiptsEnabled()
-    {
-        return _featureGate.IsEnabled(FeatureNames.Closing) &&
-               _featureGate.IsEnabled(FeatureNames.Receipts);
-    }
+    private bool IsReceiptsEnabled() =>
+        _featureGate.IsEnabled(FeatureNames.Closing) &&
+        _featureGate.IsEnabled(FeatureNames.Receipts);
 
     public sealed record AccountSubjectGroup(string Name, IReadOnlyList<string> Items);
 }

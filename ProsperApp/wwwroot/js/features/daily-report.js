@@ -5,7 +5,7 @@
     }
 
     const refreshIntervalMs = 30000;
-    const reportUrl = root.dataset.reportUrl;
+    let reportUrl = root.dataset.reportUrl;
     const status = root.querySelector('[data-report-status]');
     const content = root.querySelector('[data-report-content]');
     const warnings = root.querySelector('[data-report-warnings]');
@@ -376,6 +376,17 @@
     };
 
     refreshButton.addEventListener('click', () => void load());
+    window.addEventListener('prosper:daily-report-business-day', (event) => {
+        const businessDayId = Number(event.detail?.businessDayId) || 0;
+        if (businessDayId <= 0) {
+            return;
+        }
+
+        const url = new URL(reportUrl, window.location.origin);
+        url.searchParams.set('businessDayId', String(businessDayId));
+        reportUrl = `${url.pathname}${url.search}`;
+        void load();
+    });
     printButton.addEventListener('click', () => {
         preparePrintLayout();
         window.print();

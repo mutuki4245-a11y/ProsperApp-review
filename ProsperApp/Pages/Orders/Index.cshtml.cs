@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ProsperApp.Features.Orders;
 using ProsperApp.Features.Shared;
 using ProsperApp.Services;
@@ -20,15 +19,6 @@ public class IndexModel(
     [BindProperty(SupportsGet = true)]
     public long? SelectedSlipId { get; set; }
 
-    [BindProperty]
-    public List<OrderQueueInputModel> QueueLines { get; set; } = [];
-
-    [BindProperty]
-    public string OrderQueueJson { get; set; } = string.Empty;
-
-    [BindProperty]
-    public string OrderQueueSummaryJson { get; set; } = string.Empty;
-
     public StoreBusinessDay? CurrentBusinessDay { get; set; }
 
     public IReadOnlyList<StoreOrderSlipOption> Slips { get; set; } = [];
@@ -38,10 +28,6 @@ public class IndexModel(
     public IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts { get; set; } = [];
 
     public StoreContext? StoreContext { get; set; }
-
-    public string? SuccessMessage { get; set; }
-
-    public bool ShouldDiscardStoredQueue { get; private set; }
 
     public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
 
@@ -56,7 +42,6 @@ public class IndexModel(
 
         SelectedSlipId = slipId;
         await LoadOptionsAsync(cancellationToken);
-        SuccessMessage = TempData["SuccessMessage"] as string;
         return Page();
     }
 
@@ -67,7 +52,7 @@ public class IndexModel(
             return NotFound();
         }
 
-        var result = await _orderEntryApplicationService.GetOpenSlipsAsync(cancellationToken);
+        var result = await _orderEntryApplicationService.GetCandidatesAsync(cancellationToken);
         if (!result.Succeeded)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
@@ -78,11 +63,22 @@ public class IndexModel(
             });
         }
 
-        var slips = result.Value;
+        var candidates = result.Value;
+        var slips = candidates.Slips;
         return new JsonResult(new
         {
             succeeded = true,
             updatedAt = _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()),
+            businessDay = candidates.BusinessDay,
+            revision = candidates.Revision,
+            attendanceCasts = candidates.AttendanceCasts.Select(cast => new
+            {
+                id = cast.CastId,
+                name = cast.DisplayName,
+                display = cast.SearchDisplayName,
+                drinkMemo = cast.DrinkMemo,
+                department = cast.DepartmentName
+            }),
             slips = slips.Select(slip => new
             {
                 id = slip.SlipId,
@@ -97,37 +93,70 @@ public class IndexModel(
         });
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostSubmitV2Async(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Orders))
         {
             return NotFound();
         }
 
-        QueueLines = _orderEntryApplicationService.ReadPostedQueue(OrderQueueJson, QueueLines).ToList();
-        await LoadOptionsAsync(cancellationToken);
-        ValidateBusinessRules();
-
-        if (!ModelState.IsValid)
+        OrderEntrySubmitInput? input;
+        try
         {
-            return Page();
+            input = await JsonSerializer.DeserializeAsync<OrderEntrySubmitInput>(
+                Request.Body,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web),
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            input = null;
+        }
+        if (input is null)
+        {
+            return BadRequest(new { succeeded = false, status = "validation_error", message = "注文内容を確認してください。" });
         }
 
-        var result = await _orderEntryApplicationService.AddOrderLinesAsync(QueueLines, cancellationToken);
+        var result = await _orderEntryApplicationService.SubmitAsync(input, cancellationToken);
         if (!result.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "注文を登録できませんでした。");
-            return Page();
+            var status = result.FailureKind == ResultFailureKind.Conflict
+                ? "conflict"
+                : result.FailureKind == ResultFailureKind.InvalidInput
+                    ? "validation_error"
+                    : "unavailable";
+            return StatusCode(
+                status == "conflict" ? StatusCodes.Status409Conflict :
+                status == "validation_error" ? StatusCodes.Status400BadRequest :
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    succeeded = false,
+                    status,
+                    operationId = input.OperationId,
+                    message = result.ErrorMessage ?? "注文を登録できませんでした。"
+                });
         }
 
-        ModelState.Clear();
-        var successMessage = BuildSuccessMessage(result);
-        SelectedSlipId = null;
-        QueueLines = [];
-        OrderQueueSummaryJson = string.Empty;
-        SuccessMessage = successMessage;
-        ShouldDiscardStoredQueue = true;
-        return Page();
+        var output = result.Value;
+        var payload = new
+        {
+            succeeded = output.Status == "confirmed",
+            status = output.Status,
+            operationId = output.OperationId,
+            insertedCount = output.InsertedCount,
+            insertedLines = output.InsertedLines,
+            businessDayId = output.BusinessDayId,
+            businessDayRevision = output.BusinessDayRevision,
+            message = output.Message,
+            recoveryCandidates = output.RecoveryCandidates
+        };
+        return output.Status switch
+        {
+            "confirmed" => new JsonResult(payload),
+            "conflict" => StatusCode(StatusCodes.Status409Conflict, payload),
+            _ => BadRequest(payload)
+        };
     }
 
     public StoreOrderSlipOption? SelectedSlip => SelectedSlipId is null
@@ -146,73 +175,4 @@ public class IndexModel(
         LastUpdatedAt = state.LastUpdatedAt;
     }
 
-    private void ValidateBusinessRules()
-    {
-        if (CurrentBusinessDay is null)
-        {
-            ModelState.AddModelError(string.Empty, "注文登録の前に営業中画面で伝票を作成してください。最初の伝票作成時に営業日を自動作成します。");
-            return;
-        }
-
-        if (LoadIssues.Count > 0)
-        {
-            ModelState.AddModelError(string.Empty, "必要な情報を取得できないため注文を登録できません。再取得してください。");
-            return;
-        }
-
-        foreach (var error in _orderEntryApplicationService.ValidateQueue(QueueLines, Items, AttendanceCasts))
-        {
-            ModelState.AddModelError(nameof(QueueLines), error);
-        }
-
-        if (QueueLines.Any(x => x.SlipId is null or <= 0))
-        {
-            ModelState.AddModelError(nameof(QueueLines), "注文キューに利用できない卓番があります。");
-        }
-    }
-
-    private string BuildSuccessMessage(AddStoreOrderLinesResult result)
-    {
-        var summaries = ReadPostedQueueSummaries()
-            .Where(x => x.Count > 0)
-            .GroupBy(x => x.SlipId)
-            .Select(x =>
-            {
-                var first = x.First();
-                var display = string.IsNullOrWhiteSpace(first.Display) ? $"伝票 {first.SlipId}" : first.Display.Trim();
-                return $"{display}: {x.Sum(line => line.Count)}件";
-            })
-            .ToArray();
-
-        if (summaries.Length == 0)
-        {
-            return $"注文を登録しました。登録行数: {result.InsertedCount}";
-        }
-
-        return $"注文を登録しました。登録行数: {result.InsertedCount}（{string.Join(" / ", summaries)}）";
-    }
-
-    private IReadOnlyList<OrderQueueSummaryInput> ReadPostedQueueSummaries()
-    {
-        if (string.IsNullOrWhiteSpace(OrderQueueSummaryJson))
-        {
-            return [];
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<List<OrderQueueSummaryInput>>(
-                OrderQueueSummaryJson,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
-
-    private sealed record OrderQueueSummaryInput(
-        [property: JsonPropertyName("slipId")] long SlipId,
-        [property: JsonPropertyName("display")] string? Display,
-        [property: JsonPropertyName("count")] int Count);
 }

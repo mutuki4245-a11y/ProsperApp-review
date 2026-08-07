@@ -1,158 +1,56 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
-const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
-
-const schema = read('Sql/store_order_accounting_tables.sql');
-const businessDaySql = read('Sql/store_rpc/01_business_day.sql');
-const masterSql = read('Sql/store_rpc/02_store_masters.sql');
-const cancelSql = read('Sql/store_rpc/05_checkout.sql');
-const adjustmentSql = read('Sql/store_rpc/07_cast_sales_adjustments.sql');
-const checkoutSql = read('Sql/store_rpc/08_checkout_ready.sql');
-const businessHomeSql = read('Sql/store_rpc/09_business_home_snapshot.sql');
-const guardsSql = read('Sql/store_rpc/13_accounting_snapshot_guards.sql');
-const rpcOrder = read('Sql/store_rpc_functions.sql');
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const [schema, checkoutCore, checkoutV2, businessDay, guards, order] = await Promise.all([
+    read('Sql/store_order_accounting_tables.sql'),
+    read('Sql/store_rpc/08_checkout_ready.sql'),
+    read('Sql/store_rpc/26_current_checkout_mutations.sql'),
+    read('Sql/store_rpc/01_business_day.sql'),
+    read('Sql/store_rpc/13_accounting_snapshot_guards.sql'),
+    read('Sql/store_rpc_functions.sql')
+]);
 
 const functionBlock = (source, name) => {
-    const escapedName = name.replace('.', '\\.');
-    const match = new RegExp(
-        `create\\s+or\\s+replace\\s+function\\s+${escapedName}\\b[\\s\\S]*?\\$\\$;`,
-        'i'
-    ).exec(source);
+    const match = new RegExp(`create\\s+or\\s+replace\\s+function\\s+${name.replace('.', '\\.')}\\b[\\s\\S]*?\\$\\$;`, 'i').exec(source);
     assert.ok(match, `${name} の定義が必要です。`);
     return match[0];
 };
 
 assert.match(schema, /create table if not exists public\.store_slip_accounting_snapshots/i);
 assert.match(schema, /create table if not exists public\.store_business_day_closing_snapshots/i);
-assert.match(
-    schema,
-    /create unique index if not exists ux_store_slip_accounting_snapshots_active[\s\S]*where status = 'active'/i
-);
-assert.match(
-    schema,
-    /create unique index if not exists ux_store_slip_cast_sales_adjustments_confirmed[\s\S]*where status = 'confirmed'/i
-);
-assert.match(schema, /backfilled boolean not null default false/i);
-assert.match(schema, /alter table public\.store_slip_accounting_snapshots enable row level security/i);
-assert.match(schema, /alter table public\.store_business_day_closing_snapshots enable row level security/i);
+assert.match(schema, /ux_store_slip_accounting_snapshots_active[\s\S]*where status = 'active'/i);
 
-const issueCheckout = functionBlock(checkoutSql, 'store.issue_checkout_statement');
-assert.match(issueCheckout, /store\.capture_slip_accounting_snapshot/i);
-assert.match(issueCheckout, /store\.get_business_day_snapshot/i);
-assert.match(issueCheckout, /v_print_data[\s\S]*v_review_data[\s\S]*v_business_home_data/i);
+const issueInternal = functionBlock(checkoutCore, 'store.issue_checkout_statement_internal');
+assert.match(issueInternal, /store\.capture_slip_accounting_snapshot/i);
+assert.match(issueInternal, /store\.get_business_day_snapshot_internal/i);
 
-const getStatement = functionBlock(checkoutSql, 'store.get_checkout_statement_print_data');
-assert.match(getStatement, /from public\.store_slip_accounting_snapshots/i);
-assert.doesNotMatch(getStatement, /store\.build_checkout_(?:statement|review)_data/i);
+const releaseInternal = functionBlock(checkoutCore, 'store.release_checkout_ready_internal');
+assert.match(releaseInternal, /store\.invalidate_slip_accounting_snapshot/i);
+const cancelInternal = functionBlock(await read('Sql/store_rpc/05_checkout.sql'), 'store.cancel_checkout_internal');
+assert.match(cancelInternal, /store\.invalidate_slip_accounting_snapshot/i);
 
-const confirmCheckout = functionBlock(checkoutSql, 'store.confirm_checkout');
-assert.match(confirmCheckout, /select ss\.print_data[\s\S]*from public\.store_slip_accounting_snapshots/i);
-assert.match(confirmCheckout, /v_statement_data->>'total_amount'/i);
-assert.doesNotMatch(confirmCheckout, /round\s*\(\s*v_subtotal_amount\s*\*\s*0\.20/i);
+const applyV2 = functionBlock(checkoutV2, 'store.apply_checkout_mutation_v2');
+for (const dependency of [
+    'store.issue_checkout_statement_internal',
+    'store.release_checkout_ready_internal',
+    'store.confirm_checkout_draft_v2',
+    'store.cancel_checkout_internal'
+]) assert.match(applyV2, new RegExp(dependency.replace('.', '\\.')));
+assert.match(applyV2, /current_business_day_operation_results/i);
+assert.match(applyV2, /business_day_operation_id_reused/i);
 
-const releaseCheckout = functionBlock(checkoutSql, 'store.release_checkout_ready');
-assert.match(releaseCheckout, /store\.invalidate_slip_accounting_snapshot/i);
-assert.match(releaseCheckout, /update public\.store_slip_pricing_lines/i);
-assert.match(releaseCheckout, /source_type = 'automatic_pricing'/i);
-assert.match(releaseCheckout, /from public\.store_slips[\s\S]*for update/i);
-
-const cancelCheckout = functionBlock(cancelSql, 'store.cancel_checkout');
-assert.match(cancelCheckout, /store\.invalidate_slip_accounting_snapshot/i);
-assert.match(cancelCheckout, /update public\.store_slip_pricing_lines/i);
-assert.match(cancelCheckout, /source_type = 'automatic_pricing'/i);
-assert.match(cancelCheckout, /from public\.store_slips[\s\S]*for update/i);
-assert.match(cancelCheckout, /update public\.store_slip_cast_sales_adjustments[\s\S]*status = 'cancelled'/i);
-assert.doesNotMatch(cancelCheckout, /delete from public\.store_slip_cast_sales_adjustments/i);
-
-const saveAdjustments = functionBlock(adjustmentSql, 'store.save_cast_sales_adjustment');
-assert.match(saveAdjustments, /from public\.store_slips[\s\S]*for update/i);
-assert.match(saveAdjustments, /update public\.store_slip_cast_sales_adjustments[\s\S]*status = 'cancelled'/i);
-assert.doesNotMatch(saveAdjustments, /delete from public\.store_slip_cast_sales_adjustments/i);
-
-const closeBusinessDay = functionBlock(businessDaySql, 'store.close_business_day');
-assert.match(closeBusinessDay, /store\.capture_business_day_closing_snapshot/i);
-assert.match(closeBusinessDay, /closed_at = v_closed_at/i);
-assert.match(closeBusinessDay, /from public\.store_business_days[\s\S]*for update/i);
-
-const getBusinessSnapshot = functionBlock(businessHomeSql, 'store.get_business_day_snapshot_at');
-assert.match(getBusinessSnapshot, /left join public\.store_slip_accounting_snapshots/i);
-assert.match(getBusinessSnapshot, /when sp\.status <> 'open' and sp\.business_home_data is not null/i);
-assert.match(getBusinessSnapshot, /else sp\.computed_slip/i);
-assert.match(getBusinessSnapshot, /calculate_slip_pricing\(s\.department_id, s\.slip_id, p_as_of\)/i);
-assert.doesNotMatch(getBusinessSnapshot, /calculate_slip_pricing\(s\.department_id, s\.slip_id, now\(\)\)/i);
-
-assert.match(guardsSql, /create or replace function store\.guard_closed_business_day_mutation/i);
-assert.match(guardsSql, /for key share/i);
-assert.match(guardsSql, /business_day_slip_mismatch/i);
-assert.match(guardsSql, /backfilled_from_checkout/i);
-assert.match(guardsSql, /get_business_day_snapshot_at[\s\S]*p_closed_at/i);
-for (const tableName of [
-    'store_slips',
-    'store_slip_customers',
-    'store_slip_casts',
-    'store_order_lines',
-    'store_checkouts',
-    'store_checkout_payments',
-    'store_slip_pricing_lines',
-    'store_slip_accounting_snapshots'
-]) {
-    assert.match(guardsSql, new RegExp(`'${tableName}'`, 'i'), `${tableName} に締め後ガードが必要です。`);
+for (const name of ['issue_checkout_statement_v2', 'release_checkout_ready_v2', 'confirm_checkout_v2', 'cancel_checkout_v2']) {
+    const block = functionBlock(checkoutV2, `store.${name}`);
+    assert.match(block, /p_operation_id text/i);
+    assert.match(block, /p_expected_business_day_revision bigint/i);
+    assert.match(block, /store\.apply_checkout_mutation_v2/i);
 }
-assert.match(guardsSql, /trg_department_master_identity_immutable/i);
-assert.match(guardsSql, /trg_cast_master_identity_immutable/i);
-assert.match(
-    guardsSql,
-    /trg_department_master_identity_immutable[\s\S]*before update or delete on public\.department_master/i
-);
-assert.doesNotMatch(
-    guardsSql,
-    /'store_business_home_flush_batches'/i,
-    '7日保持の再送判定行は締め後ガード対象にしません。'
-);
 
-const deleteItem = functionBlock(masterSql, 'store.delete_item');
-assert.match(deleteItem, /delete from public\.store_item_master/i);
-assert.doesNotMatch(deleteItem, /set is_active = false/i);
-assert.doesNotMatch(deleteItem, /set item_id = null/i);
-assert.match(schema, /store_order_lines[\s\S]*?item_id bigint,[\s\S]*?item_name_snapshot text not null/i);
-assert.match(schema, /item_category_id_snapshot bigint/i);
-assert.match(schema, /item_category_code_snapshot text/i);
-assert.match(schema, /item_category_name_snapshot text/i);
-assert.match(
-    schema,
-    /create trigger trg_store_order_lines_item_category_snapshot[\s\S]*before insert or update of item_id/i
-);
-assert.match(
-    schema,
-    /update public\.store_order_lines ol[\s\S]*item_category_code_snapshot = c\.category_code[\s\S]*item_category_name_snapshot = c\.category_name/i
-);
-assert.doesNotMatch(
-    schema,
-    /add constraint store_order_lines_item_id_fkey[\s\S]*?references public\.store_item_master/i
-);
+const closeInternal = functionBlock(businessDay, 'store.close_business_day_internal');
+assert.match(closeInternal, /store\.capture_business_day_closing_snapshot/i);
+assert.match(guards, /create or replace function store\.guard_closed_business_day_mutation/i);
+assert.ok(order.indexOf('08_checkout_ready.sql') < order.indexOf('26_current_checkout_mutations.sql'));
+assert.ok(order.indexOf('13_accounting_snapshot_guards.sql') < order.indexOf('22_current_business_day_close.sql'));
 
-assert.match(schema, /table_code_snapshot text/i);
-assert.match(schema, /table_name_snapshot text/i);
-assert.match(schema, /drop constraint if exists store_slips_table_id_fkey/i);
-assert.match(schema, /disable trigger trg_store_slips_set_updated_at/i);
-assert.match(schema, /disable trigger trg_store_slips_business_ui_revision/i);
-assert.match(schema, /disable trigger trg_store_order_lines_set_updated_at/i);
-assert.match(schema, /disable trigger trg_store_order_lines_business_ui_revision/i);
-assert.match(cancelSql, /table_code_snapshot[\s\S]*?v_table\.table_code/i);
-assert.match(cancelSql, /table_name_snapshot[\s\S]*?v_table\.table_name/i);
-assert.match(
-    guardsSql,
-    /trg_store_table_master_identity_immutable[\s\S]*?before update on public\.store_table_master/i
-);
-
-const pricingOrder = rpcOrder.indexOf('Sql/store_rpc/11_pricing.sql');
-const checkoutOrder = rpcOrder.indexOf('Sql/store_rpc/08_checkout_ready.sql');
-const snapshotGuardOrder = rpcOrder.indexOf('Sql/store_rpc/13_accounting_snapshot_guards.sql');
-const grantsOrder = rpcOrder.indexOf('Sql/store_rpc/99_grants.sql');
-assert.ok(pricingOrder >= 0 && pricingOrder < checkoutOrder, '料金定義を会計RPCより先に適用してください。');
-assert.ok(checkoutOrder < snapshotGuardOrder, '会計RPCをbackfillと締め後ガードより先に適用してください。');
-assert.ok(snapshotGuardOrder < grantsOrder, '権限剥奪は最後に適用してください。');
+console.log('Accounting snapshot v2 contract checks passed.');

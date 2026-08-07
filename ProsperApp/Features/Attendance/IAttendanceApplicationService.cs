@@ -4,14 +4,12 @@ namespace ProsperApp.Features.Attendance;
 
 public interface IAttendanceApplicationService
 {
-    Task<AttendancePageState> LoadAsync(
-        ClosingAttendanceInputModel input,
-        bool preserveInput,
-        CancellationToken ct);
+    Task<AttendancePageState> LoadShellAsync(CancellationToken ct);
 
-    IReadOnlyList<AttendanceValidationError> Validate(
-        AttendancePageState state,
-        ClosingAttendanceInputModel input);
+    Task<Result<AttendanceEditorSnapshot>> ReadCurrentAsync(
+        long? knownBusinessDayId,
+        long? knownBusinessDayRevision,
+        CancellationToken ct);
 
     Task<Result<AttendanceSaveOutput>> SaveAsync(
         ClosingAttendanceInputModel input,
@@ -20,17 +18,21 @@ public interface IAttendanceApplicationService
 
 public sealed record AttendancePageState(
     StoreContext? StoreContext,
-    StoreBusinessDay? BusinessDay,
     DateOnly BusinessDate,
     IReadOnlyList<AttendanceTimeOption> ClockInTimeOptions,
     IReadOnlyList<AttendanceTimeOption> ClockOutTimeOptions,
     string DefaultClockInTime,
     string DefaultClockOutTime,
     ClosingAttendanceInputModel Input,
+    AttendanceEditorSnapshot? InitialSnapshot,
     IReadOnlyList<PageLoadIssue> LoadIssues,
-    DateTimeOffset? LastUpdatedAt);
+    bool WasFetched);
 
 public sealed record AttendanceSaveOutput(
-    StoreBusinessDay BusinessDay,
-    int SelectedCount,
-    int SavedClockOutCount);
+    string OperationId,
+    string Status,
+    string Message,
+    AttendanceEditorSnapshot Snapshot,
+    int SavedCount,
+    int SavedClockOutCount,
+    IReadOnlyList<AttendanceSaveRowResult> RowResults);

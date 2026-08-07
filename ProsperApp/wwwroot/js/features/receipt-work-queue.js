@@ -1,19 +1,17 @@
 (() => {
     const config = window.prosperReceiptWorkQueue ?? {};
     const form = document.querySelector('[data-receipt-work-queue-form]');
-    const advanceUrl = config.advanceUrl || '';
-    const items = Array.isArray(config.items) ? config.items : [];
-    if (config.enabled !== true || !form || !advanceUrl || items.length === 0) {
-        return;
-    }
+    if (config.enabled !== true || !form || !config.readUrl || !config.advanceUrl) return;
 
-    const storageKey = 'ProsperApp.ReceiptWorkQueue.v1';
     const statusElement = document.querySelector('[data-receipt-queue-status]');
+    const errorElement = document.querySelector('[data-receipt-queue-error]');
     const positionElement = document.querySelector('[data-receipt-queue-position]');
-    const fileNameElements = document.querySelectorAll(
-        '[data-receipt-queue-file-name], [data-receipt-queue-preview-file-name]');
+    const fileNameElements = document.querySelectorAll('[data-receipt-queue-file-name], [data-receipt-queue-preview-file-name]');
     const previewElement = document.querySelector('[data-receipt-queue-preview]');
     const previewLink = document.querySelector('[data-receipt-queue-preview-link]');
+    const failedSection = document.querySelector('[data-receipt-failed-section]');
+    const failedCount = document.querySelector('[data-receipt-failed-count]');
+    const failedList = document.querySelector('[data-receipt-failed-list]');
     const documentIdInput = form.querySelector('[name="Input.DocumentId"]');
     const driveFileIdInput = form.querySelector('[name="Input.DriveFileId"]');
     const businessDayIdInput = form.querySelector('[name="Input.BusinessDayId"]');
@@ -25,299 +23,300 @@
     const descriptionInput = form.querySelector('[name="Input.Description"]');
     const groupCodeInput = form.querySelector('[name="Input.GroupCode"]');
     const castAdvanceField = document.querySelector('[data-cast-advance-field]');
-    const requestVerificationToken = form.querySelector('[name="__RequestVerificationToken"]')?.value || '';
-    let cursor = Math.max(0, Number(config.currentIndex) || 0);
+    const token = form.querySelector('[name="__RequestVerificationToken"]')?.value || '';
+    const dbName = 'ProsperApp.ReceiptWorkQueue';
+    const stateKey = 'outbox-v2';
+    let state = { pending: [], failed: [] };
+    let candidates = [];
+    let current = null;
+    let businessDay = null;
+    let advanceCasts = [];
+    let resumeCursor = null;
+    let pendingCount = 0;
     let processing = false;
+    let loading = false;
     let retryTimer = null;
+    let editingFailedIndex = null;
 
-    const emptyState = () => ({ pending: [], failed: [] });
-
-    const readState = () => {
+    const openDatabase = () => new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('state');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+    const readState = async () => {
         try {
-            const parsed = JSON.parse(localStorage.getItem(storageKey) || '');
+            const db = await openDatabase();
+            const value = await new Promise((resolve, reject) => {
+                const request = db.transaction('state', 'readonly').objectStore('state').get(stateKey);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            db.close();
             return {
-                pending: Array.isArray(parsed?.pending) ? parsed.pending : [],
-                failed: Array.isArray(parsed?.failed) ? parsed.failed : []
+                pending: Array.isArray(value?.pending) ? value.pending : [],
+                failed: Array.isArray(value?.failed) ? value.failed : []
             };
         } catch {
-            return emptyState();
+            return { pending: [], failed: [] };
         }
     };
-
-    let state = readState();
-
-    const writeState = () => {
-        try {
-            localStorage.setItem(storageKey, JSON.stringify(state));
-        } catch {
-            // 保存領域が利用できない場合も、現在のタブでは直列送信を続ける。
-        }
+    const writeState = async () => {
+        const db = await openDatabase();
+        await new Promise((resolve, reject) => {
+            const transaction = db.transaction('state', 'readwrite');
+            transaction.objectStore('state').put(state, stateKey);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+        db.close();
     };
-
-    const queuedDocumentIds = () => new Set([
+    const createOperationId = () => crypto.randomUUID();
+    const queuedIds = () => new Set([
         ...state.pending.map((command) => command.documentId),
         ...state.failed.map((command) => command.documentId)
     ]);
-
-    const currentItem = () => items[cursor] ?? null;
-
-    const setStatus = () => {
-        if (!statusElement) {
-            return;
-        }
-
+    const escapeHtml = (value) => String(value ?? '')
+        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    const setError = (message = '') => {
+        if (!errorElement) return;
+        errorElement.textContent = message;
+        errorElement.classList.toggle('d-none', !message);
+    };
+    const renderStatus = () => {
         const messages = [];
-        if (state.pending.length > 0) {
-            messages.push(`同期中 ${state.pending.length}件`);
-        }
-        if (state.failed.length > 0) {
-            messages.push(`要確認 ${state.failed.length}件`);
-        }
-
+        if (state.pending.length) messages.push(`同期中 ${state.pending.length}件`);
+        if (state.failed.length) messages.push(`要確認 ${state.failed.length}件`);
+        if (!state.pending.length && !state.failed.length && current) messages.push('同期済み');
         statusElement.textContent = messages.join(' / ');
         statusElement.classList.toggle('d-none', messages.length === 0);
     };
-
-    const escapeHtml = (value) => String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-
+    const renderFailures = () => {
+        failedSection?.classList.toggle('d-none', state.failed.length === 0);
+        if (failedCount) failedCount.textContent = String(state.failed.length);
+        if (!failedList) return;
+        failedList.replaceChildren();
+        state.failed.forEach((command, index) => {
+            const row = document.createElement('div');
+            row.className = 'list-group-item d-flex align-items-center justify-content-between gap-3';
+            const body = document.createElement('div');
+            body.innerHTML = `<strong>${escapeHtml(command.item?.fileName || command.documentId)}</strong><div class="small text-danger">${escapeHtml(command.message)}</div>`;
+            const actions = document.createElement('div');
+            actions.className = 'd-flex gap-2';
+            const edit = document.createElement('button');
+            edit.type = 'button'; edit.className = 'btn btn-outline-primary btn-sm'; edit.textContent = '再編集'; edit.dataset.failedEdit = String(index);
+            const withdraw = document.createElement('button');
+            withdraw.type = 'button'; withdraw.className = 'btn btn-outline-secondary btn-sm'; withdraw.textContent = '取り下げ'; withdraw.dataset.failedWithdraw = String(index);
+            actions.append(edit, withdraw); row.append(body, actions); failedList.appendChild(row);
+        });
+    };
     const renderPreview = (item) => {
-        if (!previewElement) {
-            return;
-        }
-
         if (!item?.previewUrl) {
             previewElement.innerHTML = '<div class="preview-empty">プレビューできるファイルがありません。</div>';
             previewLink?.classList.add('d-none');
             return;
         }
-
-        const previewUrl = String(item.previewUrl);
-        previewElement.innerHTML = `<iframe id="receiptPreview" src="${escapeHtml(`${previewUrl}#toolbar=0&navpanes=0&view=Fit&zoom=page-fit`)}" title="証憑プレビュー"></iframe>`;
-        if (previewLink) {
-            previewLink.href = previewUrl;
-            previewLink.classList.remove('d-none');
-        }
+        const url = String(item.previewUrl);
+        previewElement.innerHTML = `<iframe id="receiptPreview" src="${escapeHtml(`${url}#toolbar=0&navpanes=0&view=Fit&zoom=page-fit`)}" title="証憑プレビュー"></iframe>`;
+        previewLink.href = url;
+        previewLink.classList.remove('d-none');
     };
-
+    const renderAdvanceCasts = () => {
+        const selected = advanceCastInput?.value || '';
+        if (!advanceCastInput) return;
+        advanceCastInput.replaceChildren(new Option('当日出勤のキャストを選択', ''));
+        advanceCasts.forEach((cast) => advanceCastInput.add(new Option(cast.name || '', String(cast.id))));
+        advanceCastInput.value = selected;
+    };
     const syncCastAdvance = () => {
-        const isCastAdvance = accountSubjectInput?.value === '前渡金: キャスト';
-        castAdvanceField?.classList.toggle('d-none', !isCastAdvance);
+        const enabled = accountSubjectInput?.value === '前渡金: キャスト';
+        castAdvanceField?.classList.toggle('d-none', !enabled);
         if (advanceCastInput) {
-            advanceCastInput.disabled = !isCastAdvance;
-            if (!isCastAdvance) {
-                advanceCastInput.value = '';
-            }
+            advanceCastInput.disabled = !enabled;
+            if (!enabled) advanceCastInput.value = '';
         }
     };
-
-    const renderCurrent = () => {
-        const item = currentItem();
-        if (!item) {
-            if (positionElement) {
-                positionElement.textContent = state.pending.length > 0
-                    ? '次の証憑を同期中です'
-                    : '候補バッファを使い切りました';
-            }
-            fileNameElements.forEach((element) => {
-                element.textContent = state.pending.length > 0 ? '保存内容を同期しています。' : '再読み込みしてください。';
-            });
-            renderPreview(null);
-            form.querySelectorAll('button[type="submit"]').forEach((button) => {
-                button.disabled = true;
-            });
-            return;
-        }
-
-        if (positionElement) {
-            positionElement.textContent = `${cursor + 1} / ${config.totalCount || items.length}`;
-        }
-        fileNameElements.forEach((element) => {
-            element.textContent = item.fileName || item.id;
-        });
-        renderPreview(item);
-        form.querySelectorAll('button[type="submit"]').forEach((button) => {
-            button.disabled = false;
-        });
-
-        if (documentIdInput) documentIdInput.value = item.id || '';
-        if (driveFileIdInput) driveFileIdInput.value = item.driveFileId || '';
-        if (businessDayIdInput) businessDayIdInput.value = config.businessDayId || '';
-        if (paymentDateInput) paymentDateInput.value = item.paymentDate || '';
-        if (amountInput) amountInput.value = item.amount ?? '';
-        if (accountSubjectInput) accountSubjectInput.value = '';
-        if (accountSubjectSelected) accountSubjectSelected.textContent = '科目を選択してください';
-        if (advanceCastInput) advanceCastInput.value = '';
-        if (descriptionInput) descriptionInput.value = '';
-        if (groupCodeInput) groupCodeInput.value = '';
+    const fillForm = (item, values = null) => {
+        if (documentIdInput) documentIdInput.value = item?.id || '';
+        if (driveFileIdInput) driveFileIdInput.value = item?.driveFileId || '';
+        if (businessDayIdInput) businessDayIdInput.value = businessDay?.businessDayId || '';
+        if (paymentDateInput) paymentDateInput.value = values?.paymentDate || item?.paymentDate || businessDay?.businessDate || '';
+        if (amountInput) amountInput.value = values?.amount ?? item?.amount ?? '';
+        if (accountSubjectInput) accountSubjectInput.value = values?.accountSubject || '';
+        if (accountSubjectSelected) accountSubjectSelected.textContent = values?.accountSubject || '科目を選択してください';
+        if (advanceCastInput) advanceCastInput.value = values?.advanceCastId || '';
+        if (descriptionInput) descriptionInput.value = values?.description || '';
+        if (groupCodeInput) groupCodeInput.value = values?.groupCode || '';
         document.querySelectorAll('[data-account-value]').forEach((button) => {
-            button.classList.remove('is-selected');
+            button.classList.toggle('is-selected', button.dataset.accountValue === accountSubjectInput?.value);
         });
         syncCastAdvance();
     };
-
-    const moveToNext = () => {
-        const unavailable = queuedDocumentIds();
-        let next = cursor + 1;
-        while (next < items.length && unavailable.has(items[next]?.id)) {
-            next += 1;
-        }
-        cursor = next;
+    const renderCurrent = (values = null) => {
+        const item = current;
+        positionElement.textContent = item ? `残り ${pendingCount}件` : (state.pending.length ? '同期中' : '未処理なし');
+        fileNameElements.forEach((element) => { element.textContent = item?.fileName || ''; });
+        renderPreview(item);
+        renderAdvanceCasts();
+        fillForm(item, values);
+        form.querySelectorAll('button[type="submit"]').forEach((button) => { button.disabled = !item; });
+    };
+    const mergeQueuePayload = (payload) => {
+        if (Object.hasOwn(payload, 'businessDay')) businessDay = payload.businessDay;
+        if (Array.isArray(payload.advanceCasts)) advanceCasts = payload.advanceCasts;
+        pendingCount = Number(payload.pendingCount) || 0;
+        resumeCursor = payload.resumeCursor || null;
+        const incoming = [payload.workItem, ...(Array.isArray(payload.buffer) ? payload.buffer : [])].filter(Boolean);
+        const unavailable = queuedIds();
+        const currentStillPending = current && incoming.some((item) => String(item.id) === String(current.id));
+        candidates = incoming.filter((item) =>
+            !unavailable.has(item.id) && String(item.id) !== String(current?.id || ''));
+        if (editingFailedIndex == null && (!currentStillPending || unavailable.has(current.id))) current = candidates.shift() || null;
+        document.dispatchEvent(new CustomEvent('prosper:closing-dashboard-delta', {
+            detail: { pendingReceiptCount: pendingCount }
+        }));
         renderCurrent();
     };
-
-    const createOperationId = () => {
-        if (typeof crypto?.randomUUID === 'function') {
-            return crypto.randomUUID();
+    const loadQueue = async (cursor = null) => {
+        if (loading) return;
+        loading = true;
+        try {
+            const url = new URL(config.readUrl, window.location.href);
+            if (cursor) url.searchParams.set('resumeCursor', cursor);
+            const response = await fetch(url, { headers: { Accept: 'application/json' } });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok || payload?.succeeded !== true) throw new Error(payload?.message || '領収書作業キューを取得できませんでした。');
+            setError();
+            mergeQueuePayload(payload);
+        } catch (error) {
+            setError(error?.message || '領収書作業キューを取得できませんでした。');
+        } finally {
+            loading = false;
         }
-
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-            const random = Math.floor(Math.random() * 16);
-            const value = character === 'x' ? random : (random & 0x3) | 0x8;
-            return value.toString(16);
-        });
     };
-
-    const queueCommand = (action) => {
-        const item = currentItem();
-        if (!item || !item.id || !item.workItemToken) {
-            return;
-        }
-
+    const moveNext = () => {
+        current = candidates.shift() || null;
+        renderCurrent();
+        if (!current && resumeCursor) void loadQueue(resumeCursor);
+    };
+    const queueCommand = async (action) => {
+        const item = current;
+        if (!item?.id || !item.workItemToken) return;
         const amount = Number(amountInput?.value);
         const command = {
-            operationId: createOperationId(),
-            action,
-            workItemToken: item.workItemToken,
-            documentId: item.id,
-            paymentDate: paymentDateInput?.value || null,
-            amount: Number.isFinite(amount) ? amount : null,
-            accountSubject: accountSubjectInput?.value || null,
-            description: descriptionInput?.value || null,
-            groupCode: groupCodeInput?.value || null,
-            advanceCastId: advanceCastInput?.value ? Number(advanceCastInput.value) : null
+            operationId: createOperationId(), action,
+            workItemToken: item.workItemToken, documentId: item.id,
+            paymentDate: action === 'save' ? paymentDateInput?.value || null : null,
+            amount: action === 'save' && Number.isFinite(amount) ? amount : null,
+            accountSubject: action === 'save' ? accountSubjectInput?.value || null : null,
+            description: action === 'save' ? descriptionInput?.value || null : null,
+            groupCode: action === 'save' ? groupCodeInput?.value || null : null,
+            advanceCastId: action === 'save' && advanceCastInput?.value ? Number(advanceCastInput.value) : null,
+            item
         };
-
-        if (action === 'exclude_scan_mistake') {
-            command.paymentDate = null;
-            command.amount = null;
-            command.accountSubject = null;
-            command.description = null;
-            command.groupCode = null;
-            command.advanceCastId = null;
-        }
-
+        const previousState = {
+            pending: [...state.pending],
+            failed: [...state.failed]
+        };
+        const previousEditingFailedIndex = editingFailedIndex;
+        if (editingFailedIndex != null) state.failed.splice(editingFailedIndex, 1);
         state.pending.push(command);
-        writeState();
-        setStatus();
-        moveToNext();
-        void pump();
+        try {
+            await writeState();
+        } catch {
+            state = previousState;
+            editingFailedIndex = previousEditingFailedIndex;
+            setError('端末へ未同期データを保存できませんでした。次の証憑へは進んでいません。');
+            return;
+        }
+        editingFailedIndex = null;
+        setError();
+        renderStatus(); renderFailures(); moveNext(); void pump();
     };
-
-    const moveToFailed = (command, message) => {
-        state.pending.shift();
-        state.failed.push({ ...command, message: message || '保存内容を確認してください。' });
-        writeState();
-        setStatus();
-    };
-
     const scheduleRetry = () => {
-        if (retryTimer || state.pending.length === 0) {
-            return;
-        }
-        retryTimer = window.setTimeout(() => {
-            retryTimer = null;
-            void pump();
-        }, 3000);
+        if (retryTimer || !state.pending.length) return;
+        retryTimer = window.setTimeout(() => { retryTimer = null; void pump(); }, 3000);
     };
-
     const pump = async () => {
-        if (processing || state.pending.length === 0) {
-            return;
-        }
-
+        if (processing || !state.pending.length) return;
         processing = true;
         const command = state.pending[0];
         try {
-            const response = await fetch(advanceUrl, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    ...(requestVerificationToken ? { RequestVerificationToken: requestVerificationToken } : {})
-                },
-                body: JSON.stringify(command)
+            const { item, ...payload } = command;
+            const response = await fetch(config.advanceUrl, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(token ? { RequestVerificationToken: token } : {}) },
+                body: JSON.stringify(payload)
             });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                if (response.status >= 400 && response.status < 500) {
-                    moveToFailed(command, payload.message);
+            const result = await response.json().catch(() => null);
+            if (!response.ok || result?.succeeded !== true) {
+                if (response.status < 500 && result?.status !== 'unavailable') {
+                    state.pending.shift(); state.failed.push({ ...command, message: result?.message || '保存内容を確認してください。' });
+                    await writeState(); renderStatus(); renderFailures();
                     return;
                 }
-                throw new Error(payload.message || 'receipt_queue_unavailable');
+                throw new Error('unavailable');
             }
-
-            if (payload.succeeded !== true) {
-                throw new Error(payload.message || 'receipt_queue_unavailable');
-            }
-
-            if (payload.status === 'confirmed') {
+            mergeQueuePayload(result);
+            if (result.status === 'confirmed') {
                 state.pending.shift();
-                writeState();
-                setStatus();
-                return;
+            } else if (result.status === 'validation_error' || result.status === 'stale_work_item') {
+                state.pending.shift(); state.failed.push({ ...command, message: result.message || '保存内容を確認してください。' });
+            } else {
+                throw new Error('unavailable');
             }
-
-            if (payload.status === 'validation_error' || payload.status === 'stale_work_item') {
-                moveToFailed(command, payload.message);
-                return;
-            }
-
-            throw new Error(payload.message || 'receipt_queue_unavailable');
+            await writeState(); renderStatus(); renderFailures();
         } catch {
-            // 成否不明の通信失敗は同じ operation_id を保ったまま先頭で再送する。
             scheduleRetry();
         } finally {
             processing = false;
-            if (state.pending.length > 0 && !retryTimer) {
-                void pump();
-            }
+            if (state.pending.length && !retryTimer) void pump();
         }
     };
 
     form.addEventListener('submit', (event) => {
-        const action = event.submitter?.dataset.receiptQueueAction || 'save';
-        if (action === 'skip') {
-            event.preventDefault();
-            moveToNext();
-            return;
-        }
-
-        if (action !== 'save' && action !== 'exclude_scan_mistake') {
-            return;
-        }
-
-        if (action === 'save' && !form.reportValidity()) {
-            return;
-        }
-
         event.preventDefault();
-        queueCommand(action);
+        const action = event.submitter?.dataset.receiptQueueAction || 'save';
+        if (action === 'skip') { editingFailedIndex = null; moveNext(); return; }
+        if (action === 'save' && !form.reportValidity()) return;
+        if (action === 'exclude_scan_mistake' && !window.confirm('スキャンミスとしてDB上で対象外にします。実行しますか？')) return;
+        if (action === 'save' || action === 'exclude_scan_mistake') void queueCommand(action);
     });
-
-    window.addEventListener('online', () => void pump());
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            void pump();
+    failedList?.addEventListener('click', async (event) => {
+        const edit = event.target.closest('[data-failed-edit]');
+        const withdraw = event.target.closest('[data-failed-withdraw]');
+        const index = Number(edit?.dataset.failedEdit ?? withdraw?.dataset.failedWithdraw);
+        if (!Number.isInteger(index) || !state.failed[index]) return;
+        if (edit) {
+            editingFailedIndex = index;
+            current = state.failed[index].item;
+            renderCurrent(state.failed[index]);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            state.failed.splice(index, 1);
+            await writeState(); renderStatus(); renderFailures();
         }
     });
+    document.querySelectorAll('[data-account-value]').forEach((button) => {
+        button.addEventListener('click', () => {
+            accountSubjectInput.value = button.dataset.accountValue || '';
+            accountSubjectSelected.textContent = accountSubjectInput.value || '科目を選択してください';
+            document.querySelectorAll('[data-account-value]').forEach((candidate) => candidate.classList.toggle('is-selected', candidate === button));
+            window.bootstrap?.Modal.getInstance(document.getElementById('accountSubjectModal'))?.hide();
+            syncCastAdvance();
+        });
+    });
+    window.addEventListener('online', () => { void pump(); if (!current) void loadQueue(); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') { void pump(); if (!current && !state.pending.length) void loadQueue(); }
+    });
 
-    setStatus();
-    renderCurrent();
-    void pump();
+    void (async () => {
+        state = await readState();
+        renderStatus(); renderFailures();
+        await loadQueue();
+        void pump();
+    })();
 })();

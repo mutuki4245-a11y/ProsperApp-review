@@ -148,42 +148,14 @@ public class IndexModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnGetAttendanceCastsAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetBusinessSlipsAsync(long? knownRevision, CancellationToken cancellationToken)
     {
         if (!SlipsEnabled)
         {
             return NotFound();
         }
 
-        var result = await _businessHomeApplicationService.GetAttendanceCastsAsync(cancellationToken);
-        if (!result.Succeeded)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
-            {
-                succeeded = false,
-                failureKind = result.FailureKind?.ToString(),
-                message = result.ErrorMessage ?? "出勤キャストを取得できませんでした。"
-            });
-        }
-
-        Response.Headers["X-Last-Updated"] = DateTimeOffset.UtcNow.ToString("O");
-        return new JsonResult(result.Value.Select(cast => new
-        {
-            id = cast.CastId,
-            name = cast.DisplayName,
-            display = cast.SearchDisplayName,
-            department = cast.DepartmentName
-        }));
-    }
-
-    public async Task<IActionResult> OnGetBusinessSlipsAsync(CancellationToken cancellationToken)
-    {
-        if (!SlipsEnabled)
-        {
-            return NotFound();
-        }
-
-        var result = await _businessHomeApplicationService.GetSnapshotAsync(cancellationToken);
+        var result = await _businessHomeApplicationService.GetSnapshotAsync(knownRevision, cancellationToken);
         if (!result.Succeeded)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
@@ -194,23 +166,15 @@ public class IndexModel(
         }
 
         var state = result.Value;
-        if (state.BusinessDay is null)
+        return new JsonResult(new
         {
-            return new JsonResult(new
-            {
-                succeeded = true,
-                businessDayId = (long?)null,
-                businessDate = state.BusinessDate.ToString("yyyy-MM-dd"),
-                businessDateDisplay = $"{state.BusinessDate:yyyy-MM-dd} / 自動作成待ち",
-                hasBusinessDay = false,
-                openSlipCount = 0,
-                checkedOutSlipCount = 0,
-                estimatedSalesAmount = 0,
-                slips = Array.Empty<object>()
-            });
-        }
-
-        return new JsonResult(new { succeeded = true, snapshot = state.Snapshot });
+            succeeded = true,
+            revision = state.Revision,
+            unchanged = state.Unchanged,
+            businessDay = state.BusinessDay,
+            attendanceCasts = state.AttendanceCasts,
+            snapshot = state.Snapshot
+        });
     }
 
     public async Task<IActionResult> OnPostFlushBusinessHomeChangesAsync(CancellationToken cancellationToken)
@@ -241,50 +205,24 @@ public class IndexModel(
         }
 
         var output = result.Value;
-        return new JsonResult(new
+        var payload = new
         {
-            succeeded = true,
+            succeeded = output.Status == "confirmed",
+            status = output.Status,
             batchId = output.BatchId,
+            businessDay = output.BusinessDay,
+            revision = output.BusinessDayRevision,
             snapshot = output.Snapshot,
             operationResults = output.OperationResults,
             karaokeResults = output.KaraokeResults
-        });
+        };
+        return output.Status switch
+        {
+            "confirmed" => new JsonResult(payload),
+            "conflict" => StatusCode(StatusCodes.Status409Conflict, payload),
+            _ => BadRequest(payload)
+        };
     }
-
-    public async Task<IActionResult> OnPostCreateSlipAsync(CancellationToken cancellationToken)
-    {
-        if (!SlipsEnabled)
-        {
-            return NotFound();
-        }
-
-        await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-        var edit = CreateSlipEditor.Prepare(CreateSlipInput, BuildCreateSlipEditContext(), _storeClock);
-        CreateSlipInput = edit.Input;
-        AddCreateSlipErrors(edit.Errors);
-
-        if (!ModelState.IsValid)
-        {
-            ShowCreateSlipModal = true;
-            return Page();
-        }
-
-        var result = await _businessHomeApplicationService.CreateSlipAsync(CreateSlipInput, cancellationToken);
-        if (!result.Succeeded)
-        {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "伝票を作成できませんでした。");
-            ShowCreateSlipModal = true;
-            return Page();
-        }
-
-        SuccessMessage = "伝票を作成しました。";
-        ModelState.Clear();
-        CreateSlipInput = new CreateSlipInputModel();
-        await LoadAsync(cancellationToken, includeAttendanceCasts: true);
-        SetDefaultCreateSlipInput();
-        return Page();
-    }
-
 
     public async Task<IActionResult> OnPostIssueCheckoutStatementAsync(CancellationToken cancellationToken)
     {
@@ -293,19 +231,14 @@ public class IndexModel(
             return NotFound();
         }
 
-        var request = await ReadCheckoutRequestAsync<CheckoutStatementIssueRequest>(cancellationToken);
-        if (request is null || request.SlipId <= 0 || request.ClosedAt is null)
+        var request = await ReadCheckoutRequestAsync<IssueCheckoutStatementV2Mutation>(cancellationToken);
+        if (request is null)
         {
             return CheckoutJsonError("会計伝票の対象と退店時刻を確認してください。");
         }
 
-        var result = await _businessHomeApplicationService.IssueCheckoutStatementAsync(
-            request.SlipId,
-            request.ClosedAt.Value,
-            cancellationToken);
-        return result.Succeeded && result.PrintData is { } printData && result.ReviewData is { } reviewData
-            ? new JsonResult(new { succeeded = true, slipId = request.SlipId, printData, reviewData })
-            : CheckoutJsonError(result.ErrorMessage ?? "会計伝票を出力できませんでした。");
+        var result = await _businessHomeApplicationService.IssueCheckoutStatementV2Async(request, cancellationToken);
+        return CheckoutMutationJson(result, "会計伝票を出力できませんでした。");
     }
 
     public async Task<IActionResult> OnPostGetCheckoutStatementPrintDataAsync(CancellationToken cancellationToken)
@@ -336,18 +269,14 @@ public class IndexModel(
             return NotFound();
         }
 
-        var request = await ReadCheckoutRequestAsync<CheckoutSlipRequest>(cancellationToken);
-        if (request is null || request.SlipId <= 0)
+        var request = await ReadCheckoutRequestAsync<ReleaseCheckoutReadyV2Mutation>(cancellationToken);
+        if (request is null)
         {
             return CheckoutJsonError("会計伝票の対象を確認してください。");
         }
 
-        var result = await _businessHomeApplicationService.ReleaseCheckoutReadyAsync(
-            request.SlipId,
-            cancellationToken);
-        return result.Succeeded
-            ? new JsonResult(new { succeeded = true, slipId = request.SlipId })
-            : CheckoutJsonError(result.ErrorMessage ?? "会計準備を解除できませんでした。");
+        var result = await _businessHomeApplicationService.ReleaseCheckoutReadyV2Async(request, cancellationToken);
+        return CheckoutMutationJson(result, "会計準備を解除できませんでした。");
     }
 
     public async Task<IActionResult> OnPostConfirmCheckoutAsync(CancellationToken cancellationToken)
@@ -357,27 +286,14 @@ public class IndexModel(
             return NotFound();
         }
 
-        var request = await ReadCheckoutRequestAsync<CheckoutConfirmRequest>(cancellationToken);
-        if (request is null || request.SlipId <= 0)
+        var request = await ReadCheckoutRequestAsync<ConfirmCheckoutV2Mutation>(cancellationToken);
+        if (request is null)
         {
             return CheckoutJsonError("会計伝票の対象を確認してください。");
         }
 
-        var result = await _businessHomeApplicationService.ConfirmCheckoutAsync(
-            request.SlipId,
-            request.Payments ?? [],
-            request.ReceivedAmount,
-            cancellationToken);
-        return result.Succeeded && result.CheckoutId is { } checkoutId && result.ReceiptPrintData is { } printData
-            ? new JsonResult(new
-            {
-                succeeded = true,
-                slipId = request.SlipId,
-                checkoutId,
-                changeAmount = result.ChangeAmount,
-                printData
-            })
-            : CheckoutJsonError(result.ErrorMessage ?? "会計を確定できませんでした。");
+        var result = await _businessHomeApplicationService.ConfirmCheckoutV2Async(request, cancellationToken);
+        return CheckoutMutationJson(result, "会計を確定できませんでした。");
     }
 
     public async Task<IActionResult> OnPostGetCheckoutReceiptPrintDataAsync(CancellationToken cancellationToken)
@@ -408,18 +324,56 @@ public class IndexModel(
             return NotFound();
         }
 
-        var request = await ReadCheckoutRequestAsync<CheckoutSlipRequest>(cancellationToken);
-        if (request is null || request.SlipId <= 0)
+        var request = await ReadCheckoutRequestAsync<CancelCheckoutV2Mutation>(cancellationToken);
+        if (request is null)
         {
             return CheckoutJsonError("会計取消の対象を確認してください。");
         }
 
-        var result = await _businessHomeApplicationService.CancelCheckoutAsync(
-            request.SlipId,
-            cancellationToken);
-        return result.Succeeded && result.CheckoutId is { } checkoutId
-            ? new JsonResult(new { succeeded = true, slipId = request.SlipId, checkoutId })
-            : CheckoutJsonError(result.ErrorMessage ?? "会計を取消できませんでした。");
+        var result = await _businessHomeApplicationService.CancelCheckoutV2Async(request, cancellationToken);
+        return CheckoutMutationJson(result, "会計を取消できませんでした。");
+    }
+
+    private IActionResult CheckoutMutationJson(Result<CheckoutMutationResult> result, string fallbackMessage)
+    {
+        if (!result.Succeeded)
+        {
+            var payload = new
+            {
+                succeeded = false,
+                status = result.FailureKind == ResultFailureKind.InvalidInput ? "validation_error" : "unavailable",
+                message = result.ErrorMessage ?? fallbackMessage
+            };
+            return result.FailureKind == ResultFailureKind.InvalidInput
+                ? BadRequest(payload)
+                : StatusCode(StatusCodes.Status503ServiceUnavailable, payload);
+        }
+
+        var output = result.Value;
+        var mutationPayload = new
+        {
+            succeeded = output.Confirmed,
+            status = output.Status,
+            operationId = output.OperationId,
+            errorCode = output.ErrorCode,
+            message = output.ErrorMessage ?? (output.Confirmed ? null : fallbackMessage),
+            slipId = output.SlipId,
+            checkoutId = output.CheckoutId,
+            businessDayId = output.BusinessDayId,
+            businessDayRevision = output.BusinessDayRevision,
+            currentSlipStatus = output.CurrentSlipStatus,
+            changeAmount = output.ChangeAmount,
+            statementPrintData = output.StatementPrintData,
+            statementReviewData = output.StatementReviewData,
+            receiptPrintData = output.ReceiptPrintData,
+            businessSnapshot = output.BusinessSnapshot
+        };
+        return output.Status switch
+        {
+            "confirmed" => new JsonResult(mutationPayload),
+            "conflict" => StatusCode(StatusCodes.Status409Conflict, mutationPayload),
+            _ => BadRequest(mutationPayload)
+        };
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken, bool includeAttendanceCasts)
@@ -510,11 +464,6 @@ public class IndexModel(
         new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
 
     private sealed record CheckoutSlipRequest(long SlipId);
-    private sealed record CheckoutStatementIssueRequest(long SlipId, DateTimeOffset? ClosedAt);
-    private sealed record CheckoutConfirmRequest(
-        long SlipId,
-        List<CheckoutPaymentInputModel>? Payments,
-        decimal? ReceivedAmount);
 
     public static string ToSlipStatusDisplay(string status)
     {

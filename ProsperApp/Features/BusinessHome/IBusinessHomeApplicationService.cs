@@ -5,7 +5,7 @@ namespace ProsperApp.Features.BusinessHome;
 
 public interface IBusinessHomeApplicationService
 {
-    Task<Result<BusinessHomeSnapshotState>> GetSnapshotAsync(CancellationToken ct);
+    Task<Result<BusinessHomeSnapshotState>> GetSnapshotAsync(long? knownRevision, CancellationToken ct);
 
     Task<BusinessHomePageState> LoadPageAsync(
         bool ordersEnabled,
@@ -13,52 +13,48 @@ public interface IBusinessHomeApplicationService
         bool includeAttendanceCasts,
         CancellationToken ct);
 
-    Task<Result<IReadOnlyList<StoreOrderAttendanceCastOption>>> GetAttendanceCastsAsync(
-        CancellationToken ct);
-
     Task<Result<BusinessHomeFlushOutput>> FlushAsync(
         BusinessHomeChangeFlushInput input,
         CancellationToken ct);
 
-    Task<CreateSlipResult> CreateSlipAsync(
-        CreateSlipInputModel input,
-        CancellationToken ct);
-
-    Task<CheckoutStatementResult> IssueCheckoutStatementAsync(
-        long slipId,
-        DateTimeOffset closedAt,
+    Task<Result<CheckoutMutationResult>> IssueCheckoutStatementV2Async(
+        IssueCheckoutStatementV2Mutation mutation,
         CancellationToken ct);
 
     Task<CheckoutStatementResult> GetCheckoutStatementPrintDataAsync(
         long slipId,
         CancellationToken ct);
 
-    Task<ReleaseCheckoutReadyResult> ReleaseCheckoutReadyAsync(
-        long slipId,
+    Task<Result<CheckoutMutationResult>> ReleaseCheckoutReadyV2Async(
+        ReleaseCheckoutReadyV2Mutation mutation,
         CancellationToken ct);
 
-    Task<ConfirmCheckoutResult> ConfirmCheckoutAsync(
-        long slipId,
-        IReadOnlyList<CheckoutPaymentInputModel> payments,
-        decimal? receivedAmount,
+    Task<Result<CheckoutMutationResult>> ConfirmCheckoutV2Async(
+        ConfirmCheckoutV2Mutation mutation,
         CancellationToken ct);
 
     Task<ReceiptPrintDataResult> GetCheckoutReceiptPrintDataAsync(
         long slipId,
         CancellationToken ct);
 
-    Task<CancelCheckoutResult> CancelCheckoutAsync(
-        long slipId,
+    Task<Result<CheckoutMutationResult>> CancelCheckoutV2Async(
+        CancelCheckoutV2Mutation mutation,
         CancellationToken ct);
 }
 
 public sealed record BusinessHomeSnapshotState(
     StoreBusinessDay? BusinessDay,
     DateOnly BusinessDate,
+    long Revision,
+    bool Unchanged,
+    System.Text.Json.JsonElement? AttendanceCasts,
     JsonElement? Snapshot);
 
 public sealed record BusinessHomeFlushOutput(
     string BatchId,
+    string Status,
+    JsonElement BusinessDay,
+    long BusinessDayRevision,
     JsonElement Snapshot,
     JsonElement OperationResults,
     JsonElement KaraokeResults);

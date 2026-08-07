@@ -1,70 +1,53 @@
 @page
 @model AttendanceModel
+@using System.Text.Json
 @{
     ViewData["Title"] = "勤怠入力";
     ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
-    var attendanceRows = Model.Input.Entries
-        .Select((entry, index) => new { Entry = entry, Index = index })
-        .ToList();
-    var selectedAttendanceCount = attendanceRows.Count(x => x.Entry.IsSelected);
     var currentDepartmentName = Model.StoreContext?.DepartmentName;
+    var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 }
 
 <section class="store-home terminal-page terminal-page--attendance">
-    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
-    {
-        <div class="alert alert-success">@Model.SuccessMessage</div>
-    }
-
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
     @if (Model.LoadIssues.Count > 0)
     {
         <div class="alert alert-danger" role="alert">
-            <strong>勤怠情報をすべて取得できませんでした。</strong>
+            <strong>勤怠入力の名簿を取得できませんでした。</strong>
             @foreach (var issue in Model.LoadIssues)
             {
-                <div>@issue.Area: @issue.Message</div>
+                <div>@issue.Message</div>
             }
             <a class="btn btn-outline-danger btn-sm mt-2" href="@Request.Path">再試行</a>
         </div>
     }
-    else if (Model.LastUpdatedAt is { } lastUpdatedAt)
+    else if (Model.Input.Entries.Count == 0)
     {
-        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
-    }
-
-    @if (Model.Input.Entries.Count == 0)
-    {
-        @if (!string.IsNullOrWhiteSpace(Model.CastLoadErrorMessage))
-        {
-            <div class="alert alert-warning">
-                @Model.CastLoadErrorMessage
-            </div>
-        }
-        else
-        {
-            <div class="alert alert-secondary">
-                キャストまたはスタッフ情報が未登録です。出勤者を追加する前に、マスタ情報を登録してください。
-                <a class="alert-link" asp-page="/Management/Casts">キャスト情報へ</a>
-                <span> / </span>
-                <a class="alert-link" asp-page="/Management/Staffs">スタッフ情報へ</a>
-            </div>
-        }
+        <div class="alert alert-secondary">
+            キャストまたはスタッフ情報が未登録です。
+            <a class="alert-link" asp-page="/Management/Casts">キャスト情報へ</a>
+            <span> / </span>
+            <a class="alert-link" asp-page="/Management/Staffs">スタッフ情報へ</a>
+        </div>
     }
     else
     {
-        <form method="post" class="closing-attendance-form" data-attendance-form="true">
-            <input asp-for="Input.BusinessDayId" type="hidden" />
-            <input asp-for="Input.SelectedCastIds" type="hidden" id="selectedAttendanceCastIds" />
-            <input asp-for="Input.SelectedAttendanceKeys" type="hidden" id="selectedAttendanceKeys" />
-            <input asp-for="Input.SelectedEntriesJson" type="hidden" id="selectedAttendanceEntriesJson" />
+        <div class="alert alert-secondary" id="attendanceSyncStatus" role="status">現在の勤怠を同期しています。</div>
+        <div class="alert alert-warning" id="attendanceDirtyDecision" role="alert" hidden>
+            <span>未保存の変更があります。保存するか、変更を破棄して現在の勤怠を再読込してください。</span>
+            <button class="btn btn-outline-warning btn-sm ms-2" type="button" id="discardAttendanceChanges">変更を破棄して再読込</button>
+        </div>
+        <div class="alert" id="attendanceResultMessage" role="alert" hidden></div>
+        <div class="text-muted small mb-2" id="attendanceLastUpdated" hidden></div>
+
+        <form method="post" class="closing-attendance-form" data-attendance-form="true" novalidate>
+            @Html.AntiForgeryToken()
             <div class="closing-attendance-toolbar">
-                <button class="btn btn-outline-primary" type="button" id="addAttendanceCastButton">出勤キャストを追加</button>
-                <button class="btn btn-outline-primary" type="button" id="addAttendanceStaffButton">出勤スタッフを追加</button>
+                <button class="btn btn-outline-primary" type="button" id="addAttendanceCastButton" disabled>出勤キャストを追加</button>
+                <button class="btn btn-outline-primary" type="button" id="addAttendanceStaffButton" disabled>出勤スタッフを追加</button>
+                <span class="text-muted ms-auto">出勤 <strong id="selectedAttendanceCount">--</strong></span>
             </div>
 
-            <div class="closing-attendance-table">
+            <div class="closing-attendance-table" id="attendanceEditor" aria-busy="true">
                 <div class="closing-attendance-table__row closing-attendance-table__row--header">
                     <span>出勤者</span>
                     <span>出勤時刻</span>
@@ -74,57 +57,63 @@
                 </div>
                 @for (var i = 0; i < Model.Input.Entries.Count; i++)
                 {
-                    <div class="closing-attendance-table__row" data-attendance-row data-attendance-index="@i" data-default-clock-in="@Model.DefaultClockInTime" @(Model.Input.Entries[i].IsSelected ? null : "hidden")>
-                        <input asp-for="Input.Entries[i].PersonType" type="hidden" />
-                        <input asp-for="Input.Entries[i].CastId" type="hidden" />
-                        <input asp-for="Input.Entries[i].StaffId" type="hidden" />
-                        <input asp-for="Input.Entries[i].AttendanceId" type="hidden" />
-                        <input asp-for="Input.Entries[i].DisplayName" type="hidden" />
-                        <input asp-for="Input.Entries[i].DepartmentName" type="hidden" />
-                        <input asp-for="Input.Entries[i].IsSelected" type="hidden" data-attendance-selected />
-                        <input asp-for="Input.Entries[i].IsRegistered" type="hidden" />
+                    var entry = Model.Input.Entries[i];
+                    var personType = AttendancePersonTypes.Normalize(entry.PersonType);
+                    var personId = entry.PersonId;
+                    var isHome = !string.IsNullOrWhiteSpace(currentDepartmentName) &&
+                        string.Equals(entry.DepartmentName, currentDepartmentName, StringComparison.Ordinal);
+                    <div class="closing-attendance-table__row"
+                         data-attendance-row
+                         data-person-type="@personType"
+                         data-person-id="@personId"
+                         data-display-name="@entry.DisplayName"
+                         data-department-name="@entry.DepartmentName"
+                         data-is-home="@isHome.ToString().ToLowerInvariant()"
+                         data-selected="false"
+                         data-registered="false"
+                         data-attendance-id="0"
+                         data-version="">
                         <span class="closing-attendance-table__cast">
-                            @Model.Input.Entries[i].DisplayName
-                            <small>@(Model.Input.Entries[i].PersonType == AttendancePersonTypes.Staff ? "スタッフ" : "キャスト")</small>
-                            @if (Model.Input.Entries[i].IsRegistered)
+                            @entry.DisplayName
+                            @if (!string.IsNullOrWhiteSpace(entry.DepartmentName))
                             {
-                                <small>登録済み</small>
+                                <small>@entry.DepartmentName</small>
                             }
+                            <small>@(personType == AttendancePersonTypes.Staff ? "スタッフ" : "キャスト")</small>
+                            <small data-attendance-registration>同期中</small>
                         </span>
                         <label class="closing-attendance-table__field">
                             <span>出勤時刻</span>
-                            <select class="form-select" asp-for="Input.Entries[i].ClockInTime" data-clock-in-select>
+                            <select class="form-select" data-clock-in-select disabled>
                                 <option value="">選択</option>
                                 @foreach (var time in Model.ClockInTimeOptions)
                                 {
                                     <option value="@time.Value">@time.Label</option>
                                 }
                             </select>
-                            <span asp-validation-for="Input.Entries[i].ClockInTime" class="text-danger"></span>
                         </label>
                         <label class="closing-attendance-table__field">
                             <span>退勤時刻</span>
-                            <select class="form-select" asp-for="Input.Entries[i].ClockOutTime" data-clock-out-select>
+                            <select class="form-select" data-clock-out-select disabled>
                                 <option value="">未入力</option>
                                 @foreach (var time in Model.ClockOutTimeOptions)
                                 {
                                     <option value="@time.Value">@time.Label</option>
                                 }
                             </select>
-                            <span asp-validation-for="Input.Entries[i].ClockOutTime" class="text-danger"></span>
                         </label>
                         <label class="closing-attendance-table__send form-check">
-                            <input class="form-check-input" asp-for="Input.Entries[i].UsesSendService" />
+                            <input class="form-check-input" type="checkbox" data-send-service disabled />
                             <span class="form-check-label">利用</span>
                         </label>
-                        <button class="btn btn-outline-danger btn-sm closing-attendance-table__remove" type="button" data-remove-attendance>削除</button>
+                        <button class="btn btn-outline-danger btn-sm closing-attendance-table__remove" type="button" data-remove-attendance disabled>削除</button>
                     </div>
                 }
-                <p class="alert alert-secondary mb-0" id="attendanceEmptyMessage" @(selectedAttendanceCount > 0 ? "hidden" : null)>出勤時刻が入力された出勤者はいません。</p>
+                <p class="alert alert-secondary mb-0" id="attendanceEmptyMessage" hidden>出勤時刻が入力された出勤者はいません。</p>
             </div>
 
             <div class="closing-entry-panel__actions closing-attendance-actions">
-                <button class="btn btn-primary btn-lg" type="submit" @(Model.LoadIssues.Count > 0 ? "disabled" : null)>勤怠を保存</button>
+                <button class="btn btn-primary btn-lg" type="submit" id="saveAttendanceButton" disabled>勤怠を保存</button>
             </div>
 
             <div class="modal fade" id="castSelectModal" tabindex="-1" aria-labelledby="castSelectModalLabel" aria-hidden="true">
@@ -154,288 +143,22 @@
 </section>
 
 @section Scripts {
-            <partial name="_ValidationScriptsPartial" />
-    <script>
-        (() => {
-            const attendanceOptions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Input.Entries.Select((x, index) => new { index, type = AttendancePersonTypes.Normalize(x.PersonType), id = x.PersonId, name = x.DisplayName, department = x.DepartmentName, isHome = !string.IsNullOrWhiteSpace(currentDepartmentName) && string.Equals(x.DepartmentName, currentDepartmentName, StringComparison.Ordinal) })));
-            const addCastButton = document.getElementById('addAttendanceCastButton');
-            const addStaffButton = document.getElementById('addAttendanceStaffButton');
-            const modalElement = document.getElementById('castSelectModal');
-            const modalTitle = document.getElementById('castSelectModalLabel');
-            const modalList = document.getElementById('castModalList');
-            const searchInput = document.getElementById('castSearchInput');
-            const homeStoreFilter = document.getElementById('homeStoreCastFilter');
-            const addSelectedButton = document.getElementById('addSelectedAttendanceButton');
-            const emptyMessage = document.getElementById('attendanceEmptyMessage');
-            const selectedCount = document.getElementById('selectedAttendanceCount');
-            const selectedCastIdsInput = document.getElementById('selectedAttendanceCastIds');
-            const selectedAttendanceKeysInput = document.getElementById('selectedAttendanceKeys');
-            const selectedEntriesJsonInput = document.getElementById('selectedAttendanceEntriesJson');
-            const attendanceForm = document.querySelector('[data-attendance-form]') ?? document.querySelector('.closing-attendance-form');
-            const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
-            let modalPersonType = 'cast';
-
-            const getRow = (index) => document.querySelector(`[data-attendance-row][data-attendance-index="${index}"]`);
-            const getInputBySuffix = (row, suffix) => row?.querySelector(`input[name$=".${suffix}"]`);
-            const getSelectedInput = (row) => row?.querySelector('[data-attendance-selected]');
-            const getPersonTypeInput = (row) => row?.querySelector('input[name$=".PersonType"]');
-            const getCastIdInput = (row) => row?.querySelector('input[name$=".CastId"]');
-            const getStaffIdInput = (row) => row?.querySelector('input[name$=".StaffId"]');
-            const getAttendanceIdInput = (row) => getInputBySuffix(row, 'AttendanceId');
-            const getDisplayNameInput = (row) => getInputBySuffix(row, 'DisplayName');
-            const getDepartmentNameInput = (row) => getInputBySuffix(row, 'DepartmentName');
-            const getRegisteredInput = (row) => getInputBySuffix(row, 'IsRegistered');
-            const getUsesSendServiceInput = (row) => row?.querySelector('input[type="checkbox"][name$=".UsesSendService"]');
-            const getClockInSelect = (row) => row?.querySelector('[data-clock-in-select]');
-            const getClockOutSelect = (row) => row?.querySelector('[data-clock-out-select]');
-            const isSelected = (row) => (getSelectedInput(row)?.value ?? '').toLocaleLowerCase('en-US') === 'true';
-            const toNumber = (value) => {
-                const parsed = Number(value);
-                return Number.isFinite(parsed) ? parsed : 0;
-            };
-            const toBool = (value) => (value ?? '').toString().toLocaleLowerCase('en-US') === 'true';
-            const normalize = (value) => (value ?? '').toString().trim().toLocaleLowerCase('ja-JP');
-            const normalizePersonType = (value) => value === 'staff' ? 'staff' : 'cast';
-            const getPersonType = (row) => normalizePersonType(getPersonTypeInput(row)?.value);
-            const getPersonId = (row) => getPersonType(row) === 'staff'
-                ? toNumber(getStaffIdInput(row)?.value)
-                : toNumber(getCastIdInput(row)?.value);
-            const getPersonKey = (row) => {
-                const id = getPersonId(row);
-                return id > 0 ? `${getPersonType(row)}:${id}` : '';
-            };
-            const displayPersonName = (person) => {
-                const name = person.name ?? '';
-                const department = person.department ?? '';
-                const suffix = department ? `：${department}` : '';
-                return suffix && name.endsWith(suffix)
-                    ? name.slice(0, -suffix.length)
-                    : name;
-            };
-
-            const updateSelectedState = () => {
-                const rows = Array.from(document.querySelectorAll('[data-attendance-row]'));
-                const selectedRows = rows.filter((row) => isSelected(row));
-                const count = selectedRows.length;
-                if (selectedCount) {
-                    selectedCount.textContent = `${count} 名`;
-                }
-                if (emptyMessage) {
-                    emptyMessage.hidden = count > 0;
-                }
-                if (selectedCastIdsInput) {
-                    selectedCastIdsInput.value = selectedRows
-                        .filter((row) => getPersonType(row) === 'cast')
-                        .map((row) => getCastIdInput(row)?.value ?? '')
-                        .filter((value) => value.length > 0)
-                        .join(',');
-                }
-                if (selectedAttendanceKeysInput) {
-                    selectedAttendanceKeysInput.value = selectedRows
-                        .map(getPersonKey)
-                        .filter((value) => value.length > 0)
-                        .join(',');
-                }
-                if (selectedEntriesJsonInput) {
-                    selectedEntriesJsonInput.value = JSON.stringify(selectedRows
-                        .map((row) => {
-                            const clockOutTime = getClockOutSelect(row)?.value ?? '';
-                            const personType = getPersonType(row);
-                            const castId = toNumber(getCastIdInput(row)?.value);
-                            const staffId = toNumber(getStaffIdInput(row)?.value);
-                            const entry = {
-                                person_type: personType,
-                                person_id: personType === 'staff' ? staffId : castId,
-                                cast_id: castId,
-                                staff_id: staffId,
-                                attendance_id: toNumber(getAttendanceIdInput(row)?.value),
-                                display_name: getDisplayNameInput(row)?.value ?? '',
-                                department_name: getDepartmentNameInput(row)?.value ?? '',
-                                is_registered: toBool(getRegisteredInput(row)?.value),
-                                clock_in_time: getClockInSelect(row)?.value ?? '',
-                                uses_send_service: getUsesSendServiceInput(row)?.checked ?? false
-                            };
-                            if (clockOutTime) {
-                                entry.clock_out_time = clockOutTime;
-                            }
-                            return entry;
-                        })
-                        .filter((entry) => entry.person_id > 0));
-                }
-            };
-
-            const syncVisibleRowsForSubmit = () => {
-                document.querySelectorAll('[data-attendance-row]').forEach((row) => {
-                    if (row.hidden) {
-                        return;
-                    }
-
-                    const selected = getSelectedInput(row);
-                    if (!selected) {
-                        return;
-                    }
-
-                    selected.value = 'true';
-                    const clockIn = getClockInSelect(row);
-                    if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
-                        clockIn.value = row.dataset.defaultClockIn;
-                    }
-                });
-
-                updateSelectedState();
-            };
-
-            const updateAddSelectedButton = () => {
-                if (!addSelectedButton || !modalList) {
-                    return;
-                }
-
-                addSelectedButton.disabled = modalList.querySelectorAll('[data-attendance-person-check]:checked').length === 0;
-            };
-
-            const selectAttendanceRows = (indexes) => {
-                indexes.forEach((index) => {
-                    const row = getRow(index);
-                    const selected = getSelectedInput(row);
-                    const clockIn = getClockInSelect(row);
-                    if (!row || !selected) {
-                        return;
-                    }
-
-                    selected.value = 'true';
-                    if (clockIn && !clockIn.value && row.dataset.defaultClockIn) {
-                        clockIn.value = row.dataset.defaultClockIn;
-                    }
-                    row.hidden = false;
-                });
-            };
-
-            const getCheckedModalIndexes = () => modalList
-                ? Array.from(modalList.querySelectorAll('[data-attendance-person-check]:checked')).map((checkbox) => checkbox.value)
-                : [];
-
-            const renderModal = () => {
-                if (!modalList) {
-                    return;
-                }
-
-                const query = normalize(searchInput?.value);
-                const onlyHomeStore = homeStoreFilter?.checked ?? true;
-                const title = modalPersonType === 'staff' ? '出勤スタッフを追加' : '出勤キャストを追加';
-                if (modalTitle) {
-                    modalTitle.textContent = title;
-                }
-                if (addSelectedButton) {
-                    addSelectedButton.textContent = modalPersonType === 'staff'
-                        ? '選択したスタッフを追加'
-                        : '選択したキャストを追加';
-                }
-                const candidates = attendanceOptions.filter((person) => person.type === modalPersonType);
-                const hasHomeCandidates = candidates.some((person) => person.isHome);
-                const matches = candidates
-                    .filter((person) => !query || normalize(person.name).includes(query) || normalize(person.department).includes(query))
-                    .filter((person) => !onlyHomeStore || !hasHomeCandidates || person.isHome)
-                    .filter((person) => !isSelected(getRow(person.index)))
-                    .slice(0, 80);
-
-                modalList.innerHTML = '';
-                if (addSelectedButton) {
-                    addSelectedButton.disabled = true;
-                }
-
-                if (matches.length === 0) {
-                    const empty = document.createElement('p');
-                    empty.className = 'text-muted mb-0';
-                    empty.textContent = modalPersonType === 'staff'
-                        ? '追加できるスタッフがいません。'
-                        : '追加できるキャストがいません。';
-                    modalList.appendChild(empty);
-                    return;
-                }
-
-                matches.forEach((person) => {
-                    const item = document.createElement('label');
-                    item.className = 'closing-attendance-modal__item';
-                    const checkbox = document.createElement('input');
-                    checkbox.className = 'form-check-input';
-                    checkbox.type = 'checkbox';
-                    checkbox.value = String(person.index);
-                    checkbox.dataset.attendancePersonCheck = '';
-                    const text = document.createElement('span');
-                    text.className = 'closing-attendance-modal__item-text';
-                    const name = document.createElement('strong');
-                    name.textContent = displayPersonName(person);
-                    const department = document.createElement('span');
-                    department.textContent = person.department ?? '';
-                    text.append(name, department);
-                    item.append(checkbox, text);
-                    checkbox.addEventListener('change', updateAddSelectedButton);
-                    modalList.appendChild(item);
-                });
-            };
-
-            const addSelectedCasts = () => {
-                if (!modalList) {
-                    return;
-                }
-
-                const checked = Array.from(modalList.querySelectorAll('[data-attendance-person-check]:checked'));
-                selectAttendanceRows(checked.map((checkbox) => checkbox.value));
-                checked.forEach((checkbox) => {
-                    checkbox.checked = false;
-                });
-
-                updateSelectedState();
-                updateAddSelectedButton();
-                modal?.hide();
-            };
-
-            const openModal = (personType) => {
-                modalPersonType = normalizePersonType(personType);
-                if (searchInput) {
-                    searchInput.value = '';
-                }
-                renderModal();
-                modal?.show();
-            };
-
-            addCastButton?.addEventListener('click', () => openModal('cast'));
-            addStaffButton?.addEventListener('click', () => openModal('staff'));
-
-            document.querySelectorAll('[data-remove-attendance]').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const row = button.closest('[data-attendance-row]');
-                    const selected = getSelectedInput(row);
-                    if (selected) {
-                        selected.value = 'false';
-                    }
-                    if (row) {
-                        row.hidden = true;
-                        const modalCheckbox = modalList?.querySelector(`[data-attendance-person-check][value="${row.dataset.attendanceIndex}"]`);
-                        if (modalCheckbox) {
-                            modalCheckbox.checked = false;
-                        }
-                    }
-                    updateSelectedState();
-                });
-            });
-
-            searchInput?.addEventListener('input', renderModal);
-            homeStoreFilter?.addEventListener('change', renderModal);
-            addSelectedButton?.addEventListener('click', addSelectedCasts);
-            modalElement?.addEventListener('shown.bs.modal', () => searchInput?.focus());
-            attendanceForm?.addEventListener('submit', () => {
-                selectAttendanceRows(getCheckedModalIndexes());
-                syncVisibleRowsForSubmit();
-            });
-            attendanceForm?.addEventListener('formdata', (event) => {
-                selectAttendanceRows(getCheckedModalIndexes());
-                syncVisibleRowsForSubmit();
-                event.formData.set('Input.SelectedCastIds', selectedCastIdsInput?.value ?? '');
-                event.formData.set('Input.SelectedAttendanceKeys', selectedAttendanceKeysInput?.value ?? '');
-                event.formData.set('Input.SelectedEntriesJson', selectedEntriesJsonInput?.value ?? '[]');
-            });
-            updateSelectedState();
-        })();
-    </script>
+    @if (Model.LoadIssues.Count == 0 && Model.Input.Entries.Count > 0)
+    {
+        <script>
+            window.prosperAttendanceEditor = @Html.Raw(JsonSerializer.Serialize(new
+            {
+                currentUrl = Url.Page("/Attendance", "Current"),
+                saveUrl = Url.Page("/Attendance", "SaveV2"),
+                departmentId = Model.StoreContext?.DepartmentId,
+                initialSnapshot = Model.InitialSnapshot,
+                defaultClockInTime = Model.DefaultClockInTime,
+                defaultClockOutTime = Model.DefaultClockOutTime,
+                clockInOptions = Model.ClockInTimeOptions,
+                clockOutOptions = Model.ClockOutTimeOptions,
+                isClosingContext = Model.IsClosingContext
+            }, jsonOptions));
+        </script>
+        <script src="~/js/features/attendance-editor.js" asp-append-version="true"></script>
+    }
 }

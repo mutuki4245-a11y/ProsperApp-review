@@ -1,44 +1,83 @@
-using System.ComponentModel.DataAnnotations;
+using ProsperApp.Features.Closing;
 
 namespace ProsperApp.Features.BusinessDays;
 
-public class DrinkDeliveryInputModel
-{
-    public long? BusinessDayId { get; set; }
+public sealed record CurrentClosingDashboard(
+    long DepartmentId,
+    bool HasBusinessDay,
+    long? BusinessDayId,
+    long BusinessDayRevision,
+    DateOnly? BusinessDate,
+    string? Memo,
+    int OpenSlipCount,
+    decimal DrinkDeliveryAmount,
+    bool IsDrinkDeliveryAmountEntered,
+    int AttendanceCount,
+    int MissingClockOutCount,
+    int CastSalesRequiredSlipCount,
+    int CastSalesCompletedSlipCount,
+    int CastSalesMissingSlipCount,
+    int DrinkBackRequiredCastCount,
+    int DrinkBackCompletedCastCount,
+    int DrinkBackMissingCastCount,
+    long DrinkBackTotalAmount,
+    DrinkBackEditorFragment DrinkBackEditor,
+    string CastMasterRevision,
+    IReadOnlyList<DrinkBackCastOption>? ActiveCasts,
+    int PendingReceiptCount,
+    bool CanClose,
+    IReadOnlyList<string> BlockReasons,
+    DateTimeOffset CheckedAt);
 
-    [Display(Name = "納品額")]
-    [Range(0, 999999999999, ErrorMessage = "納品額は0円以上で入力してください。")]
-    public decimal DrinkDeliveryAmount { get; set; }
-}
+public sealed record CurrentBusinessDayCloseMutation(
+    string OperationId,
+    long? ExpectedBusinessDayId,
+    long? ExpectedBusinessDayRevision,
+    string? Memo,
+    bool IgnoreClosingRequirements);
 
-public class BusinessDayAmountSaveResult
-{
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-    public decimal Amount { get; init; }
+public sealed record CurrentBusinessDayCloseOutput(
+    string OperationId,
+    string Status,
+    string? Message,
+    long? ClosedBusinessDayId,
+    DateOnly? BusinessDate,
+    DateTimeOffset? ClosedAt,
+    long? ReportBusinessDayId,
+    CurrentClosingDashboard Dashboard);
 
-    public static BusinessDayAmountSaveResult Success(decimal amount)
-    {
-        return new BusinessDayAmountSaveResult { Succeeded = true, Amount = amount };
-    }
+public sealed record CurrentDrinkDeliveryEditorState(
+    long DepartmentId,
+    bool HasBusinessDay,
+    long? BusinessDayId,
+    long BusinessDayRevision,
+    DateOnly? BusinessDate,
+    decimal DrinkDeliveryAmount,
+    bool IsEntered,
+    DateTimeOffset CheckedAt);
 
-    public static BusinessDayAmountSaveResult Failed(string message)
-    {
-        return new BusinessDayAmountSaveResult { Succeeded = false, ErrorMessage = message };
-    }
-}
+public sealed record CurrentBusinessDayDrinkDeliveryMutation(
+    string OperationId,
+    long? ExpectedBusinessDayId,
+    long? ExpectedBusinessDayRevision,
+    DateOnly BusinessDate,
+    decimal Amount);
 
-public class BusinessDayDrinkDeliveryStatus
-{
-    public decimal Amount { get; init; }
-
-    public bool IsEntered { get; init; }
-}
+public sealed record ClosingDashboardDrinkDelta(
+    long DepartmentId,
+    long BusinessDayId,
+    long BusinessDayRevision,
+    decimal DrinkDeliveryAmount,
+    bool IsDrinkDeliveryAmountEntered,
+    DateTimeOffset CheckedAt);
 
 public sealed record CurrentBusinessDayDrinkDeliverySaveOutput(
-    StoreBusinessDay BusinessDay,
-    decimal Amount,
-    bool IsEntered);
+    string Status,
+    string OperationId,
+    string? Message,
+    CurrentDrinkDeliveryEditorState Editor,
+    ClosingDashboardDrinkDelta? DashboardDelta,
+    StoreBusinessDay? BusinessDay);
 
 public class BusinessDayEnsureResult
 {
@@ -105,13 +144,13 @@ public class BusinessDayClosingReadiness
 
     public int CastSalesMissingSlipCount { get; init; }
 
-    public int ChampagneBackRequiredCastCount { get; init; }
+    public int DrinkBackRequiredCastCount { get; init; }
 
-    public int ChampagneBackCompletedCastCount { get; init; }
+    public int DrinkBackCompletedCastCount { get; init; }
 
-    public int ChampagneBackMissingCastCount { get; init; }
+    public int DrinkBackMissingCastCount { get; init; }
 
-    public decimal ChampagneBackTotalAmount { get; init; }
+    public long DrinkBackTotalAmount { get; init; }
 
     public bool? CanCloseFromStore { get; init; }
 
@@ -121,7 +160,7 @@ public class BusinessDayClosingReadiness
 
     public bool IsCastSalesAdjustmentCompleted => CastSalesMissingSlipCount == 0;
 
-    public bool IsChampagneBackCompleted => ChampagneBackMissingCastCount == 0;
+    public bool IsDrinkBackCompleted => DrinkBackMissingCastCount == 0;
 
     public bool CanClose => CanCloseFromStore ?? (
         BusinessDay is not null &&
@@ -130,7 +169,7 @@ public class BusinessDayClosingReadiness
         AttendanceCount > 0 &&
         MissingClockOutCount == 0 &&
         IsCastSalesAdjustmentCompleted &&
-        IsChampagneBackCompleted);
+        IsDrinkBackCompleted);
 
     public IReadOnlyList<string> BlockReasons
     {
@@ -172,9 +211,9 @@ public class BusinessDayClosingReadiness
                 reasons.Add("キャスト売上額調整が未完了です。");
             }
 
-            if (!IsChampagneBackCompleted)
+            if (!IsDrinkBackCompleted)
             {
-                reasons.Add("シャンパンバックが未入力です。0円の場合も保存してください。");
+                reasons.Add("ドリンクバック調整が未入力です。0円の場合も保存してください。");
             }
 
             return reasons;
@@ -254,7 +293,9 @@ public class BusinessDayAttendanceSaveResult
 }
 
 public sealed record CurrentBusinessDayAttendanceMutation(
+    string OperationId,
     long? ExpectedBusinessDayId,
+    long? ExpectedBusinessDayRevision,
     DateOnly BusinessDate,
     IReadOnlyCollection<CurrentBusinessDayAttendanceEntry> CastEntries,
     IReadOnlyCollection<CurrentBusinessDayAttendanceEntry> StaffEntries);
@@ -264,9 +305,14 @@ public sealed record CurrentBusinessDayAttendanceEntry(
     bool IsSelected,
     string ClockInTime,
     string? ClockOutTime,
-    bool UsesSendService);
+    bool UsesSendService,
+    string? ExpectedVersion);
 
 public sealed record CurrentBusinessDayAttendanceSaveOutput(
-    StoreBusinessDay BusinessDay,
-    IReadOnlyList<BusinessDayClosingAttendanceItem> Attendance,
-    int SavedClockOutCount);
+    string OperationId,
+    string Status,
+    string Message,
+    AttendanceEditorSnapshot Snapshot,
+    int SavedCount,
+    int SavedClockOutCount,
+    IReadOnlyList<AttendanceSaveRowResult> RowResults);

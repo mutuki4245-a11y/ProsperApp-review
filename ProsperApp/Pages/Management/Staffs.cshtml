@@ -2,7 +2,6 @@
 @model ManagementStaffsModel
 @{
     ViewData["Title"] = "スタッフ情報";
-    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
 }
 
 <section class="opening-page">
@@ -10,98 +9,18 @@
         <h1>スタッフ情報</h1>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
-    {
-        <div class="alert alert-success">@Model.SuccessMessage</div>
-    }
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+        <div class="text-muted small" data-management-status role="status">管理マスタを確認しています。</div>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-management-refresh>再取得</button>
+    </div>
 
-    @if (Model.LoadStatus is { Succeeded: false } loadStatus)
-    {
-        <div class="alert alert-danger" role="alert">
-            <strong>@loadStatus.FailureTitle</strong>
-            <div>@loadStatus.ErrorMessage</div>
-            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Management/Staffs">再試行</a>
-        </div>
-    }
-    else if (Model.LoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
-    {
-        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
-    }
-
-    <fieldset class="border-0 p-0 m-0" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>
-        <form method="post" asp-page-handler="Create" class="slip-create__panel cast-admin-form">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <div>
-                <label asp-for="Input.DisplayName" class="form-label"></label>
-                <input asp-for="Input.DisplayName" class="form-control form-control-lg" placeholder="スタッフ名" />
-                <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
-            </div>
-            <div>
-                <label asp-for="Input.EmploymentType" class="form-label"></label>
-                <select asp-for="Input.EmploymentType" class="form-select form-select-lg">
-                    <option value="employee">社員</option>
-                    <option value="part_time">バイト</option>
-                </select>
-                <span asp-validation-for="Input.EmploymentType" class="text-danger"></span>
-            </div>
-            <button class="btn btn-primary btn-lg" type="submit">登録</button>
-        </form>
-
-        <div class="slip-create__panel">
-            <div class="opening-attendance__header">
-                <div>
-                    <h2>登録済みスタッフ</h2>
-                    <p class="text-muted mb-0">加入日は登録日で自動設定されます。</p>
-                </div>
-                @if (Model.Staffs.Count > 0)
-                {
-                    <span class="opening-attendance__count">@Model.Staffs.Count 名</span>
-                }
-            </div>
-
-            @if (Model.Staffs.Count == 0)
-            {
-                <p class="text-muted mb-0">スタッフが未登録です。</p>
-            }
-            else
-            {
-                <div class="cast-admin-table staff-admin-table">
-                    <div class="cast-admin-table__row cast-admin-table__row--header staff-admin-table__row">
-                        <span>ID</span>
-                        <span>スタッフ名</span>
-                        <span>加入日</span>
-                        <span>雇用区分</span>
-                        <span>操作</span>
-                    </div>
-                    @foreach (var staff in Model.Staffs)
-                    {
-                        <div class="cast-admin-table__row staff-admin-table__row">
-                            <span>@staff.StaffId</span>
-                            <strong>@staff.DisplayName</strong>
-                            <span>@staff.JoinedOn.ToString("yyyy-MM-dd")</span>
-                            <form method="post" asp-page-handler="UpdateEmploymentType" class="staff-admin-table__employment-form">
-                                <input type="hidden" name="UpdateStaffId" value="@staff.StaffId" />
-                                <label class="visually-hidden" for="employment-type-@staff.StaffId">@staff.DisplayName の雇用区分</label>
-                                <select id="employment-type-@staff.StaffId" name="EmploymentType" class="form-select form-select-sm">
-                                    <option value="employee" selected="@(staff.EmploymentType == "employee" ? "selected" : null)">社員</option>
-                                    <option value="part_time" selected="@(staff.EmploymentType == "part_time" ? "selected" : null)">バイト</option>
-                                </select>
-                                <button class="btn btn-outline-primary btn-sm" type="submit">変更</button>
-                            </form>
-                            <div class="cast-admin-table__actions staff-admin-table__actions">
-                                <form method="post" asp-page-handler="Delete" onsubmit="return confirm('このスタッフを削除しますか？');">
-                                    <input type="hidden" asp-for="DeleteStaffId" value="@staff.StaffId" />
-                                    <button class="btn btn-outline-danger btn-sm" type="submit">削除</button>
-                                </form>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-    </fieldset>
+    @Html.AntiForgeryToken()
+    <div data-management-editor aria-busy="true"></div>
 </section>
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+    <script>
+        window.ProsperManagementEditorConfig = { area: 'staffs', allowAdminActions: true };
+    </script>
+    <script src="~/js/features/management-editor.js" asp-append-version="true"></script>
 }

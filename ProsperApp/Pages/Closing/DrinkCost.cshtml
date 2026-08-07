@@ -2,72 +2,52 @@
 @model ClosingDrinkCostModel
 @{
     ViewData["Title"] = "酒代入力";
-    ViewData["HasCurrentBusinessDay"] = Model.CurrentBusinessDay is not null;
+    ViewData["HasCurrentBusinessDay"] = false;
 }
 
-<section class="store-home terminal-page terminal-page--closing-entry">
+<section class="store-home terminal-page terminal-page--closing-entry"
+         data-drink-delivery-editor
+         data-department-id="@Model.StoreDepartmentId"
+         data-current-business-date="@Model.CurrentBusinessDate.ToString("yyyy-MM-dd")"
+         data-editor-url="@Url.Page("/Closing/DrinkCost", "Editor")"
+         data-save-url="@Url.Page("/Closing/DrinkCost", "SaveV2")">
     <div class="page-section-heading">
         <h1>酒代入力</h1>
-        @if (Model.CurrentBusinessDay is null)
-        {
-            <p>営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") / 保存時に自動作成</p>
-        }
-        else
-        {
-            <p>@Model.CurrentBusinessDay.BusinessDate.ToString("yyyy-MM-dd")</p>
-        }
+        <p data-drink-business-date>営業日を確認しています</p>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
-    {
-        <div class="alert alert-success">@Model.SuccessMessage</div>
-    }
+    <div class="alert alert-danger" role="alert" data-drink-error hidden></div>
+    <div class="alert alert-success" role="status" data-drink-success hidden></div>
+    <div class="text-muted small mb-2" data-drink-updated>状態を復元しています。</div>
+    <div class="alert alert-info" data-drink-guidance>
+        酒代がない場合も 0 円で保存してください。
+    </div>
 
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-    @if (Model.LoadStatus is { Succeeded: false } loadStatus)
-    {
-        <div class="alert alert-danger" role="alert">
-            <strong>@loadStatus.FailureTitle</strong>
-            <div>@loadStatus.ErrorMessage</div>
-            <a class="btn btn-outline-danger btn-sm mt-2" asp-page="/Closing/DrinkCost">再試行</a>
-        </div>
-    }
-    else if (Model.LoadStatus?.LastUpdatedAt is { } lastUpdatedAt)
-    {
-        <div class="text-muted small mb-2">最終更新: @lastUpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")</div>
-    }
-
-    @if (Model.LoadStatus?.Succeeded != false && Model.CurrentBusinessDay is null)
-    {
-        <div class="alert alert-info">
-            保存すると営業日 @Model.CurrentBusinessDate.ToString("yyyy-MM-dd") を自動作成します。酒代がない場合も 0 円で保存してください。
-        </div>
-    }
-
-    @if (Model.CurrentBusinessDay is not null && !Model.IsDrinkDeliveryAmountEntered)
-    {
-        <div class="alert alert-warning">
-            納品額が未入力です。酒代がない場合も 0 円で保存してください。
-        </div>
-    }
-
-    <form method="post" class="closing-entry-panel">
-        <input asp-for="Input.BusinessDayId" type="hidden" />
+    <form method="post" class="closing-entry-panel" data-drink-form>
+        @Html.AntiForgeryToken()
         <div class="closing-entry-panel__body">
-            <label asp-for="Input.DrinkDeliveryAmount" class="form-label">納品額</label>
+            <label for="drinkDeliveryAmount" class="form-label">納品額</label>
             <div class="closing-amount-input">
-                <input asp-for="Input.DrinkDeliveryAmount" class="form-control form-control-lg" type="number" min="0" step="1" inputmode="numeric" />
+                <input id="drinkDeliveryAmount"
+                       class="form-control form-control-lg"
+                       type="number"
+                       min="0"
+                       max="999999999999"
+                       step="1"
+                       inputmode="numeric"
+                       disabled
+                       data-drink-amount />
                 <span>円</span>
             </div>
-            <span asp-validation-for="Input.DrinkDeliveryAmount" class="text-danger"></span>
         </div>
         <div class="closing-entry-panel__actions">
-            <button class="btn btn-primary btn-lg" type="submit" @(Model.LoadStatus?.Succeeded == false ? "disabled" : null)>保存</button>
+            <a class="btn btn-outline-secondary btn-lg" asp-page="/Closing/Index">締め作業へ戻る</a>
+            <button class="btn btn-primary btn-lg" type="submit" disabled data-drink-submit>保存</button>
         </div>
+        <output class="terminal-save-status" data-drink-status data-save-state="idle" aria-live="polite">状態を復元しています。</output>
     </form>
 </section>
 
 @section Scripts {
-    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/features/drink-delivery-editor.js" asp-append-version="true"></script>
 }

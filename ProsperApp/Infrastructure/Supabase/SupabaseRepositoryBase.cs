@@ -67,6 +67,18 @@ public abstract class SupabaseRepositoryBase(
             return Result<T>.Failure(ResultFailureKind.PermissionDenied, PermissionErrorMessage());
         }
 
+        if (message.Contains("revision_conflict", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("operation_id_reused", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<T>.Failure(ResultFailureKind.Conflict, message);
+        }
+
+        if (message.Contains("invalid_", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("not_selected", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<T>.Failure(ResultFailureKind.InvalidInput, message);
+        }
+
         return Result<T>.Failure(ResultFailureKind.Unavailable, message);
     }
 

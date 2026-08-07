@@ -589,7 +589,6 @@
     <script>
         window.prosperCreateSlip = @Json.Serialize(new
         {
-            attendanceCastsUrl = Url.Page("/Index", "AttendanceCasts"),
             showCreateSlipModal = Model.ShowCreateSlipModal,
             castOptions = Model.AttendanceCasts.Select(c => new
             {

@@ -5,7 +5,11 @@ namespace ProsperApp.Features.Attendance;
 
 public class ClosingAttendanceInputModel
 {
+    public string OperationId { get; set; } = Guid.NewGuid().ToString("D");
+
     public long? BusinessDayId { get; set; }
+
+    public long? BusinessDayRevision { get; set; }
 
     public string SelectedCastIds { get; set; } = string.Empty;
 
@@ -25,6 +29,8 @@ public class BusinessDayAttendanceEntryInput
     public long StaffId { get; set; }
 
     public long AttendanceId { get; set; }
+
+    public string? ExpectedVersion { get; set; }
 
     public string DisplayName { get; set; } = string.Empty;
 
@@ -50,6 +56,45 @@ public class BusinessDayAttendanceEntryInput
 }
 
 public sealed record AttendanceTimeOption(string Value, string Label);
+
+public sealed record AttendanceRosterPerson(
+    string PersonType,
+    long PersonId,
+    string DisplayName,
+    string? DepartmentName,
+    bool IsActive);
+
+public sealed record AttendanceEditorEntrySnapshot(
+    long AttendanceId,
+    string PersonType,
+    long PersonId,
+    string DisplayName,
+    string? DepartmentName,
+    string AttendanceStatus,
+    string ClockInTime,
+    string? ClockOutTime,
+    bool UsesSendService,
+    string Version);
+
+public sealed record AttendanceEditorSnapshot(
+    bool HasBusinessDay,
+    bool Unchanged,
+    StoreBusinessDay? BusinessDay,
+    long BusinessDayRevision,
+    IReadOnlyList<AttendanceEditorEntrySnapshot> AttendanceEntries,
+    IReadOnlyList<StoreOrderAttendanceCastOption> AttendingCasts);
+
+public sealed record AttendanceShellBootstrap(
+    StoreContext StoreContext,
+    IReadOnlyList<AttendanceRosterPerson> Roster,
+    AttendanceEditorSnapshot? InitialSnapshot,
+    bool WasFetched);
+
+public sealed record AttendanceSaveRowResult(
+    string PersonType,
+    long PersonId,
+    string Status,
+    string? Message);
 
 internal sealed record PostedAttendanceEntry(
     [property: JsonPropertyName("person_type")] string? PersonType,

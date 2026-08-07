@@ -16,6 +16,11 @@ const [layoutMarkup, indexMarkup, businessHomeSource, slipsCss, editorSource, ac
 
 assert.match(layoutMarkup, /asp-page="\/Closing\/Index">締め作業/, '締め作業は最上部ナビに置くこと');
 assert.equal(layoutMarkup.includes('app-workflow-nav'), false, '営業中/締め作業の2段目業務フロータブは置かないこと');
+assert.match(
+    layoutMarkup,
+    /asp-page="\/Index"[\s\S]*?data-loading-lock="false"[\s\S]*?>営業中<\/a>/,
+    'shell-firstの営業中トップ遷移では共通の全画面navigation lockを使わないこと'
+);
 
 assert.match(indexMarkup, /data-business-slip-detail-modal/, '営業中詳細は専用モーダルを持つこと');
 assert.equal(businessHomeSource.includes('dataset.businessSlipOpenDetail'), true, '伝票パネルから詳細モーダルを開くこと');

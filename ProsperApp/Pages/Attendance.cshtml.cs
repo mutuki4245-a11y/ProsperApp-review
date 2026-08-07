@@ -12,12 +12,10 @@ public class AttendanceModel(
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IAttendanceApplicationService _attendanceApplicationService = attendanceApplicationService;
-    private AttendancePageState? _pageState;
 
-    [BindProperty]
-    public ClosingAttendanceInputModel Input { get; set; } = new();
+    public ClosingAttendanceInputModel Input { get; private set; } = new();
 
-    public StoreBusinessDay? CurrentBusinessDay { get; private set; }
+    public StoreBusinessDay? CurrentBusinessDay => InitialSnapshot?.BusinessDay;
 
     public StoreContext? StoreContext { get; private set; }
 
@@ -29,19 +27,15 @@ public class AttendanceModel(
 
     public string DefaultClockInTime { get; private set; } = "19:00";
 
-    public string DefaultClockOutTime { get; private set; } = string.Empty;
+    public string DefaultClockOutTime { get; private set; } = "01:00";
 
-    public string? SuccessMessage { get; private set; }
-
-    public string? CastLoadErrorMessage { get; private set; }
+    public AttendanceEditorSnapshot? InitialSnapshot { get; private set; }
 
     public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
 
-    public DateTimeOffset? LastUpdatedAt { get; private set; }
-
-    public bool IsClosingContext => Request.Path.StartsWithSegments("/Closing/Attendance", StringComparison.OrdinalIgnoreCase);
-
-    public string WorkflowLabel => IsClosingContext ? "締め作業" : "営業中";
+    public bool IsClosingContext => Request.Path.StartsWithSegments(
+        "/Closing/Attendance",
+        StringComparison.OrdinalIgnoreCase);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -50,86 +44,88 @@ public class AttendanceModel(
             return NotFound();
         }
 
-        await LoadAsync(cancellationToken);
-        SuccessMessage = TempData["SuccessMessage"] as string;
+        var state = await _attendanceApplicationService.LoadShellAsync(cancellationToken);
+        StoreContext = state.StoreContext;
+        CurrentBusinessDate = state.BusinessDate;
+        ClockInTimeOptions = state.ClockInTimeOptions;
+        ClockOutTimeOptions = state.ClockOutTimeOptions;
+        DefaultClockInTime = state.DefaultClockInTime;
+        DefaultClockOutTime = state.DefaultClockOutTime;
+        Input = state.Input;
+        InitialSnapshot = state.InitialSnapshot;
+        LoadIssues = state.LoadIssues;
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetCurrentAsync(
+        long? knownBusinessDayId,
+        long? knownBusinessDayRevision,
+        CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
             return NotFound();
         }
 
-        var mergeResult = AttendanceEditor.MergeSelectedEntries(Input);
-        if (!mergeResult.Succeeded)
+        var result = await _attendanceApplicationService.ReadCurrentAsync(
+            knownBusinessDayId,
+            knownBusinessDayRevision,
+            cancellationToken);
+        if (!result.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, mergeResult.ErrorMessage ?? "勤怠入力を読み取れませんでした。");
-        }
-        await LoadAsync(cancellationToken, preserveInput: true);
-        if (LoadIssues.Count > 0 || _pageState is null)
-        {
-            ModelState.AddModelError(string.Empty, "必要な情報を取得できないため勤怠を保存できません。再試行してください。");
-            return Page();
-        }
-
-        AddAttendanceErrors(_attendanceApplicationService.Validate(_pageState, Input));
-        if (!ModelState.IsValid)
-        {
-            return Page();
+            return new JsonResult(new
+            {
+                status = "error",
+                message = result.ErrorMessage ?? "現在の勤怠入力を取得できませんでした。"
+            })
+            {
+                StatusCode = ToStatusCode(result.FailureKind)
+            };
         }
 
-        var saveResult = await _attendanceApplicationService.SaveAsync(Input, cancellationToken);
-        if (!saveResult.Succeeded)
-        {
-            ModelState.AddModelError(string.Empty, saveResult.ErrorMessage ?? "勤怠入力を保存できませんでした。");
-            await LoadAsync(cancellationToken, preserveInput: true);
-            return Page();
-        }
-
-        TempData["SuccessMessage"] =
-            $"勤怠入力を保存しました。出勤 {saveResult.Value.SelectedCount}名 / 退勤 {saveResult.Value.SavedClockOutCount}名";
-        return IsClosingContext
-            ? RedirectToPage("/Closing/Index")
-            : RedirectToCurrentPath();
+        return new JsonResult(result.Value);
     }
 
-    private IActionResult RedirectToCurrentPath()
+    public async Task<IActionResult> OnPostSaveV2Async(
+        [FromBody] ClosingAttendanceInputModel input,
+        CancellationToken cancellationToken)
     {
-        return LocalRedirect(Request.PathBase.Add(Request.Path).Value ?? "/Attendance");
-    }
-
-    private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
-    {
-        _pageState = await _attendanceApplicationService.LoadAsync(Input, preserveInput, cancellationToken);
-        StoreContext = _pageState.StoreContext;
-        CurrentBusinessDay = _pageState.BusinessDay;
-        CurrentBusinessDate = _pageState.BusinessDate;
-        ClockInTimeOptions = _pageState.ClockInTimeOptions;
-        ClockOutTimeOptions = _pageState.ClockOutTimeOptions;
-        DefaultClockInTime = _pageState.DefaultClockInTime;
-        DefaultClockOutTime = _pageState.DefaultClockOutTime;
-        Input = _pageState.Input;
-        LoadIssues = _pageState.LoadIssues;
-        LastUpdatedAt = _pageState.LastUpdatedAt;
-        var memberLoadIssues = _pageState.LoadIssues
-            .Where(issue =>
-                string.Equals(issue.Area, "キャスト", StringComparison.Ordinal) ||
-                string.Equals(issue.Area, "スタッフ", StringComparison.Ordinal))
-            .Select(issue => issue.Message)
-            .Where(message => !string.IsNullOrWhiteSpace(message))
-            .ToList();
-        CastLoadErrorMessage = memberLoadIssues.Count == 0
-            ? null
-            : string.Join(" ", memberLoadIssues);
-    }
-
-    private void AddAttendanceErrors(IEnumerable<AttendanceValidationError> errors)
-    {
-        foreach (var error in errors)
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
-            ModelState.AddModelError(error.Field, error.Message);
+            return NotFound();
         }
+
+        var result = await _attendanceApplicationService.SaveAsync(input, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return new JsonResult(new
+            {
+                status = "error",
+                message = result.ErrorMessage ?? "勤怠入力を保存できませんでした。"
+            })
+            {
+                StatusCode = ToStatusCode(result.FailureKind)
+            };
+        }
+
+        var output = result.Value;
+        return new JsonResult(output)
+        {
+            StatusCode = output.Status switch
+            {
+                "conflict" => StatusCodes.Status409Conflict,
+                "validation_error" => StatusCodes.Status400BadRequest,
+                _ => StatusCodes.Status200OK
+            }
+        };
     }
+
+    private static int ToStatusCode(ResultFailureKind? failureKind) => failureKind switch
+    {
+        ResultFailureKind.InvalidInput => StatusCodes.Status400BadRequest,
+        ResultFailureKind.Conflict => StatusCodes.Status409Conflict,
+        ResultFailureKind.NotConfigured => StatusCodes.Status503ServiceUnavailable,
+        ResultFailureKind.PermissionDenied => StatusCodes.Status403Forbidden,
+        _ => StatusCodes.Status503ServiceUnavailable
+    };
 }

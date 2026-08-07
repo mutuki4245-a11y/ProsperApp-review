@@ -38,72 +38,6 @@ public class CastOption
         : $"{DisplayName}：{DepartmentName}";
 }
 
-public class CastOptionsLoadResult
-{
-    public bool Succeeded { get; init; }
-
-    public IReadOnlyList<CastOption> Casts { get; init; } = [];
-
-    public string? ErrorMessage { get; init; }
-
-    public static CastOptionsLoadResult Success(IReadOnlyList<CastOption> casts)
-    {
-        return new CastOptionsLoadResult { Succeeded = true, Casts = casts };
-    }
-
-    public static CastOptionsLoadResult Failed(string message)
-    {
-        return new CastOptionsLoadResult { Succeeded = false, ErrorMessage = message };
-    }
-}
-
-public class StoreCastAdminItem
-{
-    public long CastId { get; set; }
-    public string DisplayName { get; set; } = string.Empty;
-    public string? DrinkMemo { get; set; }
-    public DateOnly JoinedOn { get; set; }
-}
-
-public class StoreCastCreateInputModel
-{
-    [Display(Name = "キャスト名")]
-    [Required(ErrorMessage = "キャスト名を入力してください。")]
-    [StringLength(120, ErrorMessage = "キャスト名は120文字以内で入力してください。")]
-    public string DisplayName { get; set; } = string.Empty;
-
-    [Display(Name = "ドリンクメモ")]
-    [StringLength(30, ErrorMessage = "ドリンクメモは30文字以内で入力してください。")]
-    public string? DrinkMemo { get; set; }
-}
-
-public class StoreCastDrinkMemoInputModel
-{
-    [Range(1, long.MaxValue, ErrorMessage = "編集するキャストを選択してください。")]
-    public long CastId { get; set; }
-
-    [Display(Name = "ドリンクメモ")]
-    [StringLength(30, ErrorMessage = "ドリンクメモは30文字以内で入力してください。")]
-    public string? DrinkMemo { get; set; }
-}
-
-public class StoreCastSaveResult
-{
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-    public long? CastId { get; init; }
-
-    public static StoreCastSaveResult Success(long castId)
-    {
-        return new StoreCastSaveResult { Succeeded = true, CastId = castId };
-    }
-
-    public static StoreCastSaveResult Failed(string message)
-    {
-        return new StoreCastSaveResult { Succeeded = false, ErrorMessage = message };
-    }
-}
-
 public class CastNominationInputModel
 {
     public string? NominationKind { get; set; }
@@ -173,7 +107,9 @@ public class BusinessSlipEditorOperationInput
 {
     public string OperationId { get; set; } = string.Empty;
 
-    public long SlipId { get; set; }
+    public string? ClientDraftId { get; set; }
+
+    public long? SlipId { get; set; }
 
     public string OperationType { get; set; } = string.Empty;
 
@@ -187,6 +123,12 @@ public class BusinessSlipEditorOperationInput
 public class BusinessHomeChangeFlushInput
 {
     public string BatchId { get; set; } = string.Empty;
+
+    public long? ExpectedBusinessDayId { get; set; }
+
+    public long? ExpectedBusinessDayRevision { get; set; }
+
+    public DateOnly? BusinessDate { get; set; }
 
     public List<BusinessSlipEditorOperationInput> Operations { get; set; } = [];
 
@@ -208,6 +150,12 @@ public class BusinessHomeChangeFlushResult
 
     public string? ErrorMessage { get; init; }
 
+    public string Status { get; init; } = "unavailable";
+
+    public JsonElement BusinessDay { get; init; }
+
+    public long BusinessDayRevision { get; init; }
+
     public JsonElement Snapshot { get; init; }
 
     public JsonElement OperationResults { get; init; }
@@ -215,40 +163,27 @@ public class BusinessHomeChangeFlushResult
     public JsonElement KaraokeResults { get; init; }
 
     public static BusinessHomeChangeFlushResult Success(
+        string status,
+        JsonElement businessDay,
+        long businessDayRevision,
         JsonElement snapshot,
         JsonElement operationResults,
         JsonElement karaokeResults) => new()
-        {
-            Succeeded = true,
-            Snapshot = snapshot,
-            OperationResults = operationResults,
-            KaraokeResults = karaokeResults
-        };
+    {
+        Succeeded = true,
+        Status = status,
+        BusinessDay = businessDay,
+        BusinessDayRevision = businessDayRevision,
+        Snapshot = snapshot,
+        OperationResults = operationResults,
+        KaraokeResults = karaokeResults
+    };
 
     public static BusinessHomeChangeFlushResult Failed(string message) => new()
     {
         Succeeded = false,
         ErrorMessage = message
     };
-}
-
-public class BusinessDaySnapshotResult
-{
-    public bool Succeeded { get; init; }
-
-    public string? ErrorMessage { get; init; }
-
-    public JsonElement Snapshot { get; init; }
-
-    public static BusinessDaySnapshotResult Success(JsonElement snapshot)
-    {
-        return new BusinessDaySnapshotResult { Succeeded = true, Snapshot = snapshot };
-    }
-
-    public static BusinessDaySnapshotResult Failed(string message)
-    {
-        return new BusinessDaySnapshotResult { Succeeded = false, ErrorMessage = message };
-    }
 }
 
 public class BusinessHomeBootstrapResult
@@ -311,6 +246,7 @@ public class StoreBusinessDay
     public DateTimeOffset? ClosedAt { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Memo { get; set; }
+    public long BusinessUiRevision { get; set; }
 }
 
 public class BusinessDayOperationResult

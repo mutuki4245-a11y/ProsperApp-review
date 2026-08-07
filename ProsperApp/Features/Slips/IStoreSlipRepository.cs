@@ -8,20 +8,18 @@ public interface IStoreSlipRepository
 
     Task<Result<IReadOnlyList<StoreTableOption>>> GetTablesAsync(CancellationToken ct);
 
-    Task<Result<IReadOnlyList<CastOption>>> GetCastsAsync(CancellationToken ct);
-
     Task<BusinessHomeBootstrapResult> GetBusinessHomeBootstrapAsync(CancellationToken ct);
 
-    Task<BusinessDaySnapshotResult> GetBusinessDaySnapshotAsync(long businessDayId, CancellationToken ct);
-
-    Task<Result<CurrentBusinessHomeSnapshotResult>> GetCurrentBusinessHomeSnapshotAsync(CancellationToken ct);
+    Task<Result<CurrentBusinessHomeSnapshotResult>> GetCurrentBusinessHomeSnapshotAsync(long? knownRevision, CancellationToken ct);
 
     Task<BusinessHomeChangeFlushResult> FlushBusinessHomeChangesAsync(BusinessHomeChangeFlushInput input, CancellationToken ct);
 
-    Task<CreateSlipResult> CreateSlipAsync(CreateSlipInputModel input, CancellationToken ct);
 }
 
 public sealed record CurrentBusinessHomeSnapshotResult(
     StoreBusinessDay? BusinessDay,
     DateOnly BusinessDate,
+    long Revision,
+    bool Unchanged,
+    System.Text.Json.JsonElement? AttendanceCasts,
     System.Text.Json.JsonElement? Snapshot);

@@ -5,9 +5,7 @@ namespace ProsperApp.Features.StoreBootstrap;
 
 public interface IStoreMasterBootstrapper
 {
-    Task<Result<StoreBootstrapPayload>> GetStoreBootstrapAsync(CancellationToken ct);
-
     Task<Result<StoreBootstrapPayload>> EnsureAsync(CancellationToken ct);
 }
 
-public sealed record StoreBootstrapPayload(long DepartmentId, JsonElement Row);
+public sealed record StoreBootstrapPayload(long DepartmentId, JsonElement Row, bool WasFetched);

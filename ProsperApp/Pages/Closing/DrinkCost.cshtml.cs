@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Features.Shared;
@@ -8,119 +9,128 @@ namespace ProsperApp.Pages;
 public class ClosingDrinkCostModel(
     IFeatureGate featureGate,
     IBusinessDayRepository businessDayRepository,
+    ILocalSettingsProvider localSettingsProvider,
     IStoreClock storeClock) : PageModel
 {
+    private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
+    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreClock _storeClock = storeClock;
 
-    [BindProperty]
-    public DrinkDeliveryInputModel Input { get; set; } = new();
+    public long StoreDepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
 
-    public StoreBusinessDay? CurrentBusinessDay { get; private set; }
+    public DateOnly CurrentBusinessDate => _storeClock.GetCurrentBusinessDate();
 
-    public DateOnly CurrentBusinessDate { get; private set; }
-
-    public bool IsDrinkDeliveryAmountEntered { get; private set; }
-
-    public string? SuccessMessage { get; private set; }
-
-    public PageLoadStatus? LoadStatus { get; private set; }
-
-    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
+    public IActionResult OnGet()
     {
-        if (!_featureGate.IsEnabled(FeatureNames.Closing))
-        {
-            return NotFound();
-        }
-
-        await LoadAsync(cancellationToken);
-        SuccessMessage = TempData["SuccessMessage"] as string;
-        return Page();
+        return _featureGate.IsEnabled(FeatureNames.Closing) ? Page() : NotFound();
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetEditorAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
             return NotFound();
         }
 
-        if (decimal.Truncate(Input.DrinkDeliveryAmount) != Input.DrinkDeliveryAmount)
+        var result = await _businessDayRepository.GetCurrentDrinkDeliveryEditorAsync(cancellationToken);
+        if (!result.Succeeded)
         {
-            ModelState.AddModelError($"{nameof(Input)}.{nameof(Input.DrinkDeliveryAmount)}", "納品額は1円単位で入力してください。");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                succeeded = false,
+                failureKind = result.FailureKind?.ToString(),
+                errorMessage = result.ErrorMessage
+            });
         }
 
-        if (!ModelState.IsValid)
+        return new JsonResult(new { succeeded = true, editor = result.Value });
+    }
+
+    public async Task<IActionResult> OnPostSaveV2Async(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
-            await LoadAsync(cancellationToken, preserveInput: true);
-            return Page();
+            return NotFound();
+        }
+
+        DrinkDeliverySaveRequest? request;
+        try
+        {
+            request = await JsonSerializer.DeserializeAsync<DrinkDeliverySaveRequest>(
+                Request.Body,
+                RequestJsonOptions,
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            request = null;
+        }
+
+        if (request is null || !Guid.TryParse(request.OperationId, out var operationId) ||
+            request.DrinkDeliveryAmount < 0 || request.DrinkDeliveryAmount > 999999999999m ||
+            decimal.Truncate(request.DrinkDeliveryAmount) != request.DrinkDeliveryAmount)
+        {
+            return BadRequest(new
+            {
+                succeeded = false,
+                status = "validation_error",
+                operationId = request?.OperationId,
+                message = "納品額は0円以上の整数で入力してください。"
+            });
         }
 
         var result = await _businessDayRepository.SaveCurrentDrinkDeliveryAmountAsync(
-            Input.BusinessDayId,
-            _storeClock.GetCurrentBusinessDate(),
-            Input.DrinkDeliveryAmount,
+            new CurrentBusinessDayDrinkDeliveryMutation(
+                operationId.ToString("D"),
+                request.ExpectedBusinessDayId,
+                request.ExpectedBusinessDayRevision,
+                _storeClock.GetCurrentBusinessDate(),
+                request.DrinkDeliveryAmount),
             cancellationToken);
-
         if (!result.Succeeded)
         {
-            ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "納品額を保存できませんでした。");
-            await LoadAsync(cancellationToken, preserveInput: true);
-            return Page();
-        }
-
-        TempData["SuccessMessage"] = $"納品額 {StoreUiText.Yen(result.Value.Amount)}を保存しました。";
-        return RedirectToPage("/Closing/Index");
-    }
-
-    private async Task LoadAsync(CancellationToken cancellationToken, bool preserveInput = false)
-    {
-        CurrentBusinessDate = _storeClock.GetCurrentBusinessDate();
-        var businessDayResult = await _businessDayRepository.GetCurrentAsync(cancellationToken);
-        if (!businessDayResult.Succeeded)
-        {
-            LoadStatus = PageLoadStatus.Failure(
-                businessDayResult.FailureKind ?? ResultFailureKind.Unavailable,
-                businessDayResult.ErrorMessage ?? "現在営業日を取得できませんでした。");
-            CurrentBusinessDay = null;
-            return;
-        }
-
-        CurrentBusinessDay = businessDayResult.Value;
-        if (CurrentBusinessDay is null)
-        {
-            LoadStatus = PageLoadStatus.Success(
-                _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
-            if (!preserveInput)
+            var status = result.FailureKind switch
             {
-                Input = new DrinkDeliveryInputModel();
-            }
-
-            Input.BusinessDayId = null;
-            return;
+                ResultFailureKind.Conflict => "conflict",
+                ResultFailureKind.InvalidInput => "validation_error",
+                _ => "unavailable"
+            };
+            return StatusCode(
+                status == "conflict" ? StatusCodes.Status409Conflict :
+                status == "validation_error" ? StatusCodes.Status400BadRequest :
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    succeeded = false,
+                    status,
+                    operationId = operationId.ToString("D"),
+                    message = result.ErrorMessage ?? "納品額を保存できませんでした。"
+                });
         }
 
-        var status = await _businessDayRepository.GetDrinkDeliveryStatusAsync(
-            CurrentBusinessDay.BusinessDayId,
-            cancellationToken);
-        if (!status.Succeeded)
+        var output = result.Value;
+        var payload = new
         {
-            LoadStatus = PageLoadStatus.Failure(
-                status.FailureKind ?? ResultFailureKind.Unavailable,
-                status.ErrorMessage ?? "酒代入力状況を取得できませんでした。");
-            return;
-        }
-
-        LoadStatus = PageLoadStatus.Success(
-            _storeClock.ToStoreDateTimeOffset(_storeClock.GetStoreNow()));
-        IsDrinkDeliveryAmountEntered = status.Value.IsEntered;
-
-        if (!preserveInput)
+            succeeded = output.Status == "confirmed",
+            output.Status,
+            output.OperationId,
+            output.Message,
+            output.Editor,
+            output.DashboardDelta
+        };
+        return output.Status switch
         {
-            Input.DrinkDeliveryAmount = status.Value.Amount;
-        }
-
-        Input.BusinessDayId = CurrentBusinessDay.BusinessDayId;
+            "confirmed" => new JsonResult(payload),
+            "conflict" => StatusCode(StatusCodes.Status409Conflict, payload),
+            _ => BadRequest(payload)
+        };
     }
+
+    public sealed record DrinkDeliverySaveRequest(
+        string OperationId,
+        long? ExpectedBusinessDayId,
+        long? ExpectedBusinessDayRevision,
+        decimal DrinkDeliveryAmount);
 }

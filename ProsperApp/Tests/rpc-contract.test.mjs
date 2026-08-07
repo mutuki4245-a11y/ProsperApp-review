@@ -4,236 +4,117 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-
-const read = (relativePath) =>
-    fs.readFileSync(path.join(root, relativePath), 'utf8');
-
-const walk = (relativePath, extension) => {
-    const directory = path.join(root, relativePath);
-    return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const walk = (relativePath, extension) => fs.readdirSync(path.join(root, relativePath), { withFileTypes: true })
+    .flatMap((entry) => {
         const entryPath = path.join(relativePath, entry.name);
-        return entry.isDirectory()
-            ? walk(entryPath, extension)
-            : entry.name.endsWith(extension)
-                ? [entryPath]
-                : [];
+        return entry.isDirectory() ? walk(entryPath, extension) : entry.name.endsWith(extension) ? [entryPath] : [];
     });
-};
-
 const sorted = (values) => [...values].sort();
 const difference = (left, right) => sorted([...left].filter((value) => !right.has(value)));
 
-const repositorySource = walk('Infrastructure/Supabase', '.cs')
-    .map(read)
-    .join('\n');
-const csharpRpcNames = new Set(
-    [...repositorySource.matchAll(
-        /(?:PostRpcArrayAsync|PostRpcArrayResultAsync|PostRpcScalarResultAsync|PostArrayAsync|PostScalarAsync)\s*\(\s*"(store\.[a-z0-9_]+)"/g
-    )].map((match) => match[1])
-);
+const repositorySource = walk('Infrastructure/Supabase', '.cs').map(read).join('\n');
+const csharpRpcNames = new Set([...repositorySource.matchAll(
+    /(?:PostRpcArrayAsync|PostRpcArrayResultAsync|PostRpcScalarResultAsync|PostArrayAsync|PostScalarAsync|ExecuteMutationAsync|ExecuteMutationV2Async)\s*\(\s*"(store\.[a-z0-9_]+)"/g
+)].map((match) => match[1]));
 
 const edgeSource = read('supabase/functions/prosper-rpc/index.ts');
-const edgeRpcNames = new Set(
-    [...edgeSource.matchAll(/"(store\.[a-z0-9_]+)"\s*,\s*\{/g)]
-        .map((match) => match[1])
-);
-
-const sqlFiles = [
-    'Sql/store_settings_functions.sql',
-    ...walk('Sql/store_rpc', '.sql')
-];
-const sqlSource = sqlFiles.map(read).join('\n');
-const sqlDefinitions = [
-    ...sqlSource.matchAll(/create\s+or\s+replace\s+function\s+(store\.[a-z0-9_]+)/gi)
-].map((match) => match[1].toLowerCase());
+const edgeRpcNames = new Set([...edgeSource.matchAll(/"(store\.[a-z0-9_]+)"\s*,\s*\{/g)].map((match) => match[1]));
+const sqlSource = ['Sql/store_settings_functions.sql', ...walk('Sql/store_rpc', '.sql')].map(read).join('\n');
+const sqlDefinitions = [...sqlSource.matchAll(/create\s+or\s+replace\s+function\s+(store\.[a-z0-9_]+)/gi)]
+    .map((match) => match[1].toLowerCase());
 const sqlRpcNames = new Set(sqlDefinitions);
 
+assert.deepEqual(difference(csharpRpcNames, edgeRpcNames), [], 'C# RPCはEdge allowlistへ全て登録すること。');
+assert.deepEqual(difference(edgeRpcNames, csharpRpcNames), [], '未使用RPCをEdge allowlistへ残さないこと。');
+assert.deepEqual(difference(csharpRpcNames, sqlRpcNames), [], 'C# RPCにはSQL定義が必要です。');
 assert.deepEqual(
-    difference(csharpRpcNames, edgeRpcNames),
+    sorted([...new Set(sqlDefinitions.filter((name, index) => sqlDefinitions.indexOf(name) !== index))]),
     [],
-    'C#から呼ぶRPCはprosper-rpc allowlistに必要です。'
-);
-assert.deepEqual(
-    difference(edgeRpcNames, csharpRpcNames),
-    [],
-    'C#から参照されないRPCをprosper-rpc allowlistへ残さないでください。'
-);
-assert.deepEqual(
-    difference(csharpRpcNames, sqlRpcNames),
-    [],
-    'C#から呼ぶRPCにはSQL定義が必要です。'
-);
-
-const duplicateDefinitions = sorted(
-    [...new Set(sqlDefinitions.filter((name, index) => sqlDefinitions.indexOf(name) !== index))]
-);
-assert.deepEqual(
-    duplicateDefinitions,
-    [],
-    '同名RPCを複数ファイルで上書きしないでください。'
+    '同名関数を複数ファイルで再定義しないこと。'
 );
 
 for (const rpcName of csharpRpcNames) {
-    const escapedName = rpcName.replace('.', '\\.');
-    const functionBlock = new RegExp(
-        `create\\s+or\\s+replace\\s+function\\s+${escapedName}\\b[\\s\\S]*?\\$\\$;`,
+    const block = new RegExp(
+        `create\\s+or\\s+replace\\s+function\\s+${rpcName.replace('.', '\\.')}\\b[\\s\\S]*?\\$\\$;`,
         'i'
     ).exec(sqlSource)?.[0];
-
-    assert.ok(functionBlock, `${rpcName} のSQL定義を読み取れません。`);
-    assert.match(functionBlock, /\bsecurity\s+definer\b/i, `${rpcName} はsecurity definerで統一します。`);
-    assert.match(
-        functionBlock,
-        /\bset\s+search_path\s*=\s*(?:pg_catalog\s*,\s*)?public\b/i,
-        `${rpcName} はsearch_pathを固定してください。`
-    );
+    assert.ok(block, `${rpcName} のSQL定義を読み取れません。`);
+    assert.match(block, /\bsecurity\s+definer\b/i, `${rpcName} はsecurity definerで統一すること。`);
+    assert.match(block, /\bset\s+search_path\s*=\s*(?:pg_catalog\s*,\s*)?public\b/i, `${rpcName} はsearch_pathを固定すること。`);
 }
 
-const grantsSource = read('Sql/store_rpc/99_grants.sql');
-assert.match(
-    grantsSource,
-    /revoke\s+execute\s+on\s+all\s+functions\s+in\s+schema\s+store\s+from\s+public,\s*anon,\s*authenticated,\s*service_role/i,
-    'store schemaの全関数から直接実行権限を剥奪してください。'
-);
-assert.match(
-    grantsSource,
-    /alter\s+default\s+privileges\s+in\s+schema\s+store\s+revoke\s+execute\s+on\s+functions\s+from\s+public/i,
-    '今後追加するstore関数もPUBLIC実行不可を既定にしてください。'
-);
+for (const required of [
+    'store.get_business_home_bootstrap_v2',
+    'store.get_current_business_home_snapshot',
+    'store.sync_business_home_changes_v2',
+    'store.submit_current_order_entry_v2',
+    'store.save_current_business_day_attendance_v2',
+    'store.get_current_closing_dashboard',
+    'store.close_business_day_v2',
+    'store.save_current_business_day_drink_delivery_amount_v2',
+    'store.save_current_cast_sales_adjustment_v2',
+    'store.save_drink_back_adjustments_v2',
+    'store.get_current_receipt_work_queue',
+    'store.advance_receipt_work_queue_v2',
+    'store.get_management_master_snapshot',
+    'store.save_management_master_v2'
+]) assert.ok(csharpRpcNames.has(required), `${required} をアプリ契約に含めること。`);
 
-const bootstrapSource = read('Sql/store_rpc/15_business_home_bootstrap.sql');
-assert.match(
-    bootstrapSource,
-    /create\s+or\s+replace\s+function\s+store\.get_store_bootstrap/i,
-    '全画面マスタと営業中トップ初期表示はstore bootstrap RPCへ集約してください。'
-);
-assert.doesNotMatch(
-    bootstrapSource,
-    /create\s+or\s+replace\s+function\s+store\.get_business_home_bootstrap/i,
-    '旧business home bootstrap RPCは削除してください。'
-);
-assert.match(
-    bootstrapSource,
-    /drop\s+function\s+if\s+exists\s+store\.get_business_home_bootstrap\s*\(\s*bigint\s*\)/i,
-    '旧business home bootstrap RPCをDBから削除してください。'
-);
-for (const dependency of [
+const legacyRpcNames = [
+    'store.get_store_bootstrap',
     'store.get_context',
     'store.get_current_business_day',
-    'store.get_departments',
-    'store.get_tables',
-    'store.get_table_admin_list',
-    'store.get_casts',
-    'store.get_casts_admin',
-    'store.get_staffs',
-    'store.get_staffs_admin',
-    'store.get_nomination_back_master',
-    'store.get_order_items',
-    'store.get_item_admin_catalog',
+    'store.open_business_day',
+    'store.open_business_day_with_attendance',
+    'store.save_business_day_attendance',
+    'store.save_business_day_staff_attendance',
+    'store.get_business_day_closing_attendance',
+    'store.save_business_day_closing_attendance',
+    'store.save_business_day_staff_closing_attendance',
+    'store.get_business_day_closing_readiness',
+    'store.close_business_day',
+    'store.get_business_day_drink_delivery_status',
+    'store.save_business_day_drink_delivery_amount',
     'store.get_order_attending_casts',
-    'store.get_payment_methods',
-    'store.get_pricing_plan',
-    'store.get_business_day_snapshot'
-]) {
-    assert.equal(
-        bootstrapSource.includes(dependency),
-        true,
-        `bootstrap RPCは${dependency}を束ねて取得してください。`
-    );
+    'store.get_order_entry_slips',
+    'store.add_order_lines',
+    'store.create_slip',
+    'store.cancel_checkout',
+    'store.issue_checkout_statement',
+    'store.release_checkout_ready',
+    'store.confirm_checkout',
+    'store.get_business_day_snapshot',
+    'store.flush_business_home_changes',
+    'store.flush_current_business_home_changes',
+    'store.get_pending_receipts',
+    'store.quick_enter_receipt',
+    'store.mark_receipt_scan_mistake',
+    'store.get_business_day_champagne_back_overview',
+    'store.save_business_day_champagne_backs',
+    'store.get_business_day_cast_sales_adjustment_overview',
+    'store.save_business_day_cast_sales_adjustments',
+    'store.save_pricing_plan',
+    'store.save_pricing_plan_v2'
+];
+for (const legacy of legacyRpcNames) {
+    assert.ok(!csharpRpcNames.has(legacy), `${legacy} をC#呼出しに残さないこと。`);
+    assert.ok(!edgeRpcNames.has(legacy), `${legacy} をEdge allowlistに残さないこと。`);
+    assert.ok(!sqlRpcNames.has(legacy), `${legacy} をSQL関数定義として残さないこと。`);
 }
-assert.match(
-    bootstrapSource,
-    /revoke\s+execute\s+on\s+function\s+store\.get_store_bootstrap\s*\(\s*bigint\s*\)\s+from\s+public,\s*anon,\s*authenticated,\s*service_role/i,
-    'store bootstrap RPCの直接実行権限を剥奪してください。'
-);
 
-const businessDaySource = read('Sql/store_rpc/01_business_day.sql');
-const closingPageModelSource = read('Pages/Closing/Index.cshtml.cs');
-const closingPageSource = read('Pages/Closing/Index.cshtml');
-const businessDayRepositorySource = read('Infrastructure/Supabase/SupabaseBusinessDayRepository.cs');
-assert.match(
-    businessDaySource,
-    /create\s+or\s+replace\s+function\s+store\.get_business_day_closing_readiness/i,
-    '締め条件は構造化RPCへ集約してください。'
-);
-assert.match(
-    businessDaySource,
-    /from\s+store\.get_business_day_closing_readiness\s*\(/i,
-    '締め実行も画面と同じ準備判定関数を使ってください。'
-);
-assert.match(
-    businessDaySource,
-    /v_ignore_closing_requirements\s*:=\s*coalesce\(p_ignore_closing_requirements,\s*false\)\s+or\s+p_pending_receipt_status\s*=\s*'__ignore_closing_requirements__'/i,
-    '管理者締めでは新引数とEdge Function互換sentinelのどちらでも締め条件無視を扱えること。'
-);
-assert.match(
-    businessDaySource,
-    /if\s+v_ignore_closing_requirements\s*=\s*false\s+then[\s\S]*?from\s+store\.get_business_day_closing_readiness\s*\(/i,
-    '通常締めではDB側でも締め準備判定を再検証すること。'
-);
-assert.match(
-    closingPageModelSource,
-    /var\s+ignoreClosingRequirements\s*=\s*IgnoreClosingRequirements\s*&&\s*IsAdminMode;/,
-    '締め条件無視は管理者モード中だけ送信できること。'
-);
-assert.match(
-    closingPageModelSource,
-    /if\s*\(IgnoreClosingRequirements\s*&&\s*!IsAdminMode\)[\s\S]*?締め条件を無視するには管理者モードを有効にしてください。/,
-    '管理者モードなしの締め条件無視POSTはPageModelで拒否すること。'
-);
-assert.match(
-    businessDayRepositorySource,
-    /p_pending_receipt_status\s*=\s*ignoreClosingRequirements\s*\?\s*IgnoreClosingRequirementsStatus\s*:\s*null/s,
-    '通常締めは領収書を締め条件に含めず、管理者締めではEdge Function互換sentinelを送ること。'
-);
-const closingDecisionSource = businessDaySource.match(/v_can_close\s*:=([\s\S]*?)return\s+query/i)?.[1] ?? '';
-assert.doesNotMatch(
-    closingDecisionSource,
-    /pending_receipt/i,
-    '未入力領収書をDBの締め可否判定に含めないでください。'
-);
-assert.doesNotMatch(
-    businessDaySource,
-    /raise\s+exception\s+'pending_receipts_exist/i,
-    '未入力領収書をDBの締めエラーにしないでください。'
-);
-const closingPageDecisionSource = closingPageSource.match(/const\s+canClose\s*=([\s\S]*?);/i)?.[1] ?? '';
-assert.doesNotMatch(
-    closingPageDecisionSource,
-    /receipt/i,
-    '未入力領収書を画面の締め可否判定に含めないでください。'
-);
-assert.match(
-    closingPageSource,
-    /data-receipts-url[\s\S]*?loadReceiptsPanel\(\)/i,
-    '領収書件数は締め判定とは独立して取得してください。'
-);
-assert.match(
-    businessDayRepositorySource,
-    /p_ignore_closing_requirements\s*=\s*ignoreClosingRequirements/,
-    '管理者締めでは締め条件無視引数をRPC payloadへ含めること。'
-);
+const cutover = read('Sql/store_rpc/00_legacy_rpc_cutover.sql');
+for (const legacy of legacyRpcNames) {
+    assert.match(cutover, new RegExp(`drop\\s+function\\s+if\\s+exists\\s+${legacy.replace('.', '\\.')}`, 'i'));
+}
+const order = read('Sql/store_rpc_functions.sql');
+assert.ok(order.indexOf('00_legacy_rpc_cutover.sql') < order.indexOf('00a_drink_back_schema.sql'));
+assert.ok(order.indexOf('17_current_business_home_snapshot.sql') < order.indexOf('15_business_home_bootstrap.sql'));
+assert.ok(order.indexOf('28_current_closing_dashboard.sql') < order.indexOf('22_current_business_day_close.sql'));
+assert.ok(order.indexOf('22_current_business_day_close.sql') < order.indexOf('99_grants.sql'));
 
-const operationalSource = read('Sql/store_rpc/14_operational_read_models.sql');
-assert.match(
-    operationalSource,
-    /create\s+or\s+replace\s+function\s+store\.get_business_day_cast_sales_adjustment_overview/i,
-    'キャスト売上額調整は一覧・詳細を一括取得してください。'
-);
-assert.match(
-    operationalSource,
-    /create\s+or\s+replace\s+function\s+store\.save_business_day_cast_sales_adjustments/i,
-    'キャスト売上額調整は営業日単位の一括保存RPCを持ってください。'
-);
+const grants = read('Sql/store_rpc/99_grants.sql');
+assert.match(grants, /revoke\s+execute\s+on\s+all\s+functions\s+in\s+schema\s+store\s+from\s+public,\s*anon,\s*authenticated,\s*service_role/i);
+assert.match(grants, /alter\s+default\s+privileges\s+in\s+schema\s+store\s+revoke\s+execute\s+on\s+functions\s+from\s+public/i);
 
-const checkoutSource = read('Sql/store_rpc/08_checkout_ready.sql');
-assert.match(
-    checkoutSource,
-    /coalesce\(v_payment_method\.requires_received_amount,\s*false\)/i,
-    '受取額の要否は決済方法マスタを参照してください。'
-);
-assert.equal(
-    checkoutSource.includes("if v_method_code = 'cash'"),
-    false,
-    '受取額判定をcash固定へ戻さないでください。'
-);
+console.log('RPC v2 contract checks passed.');

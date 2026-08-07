@@ -131,6 +131,72 @@ public class ManagementIndexModel(
         });
     }
 
+    public async Task<IActionResult> OnPostMasterMutationAsync(CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Opening))
+        {
+            return NotFound();
+        }
+
+        ManagementMasterMutation? input;
+        try
+        {
+            input = await Request.ReadFromJsonAsync<ManagementMasterMutation>(JsonOptions, cancellationToken);
+        }
+        catch (JsonException)
+        {
+            input = null;
+        }
+
+        if (input is null)
+        {
+            return BadRequest(new
+            {
+                succeeded = false,
+                status = "validation_error",
+                message = "保存内容を確認してください。"
+            });
+        }
+
+        var result = await _managementMasterSynchronization.MutateAsync(
+            input,
+            _adminModeService.IsEnabled,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            return StatusCode(
+                result.FailureKind is ResultFailureKind.InvalidInput
+                    ? StatusCodes.Status400BadRequest
+                    : StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    succeeded = false,
+                    status = result.FailureKind is ResultFailureKind.InvalidInput
+                        ? "validation_error"
+                        : "unavailable",
+                    message = result.ErrorMessage ?? "管理マスタを保存できませんでした。"
+                });
+        }
+
+        var output = result.Value;
+        if (output.Status == "confirmed")
+        {
+            _applicationCache.ClearAll();
+        }
+        return new JsonResult(new
+        {
+            succeeded = output.Status == "confirmed",
+            operationId = output.OperationId,
+            status = output.Status,
+            revision = output.Revision,
+            areaRevision = output.AreaRevision,
+            area = output.Area,
+            delta = output.Delta,
+            errorCode = output.ErrorCode,
+            message = output.ErrorMessage
+        });
+    }
+
     private void LoadCurrentSettings()
     {
         var currentSettings = _localSettingsProvider.GetCurrent();

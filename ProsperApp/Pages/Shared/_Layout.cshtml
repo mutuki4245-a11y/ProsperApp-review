@@ -54,7 +54,11 @@
                     <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                         <ul class="navbar-nav flex-grow-1 app-main-nav__tabs">
                             <li class="nav-item">
-                                <a class="nav-link app-main-nav__link @(isSalesActive ? "is-active" : null)" asp-area="" asp-page="/Index">営業中</a>
+                                <a class="nav-link app-main-nav__link @(isSalesActive ? "is-active" : null)"
+                                   asp-area=""
+                                   asp-page="/Index"
+                                   data-loading-lock="false"
+                                   aria-current="@(isSalesActive ? "page" : null)">営業中</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link app-main-nav__link @(isClosingActive ? "is-active" : null)" asp-area="" asp-page="/Closing/Index">締め作業</a>
@@ -152,7 +156,8 @@
         <script>
             window.ProsperManagementMasterConfig = {
                 departmentId: @localSettings.StoreDepartmentId,
-                snapshotUrl: '@Url.Page("/Management/Index", "MasterSnapshot")'
+                snapshotUrl: '@Url.Page("/Management/Index", "MasterSnapshot")',
+                mutationUrl: '@Url.Page("/Management/Index", "MasterMutation")'
             };
         </script>
         <script src="~/js/features/management-master.js" asp-append-version="true"></script>

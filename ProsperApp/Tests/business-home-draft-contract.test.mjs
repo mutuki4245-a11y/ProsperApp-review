@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [markup, source, operationContract, applicationService] = await Promise.all([
+const [markup, source, createSlipSource, operationContract, applicationService] = await Promise.all([
     readFile(new URL('../Pages/Index.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/business-home.js', import.meta.url), 'utf8'),
+    readFile(new URL('../wwwroot/js/features/create-slip-modal.js', import.meta.url), 'utf8'),
     readFile(new URL('../Features/BusinessHome/BusinessHomeOperationContract.cs', import.meta.url), 'utf8'),
     readFile(new URL('../Features/BusinessHome/BusinessHomeApplicationService.cs', import.meta.url), 'utf8')
 ]);
 
 const operationTypes = [
+    'create_slip',
     'add_customer',
     'update_customer',
     'leave_customer',
@@ -29,12 +31,19 @@ assert.match(source, /const initialSnapshot = config\.initialSnapshot/, '初回�
 assert.match(source, /if \(initialSnapshot && applySnapshot\(initialSnapshot, true\)\) \{[\s\S]*?markDirtyStatus\(\);[\s\S]*?\} else \{[\s\S]*?void loadSlips\(\);[\s\S]*?\}/, '初回は埋め込みsnapshotを優先し、無い時だけ取得すること');
 assert.match(source, /setInterval\(\(\) => \{[\s\S]*?void loadSlips\(\);[\s\S]*?\}, refreshIntervalMs\)/, '自動更新はsnapshot取得を継続すること');
 assert.match(applicationService, /LoadPageAsync[\s\S]*GetBusinessHomeBootstrapAsync/, '営業中トップ初期ロードはbootstrap RPCを使うこと');
-assert.match(source, /prosper:business-home-draft:v1:\$\{config\.departmentId\}:\$\{config\.businessDayId\}/, '営業中下書きは店舗・営業日単位のlocalStorageキーを使うこと');
+assert.match(source, /prosper:business-home-draft:v2:\$\{config\.departmentId\}/, '営業日前の伝票作成も保持できる店舗単位のlocalStorageキーを使うこと');
 assert.match(source, /const restoreBusinessHomeDraft = \(\) => \{[\s\S]*pendingOperations\.set/, '営業中編集操作をlocalStorageから復元すること');
 assert.match(source, /karaokeDraft\?\.restore\?\.\(draft\.karaokeLines\)/, '営業中カラオケ下書きをlocalStorageから復元すること');
 assert.match(source, /const persistBusinessHomeDraft = \(\) => \{[\s\S]*localStorage\.setItem\(draftStorageKey/, '営業中未送信キューをlocalStorageへ保存すること');
+assert.match(source, /pendingFlushBatch/, '通信結果不明時のbatch IDを保持すること');
+assert.match(source, /pendingFlushBatch = \{[\s\S]*\.\.\.storedBatch/, '再読込後も同じbatch IDを復元すること');
 assert.match(source, /scheduleFlush\(\)/, '復元後は既存flush機構で保存を再開すること');
 assert.match(source, /if \(!editorOperationTypes\.has\(operation\?\.operationType\)\)/, '未知の営業中operationTypeをキューへ積まないこと');
+assert.match(createSlipSource, /prosper:create-slip-draft:v2:\$\{departmentId\}/, '作成伝票の入力を店舗単位で永続化すること');
+assert.match(createSlipSource, /pendingCreateCommand/, '結果不明の作成commandを保持すること');
+assert.match(createSlipSource, /sessionStorage|localStorage\.setItem\(draftStorageKey/, '作成伝票の下書きをbrowser storageへ保存すること');
+assert.match(createSlipSource, /const definitive = result\?\.status === 'validation_error' \|\| result\?\.status === 'conflict'/, '確定した業務エラーだけ旧operationを破棄すること');
+assert.match(createSlipSource, /syncPendingCommandControls/, '結果不明commandの編集中変更を防ぐこと');
 
 for (const operationType of operationTypes) {
     assert.equal(source.includes(`'${operationType}'`), true, `${operationType} をJS契約表に含めること`);

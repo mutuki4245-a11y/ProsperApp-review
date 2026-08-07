@@ -47,8 +47,8 @@
         ? config.initialSnapshot
         : null;
     const flushBusinessHomeChangesUrl = config.flushBusinessHomeChangesUrl || '';
-    const draftStorageKey = config.departmentId && config.businessDayId
-        ? `prosper:business-home-draft:v1:${config.departmentId}:${config.businessDayId}`
+    const draftStorageKey = config.departmentId
+        ? `prosper:business-home-draft:v2:${config.departmentId}`
         : '';
     const refreshIntervalMs = 10000;
     const elapsedRefreshIntervalMs = 15000;
@@ -65,6 +65,7 @@
     let isSaving = false;
     let flushPromise = null;
     let pendingFlushBatch = null;
+    let lastFlushResponse = null;
     let flushTimer = null;
     let navigationInFlight = false;
     let activeSlipFilter = 'all';
@@ -125,8 +126,10 @@
             .filter((operation) => editorOperationTypes.has(operation.operationType))
             .map((operation) => ({
                 operationId: operation.operationId,
-                slipId: Number(operation.slipId),
+                clientDraftId: operation.clientDraftId || null,
+                slipId: operation.slipId == null ? null : Number(operation.slipId),
                 operationType: operation.operationType,
+                businessDate: operation.businessDate || null,
                 payload: operation.payload || {}
             }));
         const karaokeLines = karaokeDraft?.snapshot?.() || [];
@@ -138,11 +141,12 @@
 
         try {
             localStorage.setItem(draftStorageKey, JSON.stringify({
-                version: 1,
+                version: 2,
                 departmentId: config.departmentId,
                 businessDayId: config.businessDayId,
                 operations,
-                karaokeLines
+                karaokeLines,
+                pendingFlushBatch
             }));
         } catch {
             // 保存できなくても営業中画面の操作自体は継続する。
@@ -377,6 +381,11 @@
         const revision = Number(snapshot.businessDayRevision);
         if (Number.isFinite(revision) && revision < snapshotRevision) return false;
         if (Number.isFinite(revision)) snapshotRevision = revision;
+        window.ProsperBusinessHomeState = {
+            businessDayId: snapshot.businessDayId || null,
+            businessDayRevision: Number.isFinite(revision) ? revision : null,
+            businessDate: snapshot.businessDate || config.businessDate
+        };
         serverSnapshot = snapshot;
         hasLoaded = true;
         slips = Array.isArray(snapshot.slips) ? snapshot.slips : [];
@@ -384,6 +393,13 @@
         renderProjectedSnapshot();
         return true;
     };
+
+    document.addEventListener('prosper:business-home-mutation-confirmed', (event) => {
+        const snapshot = event.detail?.snapshot;
+        if (applySnapshot(snapshot, true) && !isSaving) {
+            markDirtyStatus();
+        }
+    });
 
     const setKaraokeStatus = (state, message) => {
         saveStatus.set(status, state, message);
@@ -481,15 +497,17 @@
             if (
                 !operation?.operationId ||
                 !editorOperationTypes.has(operation.operationType) ||
-                !isDraftRestorableSlip(operation.slipId)
+                (operation.operationType !== 'create_slip' && !isDraftRestorableSlip(operation.slipId))
             ) {
                 return;
             }
 
             pendingOperations.set(String(operation.operationId), {
                 operationId: String(operation.operationId),
-                slipId: String(operation.slipId),
+                clientDraftId: operation.clientDraftId || null,
+                slipId: operation.slipId == null ? null : String(operation.slipId),
                 operationType: operation.operationType,
+                businessDate: operation.businessDate || null,
                 payload: operation.payload || {},
                 state: 'queued'
             });
@@ -498,6 +516,21 @@
 
         const karaokeRestored = karaokeDraft?.restore?.(draft.karaokeLines) ?? 0;
         restored += karaokeRestored;
+
+        const storedBatch = draft.pendingFlushBatch;
+        if (storedBatch?.batchId && Array.isArray(storedBatch.operations)) {
+            const restoredBatchOperations = storedBatch.operations
+                .map((operation) => pendingOperations.get(String(operation.operationId)))
+                .filter(Boolean);
+            if (restoredBatchOperations.length === storedBatch.operations.length) {
+                restoredBatchOperations.forEach((operation) => { operation.state = 'saving'; });
+                pendingFlushBatch = {
+                    ...storedBatch,
+                    operations: restoredBatchOperations,
+                    karaokeLines: Array.isArray(storedBatch.karaokeLines) ? storedBatch.karaokeLines : []
+                };
+            }
+        }
 
         if (restored > 0) {
             showOperationNotice('端末内の未送信キューを復元しました。');
@@ -1573,7 +1606,11 @@
 
         refreshPromise = (async () => {
             try {
-                const response = await fetch(businessSlipsUrl, {
+                const requestUrl = new URL(businessSlipsUrl, window.location.origin);
+                if (snapshotRevision >= 0) {
+                    requestUrl.searchParams.set('knownRevision', String(snapshotRevision));
+                }
+                const response = await fetch(`${requestUrl.pathname}${requestUrl.search}`, {
                     headers: {
                         'Accept': 'application/json'
                     }
@@ -1583,6 +1620,15 @@
                 }
 
                 const result = await response.json();
+                if (result?.unchanged === true) {
+                    return true;
+                }
+                if (Array.isArray(result?.attendanceCasts)) {
+                    window.ProsperCurrentAttendanceCasts = result.attendanceCasts;
+                    document.dispatchEvent(new CustomEvent('prosper:attendance-casts-updated', {
+                        detail: { casts: result.attendanceCasts }
+                    }));
+                }
                 const snapshot = result?.snapshot ?? result;
                 if (!result?.succeeded || !applySnapshot(snapshot, true)) {
                     throw new Error(result?.message || 'Business snapshot load failed.');
@@ -1620,8 +1666,13 @@
         if (operations.length === 0 && karaokeLines.length === 0) return null;
 
         operations.forEach((operation) => { operation.state = 'saving'; });
+        const state = window.ProsperBusinessHomeState || {};
+        const createBusinessDate = operations.find((operation) => operation.operationType === 'create_slip')?.businessDate;
         return {
             batchId: createClientId(),
+            expectedBusinessDayId: state.businessDayId || null,
+            expectedBusinessDayRevision: state.businessDayRevision ?? null,
+            businessDate: createBusinessDate || state.businessDate || config.businessDate,
             operations,
             karaokeLines
         };
@@ -1664,6 +1715,8 @@
             return false;
         }
 
+        lastFlushResponse = result;
+
         batch.operations.forEach((operation) => pendingOperations.delete(operation.operationId));
         karaokeResults.filter((row) => row?.succeeded).forEach((row) => {
             const line = batch.karaokeLines.find((candidate) => String(candidate.draftId) === String(row.draft_id));
@@ -1674,7 +1727,13 @@
             if (line) karaokeDraft.markRejected([line]);
         });
         applySnapshot(result.snapshot);
-        persistBusinessHomeDraft();
+        document.dispatchEvent(new CustomEvent('prosper:business-home-flush-completed', {
+            detail: {
+                operations: batch.operations,
+                operationResults,
+                status: result?.status || 'confirmed'
+            }
+        }));
         queueNoticeForFailedRows(operationResults, karaokeResults);
         return true;
     };
@@ -1691,8 +1750,10 @@
             markDirtyStatus();
             return true;
         }
+        persistBusinessHomeDraft();
 
         const batch = pendingFlushBatch;
+        lastFlushResponse = null;
         isSaving = true;
         setKaraokeStatus('saving');
         renderProjectedSnapshot();
@@ -1707,9 +1768,13 @@
                     headers: buildSaveHeaders(),
                     body: JSON.stringify({
                         batchId: batch.batchId,
+                        expectedBusinessDayId: batch.expectedBusinessDayId,
+                        expectedBusinessDayRevision: batch.expectedBusinessDayRevision,
+                        businessDate: batch.businessDate,
                         operations: batch.operations.map((operation) => ({
                             operationId: operation.operationId,
-                            slipId: Number(operation.slipId),
+                            clientDraftId: operation.clientDraftId || null,
+                            slipId: operation.slipId == null ? null : Number(operation.slipId),
                             operationType: operation.operationType,
                             payload: operation.payload
                         })),
@@ -1721,12 +1786,22 @@
                     })
                 });
                 const result = await response.json().catch(() => null);
+                lastFlushResponse = result;
                 if (!response.ok || !result?.succeeded || !result?.snapshot || !applyFlushResult(batch, result)) {
+                    if (result?.snapshot) {
+                        applySnapshot(result.snapshot, true);
+                    }
+                    if (response.status === 400 || response.status === 409) {
+                        batch.operations.forEach((operation) => { operation.state = 'queued'; });
+                        pendingFlushBatch = null;
+                        persistBusinessHomeDraft();
+                    }
                     showOperationNotice(result?.message || '保存結果を確認できません。通信復旧後に同じ変更を再送します。');
                     return false;
                 }
 
                 pendingFlushBatch = null;
+                persistBusinessHomeDraft();
                 renderProjectedSnapshot();
                 markDirtyStatus();
                 return true;
@@ -1774,6 +1849,32 @@
         renderProjectedSnapshot();
         scheduleFlush();
         return normalized.operationId;
+    };
+
+    const enqueueAndFlushOperation = async (operation) => {
+        const operationId = String(operation?.operationId || createClientId());
+        if (!pendingOperations.has(operationId)) {
+            const queued = enqueueEditorOperation({ ...operation, operationId });
+            if (!queued) {
+                return { succeeded: false, status: 'validation_error', message: '編集操作を追加できませんでした。' };
+            }
+        }
+        const saved = await flushBusinessHomeChanges();
+        if (!saved) {
+            return lastFlushResponse || { succeeded: false, status: 'unavailable', message: '保存結果を確認できません。' };
+        }
+        const operationResult = (lastFlushResponse?.operationResults || [])
+            .find((row) => String(row?.operation_id || '') === operationId);
+        return {
+            ...lastFlushResponse,
+            operationResult
+        };
+    };
+
+    const discardOperation = (operationId) => {
+        pendingOperations.delete(String(operationId));
+        persistBusinessHomeDraft();
+        renderProjectedSnapshot();
     };
 
     const setCheckoutLock = (slipId, locked) => {
@@ -2021,6 +2122,8 @@
         reload: loadSlips,
         flush: flushBusinessHomeChanges,
         enqueueEditorOperation,
+        enqueueAndFlushOperation,
+        discardOperation,
         setCheckoutLock,
         getPendingForSlip: pendingForSlip,
         waitForOperations: waitForBusinessOperations,

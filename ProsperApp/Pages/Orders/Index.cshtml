@@ -27,11 +27,6 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
-    {
-        <div class="alert alert-success" role="alert">@Model.SuccessMessage</div>
-    }
-
     @if (Model.LoadIssues.Count > 0)
     {
         <div class="alert alert-danger" role="alert">
@@ -51,13 +46,10 @@
     <form method="post" class="order-entry__form" id="orderForm">
         <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
         <input type="hidden" asp-for="SelectedSlipId" id="selectedSlipId" />
-        <input type="hidden" asp-for="OrderQueueJson" id="orderQueueJson" value="[]" />
-        <input type="hidden" asp-for="OrderQueueSummaryJson" id="orderQueueSummaryJson" value="[]" />
-        <div id="queueFields"></div>
 
         @if (Model.CurrentBusinessDay is null)
         {
-            <div class="alert alert-warning">
+            <div class="alert alert-warning" id="orderBusinessDayWarning">
                 オーダー入力の前に営業中画面で伝票を作成してください。最初の伝票作成時に営業日を自動作成します。
             </div>
         }
@@ -149,8 +141,6 @@
                         </div>
                     </div>
                     <div class="order-entry__panel-body order-entry__panel-body--queue">
-                        <span asp-validation-for="QueueLines" class="text-danger"></span>
-
                         <div class="order-queue" id="queueList"></div>
                         <div class="order-queue__empty" id="queueEmpty">商品を選択してください。</div>
                     </div>
@@ -201,12 +191,13 @@
             slips = Model.Slips.Select(x => new { id = x.SlipId, display = x.TableDisplayName, customerNames = x.CustomerDisplayName, nominationCastIds = x.NominationCastIdList, nominationCastNames = x.NominationCastDisplayName }),
             items = orderableItems.Select(x => new { id = x.ItemId, name = x.ItemName, itemType = x.ItemType, isKaraoke = x.IsKaraoke, price = x.DefaultPrice, isCastBackTarget = x.IsCastBackTarget, castBackRegularUnitAmount = x.CastBackRegularUnitAmount, castBackNominationUnitAmount = x.CastBackNominationUnitAmount, castBackType = x.CastBackType }),
             castOptions = Model.AttendanceCasts.Select(x => new { id = x.CastId, name = x.DisplayName, display = x.DisplayName, drinkMemo = x.DrinkMemo, department = x.DepartmentName, isHome = x.DepartmentName == Model.StoreContext?.DepartmentName, isAttending = true }),
-            initialQueue = Model.QueueLines.Select(x => new { slipId = x.SlipId, itemId = x.ItemId, quantity = x.Quantity, castBackCastId = x.CastBackCastId }),
+            initialQueue = Array.Empty<object>(),
             initialSlipId = Model.SelectedSlipId,
             departmentId = Model.StoreContext?.DepartmentId,
             businessDayId = Model.CurrentBusinessDay?.BusinessDayId,
-            discardStoredQueue = Model.ShouldDiscardStoredQueue,
+            discardStoredQueue = false,
             slipOptionsUrl = Url.Page("/Orders/Index", "SlipOptions"),
+            submitUrl = Url.Page("/Orders/Index", "SubmitV2"),
             refreshIntervalMs = 10000
         }))
     </script>

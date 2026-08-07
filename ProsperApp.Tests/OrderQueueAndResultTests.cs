@@ -7,36 +7,6 @@ namespace ProsperApp.Tests;
 public class OrderQueueAndResultTests
 {
     [Fact]
-    public void ReadPostedQueue_MergesEquivalentLines()
-    {
-        var service = new OrderQueueService();
-
-        var result = service.ReadPostedQueue(
-            """
-            [
-              {"slipId":1,"itemId":20,"quantity":2,"castBackCastId":5},
-              {"slipId":1,"itemId":20,"quantity":3,"castBackCastId":5}
-            ]
-            """,
-            []);
-
-        var line = Assert.Single(result);
-        Assert.Equal(5, line.Quantity);
-    }
-
-    [Fact]
-    public void ValidateSlipOrderQueue_RejectsNonAttendingBackCast()
-    {
-        var service = new OrderQueueService();
-        var errors = service.ValidateSlipOrderQueue(
-            [new OrderQueueInputModel { SlipId = 1, ItemId = 20, Quantity = 1, CastBackCastId = 99 }],
-            [new StoreOrderItemOption { ItemId = 20, IsCastBackTarget = true }],
-            [new StoreOrderAttendanceCastOption { CastId = 5 }]);
-
-        Assert.Contains("バック対象商品のキャストは出勤キャストから選択してください。", errors);
-    }
-
-    [Fact]
     public void Result_DistinguishesSuccessfulEmptyDataFromFailure()
     {
         var empty = Result<IReadOnlyList<string>>.Success([]);

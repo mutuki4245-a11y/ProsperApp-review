@@ -356,6 +356,7 @@
   .opening-list__card,
   .closing-panel,
   .closing-entry-panel,
+  .drink-back-editor__row,
   .closing-attendance-table__row,
   .closing-attendance-modal__item,
   .business-slip-detail-karaoke,
@@ -1130,6 +1131,9 @@
   .slip-detail-checkout p,
   .slip-detail-hero__items span,
   .slip-create__customer-count-label,
+  .drink-back-editor__summary p,
+  .drink-back-editor__optional p,
+  .drink-back-editor__totals span,
   .closing-amount-input span {
     color: var(--app-text-muted);
   }

@@ -35,6 +35,16 @@ public class AttendanceEditorTests
     }
 
     [Fact]
+    public void BuildTimeOptions_UsesBusinessHourLabelForOneAmClockOutDefault()
+    {
+        var options = AttendanceEditor.BuildTimeOptions(24, 0, 15);
+
+        var oneAm = Assert.Single(options, option => option.Value == "01:00");
+        Assert.Equal("25:00", oneAm.Label);
+        Assert.Equal("01:00", AttendanceEditor.ResolveDefaultTime(options, "01:00"));
+    }
+
+    [Fact]
     public void Validate_RejectsClockOutBeforeClockInOnSameBusinessDate()
     {
         var input = CreateInput("02:00", "01:00");

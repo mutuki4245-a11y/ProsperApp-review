@@ -7,6 +7,7 @@ namespace ProsperApp.Features.BusinessHome;
 
 public static class BusinessHomeOperationTypes
 {
+    public const string CreateSlip = "create_slip";
     public const string AddCustomer = "add_customer";
     public const string UpdateCustomer = "update_customer";
     public const string LeaveCustomer = "leave_customer";
@@ -19,6 +20,7 @@ public static class BusinessHomeOperationTypes
 
     public static readonly IReadOnlyList<string> All =
     [
+        CreateSlip,
         AddCustomer,
         UpdateCustomer,
         LeaveCustomer,
@@ -37,8 +39,7 @@ public static class BusinessHomeOperationParser
 
     public static Result<IBusinessHomeOperationPayload> Parse(BusinessSlipEditorOperationInput operation)
     {
-        if (operation.SlipId <= 0 ||
-            string.IsNullOrWhiteSpace(operation.OperationId) ||
+        if (string.IsNullOrWhiteSpace(operation.OperationId) ||
             operation.OperationId.Length > 100)
         {
             return Invalid();
@@ -48,6 +49,7 @@ public static class BusinessHomeOperationParser
         {
             IBusinessHomeOperationPayload? payload = operation.OperationType switch
             {
+                BusinessHomeOperationTypes.CreateSlip => Read<CreateSlipOperationPayload>(operation.Payload),
                 BusinessHomeOperationTypes.AddCustomer => Read<AddCustomerPayload>(operation.Payload),
                 BusinessHomeOperationTypes.UpdateCustomer => Read<UpdateCustomerPayload>(operation.Payload),
                 BusinessHomeOperationTypes.LeaveCustomer => Read<LeaveCustomerPayload>(operation.Payload),
@@ -60,7 +62,10 @@ public static class BusinessHomeOperationParser
                 _ => null
             };
 
-            return payload is not null && IsValid(payload)
+            var hasValidTarget = operation.OperationType == BusinessHomeOperationTypes.CreateSlip
+                ? operation.SlipId is null or 0
+                : operation.SlipId is > 0;
+            return hasValidTarget && payload is not null && IsValid(payload)
                 ? Result<IBusinessHomeOperationPayload>.Success(payload)
                 : Invalid();
         }
@@ -82,6 +87,12 @@ public static class BusinessHomeOperationParser
     {
         return payload switch
         {
+            CreateSlipOperationPayload value =>
+                value.TableId > 0 &&
+                value.OpenedAt != default &&
+                value.CustomerLabels is { Count: >= 1 and <= 20 } &&
+                value.CastNominations is { Count: <= 20 } &&
+                (value.Memo?.Length ?? 0) <= 1000,
             AddCustomerPayload value =>
                 IsClockTime(value.EnteredTime) &&
                 (value.CustomerLabel?.Length ?? 0) <= 100,
@@ -128,6 +139,18 @@ public static class BusinessHomeOperationParser
 }
 
 public interface IBusinessHomeOperationPayload;
+
+public sealed record CreateSlipOperationPayload(
+    [property: JsonPropertyName("table_id")] long TableId,
+    [property: JsonPropertyName("opened_at")] DateTimeOffset OpenedAt,
+    [property: JsonPropertyName("customer_labels")] IReadOnlyList<string?> CustomerLabels,
+    [property: JsonPropertyName("cast_nominations")] IReadOnlyList<CreateSlipNominationPayload> CastNominations,
+    [property: JsonPropertyName("memo")] string? Memo) : IBusinessHomeOperationPayload;
+
+public sealed record CreateSlipNominationPayload(
+    [property: JsonPropertyName("cast_id")] long CastId,
+    [property: JsonPropertyName("nomination_kind")] string NominationKind,
+    [property: JsonPropertyName("nomination_price")] decimal NominationPrice);
 
 public sealed record AddCustomerPayload(
     [property: JsonPropertyName("customer_label")] string? CustomerLabel,

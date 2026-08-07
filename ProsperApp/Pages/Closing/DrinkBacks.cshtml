@@ -1,0 +1,65 @@
+@page
+@model ClosingDrinkBacksModel
+@{
+    ViewData["Title"] = "ドリンクバック調整";
+    ViewData["HasCurrentBusinessDay"] = false;
+}
+
+<section class="store-home terminal-page terminal-page--closing-entry drink-back-editor"
+         data-drink-back-editor
+         data-department-id="@Model.DepartmentId"
+         data-current-business-date="@Model.CurrentBusinessDate.ToString("yyyy-MM-dd")"
+         data-editor-url="@Url.Page("/Closing/DrinkBacks", "Editor")"
+         data-save-url="@Url.Page("/Closing/DrinkBacks", "Save")">
+    <div class="page-section-heading">
+        <h1>ドリンクバック調整</h1>
+        <p data-drink-back-business-date>状態を復元しています。</p>
+    </div>
+
+    <div class="alert alert-danger" role="alert" data-drink-back-error hidden></div>
+    <div class="alert alert-success" role="status" data-drink-back-success hidden></div>
+    <div class="alert alert-info" role="status" data-drink-back-guidance>状態を復元しています。</div>
+
+    <form method="post" class="closing-entry-panel drink-back-editor__form" data-drink-back-form>
+        @Html.AntiForgeryToken()
+        <div class="closing-entry-panel__body">
+            <div class="drink-back-editor__summary">
+                <div>
+                    <h2>出勤キャスト</h2>
+                    <p>出勤者全員の符号付き整数円を保存します。調整なしの場合も0円を入力します。</p>
+                </div>
+                <div class="drink-back-editor__totals">
+                    <span data-drink-back-required-status>確認中</span>
+                    <strong data-drink-back-total>合計 0円</strong>
+                </div>
+            </div>
+
+            <div class="drink-back-editor__rows" data-drink-back-required-rows></div>
+
+            <div class="drink-back-editor__optional-control">
+                <label class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" data-drink-back-show-optional />
+                    <span class="form-check-label">出勤していないキャストを表示</span>
+                </label>
+                <span class="badge text-bg-secondary" data-drink-back-optional-badge>保存済み 0名</span>
+            </div>
+
+            <section class="drink-back-editor__optional" data-drink-back-optional-section hidden>
+                <h2>出勤外の任意調整</h2>
+                <p>調整対象にした行だけ保存します。保存済み行の選択を外すと削除します。</p>
+                <div class="drink-back-editor__rows" data-drink-back-optional-rows></div>
+            </section>
+
+            <div class="terminal-save-status" data-drink-back-status data-save-state="idle">状態を復元しています。</div>
+            <div class="text-muted small" data-drink-back-updated></div>
+        </div>
+        <div class="closing-entry-panel__actions d-grid gap-2">
+            <button class="btn btn-primary btn-lg" type="submit" data-drink-back-submit disabled>保存</button>
+            <a class="btn btn-outline-secondary btn-lg" asp-page="/Closing/Index">締め作業へ戻る</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script src="~/js/features/drink-back-editor.js" asp-append-version="true"></script>
+}

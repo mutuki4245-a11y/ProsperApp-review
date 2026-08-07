@@ -1,7 +1,7 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ProsperApp.Features.Closing;
-using ProsperApp.Features.Receipts;
 using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
@@ -10,82 +10,42 @@ namespace ProsperApp.Pages;
 public class ClosingModel(
     IFeatureGate featureGate,
     IClosingApplicationService closingApplicationService,
-    IReceiptRepository receiptRepository,
     IAdminModeService adminModeService,
-    IDailyReportApplicationService dailyReportApplicationService) : PageModel
+    IDailyReportApplicationService dailyReportApplicationService,
+    ILocalSettingsProvider localSettingsProvider) : PageModel
 {
+    private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IClosingApplicationService _closingApplicationService = closingApplicationService;
-    private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IAdminModeService _adminModeService = adminModeService;
     private readonly IDailyReportApplicationService _dailyReportApplicationService = dailyReportApplicationService;
+    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
 
     [BindProperty(SupportsGet = true)]
     public long? ReportBusinessDayId { get; set; }
-
-    [BindProperty]
-    public long? BusinessDayId { get; set; }
-
-    [BindProperty]
-    public string? ClosingMemo { get; set; }
-
-    [BindProperty]
-    public bool IgnoreClosingRequirements { get; set; }
 
     public bool ReceiptsEnabled => _featureGate.IsEnabled(FeatureNames.Receipts);
 
     public bool IsAdminMode => _adminModeService.IsEnabled;
 
-    public StoreBusinessDay? CurrentBusinessDay { get; private set; }
+    public long DepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
 
-    public BusinessDayClosingReadiness Readiness { get; private set; } = new();
-
-    public PageLoadStatus? LoadStatus { get; private set; }
-
-    [TempData]
-    public string? SuccessMessage { get; set; }
-
-    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
+    public IActionResult OnGet()
     {
-        if (!_featureGate.IsEnabled(FeatureNames.Closing))
-        {
-            return NotFound();
-        }
-
-        var result = await _closingApplicationService.LoadAsync(
-            includeReadiness: false,
-            forceRefresh: false,
-            cancellationToken);
-        if (!result.Succeeded)
-        {
-            LoadStatus = PageLoadStatus.Failure(
-                result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "現在営業日を取得できませんでした。");
-        }
-        else
-        {
-            ApplyState(result.Value);
-        }
-
-        BusinessDayId = CurrentBusinessDay?.BusinessDayId;
-        ClosingMemo = CurrentBusinessDay?.Memo;
-        if (CurrentBusinessDay is not null)
-        {
-            ReportBusinessDayId = null;
-        }
-        return Page();
+        return _featureGate.IsEnabled(FeatureNames.Closing) ? Page() : NotFound();
     }
 
-    public async Task<IActionResult> OnGetReadinessAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetDashboardAsync(
+        string? knownCastMasterRevision,
+        CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
             return NotFound();
         }
 
-        var result = await _closingApplicationService.LoadAsync(
-            includeReadiness: true,
-            forceRefresh: true,
+        var result = await _closingApplicationService.GetDashboardAsync(
+            knownCastMasterRevision,
             cancellationToken);
         if (!result.Succeeded)
         {
@@ -97,64 +57,122 @@ public class ClosingModel(
             });
         }
 
-        ApplyState(result.Value);
-        if (CurrentBusinessDay is null)
-        {
-            return new JsonResult(new
-            {
-                succeeded = true,
-                hasBusinessDay = false,
-                businessDayId = (long?)null
-            });
-        }
-
-        var readiness = result.Value.Readiness!;
+        var dashboard = result.Value;
         return new JsonResult(new
         {
             succeeded = true,
-            hasBusinessDay = true,
-            businessDayId = CurrentBusinessDay.BusinessDayId,
-            openSlipCount = readiness.OpenSlipCount,
-            drinkDeliveryAmount = readiness.DrinkDeliveryAmount,
-            isDrinkDeliveryAmountEntered = readiness.IsDrinkDeliveryAmountEntered,
-            attendanceCount = readiness.AttendanceCount,
-            missingClockOutCount = readiness.MissingClockOutCount,
-            castSalesRequiredSlipCount = readiness.CastSalesRequiredSlipCount,
-            castSalesCompletedSlipCount = readiness.CastSalesCompletedSlipCount,
-            castSalesMissingSlipCount = readiness.CastSalesMissingSlipCount,
-            champagneBackRequiredCastCount = readiness.ChampagneBackRequiredCastCount,
-            champagneBackCompletedCastCount = readiness.ChampagneBackCompletedCastCount,
-            champagneBackMissingCastCount = readiness.ChampagneBackMissingCastCount,
-            champagneBackTotalAmount = readiness.ChampagneBackTotalAmount,
-            canClose = readiness.CanClose,
-            blockReasons = readiness.BlockReasons,
-            checkedAt = readiness.CheckedAt
+            dashboard.DepartmentId,
+            dashboard.HasBusinessDay,
+            dashboard.BusinessDayId,
+            dashboard.BusinessDayRevision,
+            dashboard.BusinessDate,
+            dashboard.Memo,
+            dashboard.OpenSlipCount,
+            dashboard.DrinkDeliveryAmount,
+            dashboard.IsDrinkDeliveryAmountEntered,
+            dashboard.AttendanceCount,
+            dashboard.MissingClockOutCount,
+            dashboard.CastSalesRequiredSlipCount,
+            dashboard.CastSalesCompletedSlipCount,
+            dashboard.CastSalesMissingSlipCount,
+            dashboard.DrinkBackRequiredCastCount,
+            dashboard.DrinkBackCompletedCastCount,
+            dashboard.DrinkBackMissingCastCount,
+            dashboard.DrinkBackTotalAmount,
+            dashboard.DrinkBackEditor,
+            dashboard.CastMasterRevision,
+            dashboard.ActiveCasts,
+            dashboard.PendingReceiptCount,
+            dashboard.CanClose,
+            dashboard.BlockReasons,
+            dashboard.CheckedAt
         });
     }
 
-    public async Task<IActionResult> OnGetReceiptsAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostCloseV2Async(CancellationToken cancellationToken)
     {
-        if (!_featureGate.IsEnabled(FeatureNames.Closing) || !ReceiptsEnabled)
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
             return NotFound();
         }
 
-        var result = await _receiptRepository.GetPendingResultAsync(cancellationToken);
+        CloseBusinessDayRequest? request;
+        try
+        {
+            request = await JsonSerializer.DeserializeAsync<CloseBusinessDayRequest>(
+                Request.Body,
+                RequestJsonOptions,
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            request = null;
+        }
+
+        if (request is null ||
+            !Guid.TryParse(request.OperationId, out var operationId) ||
+            request.ExpectedBusinessDayId is null or <= 0 ||
+            request.ExpectedBusinessDayRevision is null or < 0 ||
+            request.Memo?.Length > 500)
+        {
+            return BadRequest(new
+            {
+                succeeded = false,
+                status = "validation_error",
+                operationId = request?.OperationId,
+                message = "営業日情報または締めメモが正しくありません。"
+            });
+        }
+
+        if (request.IgnoreClosingRequirements && !IsAdminMode)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                succeeded = false,
+                status = "permission_denied",
+                operationId = operationId.ToString("D"),
+                message = "締め条件を無視するには管理者モードを有効にしてください。"
+            });
+        }
+
+        var result = await _closingApplicationService.CloseAsync(
+            new CurrentBusinessDayCloseMutation(
+                operationId.ToString("D"),
+                request.ExpectedBusinessDayId,
+                request.ExpectedBusinessDayRevision,
+                request.Memo,
+                request.IgnoreClosingRequirements && IsAdminMode),
+            cancellationToken);
         if (!result.Succeeded)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
             {
                 succeeded = false,
-                failureKind = result.FailureKind?.ToString(),
-                errorMessage = result.ErrorMessage
+                status = "unavailable",
+                operationId = operationId.ToString("D"),
+                message = result.ErrorMessage ?? "営業日を締められませんでした。"
             });
         }
 
-        return new JsonResult(new
+        var output = result.Value;
+        var payload = new
         {
-            succeeded = true,
-            pendingReceiptCount = result.Value.Count
-        });
+            succeeded = output.Status == "confirmed",
+            output.OperationId,
+            output.Status,
+            output.Message,
+            output.ClosedBusinessDayId,
+            output.BusinessDate,
+            output.ClosedAt,
+            output.ReportBusinessDayId,
+            output.Dashboard
+        };
+        return output.Status switch
+        {
+            "confirmed" => new JsonResult(payload),
+            "conflict" => StatusCode(StatusCodes.Status409Conflict, payload),
+            _ => StatusCode(StatusCodes.Status400BadRequest, payload)
+        };
     }
 
     public async Task<IActionResult> OnGetDailyReportAsync(
@@ -189,67 +207,10 @@ public class ClosingModel(
         return new JsonResult(result.Value);
     }
 
-    public async Task<IActionResult> OnPostCloseBusinessDayAsync(CancellationToken cancellationToken)
-    {
-        if (!_featureGate.IsEnabled(FeatureNames.Closing))
-        {
-            return NotFound();
-        }
-
-        var ignoreClosingRequirements = IgnoreClosingRequirements && IsAdminMode;
-        if (IgnoreClosingRequirements && !IsAdminMode)
-        {
-            ModelState.AddModelError(string.Empty, "締め条件を無視するには管理者モードを有効にしてください。");
-            var reload = await _closingApplicationService.LoadAsync(
-                includeReadiness: true,
-                forceRefresh: true,
-                cancellationToken);
-            if (reload.Succeeded)
-            {
-                ApplyState(reload.Value);
-                BusinessDayId = CurrentBusinessDay?.BusinessDayId;
-            }
-
-            return Page();
-        }
-
-        var result = await _closingApplicationService.CloseAsync(
-            BusinessDayId,
-            ClosingMemo,
-            ignoreClosingRequirements,
-            cancellationToken);
-        if (!result.Succeeded)
-        {
-            foreach (var message in (result.ErrorMessage ?? "営業日を締められませんでした。")
-                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
-            {
-                ModelState.AddModelError(string.Empty, message);
-            }
-
-            var reload = await _closingApplicationService.LoadAsync(
-                includeReadiness: true,
-                forceRefresh: true,
-                cancellationToken);
-            if (reload.Succeeded)
-            {
-                ApplyState(reload.Value);
-                BusinessDayId = CurrentBusinessDay?.BusinessDayId;
-            }
-            return Page();
-        }
-
-        SuccessMessage = $"営業日 {result.Value.BusinessDate:yyyy-MM-dd} を締めました。";
-        return RedirectToPage("/Closing/Index", new
-        {
-            reportBusinessDayId = result.Value.BusinessDayId
-        });
-    }
-
-    private void ApplyState(ClosingPageState state)
-    {
-        CurrentBusinessDay = state.BusinessDay;
-        Readiness = state.Readiness ?? new BusinessDayClosingReadiness { BusinessDay = state.BusinessDay };
-        LoadStatus = PageLoadStatus.Success(
-            state.LastUpdatedAt ?? DateTimeOffset.UtcNow);
-    }
+    private sealed record CloseBusinessDayRequest(
+        string? OperationId,
+        long? ExpectedBusinessDayId,
+        long? ExpectedBusinessDayRevision,
+        string? Memo,
+        bool IgnoreClosingRequirements);
 }

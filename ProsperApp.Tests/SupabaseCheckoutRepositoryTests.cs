@@ -133,7 +133,7 @@ public class SupabaseCheckoutRepositoryTests
         {
             using var document = JsonDocument.Parse(json);
             return new FakeStoreMasterBootstrapper(Result<StoreBootstrapPayload>.Success(
-                new StoreBootstrapPayload(42, document.RootElement.Clone())));
+                new StoreBootstrapPayload(42, document.RootElement.Clone(), false)));
         }
 
         public static FakeStoreMasterBootstrapper Failure(ResultFailureKind kind, string message) =>
