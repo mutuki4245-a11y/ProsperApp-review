@@ -11,14 +11,16 @@ const exists = async (path) => {
     }
 };
 
-const [program, topPage, topModel, closingPage, closingModel, partial, editorScript] = await Promise.all([
+const [program, topPage, topModel, closingPage, closingModel, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
     read('Program.cs'),
     read('Pages/Index.cshtml'),
     read('Pages/Index.cshtml.cs'),
     read('Pages/Closing/Index.cshtml'),
     read('Pages/Closing/Index.cshtml.cs'),
     read('Pages/Shared/_AttendanceEditorModal.cshtml'),
-    read('wwwroot/js/features/attendance-editor.js')
+    read('wwwroot/js/features/attendance-editor.js'),
+    read('Features/Attendance/AttendanceModels.cs'),
+    read('Features/Attendance/AttendanceApplicationService.cs')
 ]);
 
 assert.equal(await exists('Pages/Attendance.cshtml'), false, '旧 /Attendance Razor page を残さないこと');
@@ -48,5 +50,12 @@ assert.match(editorScript, /setSelectValue\(clockIn\(row\), entry\.clockInTime, 
 assert.match(editorScript, /setSelectValue\(clockOut\(row\), entry\.clockOutTime, config\.defaultClockOutTime\)/, '保存済み退勤時刻を候補へ追加してから選択すること');
 assert.doesNotMatch(editorScript, /clockIn\(row\)\.value = entry\.clockInTime \|\| config\.defaultClockInTime \|\| '';/, '保存済み出勤時刻を直接代入して候補外時刻を空にしないこと');
 assert.doesNotMatch(editorScript, /clockOut\(row\)\.value = entry\.clockOutTime \|\| config\.defaultClockOutTime \|\| '';/, '保存済み退勤時刻を直接代入して候補外時刻を空にしないこと');
+assert.match(attendanceModels, /public DateOnly\? BusinessDate \{ get; set; \}/, '勤怠保存payloadに表示中営業日の日付を持てること');
+assert.match(editorScript, /let businessDayDate = null;/, '勤怠エディタが表示中営業日の日付を保持すること');
+assert.match(editorScript, /businessDayDate = snapshot\.hasBusinessDay[\s\S]*snapshot\.businessDay\?\.businessDate[\s\S]*: null;/, '再取得したopen営業日の日付を保存payloadへ使うこと');
+assert.match(editorScript, /businessDate: businessDayDate,/, '勤怠保存payloadにopen営業日の日付を含めること');
+assert.match(editorScript, /pendingCommand\.businessDate = businessDayDate;/, '既存の保留中保存コマンドにもopen営業日の日付を補完すること');
+assert.match(attendanceService, /var businessDate = input\.BusinessDate is \{ \} submittedBusinessDate && submittedBusinessDate != default[\s\S]*\? submittedBusinessDate[\s\S]*: _storeClock\.GetCurrentBusinessDate\(\);/, 'サーバー保存はpayloadのopen営業日を優先し、未指定時だけ現在営業日へフォールバックすること');
+assert.match(attendanceService, /input\.BusinessDayRevision,[\s\S]*businessDate,[\s\S]*castEntries,/, 'DB保存へ渡す営業日の日付がサーバー現在日付固定ではないこと');
 
 console.log('Attendance modal contract checks passed.');

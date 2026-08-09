@@ -84,6 +84,10 @@ public sealed class AttendanceApplicationService(
         ClosingAttendanceInputModel input,
         CancellationToken ct)
     {
+        var businessDate = input.BusinessDate is { } submittedBusinessDate && submittedBusinessDate != default
+            ? submittedBusinessDate
+            : _storeClock.GetCurrentBusinessDate();
+
         var castEntries = input.Entries
             .Where(entry => AttendancePersonTypes.Normalize(entry.PersonType) == AttendancePersonTypes.Cast)
             .Where(entry => entry.CastId > 0 && (entry.IsSelected || entry.IsRegistered))
@@ -104,7 +108,7 @@ public sealed class AttendanceApplicationService(
                 EnsureOperationId(input.OperationId),
                 input.BusinessDayId,
                 input.BusinessDayRevision,
-                _storeClock.GetCurrentBusinessDate(),
+                businessDate,
                 castEntries,
                 staffEntries),
             ct);

@@ -35,6 +35,7 @@
     let pendingCommand = null;
     let businessDayId = null;
     let businessDayRevision = null;
+    let businessDayDate = null;
     let pendingSnapshot = null;
     let modalPersonType = 'cast';
     let lastSynchronizedAt = 0;
@@ -328,6 +329,14 @@
             businessDayRevision = snapshot.hasBusinessDay
                 ? Number(snapshot.businessDayRevision ?? snapshot.businessDay?.businessUiRevision ?? 0)
                 : null;
+            businessDayDate = snapshot.hasBusinessDay
+                ? (snapshot.businessDay?.businessDate || snapshot.businessDate || null)
+                : null;
+            if (pendingCommand && !pendingCommand.businessDate && businessDayDate &&
+                (!pendingCommand.businessDayId || Number(pendingCommand.businessDayId) === Number(businessDayId))) {
+                pendingCommand.businessDate = businessDayDate;
+                writePendingCommand();
+            }
 
             rows().forEach((row) => {
                 row.dataset.selected = 'false';
@@ -476,6 +485,7 @@
                 operationId: newOperationId(),
                 businessDayId,
                 businessDayRevision,
+                businessDate: businessDayDate,
                 entries
             };
             writePendingCommand();

@@ -11,6 +11,8 @@ public class ClosingAttendanceInputModel
 
     public long? BusinessDayRevision { get; set; }
 
+    public DateOnly? BusinessDate { get; set; }
+
     public string SelectedCastIds { get; set; } = string.Empty;
 
     public string SelectedAttendanceKeys { get; set; } = string.Empty;
