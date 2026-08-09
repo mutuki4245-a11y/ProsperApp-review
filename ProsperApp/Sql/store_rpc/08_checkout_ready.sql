@@ -224,6 +224,7 @@ begin
 
     return jsonb_build_object(
         'schema_version', 'checkout-statement-v1',
+        'slip_id', v_slip.slip_id,
         'store_name', v_store_name,
         'table_display_name', v_table_display_name,
         'business_date', v_slip.business_date,
@@ -722,6 +723,7 @@ begin
 
     return jsonb_build_object(
         'schema_version', 'checkout-receipt-v2',
+        'slip_id', v_checkout.slip_id,
         'issued_at', v_checkout.checkout_at,
         'particulars', 'ご飲食代として',
         'total_amount', v_checkout.total_amount,

@@ -182,7 +182,6 @@ declare
     v_nomination_fee_item public.store_item_master%rowtype;
     v_order_line_no integer;
     v_customer_count integer;
-    v_slip_no text;
 begin
     select d.company_id
       into v_company_id
@@ -219,9 +218,6 @@ begin
     end if;
 
     v_customer_count := greatest(coalesce(array_length(p_customer_labels, 1), 0), 1);
-    v_slip_no := 'S' || to_char(p_opened_at at time zone 'Asia/Tokyo', 'YYMMDDHH24MISS') ||
-                 '-T' || p_table_id::text ||
-                 '-' || floor(random() * 900 + 100)::integer::text;
 
     insert into public.store_slips (
         company_id,
@@ -231,7 +227,6 @@ begin
         table_id,
         table_code_snapshot,
         table_name_snapshot,
-        slip_no,
         opened_at,
         status,
         customer_count,
@@ -245,7 +240,6 @@ begin
         p_table_id,
         v_table.table_code,
         v_table.table_name,
-        v_slip_no,
         p_opened_at,
         'open',
         v_customer_count,

@@ -42,8 +42,6 @@ public sealed class CastSalesAdjustmentSlip
 {
     public long SlipId { get; init; }
 
-    public string? SlipNo { get; init; }
-
     public long? TableId { get; init; }
 
     public string? TableCode { get; init; }
@@ -90,8 +88,6 @@ public sealed class CastSalesAdjustmentSlip
 public sealed class CastSalesAdjustmentDetail
 {
     public long SlipId { get; init; }
-
-    public string? SlipNo { get; init; }
 
     public long BusinessDayId { get; init; }
 

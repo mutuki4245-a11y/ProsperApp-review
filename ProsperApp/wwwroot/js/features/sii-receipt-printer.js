@@ -171,9 +171,9 @@
         },
         describeReceipt: (request) => {
             const table = compact(request?.tableDisplayName, '-');
-            const slipNo = compact(request?.slipNo, request?.slipId);
+            const slipId = compact(request?.slipId, request?.slip_id, request?.slipNo);
             const amount = Number(request?.totalAmount || 0).toLocaleString('ja-JP');
-            return `${table} / 伝票 ${slipNo} / ${amount}円`;
+            return `${table} / 伝票 ${slipId} / ${amount}円`;
         },
         receiptKey: (request) => compact(request?.checkoutId, `${request?.slipId ?? 'unknown'}:${request?.closedAt ?? Date.now()}`)
     });

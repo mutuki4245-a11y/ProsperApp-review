@@ -276,7 +276,7 @@
                     .filter((value) => value?.trim())
                     .join(' / ');
                 row.append(
-                    makeCell(visit.slipNo || `${index + 1}`.padStart(2, '0')),
+                    makeCell(visit.slipId ? String(visit.slipId) : `${index + 1}`.padStart(2, '0')),
                     makeCell(visit.entryTime),
                     makeCell(visit.tableDisplay),
                     makeCell(`${Number(visit.customerCount) || 0}`),

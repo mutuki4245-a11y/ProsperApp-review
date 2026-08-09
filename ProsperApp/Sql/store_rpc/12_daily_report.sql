@@ -180,7 +180,6 @@ begin
 
     select coalesce(jsonb_agg(jsonb_build_object(
         'slipId', nullif(visit.value->>'id', '')::bigint,
-        'slipNo', visit.value->>'slipNo',
         'entryTime', visit.value->>'openedTime',
         'tableDisplay', visit.value->>'tableDisplay',
         'customerCount', coalesce(nullif(visit.value->>'customerCount', '')::integer, 0),
@@ -530,7 +529,6 @@ begin
 
     select coalesce(jsonb_agg(jsonb_build_object(
         'slipId', nullif(visit.value->>'id', '')::bigint,
-        'slipNo', visit.value->>'slipNo',
         'entryTime', visit.value->>'openedTime',
         'tableDisplay', visit.value->>'tableDisplay',
         'customerCount', coalesce(nullif(visit.value->>'customerCount', '')::integer, 0),

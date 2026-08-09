@@ -186,7 +186,6 @@ public sealed class SupabaseCastSalesAdjustmentRepository(
         return rows.Select(row => new CastSalesAdjustmentSlip
             {
                 SlipId = ReadLong(row, "slip_id") ?? 0,
-                SlipNo = ReadString(row, "slip_no"),
                 TableId = ReadLong(row, "table_id"),
                 TableCode = ReadString(row, "table_code"),
                 TableName = ReadString(row, "table_name"),
@@ -255,7 +254,6 @@ public sealed class SupabaseCastSalesAdjustmentRepository(
         return new CastSalesAdjustmentDetail
         {
             SlipId = ReadLong(first, "slip_id") ?? 0,
-            SlipNo = ReadString(first, "slip_no"),
             BusinessDayId = ReadLong(first, "business_day_id") ?? 0,
             BusinessDate = ReadDateOnly(first, "business_date") ?? default,
             TableCode = ReadString(first, "table_code"),

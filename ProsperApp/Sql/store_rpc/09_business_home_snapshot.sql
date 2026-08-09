@@ -29,7 +29,6 @@ as $$
     target_slips as (
         select
             s.slip_id,
-            s.slip_no,
             s.company_id,
             s.department_id,
             s.table_id,
@@ -287,7 +286,6 @@ as $$
             s.business_home_data,
             jsonb_build_object(
                 'id', s.slip_id,
-                'slipNo', s.slip_no,
                 'tableDisplay', coalesce(nullif(concat_ws(' ', s.table_code, s.table_name), ''), '-'),
                 'openedAt', s.opened_at,
                 'openedTime', to_char(s.opened_at at time zone 'Asia/Tokyo', 'HH24:MI'),

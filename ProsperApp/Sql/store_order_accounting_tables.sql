@@ -730,6 +730,7 @@ create table if not exists public.store_slips (
     table_id bigint,
     table_code_snapshot text,
     table_name_snapshot text,
+    -- Legacy human slip number. New slips leave this null; use slip_id for display and operations.
     slip_no text,
     opened_at timestamp with time zone not null,
     closed_at timestamp with time zone,

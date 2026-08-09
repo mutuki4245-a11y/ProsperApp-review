@@ -56,7 +56,6 @@ create or replace function store.get_cast_sales_adjustment_slips(
 )
 returns table (
     slip_id bigint,
-    slip_no text,
     table_id bigint,
     table_code text,
     table_name text,
@@ -78,7 +77,6 @@ as $$
     with target_slips as (
         select
             s.slip_id,
-            s.slip_no,
             s.table_id,
             s.status,
             case when s.table_code_snapshot is not null then s.table_code_snapshot else t.table_code end as table_code,
@@ -161,7 +159,6 @@ as $$
     )
     select
         ts.slip_id,
-        ts.slip_no,
         ts.table_id,
         ts.table_code,
         ts.table_name,
@@ -193,7 +190,6 @@ create or replace function store.get_cast_sales_adjustment_detail(
 )
 returns table (
     slip_id bigint,
-    slip_no text,
     business_day_id bigint,
     business_date date,
     table_id bigint,
@@ -227,7 +223,6 @@ as $$
     with target as (
         select
             s.slip_id,
-            s.slip_no,
             s.business_day_id,
             s.business_date,
             s.company_id,
@@ -444,7 +439,6 @@ as $$
     )
     select
         t.slip_id,
-        t.slip_no,
         t.business_day_id,
         t.business_date,
         t.table_id,

@@ -91,8 +91,6 @@ public sealed class DailyReportVisit
 {
     public long SlipId { get; init; }
 
-    public string? SlipNo { get; init; }
-
     public string? EntryTime { get; init; }
 
     public string? TableDisplay { get; init; }

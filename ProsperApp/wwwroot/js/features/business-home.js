@@ -462,12 +462,12 @@
         return leftTable.categoryNo - rightTable.categoryNo
             || leftTable.sortOrder - rightTable.sortOrder
             || tableCollator.compare(String(left.tableDisplay || ''), String(right.tableDisplay || ''))
-            || (Number(left.slipNo) || Number(left.id) || 0) - (Number(right.slipNo) || Number(right.id) || 0);
+            || (Number(left.id) || 0) - (Number(right.id) || 0);
     };
     const isCheckoutReady = (slip) => slip?.status === 'checkout_ready' || Boolean(slip?.checkoutPending);
     const isOpenSlip = (slip) => ['open', 'checkout_ready'].includes(slip?.status);
     const compactSlipNumber = (slip) => {
-        const value = String(slip?.slipNo || slip?.id || '');
+        const value = String(slip?.id || '');
         const segments = value.split('-');
         return segments.length > 2 ? segments.slice(-2).join('-') : value;
     };
