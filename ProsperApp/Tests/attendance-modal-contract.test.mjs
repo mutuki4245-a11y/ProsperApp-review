@@ -11,13 +11,14 @@ const exists = async (path) => {
     }
 };
 
-const [program, topPage, topModel, closingPage, closingModel, partial] = await Promise.all([
+const [program, topPage, topModel, closingPage, closingModel, partial, editorScript] = await Promise.all([
     read('Program.cs'),
     read('Pages/Index.cshtml'),
     read('Pages/Index.cshtml.cs'),
     read('Pages/Closing/Index.cshtml'),
     read('Pages/Closing/Index.cshtml.cs'),
-    read('Pages/Shared/_AttendanceEditorModal.cshtml')
+    read('Pages/Shared/_AttendanceEditorModal.cshtml'),
+    read('wwwroot/js/features/attendance-editor.js')
 ]);
 
 assert.equal(await exists('Pages/Attendance.cshtml'), false, '旧 /Attendance Razor page を残さないこと');
@@ -41,5 +42,11 @@ assert.match(partial, /id="attendanceEditorModal"/, '共有勤怠モーダルの
 assert.match(partial, /window\.prosperAttendanceEditor/, '共有部分ビューで勤怠エディタ設定を出力すること');
 assert.match(partial, /currentUrl = Model\.CurrentUrl/, 'current handler URLを呼び出し元から渡すこと');
 assert.match(partial, /saveUrl = Model\.SaveUrl/, 'save handler URLを呼び出し元から渡すこと');
+
+assert.match(editorScript, /const ensureOption = \(select, value, label = value\) =>/, '保存済み時刻が現在の候補外でもselectへ復元できること');
+assert.match(editorScript, /setSelectValue\(clockIn\(row\), entry\.clockInTime, config\.defaultClockInTime\)/, '保存済み出勤時刻を候補へ追加してから選択すること');
+assert.match(editorScript, /setSelectValue\(clockOut\(row\), entry\.clockOutTime, config\.defaultClockOutTime\)/, '保存済み退勤時刻を候補へ追加してから選択すること');
+assert.doesNotMatch(editorScript, /clockIn\(row\)\.value = entry\.clockInTime \|\| config\.defaultClockInTime \|\| '';/, '保存済み出勤時刻を直接代入して候補外時刻を空にしないこと');
+assert.doesNotMatch(editorScript, /clockOut\(row\)\.value = entry\.clockOutTime \|\| config\.defaultClockOutTime \|\| '';/, '保存済み退勤時刻を直接代入して候補外時刻を空にしないこと');
 
 console.log('Attendance modal contract checks passed.');

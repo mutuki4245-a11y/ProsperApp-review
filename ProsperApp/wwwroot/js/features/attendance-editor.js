@@ -124,6 +124,36 @@
         });
     };
 
+    const normalizedSelectValue = (value) => (value ?? '').toString().trim();
+
+    const ensureOption = (select, value, label = value) => {
+        const normalized = normalizedSelectValue(value);
+        if (!select || !normalized) {
+            return normalized;
+        }
+
+        if (Array.from(select.options).some((option) => option.value === normalized)) {
+            return normalized;
+        }
+
+        const option = document.createElement('option');
+        option.value = normalized;
+        option.textContent = normalizedSelectValue(label) || normalized;
+        option.dataset.persistedValue = 'true';
+        select.appendChild(option);
+        return normalized;
+    };
+
+    const setSelectValue = (select, value, fallback = '') => {
+        const normalized = normalizedSelectValue(value);
+        if (normalized) {
+            select.value = ensureOption(select, normalized);
+            return;
+        }
+
+        select.value = normalizedSelectValue(fallback);
+    };
+
     const createDynamicRow = (entry) => {
         if (!editor || !emptyMessage) {
             return null;
@@ -247,10 +277,10 @@
         row.dataset.selected = selected ? 'true' : 'false';
         row.hidden = !selected;
         if (selected && !clockIn(row).value) {
-            clockIn(row).value = config.defaultClockInTime || '';
+            setSelectValue(clockIn(row), config.defaultClockInTime);
         }
         if (selected && !clockOut(row).value) {
-            clockOut(row).value = config.defaultClockOutTime || '';
+            setSelectValue(clockOut(row), config.defaultClockOutTime);
         }
         if (markAsDirty) {
             markDirty();
@@ -261,8 +291,8 @@
     function bindRow(row) {
         const key = personKey(row.dataset.personType, row.dataset.personId);
         rowByKey.set(key, row);
-        clockIn(row).value = config.defaultClockInTime || '';
-        clockOut(row).value = config.defaultClockOutTime || '';
+        setSelectValue(clockIn(row), config.defaultClockInTime);
+        setSelectValue(clockOut(row), config.defaultClockOutTime);
         clockIn(row).addEventListener('change', markDirty);
         clockOut(row).addEventListener('change', markDirty);
         sendService(row).addEventListener('change', markDirty);
@@ -305,8 +335,8 @@
                 row.dataset.attendanceId = '0';
                 row.dataset.version = '';
                 row.hidden = true;
-                clockIn(row).value = config.defaultClockInTime || '';
-                clockOut(row).value = config.defaultClockOutTime || '';
+                setSelectValue(clockIn(row), config.defaultClockInTime);
+                setSelectValue(clockOut(row), config.defaultClockOutTime);
                 sendService(row).checked = false;
                 const registration = row.querySelector('[data-attendance-registration]');
                 if (registration) {
@@ -326,8 +356,8 @@
                 row.dataset.attendanceId = String(entry.attendanceId || 0);
                 row.dataset.version = entry.version || '';
                 row.hidden = false;
-                clockIn(row).value = entry.clockInTime || config.defaultClockInTime || '';
-                clockOut(row).value = entry.clockOutTime || config.defaultClockOutTime || '';
+                setSelectValue(clockIn(row), entry.clockInTime, config.defaultClockInTime);
+                setSelectValue(clockOut(row), entry.clockOutTime, config.defaultClockOutTime);
                 sendService(row).checked = Boolean(entry.usesSendService);
                 const registration = row.querySelector('[data-attendance-registration]');
                 if (registration) {
