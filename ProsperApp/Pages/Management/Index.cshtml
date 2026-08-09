@@ -157,8 +157,9 @@
                 </table>
             </div>
         }
-        <form method="post" asp-page-handler="ClearCache">
-            <button class="btn btn-outline-secondary" type="submit">キャッシュをすべて削除</button>
+        <form method="post" asp-page-handler="ClearCache" data-clear-app-cache>
+            <input type="hidden" name="clientStateCleared" value="false" data-client-state-cleared />
+            <button class="btn btn-outline-secondary" type="submit">キャッシュと未送信キューをすべて削除</button>
         </form>
     </section>
 </section>

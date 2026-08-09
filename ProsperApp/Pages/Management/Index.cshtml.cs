@@ -87,7 +87,7 @@ public class ManagementIndexModel(
             : RedirectToPage("/Index");
     }
 
-    public Task<IActionResult> OnPostClearCacheAsync(CancellationToken ct)
+    public Task<IActionResult> OnPostClearCacheAsync(bool clientStateCleared, CancellationToken ct)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Opening))
         {
@@ -96,7 +96,9 @@ public class ManagementIndexModel(
 
         ct.ThrowIfCancellationRequested();
         var clearedCount = _applicationCache.ClearAll();
-        TempData["SuccessMessage"] = $"アプリ内キャッシュを {clearedCount} 件削除しました。";
+        TempData["SuccessMessage"] = clientStateCleared
+            ? $"アプリ内キャッシュを {clearedCount} 件、端末内の未送信キューを含む保存済みデータを削除しました。"
+            : $"アプリ内キャッシュを {clearedCount} 件削除しました。端末内データはこのブラウザで削除できなかったため、残っている場合があります。";
         return Task.FromResult<IActionResult>(RedirectToPage());
     }
 
