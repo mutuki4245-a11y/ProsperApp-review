@@ -14,8 +14,8 @@ public class QuickEntryInputModel
 
     public string? DriveFileId { get; set; }
 
-    [Display(Name = "支払日")]
-    [Required(ErrorMessage = "支払日を入力してください。")]
+    [Display(Name = "取引日")]
+    [Required(ErrorMessage = "取引日を入力してください。")]
     public DateOnly? PaymentDate { get; set; }
 
     [Display(Name = "金額")]

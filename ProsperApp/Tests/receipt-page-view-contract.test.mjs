@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [markup, pageModel, source, sql] = await Promise.all([
+const [markup, pageModel, inputModel, source, sql, receiptSql] = await Promise.all([
     readFile(new URL('../Pages/Closing/Receipts.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../Pages/Closing/Receipts.cshtml.cs', import.meta.url), 'utf8'),
+    readFile(new URL('../Features/Receipts/QuickEntryInputModel.cs', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/receipt-work-queue.js', import.meta.url), 'utf8'),
-    readFile(new URL('../Sql/store_rpc/21_receipt_work_queue.sql', import.meta.url), 'utf8')
+    readFile(new URL('../Sql/store_rpc/21_receipt_work_queue.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../Sql/store_rpc/06_receipts.sql', import.meta.url), 'utf8')
 ]);
 const closingCss = await readFile(new URL('../wwwroot/css/features/closing.css', import.meta.url), 'utf8');
 
@@ -14,6 +16,7 @@ assert.doesNotMatch(pageModel, /OnGetAsync/, '領収書Razor GETからDB readを
 assert.match(pageModel, /OnGetWorkQueueAsync\(string\? resumeCursor/, 'resume cursor付きwork queue readを持つこと');
 assert.match(pageModel, /OnPostQueueAdvanceAsync/, '保存と除外は単一JSON mutationへ送ること');
 assert.doesNotMatch(pageModel, /SaveQuickEntry|MarkScanMistake|RedirectToPage/, '旧handlerとredirectを残さないこと');
+assert.match(inputModel, /取引日/, '領収書入力日は支払日ではなく取引日として表示すること');
 
 assert.match(markup, /data-receipt-work-queue-form/, '状態非依存の入力shellを描画すること');
 assert.match(markup, /data-receipt-failed-section/, '確定失敗commandの再編集領域を持つこと');
@@ -33,5 +36,8 @@ assert.match(sql, /create or replace function store\.get_current_receipt_work_qu
 assert.match(sql, /create or replace function store\.advance_receipt_work_queue_v2/, '唯一の永続進行mutationを定義すること');
 assert.match(sql, /interval '30 days'/, 'operation結果を30日保持すること');
 assert.match(sql, /request_hash/, '同じoperation IDへ異なる本文を再利用できないこと');
+assert.match(receiptSql, /store_business_day_receipt_expenses/, '領収書支出は入力した営業日へ紐づけること');
+assert.match(sql, /receipt_reimbursement_business_day_required/, '保存時に現在営業日を必須にすること');
+assert.match(sql, /'journal_date', p_payment_date/, '仕訳日は画面入力の取引日を使うこと');
 
 console.log('Receipt work queue contract checks passed.');

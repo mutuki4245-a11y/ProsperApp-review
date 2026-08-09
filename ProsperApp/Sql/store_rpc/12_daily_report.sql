@@ -292,6 +292,38 @@ begin
         coalesce(sum(grouped.amount), 0)
       into v_expense_accounts, v_expense_total
       from (
+        with receipt_expense_entries as (
+            select
+                expense.journal_entry_id
+              from public.store_business_day_receipt_expenses expense
+             where expense.department_id = p_department_id
+               and expense.business_day_id = p_business_day_id
+               and expense.created_at <= coalesce(p_captured_at, clock_timestamp())
+        ),
+        legacy_receipt_entries as (
+            select distinct
+                entry.journal_entry_id
+              from accounting.document_journal_links document_link
+              join accounting.journal_entries entry
+                on entry.journal_entry_id = document_link.journal_entry_id
+              join accounting.journal_entry_lines line
+                on line.journal_entry_id = entry.journal_entry_id
+             where entry.status in ('confirmed', 'ready', 'exported')
+               and line.department_id = p_department_id
+               and upper(line.dc_flag) in ('D', 'DEBIT')
+               and coalesce(entry.created_at, entry.updated_at, p_captured_at, clock_timestamp()) >= v_business_day.opened_at
+               and coalesce(entry.created_at, entry.updated_at, p_captured_at, clock_timestamp()) <= coalesce(v_business_day.closed_at, p_captured_at, clock_timestamp())
+               and not exists (
+                   select 1
+                     from public.store_business_day_receipt_expenses expense
+                    where expense.journal_entry_id = entry.journal_entry_id
+               )
+        ),
+        receipt_entries as (
+            select * from receipt_expense_entries
+            union all
+            select * from legacy_receipt_entries
+        )
         select
             line.account_code,
             coalesce(
@@ -301,20 +333,16 @@ begin
             ) as account_name,
             min(coalesce(account.sort_order, 9999)) as sort_order,
             sum(line.amount) as amount
-          from accounting.journal_entry_lines line
+          from receipt_entries receipt_entry
           join accounting.journal_entries entry
-            on entry.journal_entry_id = line.journal_entry_id
+            on entry.journal_entry_id = receipt_entry.journal_entry_id
+          join accounting.journal_entry_lines line
+            on line.journal_entry_id = receipt_entry.journal_entry_id
           left join accounting.account_master account
             on account.account_code = line.account_code
-         where entry.entry_date = v_business_day.business_date
-           and entry.status in ('confirmed', 'ready', 'exported')
+         where entry.status in ('confirmed', 'ready', 'exported')
            and line.department_id = p_department_id
            and upper(line.dc_flag) in ('D', 'DEBIT')
-           and exists (
-               select 1
-                 from accounting.document_journal_links document_link
-                where document_link.journal_entry_id = entry.journal_entry_id
-           )
          group by line.account_code
       ) grouped;
 

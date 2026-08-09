@@ -319,7 +319,7 @@ Edge Function は allowlist 済みの `store.*` 関数のみを実行する。C#
 
 1. `store.get_current_receipt_work_queue` でresume cursor付きキューを取得する。
 2. Drive ファイルがある場合、許可対象のファイルだけをプレビューする。
-3. 利用者が支払日、金額、科目、摘要を入力する。
+3. 利用者が取引日、金額、科目、摘要を入力する。取引日は領収書上の取引日であり、入力した現在営業日を店舗から従業員へ立替分を返済した営業日として記録する。
 4. 仕訳payloadまたはスキャンミスcommandをIndexedDB outboxへ積み、次票を即時表示する。
 5. `store.advance_receipt_work_queue_v2` へ先頭1件だけ送り、結果不明時は同じ `operation_id` を再送する。
 

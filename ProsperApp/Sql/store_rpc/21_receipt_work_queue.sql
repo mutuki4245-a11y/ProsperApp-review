@@ -180,6 +180,7 @@ declare
     v_error_message text;
     v_error_state text;
     v_queue jsonb;
+    v_current_business_day public.store_business_days%rowtype;
 begin
     if p_department_id <= 0 or
        v_operation_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' or
@@ -265,13 +266,15 @@ begin
                     raise exception 'store_department_not_found';
                 end if;
 
-                if trim(p_account_subject) in ('前渡金: キャスト', '前渡金：キャスト') then
-                    select current_business_day.business_day_id
-                      into v_business_day_id
-                      from store.get_current_business_day_internal(p_department_id) current_business_day;
-                else
-                    v_business_day_id := null;
+                select current_business_day.*
+                  into v_current_business_day
+                  from store.get_current_business_day_internal(p_department_id) current_business_day;
+
+                if v_current_business_day.business_day_id is null then
+                    raise exception 'receipt_reimbursement_business_day_required';
                 end if;
+
+                v_business_day_id := v_current_business_day.business_day_id;
 
                 v_account_code := trim(split_part(replace(p_account_subject, '：', ':'), ':', 1));
                 v_memo := trim(p_description) || case
@@ -366,6 +369,12 @@ begin
                     'status', 'validation_error',
                     'document_id', v_document_id,
                     'message', v_error_message
+                );
+            elsif v_error_message like 'receipt_reimbursement_%' then
+                v_response := jsonb_build_object(
+                    'status', 'validation_error',
+                    'document_id', v_document_id,
+                    'message', '営業日を開始してから領収書を入力してください。'
                 );
             else
                 raise;

@@ -344,7 +344,7 @@
                 );
                 return row;
             },
-            unavailable.has('expenses') ? '旧形式では未保存です。' : '当日支払の領収書支出はありません。',
+            unavailable.has('expenses') ? '旧形式では未保存です。' : '当営業日に入力した領収書支出はありません。',
             2
         );
 

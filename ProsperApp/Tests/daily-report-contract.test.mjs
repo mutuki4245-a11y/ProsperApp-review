@@ -13,6 +13,8 @@ assert.match(sql, /create or replace function store\.build_business_day_daily_re
 assert.match(sql, /create or replace function store\.get_business_day_daily_report/i);
 assert.match(sql, /store_business_day_closing_snapshots/i);
 assert.match(sql, /daily_report_closing_snapshot_not_found/i);
+assert.match(sql, /store_business_day_receipt_expenses/i, '日報支出は領収書を入力した営業日で集計すること');
+assert.doesNotMatch(sql, /where\s+entry\.entry_date\s*=\s*v_business_day\.business_date/i, '日報支出を取引日だけで集計しないこと');
 assert.match(repository, /store\.get_business_day_daily_report/);
 assert.match(pageModel, /OnGetDailyReportAsync/);
 assert.match(closeSource, /prosper:daily-report-business-day/);

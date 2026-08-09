@@ -37,6 +37,7 @@
     let loading = false;
     let retryTimer = null;
     let editingFailedIndex = null;
+    const businessDayRequiredMessage = '営業日を開始してから領収書を入力してください。';
 
     const openDatabase = () => new Promise((resolve, reject) => {
         const request = indexedDB.open(dbName, 1);
@@ -163,7 +164,14 @@
         renderPreview(item);
         renderAdvanceCasts();
         fillForm(item, values);
-        form.querySelectorAll('button[type="submit"]').forEach((button) => { button.disabled = !item; });
+        if (item && !businessDay?.businessDayId) {
+            setError(businessDayRequiredMessage);
+        } else if (errorElement?.textContent === businessDayRequiredMessage) {
+            setError();
+        }
+        form.querySelectorAll('button[type="submit"]').forEach((button) => {
+            button.disabled = !item || (button.dataset.receiptQueueAction === 'save' && !businessDay?.businessDayId);
+        });
     };
     const mergeQueuePayload = (payload) => {
         if (Object.hasOwn(payload, 'businessDay')) businessDay = payload.businessDay;

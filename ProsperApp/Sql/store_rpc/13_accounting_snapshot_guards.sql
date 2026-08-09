@@ -693,6 +693,7 @@ begin
         'store_slip_cast_backs',
         'store_business_day_drink_back_adjustments',
         'store_business_day_cast_advances',
+        'store_business_day_receipt_expenses',
         'store_slip_charge_lines',
         'store_checkouts',
         'store_checkout_payments',
@@ -720,6 +721,7 @@ revoke all on table public.store_slip_accounting_snapshots from public, anon, au
 revoke all on table public.store_business_day_closing_snapshots from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_drink_back_adjustments from public, anon, authenticated, service_role;
 revoke all on table public.store_business_day_cast_advances from public, anon, authenticated, service_role;
+revoke all on table public.store_business_day_receipt_expenses from public, anon, authenticated, service_role;
 revoke all on table public.store_staff_attendance from public, anon, authenticated, service_role;
 revoke all on table public.store_staff_master from public, anon, authenticated, service_role;
 revoke execute on function store.get_business_day_snapshot_at(bigint, bigint, timestamp with time zone) from public, anon, authenticated, service_role;
