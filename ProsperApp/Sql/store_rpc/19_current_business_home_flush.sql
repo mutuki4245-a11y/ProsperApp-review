@@ -317,14 +317,29 @@ begin
                 then 'conflict'
             else 'validation_error'
         end;
-        v_operation_results := jsonb_build_array(jsonb_build_object(
-            'operation_id', coalesce(v_operation_id, ''),
+        select coalesce(jsonb_agg(jsonb_build_object(
+            'operation_id', lower(trim(coalesce(line.value->>'operation_id', ''))),
+            'client_draft_id', nullif(trim(coalesce(line.value->>'client_draft_id', '')), ''),
+            'slip_id', nullif(trim(coalesce(line.value->>'slip_id', '')), ''),
             'succeeded', false,
             'status', v_result_status,
             'message', coalesce(v_error_message, 'business_home_sync_failed'),
             'sqlstate', coalesce(v_error_state, '')
-        ));
-        v_karaoke_results := '[]'::jsonb;
+        ) order by line.ordinal), '[]'::jsonb)
+          into v_operation_results
+          from jsonb_array_elements(p_operations) with ordinality line(value, ordinal);
+
+        select coalesce(jsonb_agg(jsonb_build_object(
+            'operation_id', lower(trim(coalesce(line.value->>'operation_id', line.value->>'draft_id', ''))),
+            'draft_id', lower(trim(coalesce(line.value->>'draft_id', line.value->>'operation_id', ''))),
+            'slip_id', nullif(trim(coalesce(line.value->>'slip_id', '')), ''),
+            'succeeded', false,
+            'status', v_result_status,
+            'message', coalesce(v_error_message, 'business_home_sync_failed'),
+            'sqlstate', coalesce(v_error_state, '')
+        ) order by line.ordinal), '[]'::jsonb)
+          into v_karaoke_results
+          from jsonb_array_elements(p_karaoke_lines) with ordinality line(value, ordinal);
     end;
 
     select current_snapshot.business_day,

@@ -34,6 +34,7 @@
     const proceedPaymentButton = root.querySelector('[data-business-proceed-payment]');
     const storagePrefix = 'prosper:checkout-statement:v1:';
     const receiptStoragePrefix = 'prosper:checkout-receipt:v2:';
+    const saveResponse = window.ProsperSaveResponse;
     const fallbackPaymentMethods = [
         { methodCode: 'cash', methodName: '現金', requiresReceivedAmount: true },
         { methodCode: 'cat', methodName: 'クレジット', requiresReceivedAmount: false },
@@ -97,6 +98,7 @@
     const yen = (value) => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
     const token = () => sourceForm.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
     const showDialogAlert = async (value) => {
+        window.AppLoading?.hide();
         if (window.AppConfirm?.alert) {
             await window.AppConfirm.alert(value);
             return;
@@ -105,6 +107,7 @@
         window.alert(value);
     };
     const showDialogConfirm = async (value) => {
+        window.AppLoading?.hide();
         if (window.AppConfirm?.confirm) {
             return window.AppConfirm.confirm(value);
         }
@@ -202,15 +205,20 @@
                 body: JSON.stringify(command)
             });
             const data = await response.json().catch(() => null);
+            const classification = saveResponse?.classify({ response, payload: data }) ?? {
+                confirmed: data?.status === 'confirmed',
+                terminal: ['confirmed', 'conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(data?.status),
+                retry: !data || response.status >= 500 || data?.status === 'unavailable'
+            };
             if (data?.businessSnapshot) {
                 document.dispatchEvent(new CustomEvent('prosper:business-home-mutation-confirmed', {
                     detail: { snapshot: data.businessSnapshot }
                 }));
             }
-            if (['confirmed', 'conflict', 'validation_error', 'permission_denied'].includes(data?.status)) {
+            if (classification.terminal) {
                 deletePendingMutation(commandKey);
             }
-            if (!response.ok || data?.status !== 'confirmed') {
+            if (!classification.confirmed) {
                 throw new Error(data?.message || '会計処理に失敗しました。');
             }
             deletePendingMutation(commandKey);

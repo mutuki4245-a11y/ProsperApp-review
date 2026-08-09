@@ -19,6 +19,7 @@
     const castMasterStore = window.ProsperSync && departmentId > 0
         ? window.ProsperSync.getStore(`closing-cast-master:${departmentId}:v1`)
         : null;
+    const saveResponse = window.ProsperSaveResponse;
     let dashboard = null;
     let refreshInFlight = null;
     let memoDirty = Boolean(memo?.value?.trim());
@@ -344,8 +345,12 @@
                 body: JSON.stringify(command)
             });
             const result = await response.json().catch(() => null);
-            const definitiveStatuses = new Set(['confirmed', 'conflict', 'validation_error', 'permission_denied']);
-            if (!result || !definitiveStatuses.has(result.status)) {
+            const classification = saveResponse?.classify({ response, payload: result }) ?? {
+                confirmed: result?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(result?.status),
+                retry: !result || response.status >= 500 || result?.status === 'unavailable'
+            };
+            if (!result || classification.retry) {
                 throw new Error(result?.message || '締め結果を確認できませんでした。');
             }
 
@@ -354,7 +359,7 @@
                 renderDashboard(result.dashboard);
             }
 
-            if (result.status === 'confirmed') {
+            if (classification.confirmed) {
                 memoDirty = false;
                 finalFeedback = { state: 'done', message: result.message || '営業日を締めました。' };
                 if (result.reportBusinessDayId) {
@@ -388,6 +393,7 @@
     });
     override?.addEventListener('change', renderFinal);
     document.querySelector('[data-closing-retry]')?.addEventListener('click', () => void refresh());
+    window.addEventListener('prosper:attendance-editor-saved', () => void refresh());
     finalForm?.addEventListener('submit', (event) => {
         event.preventDefault();
         const command = pendingCloseCommand || createCloseCommand();

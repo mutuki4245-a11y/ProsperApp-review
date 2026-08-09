@@ -33,14 +33,14 @@
             <span class="closing-panel__action" data-closing-action>開く</span>
         </a>
 
-        <a class="closing-panel is-preparing" href="@Url.Content("~/Closing/Attendance")" data-closing-panel="attendance">
+        <button class="closing-panel is-preparing" type="button" data-closing-panel="attendance" data-bs-toggle="modal" data-bs-target="#attendanceEditorModal">
             <span class="closing-panel__body">
                 <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">3</span><span>勤怠確認</span></strong>
                 <small data-closing-message>状態を確認しています。</small>
             </span>
             <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
             <span class="closing-panel__action" data-closing-action>確認/修正</span>
-        </a>
+        </button>
 
         <a class="closing-panel is-preparing" asp-page="/Closing/CastSalesAdjustment" data-closing-panel="castSalesAdjustment">
             <span class="closing-panel__body">
@@ -96,6 +96,11 @@
             <output class="terminal-save-status closing-final__status" data-closing-final-status data-save-state="saving" aria-live="polite">締め条件を確認しています。</output>
         </form>
     </section>
+
+    @if (Model.AttendanceModal is not null)
+    {
+        <partial name="_AttendanceEditorModal" model="Model.AttendanceModal" />
+    }
 
     <section class="daily-report"
              aria-labelledby="dailyReportTitle"
@@ -244,6 +249,11 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    @if (Model.AttendanceModal?.State.LoadIssues.Count == 0 &&
+        Model.AttendanceModal.State.Input.Entries.Count > 0)
+    {
+        <script src="~/js/features/attendance-editor.js" asp-append-version="true"></script>
+    }
     <script src="~/js/features/daily-report.js" asp-append-version="true"></script>
     <script src="~/js/features/closing-dashboard.js" asp-append-version="true"></script>
 }

@@ -123,7 +123,7 @@ public sealed class BusinessHomeApplicationService(
                     result.OperationResults,
                     result.KaraokeResults))
             : Result<BusinessHomeFlushOutput>.Failure(
-                ResultFailureKind.Unavailable,
+                result.FailureKind ?? ResultFailureKind.Unavailable,
                 result.ErrorMessage ?? "営業中の変更を保存できませんでした。");
     }
 

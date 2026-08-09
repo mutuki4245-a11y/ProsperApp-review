@@ -32,6 +32,7 @@
     const castRows = root.querySelector('[data-cast-sales-casts]');
     const saveButton = root.querySelector('[data-cast-sales-save]');
     const antiForgeryToken = root.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+    const saveResponse = window.ProsperSaveResponse;
     const yenFormatter = new Intl.NumberFormat('ja-JP', {
         style: 'currency',
         currency: 'JPY',
@@ -409,7 +410,12 @@
 
         try {
             const { response, payload } = await postCommand(url, command);
-            if (response.ok && payload?.status === 'confirmed') {
+            const classification = saveResponse?.classify({ response, payload }) ?? {
+                confirmed: payload?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(payload?.status),
+                retry: !payload || response.status >= 500 || payload?.status === 'unavailable'
+            };
+            if (classification.confirmed) {
                 applyConfirmed(payload, kind);
                 clearPendingMutation();
                 if (kind === 'save') {
@@ -420,7 +426,7 @@
                 return;
             }
 
-            if (response.status === 409 || payload?.status === 'conflict') {
+            if (classification.rejected) {
                 clearPendingMutation();
                 if (payload?.latestOverview) {
                     overview = payload.latestOverview;
@@ -430,18 +436,12 @@
                 } else if (kind === 'save') {
                     setEditorDisabled(false);
                 }
-                showError(payload?.message ?? '他の端末で会計または調整内容が更新されました。最新の内容を確認してください。');
-                setStatus('競合を検出したため保存していません。', 'error');
-                return;
-            }
-
-            if (response.status >= 400 && response.status < 500) {
-                clearPendingMutation();
-                if (kind === 'save') {
-                    setEditorDisabled(false);
-                }
-                showError(payload?.message ?? '入力内容を確認してください。');
-                setStatus('入力内容を保存できませんでした。', 'error');
+                showError(payload?.message ?? (payload?.status === 'conflict'
+                    ? '他の端末で会計または調整内容が更新されました。最新の内容を確認してください。'
+                    : '入力内容を確認してください。'));
+                setStatus(payload?.status === 'conflict'
+                    ? '競合を検出したため保存していません。'
+                    : 'DB側で保存が拒否されました。', 'error');
                 return;
             }
 

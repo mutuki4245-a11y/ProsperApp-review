@@ -5,6 +5,7 @@
     }
 
     const store = window.ProsperSync.getStore(`management-master:${config.departmentId}:v1`);
+    const saveResponse = window.ProsperSaveResponse;
     const areaPayloadKeys = Object.freeze({
         tables: 'tables',
         casts: 'casts',
@@ -101,7 +102,14 @@
                 })
             });
         } catch (error) {
-            if (Number(error?.status) > 0 && Number(error.status) < 500) {
+            const classification = saveResponse?.classify({
+                response: { ok: false, status: Number(error?.status) || 0 },
+                payload: error?.payload
+            }) ?? {
+                rejected: Number(error?.status) > 0 && Number(error.status) < 500,
+                retry: !error?.payload || Number(error?.status) >= 500
+            };
+            if (classification.rejected) {
                 pendingMutation = null;
                 writePendingMutation(null);
             }

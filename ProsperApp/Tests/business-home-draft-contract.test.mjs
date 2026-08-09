@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [markup, source, createSlipSource, operationContract, applicationService] = await Promise.all([
+const [markup, source, createSlipSource, operationContract, applicationService, flushSql] = await Promise.all([
     readFile(new URL('../Pages/Index.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/business-home.js', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/create-slip-modal.js', import.meta.url), 'utf8'),
     readFile(new URL('../Features/BusinessHome/BusinessHomeOperationContract.cs', import.meta.url), 'utf8'),
-    readFile(new URL('../Features/BusinessHome/BusinessHomeApplicationService.cs', import.meta.url), 'utf8')
+    readFile(new URL('../Features/BusinessHome/BusinessHomeApplicationService.cs', import.meta.url), 'utf8'),
+    readFile(new URL('../Sql/store_rpc/19_current_business_home_flush.sql', import.meta.url), 'utf8')
 ]);
 
 const operationTypes = [
@@ -42,8 +43,12 @@ assert.match(source, /if \(!editorOperationTypes\.has\(operation\?\.operationTyp
 assert.match(createSlipSource, /prosper:create-slip-draft:v2:\$\{departmentId\}/, '作成伝票の入力を店舗単位で永続化すること');
 assert.match(createSlipSource, /pendingCreateCommand/, '結果不明の作成commandを保持すること');
 assert.match(createSlipSource, /sessionStorage|localStorage\.setItem\(draftStorageKey/, '作成伝票の下書きをbrowser storageへ保存すること');
-assert.match(createSlipSource, /const definitive = result\?\.status === 'validation_error' \|\| result\?\.status === 'conflict'/, '確定した業務エラーだけ旧operationを破棄すること');
+assert.match(createSlipSource, /saveResponse\?\.isRejectedStatus\(result\?\.status\)/, '確定した業務エラーだけ旧operationを破棄すること');
 assert.match(createSlipSource, /syncPendingCommandControls/, '結果不明commandの編集中変更を防ぐこと');
+assert.match(source, /classifyRow/, '営業中flushは行単位で保存応答を分類すること');
+assert.match(source, /pendingFlushBatch[\s\S]*保存結果を確認できません/, '応答不明時はbatch IDを保持して再送すること');
+assert.match(flushSql, /jsonb_array_elements\(p_operations\) with ordinality[\s\S]*'succeeded', false/, 'DB拒否時もoperation全行へ拒否結果を返すこと');
+assert.match(flushSql, /jsonb_array_elements\(p_karaoke_lines\) with ordinality[\s\S]*'succeeded', false/, 'DB拒否時もkaraoke全行へ拒否結果を返すこと');
 
 for (const operationType of operationTypes) {
     assert.equal(source.includes(`'${operationType}'`), true, `${operationType} をJS契約表に含めること`);

@@ -99,7 +99,12 @@
                             新しい伝票
                         </button>
                     }
-                    <a class="btn sales-summary__attendance business-floor__attendance" asp-page="/Attendance">勤怠管理</a>
+                    <button class="btn sales-summary__attendance business-floor__attendance"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#attendanceEditorModal">
+                        勤怠管理
+                    </button>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(Model.CreateSlipDisabledMessage))
                 {
@@ -491,6 +496,11 @@
             </div>
         </div>
     }
+
+    @if (Model.AttendanceModal is not null)
+    {
+        <partial name="_AttendanceEditorModal" model="Model.AttendanceModal" />
+    }
 </section>
 
 @section Scripts {
@@ -586,6 +596,11 @@
     <script src="~/js/features/business-home.js" asp-append-version="true"></script>
     <script src="~/js/features/business-slip-editor.js" asp-append-version="true"></script>
     <script src="~/js/features/business-checkout.js" asp-append-version="true"></script>
+    @if (Model.AttendanceModal?.State.LoadIssues.Count == 0 &&
+        Model.AttendanceModal.State.Input.Entries.Count > 0)
+    {
+        <script src="~/js/features/attendance-editor.js" asp-append-version="true"></script>
+    }
     <script>
         window.prosperCreateSlip = @Json.Serialize(new
         {

@@ -23,6 +23,7 @@
     const showCreateSlipModal = Boolean(config.showCreateSlipModal);
     const departmentId = window.ProsperBusinessHomeConfig?.departmentId;
     const draftStorageKey = departmentId ? `prosper:create-slip-draft:v2:${departmentId}` : '';
+    const saveResponse = window.ProsperSaveResponse;
     let pendingCreateCommand = null;
     let isSubmitting = false;
     let isRestoringDraft = false;
@@ -594,7 +595,10 @@
             syncCreateAvailability();
             const result = await window.ProsperBusinessHome?.enqueueAndFlushOperation?.(pendingCreateCommand);
             if (result?.status !== 'confirmed' || result?.operationResult?.succeeded !== true) {
-                const definitive = result?.status === 'validation_error' || result?.status === 'conflict';
+                const failedOperation = result?.operationResult ||
+                    result?.operationResults?.find?.((row) => row?.succeeded === false);
+                const definitive = saveResponse?.isRejectedStatus(result?.status) ||
+                    saveResponse?.isRejectedStatus(failedOperation?.status);
                 if (definitive) {
                     window.ProsperBusinessHome?.discardOperation?.(pendingCreateCommand.operationId);
                     setPendingCreateCommand(null);

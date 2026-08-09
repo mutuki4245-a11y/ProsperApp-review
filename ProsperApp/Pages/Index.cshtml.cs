@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
+using ProsperApp.Features.Attendance;
 using ProsperApp.Features.BusinessHome;
 using ProsperApp.Features.Shared;
 using ProsperApp.Options;
@@ -12,12 +13,14 @@ namespace ProsperApp.Pages;
 public class IndexModel(
     IFeatureGate featureGate,
     IBusinessHomeApplicationService businessHomeApplicationService,
+    IAttendanceApplicationService attendanceApplicationService,
     ILocalSettingsProvider localSettingsProvider,
     IOptions<ReceiptPrinterOptions> receiptPrinterOptions,
     IStoreClock storeClock) : PageModel
 {
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IBusinessHomeApplicationService _businessHomeApplicationService = businessHomeApplicationService;
+    private readonly IAttendanceApplicationService _attendanceApplicationService = attendanceApplicationService;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly ReceiptPrinterOptions _receiptPrinterOptions = receiptPrinterOptions.Value;
     private readonly IStoreClock _storeClock = storeClock;
@@ -44,6 +47,8 @@ public class IndexModel(
     public string? PaymentMethodsLoadError { get; private set; }
 
     public IReadOnlyList<PageLoadIssue> LoadIssues { get; private set; } = [];
+
+    public AttendanceModalViewModel? AttendanceModal { get; private set; }
 
     public DateTimeOffset? LastUpdatedAt { get; private set; }
 
@@ -144,8 +149,74 @@ public class IndexModel(
 
         await LoadAsync(cancellationToken, includeAttendanceCasts: true);
         SetDefaultCreateSlipInput();
+        await LoadAttendanceModalAsync(isClosingContext: false, cancellationToken);
         SuccessMessage = TempData["SuccessMessage"] as string;
         return Page();
+    }
+
+    public async Task<IActionResult> OnGetAttendanceCurrentAsync(
+        long? knownBusinessDayId,
+        long? knownBusinessDayRevision,
+        CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        var result = await _attendanceApplicationService.ReadCurrentAsync(
+            knownBusinessDayId,
+            knownBusinessDayRevision,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            return new JsonResult(new
+            {
+                status = ToSaveStatus(result.FailureKind),
+                message = result.ErrorMessage ?? "現在の勤怠入力を取得できませんでした。"
+            })
+            {
+                StatusCode = ToStatusCode(result.FailureKind)
+            };
+        }
+
+        return new JsonResult(result.Value);
+    }
+
+    public async Task<IActionResult> OnPostAttendanceSaveAsync(
+        [FromBody] ClosingAttendanceInputModel input,
+        CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        var result = await _attendanceApplicationService.SaveAsync(input, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return new JsonResult(new
+            {
+                status = ToSaveStatus(result.FailureKind),
+                message = result.ErrorMessage ?? "勤怠入力を保存できませんでした。"
+            })
+            {
+                StatusCode = ToStatusCode(result.FailureKind)
+            };
+        }
+
+        var output = result.Value;
+        return new JsonResult(output)
+        {
+            StatusCode = output.Status switch
+            {
+                "conflict" => StatusCodes.Status409Conflict,
+                "validation_error" => StatusCodes.Status400BadRequest,
+                "permission_denied" => StatusCodes.Status403Forbidden,
+                "stale_work_item" => StatusCodes.Status409Conflict,
+                _ => StatusCodes.Status200OK
+            }
+        };
     }
 
     public async Task<IActionResult> OnGetBusinessSlipsAsync(long? knownRevision, CancellationToken cancellationToken)
@@ -196,12 +267,11 @@ public class IndexModel(
             var error = new
             {
                 succeeded = false,
+                status = ToSaveStatus(result.FailureKind),
                 batchId = input.BatchId,
                 message = result.ErrorMessage ?? "営業中の変更を保存できませんでした。"
             };
-            return result.FailureKind is ResultFailureKind.Unavailable or ResultFailureKind.NotConfigured
-                ? StatusCode(StatusCodes.Status503ServiceUnavailable, error)
-                : BadRequest(error);
+            return StatusCode(ToStatusCode(result.FailureKind), error);
         }
 
         var output = result.Value;
@@ -220,6 +290,10 @@ public class IndexModel(
         {
             "confirmed" => new JsonResult(payload),
             "conflict" => StatusCode(StatusCodes.Status409Conflict, payload),
+            "validation_error" => BadRequest(payload),
+            "permission_denied" => StatusCode(StatusCodes.Status403Forbidden, payload),
+            "stale_work_item" => StatusCode(StatusCodes.Status409Conflict, payload),
+            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, payload),
             _ => BadRequest(payload)
         };
     }
@@ -341,12 +415,10 @@ public class IndexModel(
             var payload = new
             {
                 succeeded = false,
-                status = result.FailureKind == ResultFailureKind.InvalidInput ? "validation_error" : "unavailable",
+                status = ToSaveStatus(result.FailureKind),
                 message = result.ErrorMessage ?? fallbackMessage
             };
-            return result.FailureKind == ResultFailureKind.InvalidInput
-                ? BadRequest(payload)
-                : StatusCode(StatusCodes.Status503ServiceUnavailable, payload);
+            return StatusCode(ToStatusCode(result.FailureKind), payload);
         }
 
         var output = result.Value;
@@ -372,6 +444,10 @@ public class IndexModel(
         {
             "confirmed" => new JsonResult(mutationPayload),
             "conflict" => StatusCode(StatusCodes.Status409Conflict, mutationPayload),
+            "validation_error" => BadRequest(mutationPayload),
+            "permission_denied" => StatusCode(StatusCodes.Status403Forbidden, mutationPayload),
+            "stale_work_item" => StatusCode(StatusCodes.Status409Conflict, mutationPayload),
+            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, mutationPayload),
             _ => BadRequest(mutationPayload)
         };
     }
@@ -399,6 +475,21 @@ public class IndexModel(
             .FirstOrDefault(issue => string.Equals(issue.Area, "決済方法", StringComparison.Ordinal))
             ?.Message;
         TimeOptions = _storeClock.BuildTimeOptions(5);
+    }
+
+    private async Task LoadAttendanceModalAsync(bool isClosingContext, CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return;
+        }
+
+        var state = await _attendanceApplicationService.LoadShellAsync(cancellationToken);
+        AttendanceModal = new AttendanceModalViewModel(
+            state,
+            Url.Page("/Index", "AttendanceCurrent") ?? string.Empty,
+            Url.Page("/Index", "AttendanceSave") ?? string.Empty,
+            isClosingContext);
     }
 
     private void SetDefaultCreateSlipInput()
@@ -462,6 +553,23 @@ public class IndexModel(
 
     private IActionResult CheckoutJsonError(string message, int statusCode = 400) =>
         new JsonResult(new { succeeded = false, message }) { StatusCode = statusCode };
+
+    private static int ToStatusCode(ResultFailureKind? failureKind) => failureKind switch
+    {
+        ResultFailureKind.InvalidInput => StatusCodes.Status400BadRequest,
+        ResultFailureKind.Conflict => StatusCodes.Status409Conflict,
+        ResultFailureKind.NotConfigured => StatusCodes.Status503ServiceUnavailable,
+        ResultFailureKind.PermissionDenied => StatusCodes.Status403Forbidden,
+        _ => StatusCodes.Status503ServiceUnavailable
+    };
+
+    private static string ToSaveStatus(ResultFailureKind? failureKind) => failureKind switch
+    {
+        ResultFailureKind.InvalidInput => "validation_error",
+        ResultFailureKind.Conflict => "conflict",
+        ResultFailureKind.PermissionDenied => "permission_denied",
+        _ => "unavailable"
+    };
 
     private sealed record CheckoutSlipRequest(long SlipId);
 

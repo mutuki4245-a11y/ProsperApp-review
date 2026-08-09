@@ -150,7 +150,9 @@
         if (descriptionInput) descriptionInput.value = values?.description || '';
         if (groupCodeInput) groupCodeInput.value = values?.groupCode || '';
         document.querySelectorAll('[data-account-value]').forEach((button) => {
-            button.classList.toggle('is-selected', button.dataset.accountValue === accountSubjectInput?.value);
+            const selected = button.dataset.accountValue === accountSubjectInput?.value;
+            button.classList.toggle('is-selected', selected);
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
         });
         syncCastAdvance();
     };
@@ -252,7 +254,7 @@
             });
             const result = await response.json().catch(() => null);
             if (!response.ok || result?.succeeded !== true) {
-                if (response.status < 500 && result?.status !== 'unavailable') {
+                if (window.ProsperSaveResponse?.isRejectedStatus(result?.status)) {
                     state.pending.shift(); state.failed.push({ ...command, message: result?.message || '保存内容を確認してください。' });
                     await writeState(); renderStatus(); renderFailures();
                     return;
@@ -262,7 +264,7 @@
             mergeQueuePayload(result);
             if (result.status === 'confirmed') {
                 state.pending.shift();
-            } else if (result.status === 'validation_error' || result.status === 'stale_work_item') {
+            } else if (window.ProsperSaveResponse?.isRejectedStatus(result.status)) {
                 state.pending.shift(); state.failed.push({ ...command, message: result.message || '保存内容を確認してください。' });
             } else {
                 throw new Error('unavailable');
@@ -303,7 +305,11 @@
         button.addEventListener('click', () => {
             accountSubjectInput.value = button.dataset.accountValue || '';
             accountSubjectSelected.textContent = accountSubjectInput.value || '科目を選択してください';
-            document.querySelectorAll('[data-account-value]').forEach((candidate) => candidate.classList.toggle('is-selected', candidate === button));
+            document.querySelectorAll('[data-account-value]').forEach((candidate) => {
+                const selected = candidate === button;
+                candidate.classList.toggle('is-selected', selected);
+                candidate.setAttribute('aria-pressed', selected ? 'true' : 'false');
+            });
             window.bootstrap?.Modal.getInstance(document.getElementById('accountSubjectModal'))?.hide();
             syncCastAdvance();
         });

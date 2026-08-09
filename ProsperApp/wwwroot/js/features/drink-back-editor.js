@@ -25,6 +25,7 @@
     const error = root.querySelector('[data-drink-back-error]');
     const success = root.querySelector('[data-drink-back-success]');
     const submit = root.querySelector('[data-drink-back-submit]');
+    const saveResponse = window.ProsperSaveResponse;
     const amountLimit = 999999999999;
     let editor = null;
     let activeCasts = [];
@@ -363,14 +364,19 @@
                 body: JSON.stringify(pendingCommand)
             });
             const result = await response.json().catch(() => null);
-            const definitive = result?.status === 'conflict' || result?.status === 'validation_error';
+            const classification = saveResponse?.classify({ response, payload: result }) ?? {
+                confirmed: result?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(result?.status),
+                retry: !result || response.status >= 500 || result?.status === 'unavailable'
+            };
+            const definitive = classification.rejected;
             if (definitive && result?.editor) {
                 draftCommand = pendingCommand;
                 pendingCommand = null;
                 persistPendingCommand();
                 applyState(result.editor, null, null, { preserveDraft: true });
             }
-            if (!response.ok || result?.status !== 'confirmed') {
+            if (!classification.confirmed) {
                 throw new Error(friendlyMessage(result?.message) || (definitive
                     ? '最新状態を反映しました。入力内容を確認して再度保存してください。'
                     : 'ドリンクバック調整を保存できませんでした。'));

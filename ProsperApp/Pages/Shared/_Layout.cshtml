@@ -8,9 +8,8 @@
     var appleStatusBarStyle = isDarkTheme ? "black-translucent" : "default";
     var currentPath = Context.Request.Path.Value ?? "/";
     var isOrdersPage = currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase);
-    var isSalesAttendance = currentPath.StartsWith("/Attendance", StringComparison.OrdinalIgnoreCase);
     var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase);
-    var isSalesActive = currentPath == "/" || isSalesAttendance;
+    var isSalesActive = currentPath == "/";
     var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
     var isSettingsActive = currentPath.StartsWith("/Settings", StringComparison.OrdinalIgnoreCase);
     var bodyClass = isOrdersPage
@@ -150,6 +149,7 @@
         })();
     </script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/save-response.js" asp-append-version="true"></script>
     <script src="~/js/sync-store.js" asp-append-version="true"></script>
     @if (isManagementActive)
     {

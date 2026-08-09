@@ -9,6 +9,7 @@
     const slipOptionsUrl = pageData.slipOptionsUrl || '';
     const submitUrl = pageData.submitUrl || '';
     const refreshIntervalMs = pageData.refreshIntervalMs || 10000;
+    const saveResponse = window.ProsperSaveResponse;
 
     const selectedSlipInput = document.getElementById('selectedSlipId');
     const orderForm = document.getElementById('orderForm');
@@ -682,11 +683,16 @@
                 body: JSON.stringify(pendingSubmitCommand)
             });
             const result = await response.json().catch(() => null);
-            if (!response.ok || result?.status !== 'confirmed') {
+            const classification = saveResponse?.classify({ response, payload: result }) ?? {
+                confirmed: result?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(result?.status),
+                retry: !result || response.status >= 500 || result?.status === 'unavailable'
+            };
+            if (!classification.confirmed) {
                 if (result?.recoveryCandidates) {
                     applyRecoveryCandidates(result.recoveryCandidates);
                 }
-                if (['conflict', 'validation_error'].includes(result?.status)) {
+                if (classification.rejected) {
                     pendingSubmitCommand = null;
                     persistDraft();
                 }

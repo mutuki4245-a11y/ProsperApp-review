@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Features.Slips;
@@ -150,6 +151,8 @@ public class BusinessHomeChangeFlushResult
 
     public string? ErrorMessage { get; init; }
 
+    public ResultFailureKind? FailureKind { get; init; }
+
     public string Status { get; init; } = "unavailable";
 
     public JsonElement BusinessDay { get; init; }
@@ -179,10 +182,15 @@ public class BusinessHomeChangeFlushResult
         KaraokeResults = karaokeResults
     };
 
-    public static BusinessHomeChangeFlushResult Failed(string message) => new()
+    public static BusinessHomeChangeFlushResult Failed(
+        string message,
+        ResultFailureKind failureKind = ResultFailureKind.Unavailable,
+        string status = "unavailable") => new()
     {
         Succeeded = false,
-        ErrorMessage = message
+        ErrorMessage = message,
+        FailureKind = failureKind,
+        Status = status
     };
 }
 

@@ -47,6 +47,7 @@
         ? config.initialSnapshot
         : null;
     const flushBusinessHomeChangesUrl = config.flushBusinessHomeChangesUrl || '';
+    const saveResponse = window.ProsperSaveResponse;
     const draftStorageKey = config.departmentId
         ? `prosper:business-home-draft:v2:${config.departmentId}`
         : '';
@@ -520,8 +521,8 @@
         const storedBatch = draft.pendingFlushBatch;
         if (storedBatch?.batchId && Array.isArray(storedBatch.operations)) {
             const restoredBatchOperations = storedBatch.operations
-                .map((operation) => pendingOperations.get(String(operation.operationId)))
-                .filter(Boolean);
+                .map((operation) => pendingOperations.get(String(operation.operationId)) || operation)
+                .filter((operation) => operation?.operationId);
             if (restoredBatchOperations.length === storedBatch.operations.length) {
                 restoredBatchOperations.forEach((operation) => { operation.state = 'saving'; });
                 pendingFlushBatch = {
@@ -1695,10 +1696,10 @@
 
     const queueNoticeForFailedRows = (operationResults, karaokeResults) => {
         const messages = [];
-        operationResults.filter((row) => row?.succeeded === false).forEach((row) => {
+        operationResults.filter((row) => saveResponse?.classifyRow(row).rejected).forEach((row) => {
             messages.push(friendlyFlushError(row.message, '編集内容を保存できませんでした。'));
         });
-        karaokeResults.filter((row) => row?.succeeded === false).forEach((row) => {
+        karaokeResults.filter((row) => saveResponse?.classifyRow(row).rejected).forEach((row) => {
             messages.push(friendlyFlushError(row.message, 'カラオケ回数を保存できませんでした。'));
         });
         if (messages.length > 0) showOperationNotice([...new Set(messages)].join(' '));
@@ -1707,24 +1708,48 @@
     const applyFlushResult = (batch, result) => {
         const operationResults = Array.isArray(result?.operationResults) ? result.operationResults : [];
         const karaokeResults = Array.isArray(result?.karaokeResults) ? result.karaokeResults : [];
-        const operationResultIds = new Set(operationResults.map((row) => String(row?.operation_id || '')));
-        const karaokeResultIds = new Set(karaokeResults.map((row) => String(row?.draft_id || '')));
+        const operationResultById = new Map(operationResults.map((row) => [String(row?.operation_id || ''), row]));
+        const karaokeResultById = new Map(karaokeResults.map((row) => [String(row?.draft_id || row?.operation_id || ''), row]));
 
-        if (batch.operations.some((operation) => !operationResultIds.has(String(operation.operationId))) ||
-            batch.karaokeLines.some((line) => !karaokeResultIds.has(String(line.draftId)))) {
+        if (batch.operations.some((operation) => !operationResultById.has(String(operation.operationId))) ||
+            batch.karaokeLines.some((line) => !karaokeResultById.has(String(line.draftId)))) {
             return false;
         }
 
         lastFlushResponse = result;
+        let hasUnknownRows = false;
 
-        batch.operations.forEach((operation) => pendingOperations.delete(operation.operationId));
-        karaokeResults.filter((row) => row?.succeeded).forEach((row) => {
-            const line = batch.karaokeLines.find((candidate) => String(candidate.draftId) === String(row.draft_id));
-            if (line) karaokeDraft.markSaved([line]);
+        batch.operations.forEach((operation) => {
+            const row = operationResultById.get(String(operation.operationId));
+            const classification = saveResponse?.classifyRow(row) ?? {
+                confirmed: row?.succeeded === true,
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(row?.status),
+                retry: row?.succeeded !== true
+            };
+            if (classification.confirmed || classification.rejected) {
+                pendingOperations.delete(String(operation.operationId));
+                return;
+            }
+
+            hasUnknownRows = true;
         });
-        karaokeResults.filter((row) => row?.succeeded === false).forEach((row) => {
-            const line = batch.karaokeLines.find((candidate) => String(candidate.draftId) === String(row.draft_id));
-            if (line) karaokeDraft.markRejected([line]);
+        batch.karaokeLines.forEach((line) => {
+            const row = karaokeResultById.get(String(line.draftId));
+            const classification = saveResponse?.classifyRow(row) ?? {
+                confirmed: row?.succeeded === true,
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(row?.status),
+                retry: row?.succeeded !== true
+            };
+            if (classification.confirmed) {
+                karaokeDraft.markSaved([line]);
+                return;
+            }
+            if (classification.rejected) {
+                karaokeDraft.markRejected([line]);
+                return;
+            }
+
+            hasUnknownRows = true;
         });
         applySnapshot(result.snapshot);
         document.dispatchEvent(new CustomEvent('prosper:business-home-flush-completed', {
@@ -1735,7 +1760,7 @@
             }
         }));
         queueNoticeForFailedRows(operationResults, karaokeResults);
-        return true;
+        return !hasUnknownRows;
     };
 
     const flushBusinessHomeChanges = async () => {
@@ -1787,15 +1812,9 @@
                 });
                 const result = await response.json().catch(() => null);
                 lastFlushResponse = result;
-                if (!response.ok || !result?.succeeded || !result?.snapshot || !applyFlushResult(batch, result)) {
-                    if (result?.snapshot) {
-                        applySnapshot(result.snapshot, true);
-                    }
-                    if (response.status === 400 || response.status === 409) {
-                        batch.operations.forEach((operation) => { operation.state = 'queued'; });
-                        pendingFlushBatch = null;
-                        persistBusinessHomeDraft();
-                    }
+                const applied = Boolean(result?.snapshot) && applyFlushResult(batch, result);
+                if (!applied) {
+                    if (result?.snapshot) applySnapshot(result.snapshot, true);
                     showOperationNotice(result?.message || '保存結果を確認できません。通信復旧後に同じ変更を再送します。');
                     return false;
                 }

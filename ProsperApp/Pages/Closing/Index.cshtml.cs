@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using ProsperApp.Features.Attendance;
 using ProsperApp.Features.Closing;
 using ProsperApp.Features.Shared;
 using ProsperApp.Services;
@@ -10,6 +11,7 @@ namespace ProsperApp.Pages;
 public class ClosingModel(
     IFeatureGate featureGate,
     IClosingApplicationService closingApplicationService,
+    IAttendanceApplicationService attendanceApplicationService,
     IAdminModeService adminModeService,
     IDailyReportApplicationService dailyReportApplicationService,
     ILocalSettingsProvider localSettingsProvider) : PageModel
@@ -17,6 +19,7 @@ public class ClosingModel(
     private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IClosingApplicationService _closingApplicationService = closingApplicationService;
+    private readonly IAttendanceApplicationService _attendanceApplicationService = attendanceApplicationService;
     private readonly IAdminModeService _adminModeService = adminModeService;
     private readonly IDailyReportApplicationService _dailyReportApplicationService = dailyReportApplicationService;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
@@ -30,9 +33,17 @@ public class ClosingModel(
 
     public long DepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
 
-    public IActionResult OnGet()
+    public AttendanceModalViewModel? AttendanceModal { get; private set; }
+
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        return _featureGate.IsEnabled(FeatureNames.Closing) ? Page() : NotFound();
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        await LoadAttendanceModalAsync(cancellationToken);
+        return Page();
     }
 
     public async Task<IActionResult> OnGetDashboardAsync(
@@ -145,10 +156,10 @@ public class ClosingModel(
             cancellationToken);
         if (!result.Succeeded)
         {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            return StatusCode(ToStatusCode(result.FailureKind), new
             {
                 succeeded = false,
-                status = "unavailable",
+                status = ToSaveStatus(result.FailureKind),
                 operationId = operationId.ToString("D"),
                 message = result.ErrorMessage ?? "営業日を締められませんでした。"
             });
@@ -171,7 +182,76 @@ public class ClosingModel(
         {
             "confirmed" => new JsonResult(payload),
             "conflict" => StatusCode(StatusCodes.Status409Conflict, payload),
+            "validation_error" => StatusCode(StatusCodes.Status400BadRequest, payload),
+            "permission_denied" => StatusCode(StatusCodes.Status403Forbidden, payload),
+            "stale_work_item" => StatusCode(StatusCodes.Status409Conflict, payload),
+            "unavailable" => StatusCode(StatusCodes.Status503ServiceUnavailable, payload),
             _ => StatusCode(StatusCodes.Status400BadRequest, payload)
+        };
+    }
+
+    public async Task<IActionResult> OnGetAttendanceCurrentAsync(
+        long? knownBusinessDayId,
+        long? knownBusinessDayRevision,
+        CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        var result = await _attendanceApplicationService.ReadCurrentAsync(
+            knownBusinessDayId,
+            knownBusinessDayRevision,
+            cancellationToken);
+        if (!result.Succeeded)
+        {
+            return new JsonResult(new
+            {
+                status = ToSaveStatus(result.FailureKind),
+                message = result.ErrorMessage ?? "現在の勤怠入力を取得できませんでした。"
+            })
+            {
+                StatusCode = ToStatusCode(result.FailureKind)
+            };
+        }
+
+        return new JsonResult(result.Value);
+    }
+
+    public async Task<IActionResult> OnPostAttendanceSaveAsync(
+        [FromBody] ClosingAttendanceInputModel input,
+        CancellationToken cancellationToken)
+    {
+        if (!_featureGate.IsEnabled(FeatureNames.Closing))
+        {
+            return NotFound();
+        }
+
+        var result = await _attendanceApplicationService.SaveAsync(input, cancellationToken);
+        if (!result.Succeeded)
+        {
+            return new JsonResult(new
+            {
+                status = ToSaveStatus(result.FailureKind),
+                message = result.ErrorMessage ?? "勤怠入力を保存できませんでした。"
+            })
+            {
+                StatusCode = ToStatusCode(result.FailureKind)
+            };
+        }
+
+        var output = result.Value;
+        return new JsonResult(output)
+        {
+            StatusCode = output.Status switch
+            {
+                "conflict" => StatusCodes.Status409Conflict,
+                "validation_error" => StatusCodes.Status400BadRequest,
+                "permission_denied" => StatusCodes.Status403Forbidden,
+                "stale_work_item" => StatusCodes.Status409Conflict,
+                _ => StatusCodes.Status200OK
+            }
         };
     }
 
@@ -206,6 +286,33 @@ public class ClosingModel(
 
         return new JsonResult(result.Value);
     }
+
+    private async Task LoadAttendanceModalAsync(CancellationToken cancellationToken)
+    {
+        var state = await _attendanceApplicationService.LoadShellAsync(cancellationToken);
+        AttendanceModal = new AttendanceModalViewModel(
+            state,
+            Url.Page("/Closing/Index", "AttendanceCurrent") ?? string.Empty,
+            Url.Page("/Closing/Index", "AttendanceSave") ?? string.Empty,
+            IsClosingContext: true);
+    }
+
+    private static int ToStatusCode(ResultFailureKind? failureKind) => failureKind switch
+    {
+        ResultFailureKind.InvalidInput => StatusCodes.Status400BadRequest,
+        ResultFailureKind.Conflict => StatusCodes.Status409Conflict,
+        ResultFailureKind.NotConfigured => StatusCodes.Status503ServiceUnavailable,
+        ResultFailureKind.PermissionDenied => StatusCodes.Status403Forbidden,
+        _ => StatusCodes.Status503ServiceUnavailable
+    };
+
+    private static string ToSaveStatus(ResultFailureKind? failureKind) => failureKind switch
+    {
+        ResultFailureKind.InvalidInput => "validation_error",
+        ResultFailureKind.Conflict => "conflict",
+        ResultFailureKind.PermissionDenied => "permission_denied",
+        _ => "unavailable"
+    };
 
     private sealed record CloseBusinessDayRequest(
         string? OperationId,

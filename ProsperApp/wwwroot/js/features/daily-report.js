@@ -14,6 +14,41 @@
     const refreshButton = root.querySelector('[data-report-refresh]');
     let refreshInFlight = false;
     let lastReportState = null;
+    let previewLayoutFrame = 0;
+
+    const updatePreviewLayout = () => {
+        if (!content || content.hidden) {
+            return;
+        }
+
+        const pages = root.querySelector('.daily-report__pages');
+        if (!pages) {
+            return;
+        }
+
+        pages.style.setProperty('--daily-report-preview-scale', '1');
+        content.style.removeProperty('height');
+        const availableWidth = content.clientWidth;
+        const naturalWidth = pages.scrollWidth;
+        if (availableWidth <= 0 || naturalWidth <= 0) {
+            return;
+        }
+
+        const scale = Math.min(1, availableWidth / naturalWidth);
+        pages.style.setProperty('--daily-report-preview-scale', `${scale}`);
+        content.style.height = `${Math.ceil(pages.scrollHeight * scale)}px`;
+    };
+
+    const schedulePreviewLayout = () => {
+        if (previewLayoutFrame) {
+            window.cancelAnimationFrame(previewLayoutFrame);
+        }
+
+        previewLayoutFrame = window.requestAnimationFrame(() => {
+            previewLayoutFrame = 0;
+            updatePreviewLayout();
+        });
+    };
 
     const resetPrintLayout = () => {
         root.querySelectorAll('[data-report-page-content]').forEach((pageContent) => {
@@ -327,6 +362,7 @@
         content.hidden = false;
         printButton.disabled = false;
         root.setAttribute('aria-busy', 'false');
+        schedulePreviewLayout();
     };
 
     const setFailure = (message) => {
@@ -392,7 +428,11 @@
         window.print();
     });
     window.addEventListener('beforeprint', preparePrintLayout);
-    window.addEventListener('afterprint', resetPrintLayout);
+    window.addEventListener('afterprint', () => {
+        resetPrintLayout();
+        schedulePreviewLayout();
+    });
+    window.addEventListener('resize', schedulePreviewLayout);
     window.addEventListener('focus', () => {
         if (document.visibilityState === 'visible' && lastReportState !== 'closed' && lastReportState !== 'legacy') {
             void load();

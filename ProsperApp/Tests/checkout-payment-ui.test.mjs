@@ -22,7 +22,9 @@ assert.match(source, /pendingMutationCommands = new Map\(readPendingMutations\(\
 assert.match(source, /sessionStorage\.setItem\(mutationStorageKey/);
 assert.match(source, /operationId: crypto\.randomUUID\(\)/);
 assert.match(source, /pendingMutationCommands\.get\(commandKey\)/);
-assert.match(source, /\['confirmed', 'conflict', 'validation_error', 'permission_denied'\]\.includes\(data\?\.status\)/);
+assert.match(source, /saveResponse\?\.classify\(\{ response, payload: data \}\)/);
+assert.match(source, /if \(classification\.terminal\)[\s\S]*deletePendingMutation\(commandKey\)/);
+assert.match(source, /showDialogAlert[\s\S]*AppLoading\?\.hide/, '確認不能モーダルを出す前にロックoverlayを外すこと');
 assert.match(source, /sessionStorage\.setItem\(receiptKey\(slipId\)/);
 assert.doesNotMatch(source, /ProsperBusinessHome\.reload\s*\(/, '成功mutation直後に全体readを行わないこと');
 

@@ -16,6 +16,7 @@
     const updated = root.querySelector('[data-drink-updated]');
     const guidance = root.querySelector('[data-drink-guidance]');
     const businessDate = root.querySelector('[data-drink-business-date]');
+    const saveResponse = window.ProsperSaveResponse;
     let editor = null;
     let pendingCommand = null;
     let saving = false;
@@ -210,12 +211,17 @@
                 body: JSON.stringify(pendingCommand)
             });
             const result = await response.json().catch(() => null);
-            const definitive = result?.status === 'conflict' || result?.status === 'validation_error';
+            const classification = saveResponse?.classify({ response, payload: result }) ?? {
+                confirmed: result?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(result?.status),
+                retry: !result || response.status >= 500 || result?.status === 'unavailable'
+            };
+            const definitive = classification.rejected;
             if (result?.editor) {
                 applyEditor(result.editor, { preserveAmount: definitive });
             }
 
-            if (!response.ok || result?.status !== 'confirmed') {
+            if (!classification.confirmed) {
                 if (definitive) {
                     clearPendingCommand();
                 }

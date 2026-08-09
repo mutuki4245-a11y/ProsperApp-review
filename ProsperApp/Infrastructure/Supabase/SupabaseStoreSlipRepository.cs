@@ -216,13 +216,19 @@ public class SupabaseStoreSlipRepository(
     {
         if (!HasRpcAccess())
         {
-            return BusinessHomeChangeFlushResult.Failed("Supabase Edge Function設定が未設定です。営業中の変更を保存できません。");
+            return BusinessHomeChangeFlushResult.Failed(
+                "Supabase Edge Function設定が未設定です。営業中の変更を保存できません。",
+                ResultFailureKind.NotConfigured,
+                "unavailable");
         }
 
         if (!Guid.TryParse(input.BatchId, out _) ||
             input.Operations.Count > 100 || input.KaraokeLines.Count > 100)
         {
-            return BusinessHomeChangeFlushResult.Failed("保存内容を確認してください。");
+            return BusinessHomeChangeFlushResult.Failed(
+                "保存内容を確認してください。",
+                ResultFailureKind.InvalidInput,
+                "validation_error");
         }
 
         var result = await RpcClient.PostArrayAsync(
@@ -256,7 +262,11 @@ public class SupabaseStoreSlipRepository(
             !result.Rows[0].TryGetProperty("snapshot", out var snapshot) ||
             snapshot.ValueKind is not JsonValueKind.Object)
         {
-            return BusinessHomeChangeFlushResult.Failed(ToFriendlyError(result.ErrorMessage));
+            var failure = ClassifyFlushFailure(result.ErrorMessage);
+            return BusinessHomeChangeFlushResult.Failed(
+                failure.Message,
+                failure.FailureKind,
+                failure.Status);
         }
 
         var row = result.Rows[0];
@@ -580,6 +590,37 @@ public class SupabaseStoreSlipRepository(
         return $"伝票を作成できません。{rawError}";
     }
 
+    private static FlushFailure ClassifyFlushFailure(string? rawError)
+    {
+        var message = ToFriendlyError(rawError);
+        var raw = rawError ?? string.Empty;
+        if (raw.Contains("401", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("403", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
+        {
+            return new FlushFailure(ResultFailureKind.PermissionDenied, "permission_denied", message);
+        }
+
+        if (raw.Contains("revision_conflict", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("closing_required", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("not_open", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("not_found", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("operation_id_reused", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("batch_id_reused", StringComparison.OrdinalIgnoreCase))
+        {
+            return new FlushFailure(ResultFailureKind.Conflict, "conflict", message);
+        }
+
+        if (raw.Contains("invalid_", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("not_selected", StringComparison.OrdinalIgnoreCase) ||
+            raw.Contains("duplicate_nomination_cast", StringComparison.OrdinalIgnoreCase))
+        {
+            return new FlushFailure(ResultFailureKind.InvalidInput, "validation_error", message);
+        }
+
+        return new FlushFailure(ResultFailureKind.Unavailable, "unavailable", message);
+    }
+
     private static string ToBootstrapFriendlyError(string? rawError)
     {
         if (string.IsNullOrWhiteSpace(rawError))
@@ -606,5 +647,7 @@ public class SupabaseStoreSlipRepository(
         using var document = JsonDocument.Parse("[]");
         return document.RootElement.Clone();
     }
+
+    private sealed record FlushFailure(ResultFailureKind FailureKind, string Status, string Message);
 
 }

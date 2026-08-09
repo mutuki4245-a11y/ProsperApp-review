@@ -19,9 +19,9 @@
     <div class="alert alert-info d-none" role="status" data-receipt-queue-status></div>
     <div class="alert alert-danger d-none" role="alert" data-receipt-queue-error></div>
 
-    <div class="tablet-entry__layout">
+    <div class="tablet-entry__workspace">
         <section class="tablet-entry__preview" aria-label="証憑プレビュー">
-            <div class="tablet-entry__preview-header">
+            <div class="preview-toolbar">
                 <span data-receipt-queue-preview-file-name>証憑を取得しています</span>
                 <a class="btn btn-outline-secondary btn-sm d-none"
                    target="_blank"
@@ -35,7 +35,7 @@
             </div>
         </section>
 
-        <section class="tablet-entry__input">
+        <section class="tablet-entry__form">
             <form method="post" data-receipt-work-queue-form>
                 <input type="hidden" asp-for="Input.DocumentId" />
                 <input type="hidden" asp-for="Input.DriveFileId" />
@@ -89,7 +89,7 @@
                                                 @foreach (var item in group.Items)
                                                 {
                                                     var value = $"{group.Name}: {item}";
-                                                    <button type="button" class="account-sheet__item" data-account-value="@value">@item</button>
+                                                    <button type="button" class="account-sheet__item" data-account-value="@value" aria-pressed="false">@item</button>
                                                 }
                                             </div>
                                         </section>

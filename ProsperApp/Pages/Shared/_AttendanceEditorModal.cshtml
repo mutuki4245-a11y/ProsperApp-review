@@ -1,0 +1,181 @@
+@model ProsperApp.Features.Attendance.AttendanceModalViewModel
+@using System.Text.Json
+@using ProsperApp.Features.Attendance
+@{
+    var state = Model.State;
+    var input = state.Input;
+    var currentDepartmentName = state.StoreContext?.DepartmentName;
+    var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+}
+
+<div class="modal fade attendance-editor-modal"
+     id="attendanceEditorModal"
+     tabindex="-1"
+     aria-labelledby="attendanceEditorModalLabel"
+     aria-hidden="true"
+     data-attendance-editor-modal>
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <p class="store-home__eyebrow mb-1">ATTENDANCE</p>
+                    <h2 class="modal-title fs-4" id="attendanceEditorModalLabel">勤怠管理</h2>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+            </div>
+            <div class="modal-body">
+                @if (state.LoadIssues.Count > 0)
+                {
+                    <div class="alert alert-danger mb-0" role="alert">
+                        <strong>勤怠入力の名簿を取得できませんでした。</strong>
+                        @foreach (var issue in state.LoadIssues)
+                        {
+                            <div>@issue.Message</div>
+                        }
+                        <a class="btn btn-outline-danger btn-sm mt-2" href="@Context.Request.Path">再試行</a>
+                    </div>
+                }
+                else if (input.Entries.Count == 0)
+                {
+                    <div class="alert alert-secondary mb-0">
+                        キャストまたはスタッフ情報が未登録です。
+                        <a class="alert-link" asp-page="/Management/Casts">キャスト情報へ</a>
+                        <span> / </span>
+                        <a class="alert-link" asp-page="/Management/Staffs">スタッフ情報へ</a>
+                    </div>
+                }
+                else
+                {
+                    <section class="terminal-page--attendance" data-attendance-editor-root>
+                        <div class="alert alert-secondary" id="attendanceSyncStatus" role="status">現在の勤怠を同期しています。</div>
+                        <div class="alert alert-warning" id="attendanceDirtyDecision" role="alert" hidden>
+                            <span>未保存の変更があります。保存するか、変更を破棄して現在の勤怠を再読込してください。</span>
+                            <button class="btn btn-outline-warning btn-sm ms-2" type="button" id="discardAttendanceChanges">変更を破棄して再読込</button>
+                        </div>
+                        <div class="alert" id="attendanceResultMessage" role="alert" hidden></div>
+                        <div class="text-muted small mb-2" id="attendanceLastUpdated" hidden></div>
+
+                        <form method="post" class="closing-attendance-form" data-attendance-form="true" novalidate>
+                            @Html.AntiForgeryToken()
+                            <div class="closing-attendance-toolbar">
+                                <button class="btn btn-outline-primary" type="button" id="addAttendanceCastButton" disabled>出勤キャストを追加</button>
+                                <button class="btn btn-outline-primary" type="button" id="addAttendanceStaffButton" disabled>出勤スタッフを追加</button>
+                                <span class="text-muted ms-auto">出勤 <strong id="selectedAttendanceCount">--</strong></span>
+                            </div>
+
+                            <div class="closing-attendance-table" id="attendanceEditor" aria-busy="true">
+                                <div class="closing-attendance-table__row closing-attendance-table__row--header">
+                                    <span>出勤者</span>
+                                    <span>出勤時刻</span>
+                                    <span>退勤時刻</span>
+                                    <span>送り</span>
+                                    <span></span>
+                                </div>
+                                @for (var i = 0; i < input.Entries.Count; i++)
+                                {
+                                    var entry = input.Entries[i];
+                                    var personType = AttendancePersonTypes.Normalize(entry.PersonType);
+                                    var personId = entry.PersonId;
+                                    var isHome = !string.IsNullOrWhiteSpace(currentDepartmentName) &&
+                                        string.Equals(entry.DepartmentName, currentDepartmentName, StringComparison.Ordinal);
+                                    <div class="closing-attendance-table__row"
+                                         data-attendance-row
+                                         data-person-type="@personType"
+                                         data-person-id="@personId"
+                                         data-display-name="@entry.DisplayName"
+                                         data-department-name="@entry.DepartmentName"
+                                         data-is-home="@isHome.ToString().ToLowerInvariant()"
+                                         data-selected="false"
+                                         data-registered="false"
+                                         data-attendance-id="0"
+                                         data-version="">
+                                        <span class="closing-attendance-table__cast">
+                                            @entry.DisplayName
+                                            @if (!string.IsNullOrWhiteSpace(entry.DepartmentName))
+                                            {
+                                                <small>@entry.DepartmentName</small>
+                                            }
+                                            <small>@(personType == AttendancePersonTypes.Staff ? "スタッフ" : "キャスト")</small>
+                                            <small data-attendance-registration>同期中</small>
+                                        </span>
+                                        <label class="closing-attendance-table__field">
+                                            <span>出勤時刻</span>
+                                            <select class="form-select" data-clock-in-select disabled>
+                                                <option value="">選択</option>
+                                                @foreach (var time in state.ClockInTimeOptions)
+                                                {
+                                                    <option value="@time.Value">@time.Label</option>
+                                                }
+                                            </select>
+                                        </label>
+                                        <label class="closing-attendance-table__field">
+                                            <span>退勤時刻</span>
+                                            <select class="form-select" data-clock-out-select disabled>
+                                                <option value="">未入力</option>
+                                                @foreach (var time in state.ClockOutTimeOptions)
+                                                {
+                                                    <option value="@time.Value">@time.Label</option>
+                                                }
+                                            </select>
+                                        </label>
+                                        <label class="closing-attendance-table__send form-check">
+                                            <input class="form-check-input" type="checkbox" data-send-service disabled />
+                                            <span class="form-check-label">利用</span>
+                                        </label>
+                                        <button class="btn btn-outline-danger btn-sm closing-attendance-table__remove" type="button" data-remove-attendance disabled>削除</button>
+                                    </div>
+                                }
+                                <p class="alert alert-secondary mb-0" id="attendanceEmptyMessage" hidden>出勤時刻が入力された出勤者はいません。</p>
+                            </div>
+
+                            <div class="closing-entry-panel__actions closing-attendance-actions">
+                                <button class="btn btn-primary btn-lg" type="submit" id="saveAttendanceButton" disabled>勤怠を保存</button>
+                            </div>
+                        </form>
+                    </section>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (state.LoadIssues.Count == 0 && input.Entries.Count > 0)
+{
+    <div class="modal fade" id="castSelectModal" tabindex="-1" aria-labelledby="castSelectModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="castSelectModalLabel">出勤キャストを追加</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                </div>
+                <div class="modal-body closing-attendance-modal">
+                    <input class="form-control form-control-lg closing-attendance-modal__search" id="castSearchInput" type="search" placeholder="名前を入力" autocomplete="off" />
+                    <label class="form-check closing-attendance-modal__filter">
+                        <input class="form-check-input" type="checkbox" id="homeStoreCastFilter" checked />
+                        <span class="form-check-label">自店舗のみ</span>
+                    </label>
+                    <div class="closing-attendance-modal__list" id="castModalList"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">閉じる</button>
+                    <button class="btn btn-primary" type="button" id="addSelectedAttendanceButton" disabled>選択したキャストを追加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.prosperAttendanceEditor = @Html.Raw(JsonSerializer.Serialize(new
+        {
+            currentUrl = Model.CurrentUrl,
+            saveUrl = Model.SaveUrl,
+            departmentId = state.StoreContext?.DepartmentId,
+            initialSnapshot = state.InitialSnapshot,
+            defaultClockInTime = state.DefaultClockInTime,
+            defaultClockOutTime = state.DefaultClockOutTime,
+            clockInOptions = state.ClockInTimeOptions,
+            clockOutOptions = state.ClockOutTimeOptions,
+            isClosingContext = Model.IsClosingContext
+        }, jsonOptions));
+    </script>
+}

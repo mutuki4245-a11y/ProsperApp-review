@@ -24,6 +24,7 @@
     const addSelectedButton = document.getElementById('addSelectedAttendanceButton');
     const modal = modalElement ? new bootstrap.Modal(modalElement) : null;
     const token = form.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    const saveResponse = window.ProsperSaveResponse;
     const rowByKey = new Map();
 
     let hydrated = false;
@@ -465,33 +466,46 @@
                 body: JSON.stringify(pendingCommand)
             });
             const body = await response.json().catch(() => null);
+            const classification = saveResponse?.classify({ response, payload: body }) ?? {
+                confirmed: body?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(body?.status),
+                retry: !body || response.status >= 500 || body?.status === 'unavailable'
+            };
 
-            if (body?.status === 'confirmed') {
+            if (classification.confirmed) {
                 clearPendingCommand();
                 applySnapshot(body.snapshot, true);
                 setResult(
                     body.message || `勤怠入力を保存しました。出勤 ${body.savedCount || 0}名 / 退勤 ${body.savedClockOutCount || 0}名`,
                     'success');
+                window.dispatchEvent(new CustomEvent('prosper:attendance-editor-saved', {
+                    detail: {
+                        snapshot: body.snapshot,
+                        savedCount: body.savedCount || 0,
+                        savedClockOutCount: body.savedClockOutCount || 0
+                    }
+                }));
                 return;
             }
 
-            if (body?.status === 'conflict') {
+            if (classification.rejected) {
                 clearPendingCommand();
-                pendingSnapshot = body.snapshot || null;
-                if (dirtyDecision) {
+                pendingSnapshot = body?.snapshot || null;
+                if (body?.status === 'conflict' && dirtyDecision) {
                     dirtyDecision.hidden = false;
                 }
-                setResult(body.message || '別の更新が先に保存されています。', 'warning');
+                const rowMessages = (body?.rowResults || [])
+                    .map((row) => row.message)
+                    .filter(Boolean);
+                setResult(
+                    rowMessages.join(' ') ||
+                    body?.message ||
+                    (body?.status === 'conflict' ? '別の更新が先に保存されています。' : '勤怠入力はDB側で拒否されました。'),
+                    'warning');
                 return;
             }
 
-            if (response.status < 500) {
-                clearPendingCommand();
-            }
-            const rowMessages = (body?.rowResults || [])
-                .map((row) => row.message)
-                .filter(Boolean);
-            setResult(rowMessages.join(' ') || body?.message || '勤怠入力を保存できませんでした。');
+            setResult(body?.message || '通信結果を確認できませんでした。同じ操作IDで再送します。', 'warning');
         } catch {
             setResult('通信結果を確認できませんでした。同じ操作IDで再送します。', 'warning');
         } finally {
