@@ -58,7 +58,10 @@ for (const required of [
     'store.get_current_receipt_work_queue',
     'store.advance_receipt_work_queue_v2',
     'store.get_management_master_snapshot',
-    'store.save_management_master_v2'
+    'store.save_management_master_v2',
+    'store.get_sales_history_page',
+    'store.get_sales_history_correction_editor',
+    'store.save_sales_history_correction_v1'
 ]) assert.ok(csharpRpcNames.has(required), `${required} をアプリ契約に含めること。`);
 
 const legacyRpcNames = [
@@ -112,6 +115,8 @@ assert.ok(order.indexOf('00_legacy_rpc_cutover.sql') < order.indexOf('00a_drink_
 assert.ok(order.indexOf('17_current_business_home_snapshot.sql') < order.indexOf('15_business_home_bootstrap.sql'));
 assert.ok(order.indexOf('28_current_closing_dashboard.sql') < order.indexOf('22_current_business_day_close.sql'));
 assert.ok(order.indexOf('22_current_business_day_close.sql') < order.indexOf('99_grants.sql'));
+assert.ok(order.indexOf('22_current_business_day_close.sql') < order.indexOf('31_sales_history.sql'));
+assert.ok(order.indexOf('31_sales_history.sql') < order.indexOf('99_grants.sql'));
 
 const grants = read('Sql/store_rpc/99_grants.sql');
 assert.match(grants, /revoke\s+execute\s+on\s+all\s+functions\s+in\s+schema\s+store\s+from\s+public,\s*anon,\s*authenticated,\s*service_role/i);

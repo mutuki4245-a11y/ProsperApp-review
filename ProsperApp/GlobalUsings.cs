@@ -8,6 +8,7 @@ global using ProsperApp.Features.DailyReports;
 global using ProsperApp.Features.Drive;
 global using ProsperApp.Features.Orders;
 global using ProsperApp.Features.Receipts;
+global using ProsperApp.Features.SalesHistory;
 global using ProsperApp.Features.Settings;
 global using ProsperApp.Features.Shared;
 global using ProsperApp.Features.Slips;

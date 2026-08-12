@@ -40,6 +40,7 @@ builder.Services.AddScoped<IBusinessHomeApplicationService, BusinessHomeApplicat
 builder.Services.AddScoped<IAttendanceApplicationService, AttendanceApplicationService>();
 builder.Services.AddScoped<IClosingApplicationService, ClosingApplicationService>();
 builder.Services.AddScoped<IDailyReportApplicationService, DailyReportApplicationService>();
+builder.Services.AddScoped<ISalesHistoryApplicationService, SalesHistoryApplicationService>();
 builder.Services.AddScoped<IStoreMasterBootstrapper, SupabaseStoreMasterBootstrapper>();
 builder.Services.AddScoped<IManagementMasterSynchronization, SupabaseManagementMasterSynchronization>();
 builder.Services.AddHttpClient<ISupabaseRpcClient, SupabaseRpcClient>();
@@ -47,6 +48,7 @@ builder.Services.AddScoped<IGoogleDriveAuthService, GoogleDriveAuthService>();
 builder.Services.AddScoped<IStoreSettingsRepository, SupabaseStoreSettingsRepository>();
 builder.Services.AddScoped<IReceiptRepository, SupabaseReceiptRepository>();
 builder.Services.AddScoped<IDailyReportRepository, SupabaseDailyReportRepository>();
+builder.Services.AddScoped<ISalesHistoryRepository, SupabaseSalesHistoryRepository>();
 builder.Services.AddScoped<IBusinessDayRepository, SupabaseBusinessDayRepository>();
 builder.Services.AddScoped<ICastSalesAdjustmentRepository, SupabaseCastSalesAdjustmentRepository>();
 builder.Services.AddScoped<IDrinkBackRepository, SupabaseDrinkBackRepository>();

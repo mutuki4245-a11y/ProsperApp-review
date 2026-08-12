@@ -2,21 +2,22 @@
 
 ## Current State
 
-2026-08-07時点の正本です。RPC同期は `docs/rpc-synchronization-improvement-plan.md` の横断契約と画面別契約へ全面移行しました。旧RPC、旧Razor POST、旧DTO、旧Repository、旧payload変換、画面内fallbackは互換目的で残していません。
+2026-08-12時点の正本です。RPC同期は `docs/rpc-synchronization-improvement-plan.md` の横断契約と画面別契約へ全面移行しました。旧RPC、旧Razor POST、旧DTO、旧Repository、旧payload変換、画面内fallbackは互換目的で残していません。
 
-本番Supabaseプロジェクト `zwdecfoecgpzpkallukh` へSQLを適用し、`prosper-rpc` Edge Function v39をdeploy済みです。旧RPCとの互換期間は設けず、Azureアプリ、DB、Edge Functionをv2契約へ切り替えました。
+本番Supabaseプロジェクト `zwdecfoecgpzpkallukh` へ営業履歴・過去営業日補正SQLを適用し、`prosper-rpc` Edge Function v40をdeploy済みです。旧RPCとの互換期間は設けず、Azureアプリ、DB、Edge Functionを同じ契約へ切り替えます。
 
 確認済み:
 
 - `dotnet build ProsperApp.csproj --no-restore`: 警告0、エラー0
-- `dotnet test ../ProsperApp.Tests/ProsperApp.Tests.csproj --no-restore`: 31/31成功
-- `node --test Tests/*.test.mjs`: 21/21成功
+- `dotnet test ../ProsperApp.Tests/ProsperApp.Tests.csproj --no-restore`: 34/34成功
+- `node --test Tests/*.test.mjs`: 26/26成功
 - `node --check wwwroot/js/features/*.js`: 成功
 - Edge Function bundle検査: 成功
 - v2アプリ契約31 RPC: 各1定義、旧RPC: 0定義
 - `anon`、`authenticated`、`service_role` の `store` 関数直接実行権限: 0件
 - ドリンクバック移行: 旧12件から新12件、合計金額一致、旧テーブル削除済み
-- `prosper-rpc` v39: ACTIVE、`get_departments` と `get_business_home_bootstrap_v2` がHTTP 200
+- `prosper-rpc` v40: ACTIVE
+- 営業履歴補正RPC: 実データを用いたrollback試験で変更なし、新版追加、旧版不変、監査、競合、4件目拒否、別営業日拒否、冪等再送、不完全状態維持を確認
 
 ローカル開発サーバーは起動していません。
 
@@ -27,7 +28,7 @@
 - runtime stateをApp Serviceのmaster cacheへ混ぜません。営業日、伝票、勤怠、締め、領収書キューはcurrent read/mutation応答だけを正とします。
 - revisionの古い非同期応答はbrowserで破棄します。snapshot同期はsingle-flightです。
 - 全mutationは `operation_id` を受けます。結果不明時は同じpayloadとIDを再送し、確認済みの業務エラーだけを編集可能状態へ戻します。
-- operation結果はDBで30日保持します。部署、営業日、対象ID、revision、管理者権限はRPC側で再検証します。
+- operation結果は原則DBで30日保持します。営業履歴補正のoperation結果は監査・長期冪等性のため削除しません。部署、営業日、対象ID、revision、管理者権限はRPC側で再検証します。
 - アプリからSupabase table RESTやRPC REST fallbackを使いません。C#は `prosper-rpc` Edge Functionのallowlistだけを呼びます。
 
 ## Current RPCs
@@ -45,6 +46,7 @@
 - 領収書: `get_current_receipt_work_queue`, `advance_receipt_work_queue_v2`
 - 管理master: `get_management_master_snapshot`, `save_management_master_v2`
 - 日報・再印刷: `get_business_day_daily_report`, `get_checkout_statement_print_data`, `get_checkout_receipt_print_data`
+- 営業履歴・補正: `get_sales_history_page`, `get_sales_history_correction_editor`, `save_sales_history_correction_v1`
 
 C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完全一致を検証します。旧RPC名は `Sql/store_rpc/00_legacy_rpc_cutover.sql` で削除し、SQL定義として再作成しません。v2から使う低水準関数は `_internal` 名で、全 `store` 関数の直接実行権限は `99_grants.sql` で剥奪します。
 
@@ -93,10 +95,11 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 28_current_closing_dashboard.sql
 29_current_cast_sales_adjustment.sql
 22_current_business_day_close.sql
+31_sales_history.sql
 99_grants.sql
 ```
 
-その後、`supabase/functions/prosper-rpc/index.ts` を同じリリースのEdge Functionとしてdeployします。本番では2026-08-07にv39まで適用済みです。旧アプリと新DB、または新アプリと旧DBを混在させないでください。
+その後、`supabase/functions/prosper-rpc/index.ts` を同じリリースのEdge Functionとしてdeployします。本番では2026-08-12にv40まで適用済みです。旧アプリと新DB、または新アプリと旧DBを混在させないでください。
 
 ## Irreversible Migration
 
@@ -110,6 +113,8 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 4. 旧 `prosper-rpc` allowlistと旧アプリを同時にdeployする。
 
 符号付き任意調整は旧モデルで表現できないため、機械的な完全ロールバックは保証しません。通常の戻し方はv2 SQLの前進修正です。
+
+営業履歴補正では `ux_store_business_day_closing_snapshots_day` を削除し、`(business_day_id, snapshot_version)` の一意制約で複数の不変版を保持します。Git revertでは適用済みSQLや補正済みデータは戻りません。誤補正は旧版を更新・削除せず、正しい状態への逆補正を新しい版として追加します。Webを戻す場合も、補正済みスナップショットを保持したまま前進修正するのが基本です。
 
 ## Post-Apply Checks
 

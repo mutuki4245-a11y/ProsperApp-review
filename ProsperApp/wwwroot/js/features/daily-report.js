@@ -6,6 +6,8 @@
 
     const refreshIntervalMs = 30000;
     let reportUrl = root.dataset.reportUrl;
+    const autoLoad = root.dataset.reportAutoLoad !== 'false';
+    let canLoad = autoLoad;
     const status = root.querySelector('[data-report-status]');
     const content = root.querySelector('[data-report-content]');
     const warnings = root.querySelector('[data-report-warnings]');
@@ -378,7 +380,7 @@
     };
 
     const load = async () => {
-        if (refreshInFlight || !reportUrl) {
+        if (refreshInFlight || !reportUrl || !canLoad) {
             return;
         }
 
@@ -419,6 +421,7 @@
             return;
         }
 
+        canLoad = true;
         const url = new URL(reportUrl, window.location.origin);
         url.searchParams.set('businessDayId', String(businessDayId));
         reportUrl = `${url.pathname}${url.search}`;
@@ -435,12 +438,12 @@
     });
     window.addEventListener('resize', schedulePreviewLayout);
     window.addEventListener('focus', () => {
-        if (document.visibilityState === 'visible' && lastReportState !== 'closed' && lastReportState !== 'legacy') {
+        if (canLoad && document.visibilityState === 'visible' && lastReportState !== 'closed' && lastReportState !== 'legacy') {
             void load();
         }
     });
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && lastReportState !== 'closed' && lastReportState !== 'legacy') {
+        if (canLoad && document.visibilityState === 'visible' && lastReportState !== 'closed' && lastReportState !== 'legacy') {
             void load();
         }
     });
@@ -450,5 +453,13 @@
         }
     }, refreshIntervalMs);
 
-    void load();
+    if (autoLoad) {
+        void load();
+    } else {
+        refreshButton.disabled = true;
+        status.className = 'alert alert-secondary daily-report__loading';
+        status.textContent = '営業日を選択すると日報を表示します。';
+        stateBadge.textContent = '未選択';
+        root.setAttribute('aria-busy', 'false');
+    }
 })();

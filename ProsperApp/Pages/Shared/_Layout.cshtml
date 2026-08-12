@@ -11,6 +11,7 @@
     var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase);
     var isSalesActive = currentPath == "/";
     var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
+    var isSalesHistoryActive = currentPath.StartsWith("/SalesHistory", StringComparison.OrdinalIgnoreCase);
     var isSettingsActive = currentPath.StartsWith("/Settings", StringComparison.OrdinalIgnoreCase);
     var bodyClass = isOrdersPage
         ? "order-terminal"
@@ -62,6 +63,15 @@
                             <li class="nav-item">
                                 <a class="nav-link app-main-nav__link @(isClosingActive ? "is-active" : null)" asp-area="" asp-page="/Closing/Index">締め作業</a>
                             </li>
+                            @if (FeatureGate.IsEnabled(FeatureNames.SalesHistory))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link app-main-nav__link @(isSalesHistoryActive ? "is-active" : null)"
+                                       asp-area=""
+                                       asp-page="/SalesHistory/Index"
+                                       aria-current="@(isSalesHistoryActive ? "page" : null)">営業履歴</a>
+                                </li>
+                            }
                             @if (FeatureGate.IsEnabled(FeatureNames.Opening))
                             {
                                 <li class="nav-item">
