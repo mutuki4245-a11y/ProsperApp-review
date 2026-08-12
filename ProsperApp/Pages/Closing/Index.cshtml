@@ -24,14 +24,14 @@
             <span class="closing-panel__action" data-closing-action>営業中を開く</span>
         </a>
 
-        <a class="closing-panel is-preparing" asp-page="/Closing/DrinkCost" data-closing-panel="drinkDelivery">
+        <button class="closing-panel is-preparing" type="button" data-closing-panel="drinkDelivery" data-bs-toggle="modal" data-bs-target="#drinkDeliveryEditorModal">
             <span class="closing-panel__body">
                 <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">2</span><span>酒代入力</span></strong>
                 <small data-closing-message>状態を確認しています。</small>
             </span>
             <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
             <span class="closing-panel__action" data-closing-action>開く</span>
-        </a>
+        </button>
 
         <button class="closing-panel is-preparing" type="button" data-closing-panel="attendance" data-bs-toggle="modal" data-bs-target="#attendanceEditorModal">
             <span class="closing-panel__body">
@@ -42,23 +42,23 @@
             <span class="closing-panel__action" data-closing-action>確認/修正</span>
         </button>
 
-        <a class="closing-panel is-preparing" asp-page="/Closing/CastSalesAdjustment" data-closing-panel="castSalesAdjustment">
+        <button class="closing-panel is-preparing" type="button" data-closing-panel="castSalesAdjustment" data-bs-toggle="modal" data-bs-target="#castSalesAdjustmentShellModal">
             <span class="closing-panel__body">
                 <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">4</span><span>キャスト売上額調整</span></strong>
                 <small data-closing-message>状態を確認しています。</small>
             </span>
             <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
             <span class="closing-panel__action" data-closing-action>開く</span>
-        </a>
+        </button>
 
-        <a class="closing-panel is-preparing" asp-page="/Closing/DrinkBacks" data-closing-panel="drinkBack">
+        <button class="closing-panel is-preparing" type="button" data-closing-panel="drinkBack" data-bs-toggle="modal" data-bs-target="#drinkBackEditorModal">
             <span class="closing-panel__body">
                 <strong class="closing-panel__title"><span class="closing-panel__step" aria-hidden="true">5</span><span>ドリンクバック調整</span></strong>
                 <small data-closing-message>状態を確認しています。</small>
             </span>
             <span class="closing-panel__badge is-preparing" data-closing-badge>確認中</span>
             <span class="closing-panel__action" data-closing-action>開く</span>
-        </a>
+        </button>
 
         @if (Model.ReceiptsEnabled)
         {
@@ -101,6 +101,204 @@
     {
         <partial name="_AttendanceEditorModal" model="Model.AttendanceModal" />
     }
+
+    <div class="modal fade" id="drinkDeliveryEditorModal" tabindex="-1" aria-labelledby="drinkDeliveryEditorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <section class="modal-body terminal-page--closing-entry"
+                         data-drink-delivery-editor
+                         data-department-id="@Model.DepartmentId"
+                         data-current-business-date="@Model.CurrentBusinessDate.ToString("yyyy-MM-dd")"
+                         data-editor-url="@Url.Page("/Closing/DrinkCost", "Editor")"
+                         data-save-url="@Url.Page("/Closing/DrinkCost", "SaveV2")">
+                    <div class="modal-header px-0 pt-0">
+                        <div>
+                            <p class="store-home__eyebrow mb-1">DRINK COST</p>
+                            <h2 class="modal-title fs-4" id="drinkDeliveryEditorModalLabel">酒代入力</h2>
+                            <p class="text-muted small mb-0" data-drink-business-date>営業日を確認しています</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+
+                    <div class="alert alert-danger" role="alert" data-drink-error hidden></div>
+                    <div class="alert alert-success" role="status" data-drink-success hidden></div>
+                    <div class="text-muted small mb-2" data-drink-updated>状態を復元しています。</div>
+                    <div class="alert alert-info" data-drink-guidance>
+                        酒代がない場合も 0 円で保存してください。
+                    </div>
+
+                    <form method="post" class="closing-entry-panel" data-drink-form>
+                        @Html.AntiForgeryToken()
+                        <div class="closing-entry-panel__body">
+                            <label for="drinkDeliveryAmount" class="form-label">納品額</label>
+                            <div class="closing-amount-input">
+                                <input id="drinkDeliveryAmount"
+                                       class="form-control form-control-lg"
+                                       type="text"
+                                       inputmode="numeric"
+                                       autocomplete="off"
+                                       disabled
+                                       data-drink-amount />
+                                <span>円</span>
+                            </div>
+                        </div>
+                        <div class="closing-entry-panel__actions">
+                            <button class="btn btn-primary btn-lg" type="submit" disabled data-drink-submit>保存</button>
+                        </div>
+                        <output class="terminal-save-status" data-drink-status data-save-state="idle" aria-live="polite">状態を復元しています。</output>
+                    </form>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="castSalesAdjustmentShellModal" tabindex="-1" aria-labelledby="castSalesAdjustmentShellModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <section class="modal-body cast-sales-editor"
+                         data-cast-sales-editor
+                         data-department-id="@Model.DepartmentId"
+                         data-overview-url="@Url.Page("/Closing/CastSalesAdjustment", "Overview")"
+                         data-save-url="@Url.Page("/Closing/CastSalesAdjustment", "SaveV2")"
+                         data-confirm-url="@Url.Page("/Closing/CastSalesAdjustment", "ConfirmAllV2")">
+                    <div class="modal-header px-0 pt-0">
+                        <div>
+                            <p class="store-home__eyebrow mb-1">CAST SALES</p>
+                            <h2 class="modal-title fs-4" id="castSalesAdjustmentShellModalLabel">キャスト売上額調整</h2>
+                            <p class="text-muted small mb-0" data-cast-sales-summary>現在の営業日を確認しています</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+
+                    <form class="d-none" aria-hidden="true" data-cast-sales-token-form>
+                        @Html.AntiForgeryToken()
+                    </form>
+
+                    <div class="alert alert-danger" role="alert" data-cast-sales-error hidden>
+                        <span data-cast-sales-error-message></span>
+                        <button class="btn btn-outline-danger btn-sm ms-2" type="button" data-cast-sales-retry>再試行</button>
+                    </div>
+                    <div class="alert alert-success" role="status" data-cast-sales-success hidden></div>
+                    <div class="text-muted small mb-2" data-cast-sales-updated>状態を取得しています。</div>
+
+                    <div class="cast-sales-editor__loading" data-cast-sales-loading aria-live="polite">
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                        <span>調整対象を取得しています</span>
+                    </div>
+
+                    <div class="cast-sales-editor__empty" data-cast-sales-empty hidden>
+                        <strong data-cast-sales-empty-title>調整対象はありません</strong>
+                        <span data-cast-sales-empty-message>会計済みかつ指名キャストがいる伝票が対象です。</span>
+                    </div>
+
+                    <div class="cast-sales-editor__list" data-cast-sales-list aria-label="キャスト売上額調整対象伝票" hidden></div>
+
+                    <div class="cast-sales-editor__actions" data-cast-sales-actions hidden>
+                        <span data-cast-sales-missing></span>
+                        <button class="btn btn-primary btn-lg" type="button" data-cast-sales-confirm>全件確認</button>
+                    </div>
+
+                    <output class="terminal-save-status cast-sales-editor__status"
+                            data-cast-sales-status
+                            data-save-state="idle"
+                            aria-live="polite">状態を取得しています。</output>
+
+                    <div class="modal fade" id="castSalesAdjustmentModal" tabindex="-1" aria-labelledby="castSalesAdjustmentModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                            <div class="modal-content">
+                                <form data-cast-sales-form>
+                                    <div class="modal-header">
+                                        <div>
+                                            <p class="store-home__eyebrow mb-1" data-cast-sales-base></p>
+                                            <h2 class="modal-title fs-4" id="castSalesAdjustmentModalLabel">売上額調整</h2>
+                                        </div>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                                    </div>
+                                    <div class="modal-body cast-sales-editor__modal-body">
+                                        <p class="text-muted small mb-3" data-cast-sales-guidance></p>
+                                        <div class="cast-sales-editor__cast-table">
+                                            <div class="cast-sales-editor__cast-row cast-sales-editor__cast-row--header" aria-hidden="true">
+                                                <span>指名キャスト</span>
+                                                <span>区分</span>
+                                                <span>売上額</span>
+                                            </div>
+                                            <div data-cast-sales-casts></div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">閉じる</button>
+                                        <button type="submit" class="btn btn-primary" data-cast-sales-save>保存</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="drinkBackEditorModal" tabindex="-1" aria-labelledby="drinkBackEditorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <section class="modal-body terminal-page--closing-entry drink-back-editor"
+                         data-drink-back-editor
+                         data-department-id="@Model.DepartmentId"
+                         data-current-business-date="@Model.CurrentBusinessDate.ToString("yyyy-MM-dd")"
+                         data-editor-url="@Url.Page("/Closing/DrinkBacks", "Editor")"
+                         data-save-url="@Url.Page("/Closing/DrinkBacks", "Save")">
+                    <div class="modal-header px-0 pt-0">
+                        <div>
+                            <p class="store-home__eyebrow mb-1">DRINK BACK</p>
+                            <h2 class="modal-title fs-4" id="drinkBackEditorModalLabel">ドリンクバック調整</h2>
+                            <p class="text-muted small mb-0" data-drink-back-business-date>状態を復元しています。</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+
+                    <div class="alert alert-danger" role="alert" data-drink-back-error hidden></div>
+                    <div class="alert alert-success" role="status" data-drink-back-success hidden></div>
+                    <div class="alert alert-info" role="status" data-drink-back-guidance>状態を復元しています。</div>
+
+                    <form method="post" class="closing-entry-panel drink-back-editor__form" data-drink-back-form>
+                        @Html.AntiForgeryToken()
+                        <div class="closing-entry-panel__body">
+                            <div class="drink-back-editor__summary">
+                                <div>
+                                    <h2>出勤キャスト</h2>
+                                </div>
+                                <div class="drink-back-editor__totals">
+                                    <span data-drink-back-required-status>確認中</span>
+                                    <strong data-drink-back-total>合計 0円</strong>
+                                </div>
+                            </div>
+
+                            <div class="drink-back-editor__rows" data-drink-back-required-rows></div>
+
+                            <div class="drink-back-editor__optional-control">
+                                <label class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" data-drink-back-show-optional />
+                                    <span class="form-check-label">出勤していないキャストを表示</span>
+                                </label>
+                                <span class="badge text-bg-secondary" data-drink-back-optional-badge>保存済み 0名</span>
+                            </div>
+
+                            <section class="drink-back-editor__optional" data-drink-back-optional-section hidden>
+                                <h2>出勤外の任意調整</h2>
+                                <div class="drink-back-editor__rows" data-drink-back-optional-rows></div>
+                            </section>
+
+                            <div class="terminal-save-status" data-drink-back-status data-save-state="idle">状態を復元しています。</div>
+                            <div class="text-muted small" data-drink-back-updated></div>
+                        </div>
+                        <div class="closing-entry-panel__actions d-grid gap-2">
+                            <button class="btn btn-primary btn-lg" type="submit" data-drink-back-submit disabled>保存</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </div>
+    </div>
 
     <section class="daily-report"
              aria-labelledby="dailyReportTitle"
@@ -216,7 +414,7 @@
                                 <th>お客様</th><th>担当キャスト</th><th>会計</th><th>備考</th>
                             </tr>
                         </thead>
-                        <tbody data-report-visits data-min-rows="26"></tbody>
+                        <tbody data-report-visits data-min-rows="31"></tbody>
                     </table>
                     </div>
                 </article>
@@ -232,8 +430,8 @@
                     <section class="daily-report__sheet-section">
                         <h4 class="daily-report__block-title">支出内訳（勘定科目別）</h4>
                         <table class="daily-report__form-table daily-report__expense-table">
-                            <thead><tr><th>勘定科目</th><th>金額</th></tr></thead>
-                            <tbody data-report-expenses data-min-rows="24"></tbody>
+                            <thead><tr><th>勘定科目</th><th>摘要</th><th>金額</th></tr></thead>
+                            <tbody data-report-expenses data-min-rows="29"></tbody>
                         </table>
                     </section>
                     </div>
@@ -255,5 +453,8 @@
         <script src="~/js/features/attendance-editor.js" asp-append-version="true"></script>
     }
     <script src="~/js/features/daily-report.js" asp-append-version="true"></script>
+    <script src="~/js/features/drink-delivery-editor.js" asp-append-version="true"></script>
+    <script src="~/js/features/cast-sales-adjustment.js" asp-append-version="true"></script>
+    <script src="~/js/features/drink-back-editor.js" asp-append-version="true"></script>
     <script src="~/js/features/closing-dashboard.js" asp-append-version="true"></script>
 }

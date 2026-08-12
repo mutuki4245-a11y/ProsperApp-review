@@ -47,6 +47,7 @@
             success.hidden = true;
         }
     };
+    const readAmount = () => Number(String(amountInput?.value ?? '').replace(/,/g, '').trim());
 
     const normalizeEditor = (value) => ({
         departmentId: Number(value?.departmentId) || departmentId,
@@ -170,7 +171,7 @@
         operationId: crypto.randomUUID(),
         expectedBusinessDayId: editor?.hasBusinessDay ? editor.businessDayId : null,
         expectedBusinessDayRevision: editor?.hasBusinessDay ? editor.businessDayRevision : null,
-        drinkDeliveryAmount: Number(amountInput?.value)
+        drinkDeliveryAmount: readAmount()
     });
 
     form?.addEventListener('submit', async (event) => {
@@ -179,7 +180,7 @@
             return;
         }
 
-        const amount = Number(amountInput?.value);
+        const amount = readAmount();
         if (!Number.isInteger(amount) || amount < 0 || amount > 999999999999) {
             showError('納品額は0円以上の整数で入力してください。');
             amountInput?.focus();
@@ -254,7 +255,7 @@
     });
 
     amountInput?.addEventListener('input', () => {
-        if (!pendingCommand || saving || Number(amountInput.value) === pendingCommand.drinkDeliveryAmount) {
+        if (!pendingCommand || saving || readAmount() === pendingCommand.drinkDeliveryAmount) {
             return;
         }
 

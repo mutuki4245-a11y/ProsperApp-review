@@ -258,11 +258,9 @@
             row.dataset.slipCastId = String(cast.slipCastId);
             const amount = element('label', 'cast-sales-editor__amount-input');
             const input = element('input', 'form-control');
-            input.type = 'number';
-            input.min = '0';
-            input.max = '999999999999';
-            input.step = '1';
+            input.type = 'text';
             input.inputMode = 'numeric';
+            input.autocomplete = 'off';
             input.required = true;
             input.value = String(initial.values[index]);
             amount.append(input, element('span', null, '円'));
@@ -288,7 +286,7 @@
         const values = [];
         for (const row of castRows.querySelectorAll('[data-slip-cast-id]')) {
             const input = row.querySelector('input');
-            const amount = Number(input?.value);
+            const amount = Number(String(input?.value ?? '').replace(/,/g, '').trim());
             if (!input?.checkValidity() || !Number.isInteger(amount) || amount < 0 || amount > 999999999999) {
                 input?.reportValidity();
                 return null;

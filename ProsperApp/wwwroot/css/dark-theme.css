@@ -1134,6 +1134,7 @@
   .drink-back-editor__summary p,
   .drink-back-editor__optional p,
   .drink-back-editor__totals span,
+  .drink-back-editor__department,
   .closing-amount-input span {
     color: var(--app-text-muted);
   }

@@ -154,5 +154,7 @@ public sealed class DailyReportExpenseAccount
 
     public string AccountName { get; init; } = string.Empty;
 
+    public string? Description { get; init; }
+
     public decimal Amount { get; init; }
 }

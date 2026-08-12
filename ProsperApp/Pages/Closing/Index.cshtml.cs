@@ -14,7 +14,8 @@ public class ClosingModel(
     IAttendanceApplicationService attendanceApplicationService,
     IAdminModeService adminModeService,
     IDailyReportApplicationService dailyReportApplicationService,
-    ILocalSettingsProvider localSettingsProvider) : PageModel
+    ILocalSettingsProvider localSettingsProvider,
+    IStoreClock storeClock) : PageModel
 {
     private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IFeatureGate _featureGate = featureGate;
@@ -23,6 +24,7 @@ public class ClosingModel(
     private readonly IAdminModeService _adminModeService = adminModeService;
     private readonly IDailyReportApplicationService _dailyReportApplicationService = dailyReportApplicationService;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
+    private readonly IStoreClock _storeClock = storeClock;
 
     [BindProperty(SupportsGet = true)]
     public long? ReportBusinessDayId { get; set; }
@@ -32,6 +34,8 @@ public class ClosingModel(
     public bool IsAdminMode => _adminModeService.IsEnabled;
 
     public long DepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
+
+    public DateOnly CurrentBusinessDate => _storeClock.GetCurrentBusinessDate();
 
     public AttendanceModalViewModel? AttendanceModal { get; private set; }
 

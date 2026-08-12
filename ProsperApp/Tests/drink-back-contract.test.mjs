@@ -30,6 +30,8 @@ assert.match(repository, /store\.save_drink_back_adjustments_v2/);
 assert.match(source, /sessionStorage\.getItem\(pendingStorageKey\)/);
 assert.match(source, /pendingCommand \?\?= collectCommand\(\)/);
 assert.match(source, /if \(!pendingCommand \|\| saving\) return/);
+assert.match(source, /className = 'drink-back-editor__department'/, 'キャスト名と店名を別列表示すること');
+assert.match(source, /input\.type = 'text'/, 'ドリンクバック金額入力はnumber spinnerを出さないこと');
 assert.match(program, /AddScoped<IDrinkBackRepository, SupabaseDrinkBackRepository>/);
 
 console.log('Drink-back v2 contract checks passed.');

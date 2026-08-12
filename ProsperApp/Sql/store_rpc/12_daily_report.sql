@@ -286,6 +286,7 @@ begin
         coalesce(jsonb_agg(jsonb_build_object(
             'accountCode', grouped.account_code,
             'accountName', grouped.account_name,
+            'description', grouped.description,
             'amount', grouped.amount
         ) order by grouped.sort_order, grouped.account_code), '[]'::jsonb),
         coalesce(sum(grouped.amount), 0)
@@ -293,7 +294,8 @@ begin
       from (
         with receipt_expense_entries as (
             select
-                expense.journal_entry_id
+                expense.journal_entry_id,
+                expense.memo
               from public.store_business_day_receipt_expenses expense
              where expense.department_id = p_department_id
                and expense.business_day_id = p_business_day_id
@@ -301,7 +303,8 @@ begin
         ),
         legacy_receipt_entries as (
             select distinct
-                entry.journal_entry_id
+                entry.journal_entry_id,
+                null::text as memo
               from accounting.document_journal_links document_link
               join accounting.journal_entries entry
                 on entry.journal_entry_id = document_link.journal_entry_id
@@ -330,6 +333,7 @@ begin
                 nullif(max(account.account_name), ''),
                 line.account_code
             ) as account_name,
+            nullif(string_agg(distinct nullif(trim(coalesce(receipt_entry.memo, entry.description, line.line_memo, '')), ''), ' / '), '') as description,
             min(coalesce(account.sort_order, 9999)) as sort_order,
             sum(line.amount) as amount
           from receipt_entries receipt_entry

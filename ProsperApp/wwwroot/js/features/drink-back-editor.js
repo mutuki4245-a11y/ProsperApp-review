@@ -112,9 +112,8 @@
         displayName: String(value?.displayName || ''),
         departmentName: value?.departmentName || null
     });
-    const displayName = (value) => value.departmentName
-        ? `${value.displayName}：${value.departmentName}`
-        : value.displayName;
+    const displayName = (value) => value.displayName || '-';
+    const departmentName = (value) => value.departmentName || '-';
 
     const persistEditor = () => {
         try {
@@ -141,6 +140,9 @@
         const name = document.createElement('strong');
         name.textContent = displayName(row);
         identity.append(name);
+        const department = document.createElement('span');
+        department.className = 'drink-back-editor__department';
+        department.textContent = departmentName(row);
         if (!required) {
             const selector = document.createElement('input');
             selector.type = 'checkbox';
@@ -160,10 +162,9 @@
         amount.className = 'closing-amount-input';
         const input = document.createElement('input');
         input.className = 'form-control';
-        input.type = 'number';
-        input.step = '1';
-        input.min = String(-amountLimit);
-        input.max = String(amountLimit);
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.autocomplete = 'off';
         input.value = String(row.adjustmentAmount ?? 0);
         input.disabled = !required && !selected;
         input.dataset.adjustmentAmount = '';
@@ -171,7 +172,7 @@
         const unit = document.createElement('span');
         unit.textContent = '円';
         amount.append(input, unit);
-        wrapper.append(identity, amount);
+        wrapper.append(identity, department, amount);
 
         if (!required) {
             const selector = identity.querySelector('[data-optional-selected]');
@@ -297,7 +298,7 @@
     };
 
     const parseAmount = (input) => {
-        const value = Number(input.value);
+        const value = Number(String(input?.value ?? '').replace(/,/g, '').trim());
         return Number.isSafeInteger(value) && Math.abs(value) <= amountLimit ? value : null;
     };
     const collectCommand = () => {

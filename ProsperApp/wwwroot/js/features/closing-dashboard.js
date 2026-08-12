@@ -159,8 +159,7 @@
         } else if (canOverride) {
             finalStatus.textContent = '管理者設定で締め条件を無視します。';
         } else {
-            const reasons = Array.isArray(dashboard.blockReasons) ? dashboard.blockReasons : [];
-            finalStatus.textContent = reasons.length > 0 ? reasons.join(' ') : '未完了の項目があります。';
+            finalStatus.textContent = '未完了の項目があります。';
         }
     };
 

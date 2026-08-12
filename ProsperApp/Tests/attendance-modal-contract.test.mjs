@@ -35,6 +35,12 @@ assert.match(topModel, /OnGetAttendanceCurrentAsync/, 'トップPageModelに勤�
 assert.match(topModel, /OnPostAttendanceSaveAsync/, 'トップPageModelに勤怠save handlerを持つこと');
 
 assert.match(closingPage, /data-closing-panel="attendance"[\s\S]*data-bs-target="#attendanceEditorModal"/, '締め作業から勤怠モーダルを開けること');
+assert.match(closingPage, /data-closing-panel="drinkDelivery"[\s\S]*data-bs-target="#drinkDeliveryEditorModal"/, '締め作業から酒代入力モーダルを開けること');
+assert.match(closingPage, /data-closing-panel="castSalesAdjustment"[\s\S]*data-bs-target="#castSalesAdjustmentShellModal"/, '締め作業からキャスト売上額調整モーダルを開けること');
+assert.match(closingPage, /data-closing-panel="drinkBack"[\s\S]*data-bs-target="#drinkBackEditorModal"/, '締め作業からドリンクバック調整モーダルを開けること');
+assert.match(closingPage, /data-drink-delivery-editor[\s\S]*data-editor-url="@Url\.Page\("\/Closing\/DrinkCost", "Editor"\)/, '酒代入力エディタを締め作業内に描画すること');
+assert.match(closingPage, /data-cast-sales-editor[\s\S]*data-overview-url="@Url\.Page\("\/Closing\/CastSalesAdjustment", "Overview"\)/, 'キャスト売上額調整エディタを締め作業内に描画すること');
+assert.match(closingPage, /data-drink-back-editor[\s\S]*data-editor-url="@Url\.Page\("\/Closing\/DrinkBacks", "Editor"\)/, 'ドリンクバック調整エディタを締め作業内に描画すること');
 assert.match(closingPage, /<partial name="_AttendanceEditorModal"/, '締め作業に共有勤怠モーダルを描画すること');
 assert.doesNotMatch(closingPage, /\/Closing\/Attendance/, '締め作業から旧勤怠URLへ遷移しないこと');
 assert.match(closingModel, /OnGetAttendanceCurrentAsync/, '締め作業PageModelに勤怠current handlerを持つこと');

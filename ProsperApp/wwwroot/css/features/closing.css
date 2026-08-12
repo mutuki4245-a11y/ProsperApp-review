@@ -37,6 +37,31 @@ button.closing-panel {
   width: 100%;
 }
 
+.modal-body.terminal-page--closing-entry,
+.modal-body.cast-sales-editor {
+  margin: 0;
+  max-width: none;
+  padding: 1rem;
+}
+
+.modal-body.terminal-page--closing-entry .closing-entry-panel,
+.modal-body.terminal-page--closing-entry .drink-back-editor__form {
+  max-width: none;
+}
+
+.closing-amount-input input[type="number"]::-webkit-outer-spin-button,
+.closing-amount-input input[type="number"]::-webkit-inner-spin-button,
+.cast-sales-editor input[type="number"]::-webkit-outer-spin-button,
+.cast-sales-editor input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.closing-amount-input input[type="number"],
+.cast-sales-editor input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .closing-panel--primary-action {
   min-height: 120px;
 }
@@ -410,7 +435,7 @@ button.closing-panel:focus {
   border-radius: 6px;
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 22rem);
+  grid-template-columns: minmax(10rem, 1fr) minmax(9rem, 0.75fr) minmax(12rem, 18rem);
   padding: 0.75rem;
 }
 
@@ -427,6 +452,13 @@ button.closing-panel:focus {
 
 .drink-back-editor__identity .badge {
   margin-left: auto;
+}
+
+.drink-back-editor__department {
+  color: #475569;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .drink-back-editor__optional {
@@ -1349,11 +1381,19 @@ button.closing-panel:focus {
 
 .daily-report__expense-table th,
 .daily-report__expense-table td {
-  height: 8mm;
+  height: 7.3mm;
 }
 
 .daily-report__expense-table th:first-child {
-  width: 68%;
+  width: 34%;
+}
+
+.daily-report__expense-table th:nth-child(2) {
+  width: 44%;
+}
+
+.daily-report__expense-table td:nth-child(2) {
+  text-align: left;
 }
 
 .daily-report__footer {

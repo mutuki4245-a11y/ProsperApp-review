@@ -340,12 +340,13 @@
                 const row = document.createElement('tr');
                 row.append(
                     makeCell(expense.accountName || expense.accountCode),
+                    makeCell(expense.description || '-'),
                     makeCell(toYen(expense.amount), 'text-end')
                 );
                 return row;
             },
             unavailable.has('expenses') ? '旧形式では未保存です。' : '当営業日に入力した領収書支出はありません。',
-            2
+            3
         );
 
         root.querySelector('[data-report-memo]').textContent =
