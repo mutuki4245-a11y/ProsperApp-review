@@ -467,101 +467,118 @@ begin
 end;
 $$;
 
+create or replace function store.resolve_guard_business_day_id(
+    p_table_name text,
+    p_row_data jsonb
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+    v_business_day_id bigint;
+    v_slip_id bigint;
+    v_slip_business_day_id bigint;
+begin
+    v_business_day_id := nullif(p_row_data->>'business_day_id', '')::bigint;
+    v_slip_id := nullif(p_row_data->>'slip_id', '')::bigint;
+
+    if p_table_name = 'store_slips' then
+        v_slip_business_day_id := v_business_day_id;
+    elsif v_slip_id is not null then
+        select slip.business_day_id
+          into v_slip_business_day_id
+          from public.store_slips slip
+         where slip.slip_id = v_slip_id;
+    end if;
+
+    if v_business_day_id is not null
+       and v_slip_business_day_id is not null
+       and v_business_day_id <> v_slip_business_day_id then
+        raise exception 'business_day_slip_mismatch';
+    end if;
+
+    return coalesce(v_business_day_id, v_slip_business_day_id);
+end;
+$$;
+
+create or replace function store.sales_history_correction_target()
+returns bigint
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+    v_value text := current_setting('store.sales_history_correction_business_day_id', true);
+begin
+    if coalesce(v_value, '') !~ '^[1-9][0-9]*$' then
+        return null;
+    end if;
+
+    return v_value::bigint;
+end;
+$$;
+
+revoke all on function store.resolve_guard_business_day_id(text, jsonb)
+    from public, anon, authenticated, service_role;
+revoke all on function store.sales_history_correction_target()
+    from public, anon, authenticated, service_role;
+
 create or replace function store.guard_closed_business_day_mutation()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, public
 as $$
 declare
-    v_row_data jsonb;
-    v_business_day_id bigint;
-    v_slip_id bigint;
-    v_slip_business_day_id bigint;
+    v_old_business_day_id bigint;
+    v_new_business_day_id bigint;
+    v_target_business_day_id bigint;
     v_business_day_status text;
 begin
     if current_setting('store.allow_closed_day_mutation', true) = 'on' then
-        if tg_op = 'DELETE' then
-            return old;
-        end if;
-        return new;
+        return case when tg_op = 'DELETE' then old else new end;
     end if;
 
     if tg_op <> 'INSERT' then
-        v_row_data := to_jsonb(old);
-        v_business_day_id := nullif(v_row_data->>'business_day_id', '')::bigint;
-        v_slip_id := nullif(v_row_data->>'slip_id', '')::bigint;
-        v_slip_business_day_id := null;
-        v_business_day_status := null;
-
-        if tg_table_name = 'store_slips' then
-            v_slip_business_day_id := v_business_day_id;
-        elsif v_slip_id is not null then
-            select s.business_day_id
-              into v_slip_business_day_id
-              from public.store_slips s
-              where s.slip_id = v_slip_id;
-        end if;
-
-        if v_business_day_id is not null
-           and v_slip_business_day_id is not null
-           and v_business_day_id <> v_slip_business_day_id then
-            raise exception 'business_day_slip_mismatch';
-        end if;
-
-        v_business_day_id := coalesce(v_business_day_id, v_slip_business_day_id);
-
-        select b.status
-          into v_business_day_status
-          from public.store_business_days b
-         where b.business_day_id = v_business_day_id
-         for key share;
-
-        if v_business_day_status = 'closed' then
-            raise exception 'business_day_closed';
-        end if;
+        v_old_business_day_id := store.resolve_guard_business_day_id(tg_table_name, to_jsonb(old));
     end if;
-
     if tg_op <> 'DELETE' then
-        v_row_data := to_jsonb(new);
-        v_business_day_id := nullif(v_row_data->>'business_day_id', '')::bigint;
-        v_slip_id := nullif(v_row_data->>'slip_id', '')::bigint;
-        v_slip_business_day_id := null;
-        v_business_day_status := null;
+        v_new_business_day_id := store.resolve_guard_business_day_id(tg_table_name, to_jsonb(new));
+    end if;
 
-        if tg_table_name = 'store_slips' then
-            v_slip_business_day_id := v_business_day_id;
-        elsif v_slip_id is not null then
-            select s.business_day_id
-              into v_slip_business_day_id
-              from public.store_slips s
-              where s.slip_id = v_slip_id;
-        end if;
+    v_target_business_day_id := store.sales_history_correction_target();
+    if v_target_business_day_id is not null
+       and tg_op <> 'DELETE'
+       and coalesce(v_old_business_day_id, v_target_business_day_id) = v_target_business_day_id
+       and v_new_business_day_id = v_target_business_day_id then
+        return new;
+    end if;
 
-        if v_business_day_id is not null
-           and v_slip_business_day_id is not null
-           and v_business_day_id <> v_slip_business_day_id then
-            raise exception 'business_day_slip_mismatch';
-        end if;
-
-        v_business_day_id := coalesce(v_business_day_id, v_slip_business_day_id);
-
-        select b.status
+    if v_old_business_day_id is not null then
+        select business_day.status
           into v_business_day_status
-          from public.store_business_days b
-         where b.business_day_id = v_business_day_id
+          from public.store_business_days business_day
+         where business_day.business_day_id = v_old_business_day_id
          for key share;
-
         if v_business_day_status = 'closed' then
             raise exception 'business_day_closed';
         end if;
     end if;
 
-    if tg_op = 'DELETE' then
-        return old;
+    if v_new_business_day_id is not null then
+        select business_day.status
+          into v_business_day_status
+          from public.store_business_days business_day
+         where business_day.business_day_id = v_new_business_day_id
+         for key share;
+        if v_business_day_status = 'closed' then
+            raise exception 'business_day_closed';
+        end if;
     end if;
 
-    return new;
+    return case when tg_op = 'DELETE' then old else new end;
 end;
 $$;
 
@@ -569,13 +586,22 @@ create or replace function store.guard_closed_business_day_row()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, public
 as $$
+declare
+    v_target_business_day_id bigint;
 begin
     if current_setting('store.allow_closed_day_mutation', true) = 'on' then
-        if tg_op = 'DELETE' then
-            return old;
-        end if;
+        return case when tg_op = 'DELETE' then old else new end;
+    end if;
+
+    v_target_business_day_id := store.sales_history_correction_target();
+    if tg_op = 'UPDATE'
+       and v_target_business_day_id is not null
+       and old.business_day_id = v_target_business_day_id
+       and new.business_day_id = v_target_business_day_id
+       and old.status = 'closed'
+       and new.status = 'closed' then
         return new;
     end if;
 
@@ -593,11 +619,7 @@ begin
         raise exception 'business_day_closing_snapshot_required';
     end if;
 
-    if tg_op = 'DELETE' then
-        return old;
-    end if;
-
-    return new;
+    return case when tg_op = 'DELETE' then old else new end;
 end;
 $$;
 

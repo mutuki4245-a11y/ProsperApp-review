@@ -36,7 +36,8 @@
 --  30. Sql/store_rpc/28_current_closing_dashboard.sql
 --  31. Sql/store_rpc/29_current_cast_sales_adjustment.sql
 --  32. Sql/store_rpc/22_current_business_day_close.sql
---  33. Sql/store_rpc/99_grants.sql
+--  33. Sql/store_rpc/31_sales_history.sql
+--  34. Sql/store_rpc/99_grants.sql
 --
 -- Keep function names, argument lists, return columns, and direct execute revokes
 -- in the split files aligned with the current C# RPC callers and prosper-rpc allowlist.

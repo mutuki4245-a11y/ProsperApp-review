@@ -102,6 +102,48 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
     },
   ],
   [
+    "store.get_sales_history_page",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_from_business_date", type: "date", defaultValue: null },
+        { name: "p_to_business_date", type: "date", defaultValue: null },
+        { name: "p_before_business_date", type: "date", defaultValue: null },
+        { name: "p_before_business_day_id", type: "bigint", defaultValue: null },
+        { name: "p_limit", type: "integer", defaultValue: 31 },
+        { name: "p_current_business_date", type: "date" },
+      ],
+    },
+  ],
+  [
+    "store.get_sales_history_correction_editor",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_current_business_date", type: "date" },
+      ],
+    },
+  ],
+  [
+    "store.save_sales_history_correction_v1",
+    {
+      result: "rows",
+      params: [
+        { name: "p_department_id", type: "bigint" },
+        { name: "p_operation_id", type: "text" },
+        { name: "p_business_day_id", type: "bigint" },
+        { name: "p_expected_snapshot_version", type: "integer" },
+        { name: "p_current_business_date", type: "date" },
+        { name: "p_actor_email", type: "text" },
+        { name: "p_reason", type: "text" },
+        { name: "p_correction_payload", type: "jsonb" },
+      ],
+    },
+  ],
+  [
     "store.get_current_receipt_work_queue",
     {
       result: "rows",
