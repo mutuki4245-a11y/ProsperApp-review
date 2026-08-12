@@ -11,7 +11,7 @@ const exists = async (path) => {
     }
 };
 
-const [program, topPage, topModel, closingPage, closingModel, drinkDeliveryHandlers, drinkBackHandlers, castSalesHandlers, closingDashboardScript, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
+const [program, topPage, topModel, closingPage, closingModel, drinkDeliveryHandlers, drinkBackHandlers, castSalesHandlers, closingDashboardScript, closingCss, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
     read('Program.cs'),
     read('Pages/Index.cshtml'),
     read('Pages/Index.cshtml.cs'),
@@ -21,6 +21,7 @@ const [program, topPage, topModel, closingPage, closingModel, drinkDeliveryHandl
     read('Pages/Closing/Index.DrinkBack.cs'),
     read('Pages/Closing/Index.CastSalesAdjustment.cs'),
     read('wwwroot/js/features/closing-dashboard.js'),
+    read('wwwroot/css/features/closing.css'),
     read('Pages/Shared/_AttendanceEditorModal.cshtml'),
     read('wwwroot/js/features/attendance-editor.js'),
     read('Features/Attendance/AttendanceModels.cs'),
@@ -61,6 +62,9 @@ assert.match(castSalesHandlers, /OnGetCastSalesOverviewAsync/, '締め作業Page
 assert.match(castSalesHandlers, /OnPostCastSalesSaveV2Async/, '締め作業PageModelにキャスト売上保存handlerを持つこと');
 assert.match(closingDashboardScript, /const modalTargets = \{[\s\S]*drinkDelivery: '#drinkDeliveryEditorModal'[\s\S]*castSalesAdjustment: '#castSalesAdjustmentShellModal'[\s\S]*drinkBack: '#drinkBackEditorModal'/, '締め作業JSで各調整モーダルを明示起動できること');
 assert.doesNotMatch(closingDashboardScript, /URLSearchParams[\s\S]*get\('modal'\)/, '旧ページリダイレクト用のモーダル指定を残さないこと');
+assert.match(closingCss, /\.closing-attendance-table\s*\{[\s\S]*gap:\s*0\.25rem;/, '勤怠行間を詰めて一覧性を確保すること');
+assert.match(closingCss, /\.closing-attendance-table__row\s*\{[\s\S]*min-height:\s*3\.25rem;[\s\S]*padding:\s*0\.35rem 0\.5rem;/, '勤怠行をコンパクトにすること');
+assert.match(closingCss, /@media \(min-width:\s*768px\)[\s\S]*\.closing-attendance-table__field > span:first-child\s*\{[\s\S]*display:\s*none;/, 'デスクトップでは表見出しと重複する行内ラベルを隠すこと');
 
 assert.match(partial, /id="attendanceEditorModal"/, '共有勤怠モーダルのroot IDを持つこと');
 assert.match(partial, /window\.prosperAttendanceEditor/, '共有部分ビューで勤怠エディタ設定を出力すること');

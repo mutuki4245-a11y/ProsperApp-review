@@ -41,6 +41,10 @@ assert.match(source, /pendingCommand \?\?= collectCommand\(\)/);
 assert.match(source, /if \(!pendingCommand \|\| saving\) return/);
 assert.match(source, /className = 'drink-back-editor__department'/, 'キャスト名と店名を別列表示すること');
 assert.match(source, /input\.type = 'text'/, 'ドリンクバック金額入力はnumber spinnerを出さないこと');
+assert.doesNotMatch(source, /row\.isSaved \? '保存済み' : '未保存'/, '一括保存画面に行別保存状態を表示しないこと');
+assert.doesNotMatch(source, /未入力 \$\{editor\.status\.missingCastCount\}名/, '一括保存画面に未入力件数ナビを表示しないこと');
+assert.doesNotMatch(source, /保存済み \$\{savedOptionalCount\}名/, '一括保存画面に任意調整の保存件数を表示しないこと');
+assert.doesNotMatch(page, /data-drink-back-required-status|data-drink-back-optional-badge/, '不要な件数表示領域を描画しないこと');
 assert.match(program, /AddScoped<IDrinkBackRepository, SupabaseDrinkBackRepository>/);
 
 console.log('Drink-back v2 contract checks passed.');

@@ -333,7 +333,7 @@ begin
                 nullif(max(account.account_name), ''),
                 line.account_code
             ) as account_name,
-            nullif(string_agg(distinct nullif(trim(coalesce(receipt_entry.memo, entry.description, line.line_memo, '')), ''), ' / '), '') as description,
+            nullif(string_agg(distinct nullif(trim(coalesce(receipt_entry.memo, line.line_memo, '')), ''), ' / '), '') as description,
             min(coalesce(account.sort_order, 9999)) as sort_order,
             sum(line.amount) as amount
           from receipt_entries receipt_entry

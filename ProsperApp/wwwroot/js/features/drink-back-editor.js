@@ -15,8 +15,6 @@
     const optionalRows = root.querySelector('[data-drink-back-optional-rows]');
     const optionalSection = root.querySelector('[data-drink-back-optional-section]');
     const optionalToggle = root.querySelector('[data-drink-back-show-optional]');
-    const optionalBadge = root.querySelector('[data-drink-back-optional-badge]');
-    const requiredStatus = root.querySelector('[data-drink-back-required-status]');
     const total = root.querySelector('[data-drink-back-total]');
     const businessDate = root.querySelector('[data-drink-back-business-date]');
     const guidance = root.querySelector('[data-drink-back-guidance]');
@@ -100,11 +98,9 @@
             : [],
         status: {
             requiredCastCount: Number(value?.status?.requiredCastCount) || 0,
-            completedCastCount: Number(value?.status?.completedCastCount) || 0,
             missingCastCount: Number(value?.status?.missingCastCount) || 0,
             totalAmount: Number(value?.status?.totalAmount) || 0
         },
-        optionalAdjustmentCount: Number(value?.optionalAdjustmentCount) || 0,
         checkedAt: value?.checkedAt || new Date().toISOString()
     });
     const normalizeCast = (value) => ({
@@ -151,11 +147,6 @@
             selector.dataset.optionalSelected = '';
             selector.setAttribute('aria-label', `${displayName(row)}を調整対象にする`);
             identity.prepend(selector);
-        } else {
-            const badge = document.createElement('span');
-            badge.className = `badge ${row.isSaved ? 'text-bg-success' : 'text-bg-warning'}`;
-            badge.textContent = row.isSaved ? '保存済み' : '未保存';
-            identity.append(badge);
         }
 
         const amount = document.createElement('span');
@@ -220,24 +211,15 @@
             });
         optionalRows.replaceChildren(...optionalNodes);
 
-        const savedOptionalCount = editor.optionalRows.length;
-        optionalBadge.textContent = `保存済み ${savedOptionalCount}名`;
-        optionalBadge.className = `badge ${savedOptionalCount > 0 ? 'text-bg-warning' : 'text-bg-secondary'}`;
-        requiredStatus.textContent = editor.status.missingCastCount > 0
-            ? `未入力 ${editor.status.missingCastCount}名`
-            : `必須 ${editor.status.completedCastCount}/${editor.status.requiredCastCount}名 保存済み`;
         total.textContent = `合計 ${toYen(editor.status.totalAmount)}`;
         businessDate.textContent = editor.hasBusinessDay && editor.businessDate
             ? `${editor.businessDate} / 出勤キャスト ${editor.status.requiredCastCount}名`
             : `営業日 ${root.dataset.currentBusinessDate} / 勤怠保存待ち`;
+        guidance.hidden = editor.hasBusinessDay && editor.status.requiredCastCount > 0;
         guidance.textContent = !editor.hasBusinessDay
             ? '営業日と勤怠を保存してから調整します。'
-            : editor.status.requiredCastCount === 0
-                ? '出勤キャストが登録されていません。'
-                : editor.status.missingCastCount > 0
-                    ? `未入力の出勤キャストが ${editor.status.missingCastCount}名います。`
-                    : '保存済みの調整額を変更できます。';
-        guidance.className = `alert ${editor.hasBusinessDay && editor.status.requiredCastCount > 0 ? 'alert-info' : 'alert-warning'}`;
+            : '出勤キャストが登録されていません。';
+        guidance.className = 'alert alert-warning';
         const checkedAt = new Date(editor.checkedAt);
         updated.textContent = Number.isNaN(checkedAt.getTime()) ? '' : `最終確認: ${checkedAt.toLocaleString('ja-JP')}`;
         submit.disabled = !editor.hasBusinessDay || editor.status.requiredCastCount === 0 || saving;
