@@ -11,12 +11,16 @@ const exists = async (path) => {
     }
 };
 
-const [program, topPage, topModel, closingPage, closingModel, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
+const [program, topPage, topModel, closingPage, closingModel, drinkCostModel, drinkBackModel, castSalesModel, closingDashboardScript, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
     read('Program.cs'),
     read('Pages/Index.cshtml'),
     read('Pages/Index.cshtml.cs'),
     read('Pages/Closing/Index.cshtml'),
     read('Pages/Closing/Index.cshtml.cs'),
+    read('Pages/Closing/DrinkCost.cshtml.cs'),
+    read('Pages/Closing/DrinkBacks.cshtml.cs'),
+    read('Pages/Closing/CastSalesAdjustment.cshtml.cs'),
+    read('wwwroot/js/features/closing-dashboard.js'),
     read('Pages/Shared/_AttendanceEditorModal.cshtml'),
     read('wwwroot/js/features/attendance-editor.js'),
     read('Features/Attendance/AttendanceModels.cs'),
@@ -45,6 +49,11 @@ assert.match(closingPage, /<partial name="_AttendanceEditorModal"/, '締め作�
 assert.doesNotMatch(closingPage, /\/Closing\/Attendance/, '締め作業から旧勤怠URLへ遷移しないこと');
 assert.match(closingModel, /OnGetAttendanceCurrentAsync/, '締め作業PageModelに勤怠current handlerを持つこと');
 assert.match(closingModel, /OnPostAttendanceSaveAsync/, '締め作業PageModelに勤怠save handlerを持つこと');
+assert.match(drinkCostModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "drinkDelivery" \}\)/, '旧酒代ページ表示は締め作業モーダルへ戻すこと');
+assert.match(drinkBackModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "drinkBack" \}\)/, '旧ドリンクバックページ表示は締め作業モーダルへ戻すこと');
+assert.match(castSalesModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "castSalesAdjustment" \}\)/, '旧キャスト売上額調整ページ表示は締め作業モーダルへ戻すこと');
+assert.match(closingDashboardScript, /const modalTargets = \{[\s\S]*drinkDelivery: '#drinkDeliveryEditorModal'[\s\S]*castSalesAdjustment: '#castSalesAdjustmentShellModal'[\s\S]*drinkBack: '#drinkBackEditorModal'/, '締め作業JSで各調整モーダルを明示起動できること');
+assert.match(closingDashboardScript, /new URLSearchParams\(window\.location\.search\)\.get\('modal'\)/, '旧URLから戻ったとき指定モーダルを自動表示すること');
 
 assert.match(partial, /id="attendanceEditorModal"/, '共有勤怠モーダルのroot IDを持つこと');
 assert.match(partial, /window\.prosperAttendanceEditor/, '共有部分ビューで勤怠エディタ設定を出力すること');

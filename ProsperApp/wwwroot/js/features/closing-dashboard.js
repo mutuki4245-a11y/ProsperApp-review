@@ -16,6 +16,11 @@
     const businessDayRevisionInput = finalForm?.querySelector('[name="BusinessDayRevision"]');
     const departmentId = Number(root.dataset.departmentId) || 0;
     const closeCommandStorageKey = `prosper:closing-command:${departmentId}:v2`;
+    const modalTargets = {
+        drinkDelivery: '#drinkDeliveryEditorModal',
+        castSalesAdjustment: '#castSalesAdjustmentShellModal',
+        drinkBack: '#drinkBackEditorModal'
+    };
     const castMasterStore = window.ProsperSync && departmentId > 0
         ? window.ProsperSync.getStore(`closing-cast-master:${departmentId}:v1`)
         : null;
@@ -260,6 +265,17 @@
         renderFinal();
     };
 
+    const openClosingModal = (name) => {
+        const selector = modalTargets[name];
+        const element = selector ? document.querySelector(selector) : null;
+        if (!element || !window.bootstrap?.Modal) {
+            return false;
+        }
+
+        window.bootstrap.Modal.getOrCreateInstance(element).show();
+        return true;
+    };
+
     const loadDashboard = async () => {
         const url = new URL(root.dataset.dashboardUrl, window.location.origin);
         const knownCastMasterRevision = castMasterStore?.getRevision();
@@ -392,6 +408,13 @@
     });
     override?.addEventListener('change', renderFinal);
     document.querySelector('[data-closing-retry]')?.addEventListener('click', () => void refresh());
+    Object.keys(modalTargets).forEach((name) => {
+        root.querySelector(`[data-closing-panel="${name}"]`)?.addEventListener('click', (event) => {
+            if (openClosingModal(name)) {
+                event.preventDefault();
+            }
+        });
+    });
     window.addEventListener('prosper:attendance-editor-saved', () => void refresh());
     finalForm?.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -447,6 +470,12 @@
 
     renderFinal();
     void refresh().then(() => {
+        const requestedModal = new URLSearchParams(window.location.search).get('modal');
+        if (requestedModal && openClosingModal(requestedModal)) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('modal');
+            window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        }
         if (pendingCloseCommand) {
             void submitClose(pendingCloseCommand);
         }

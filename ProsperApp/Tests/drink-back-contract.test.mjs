@@ -24,7 +24,7 @@ assert.match(sql, /current_business_day_operation_results/i);
 assert.match(page, /data-drink-back-editor/);
 assert.match(pageModel, /OnGetEditorAsync/);
 assert.match(pageModel, /OnPostSaveAsync/);
-assert.doesNotMatch(pageModel, /RedirectToPage/);
+assert.match(pageModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "drinkBack" \}\)/, '旧ドリンクバックページ表示は締め作業モーダルへ戻すこと');
 assert.match(repository, /store\.get_current_drink_back_editor/);
 assert.match(repository, /store\.save_drink_back_adjustments_v2/);
 assert.match(source, /sessionStorage\.getItem\(pendingStorageKey\)/);

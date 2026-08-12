@@ -19,7 +19,9 @@ public sealed class CastSalesAdjustmentModel(
 
     public IActionResult OnGet()
     {
-        return _featureGate.IsEnabled(FeatureNames.Closing) ? Page() : NotFound();
+        return _featureGate.IsEnabled(FeatureNames.Closing)
+            ? RedirectToPage("/Closing/Index", new { modal = "castSalesAdjustment" })
+            : NotFound();
     }
 
     public async Task<IActionResult> OnGetOverviewAsync(CancellationToken cancellationToken)

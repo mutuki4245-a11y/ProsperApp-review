@@ -24,7 +24,9 @@ public class ClosingDrinkCostModel(
 
     public IActionResult OnGet()
     {
-        return _featureGate.IsEnabled(FeatureNames.Closing) ? Page() : NotFound();
+        return _featureGate.IsEnabled(FeatureNames.Closing)
+            ? RedirectToPage("/Closing/Index", new { modal = "drinkDelivery" })
+            : NotFound();
     }
 
     public async Task<IActionResult> OnGetEditorAsync(CancellationToken cancellationToken)
