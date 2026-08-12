@@ -1508,7 +1508,7 @@ button.closing-panel:focus {
 
 .daily-report__expense-table th,
 .daily-report__expense-table td {
-  height: 7.3mm;
+  height: 7.25mm;
 }
 
 .daily-report__expense-table th:first-child {

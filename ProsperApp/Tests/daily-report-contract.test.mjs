@@ -27,7 +27,8 @@ assert.match(closeSource, /window\.addEventListener\('resize', schedulePreviewLa
 assert.match(closeSource, /expense\.description/, '支出内訳の摘要列を描画すること');
 assert.match(closingPage, /<th>勘定科目<\/th><th>摘要<\/th><th>金額<\/th>/, '支出内訳は摘要列を持つこと');
 assert.match(closingPage, /data-report-visits data-min-rows="31"/, 'リスト表はA4余白を埋める既定行を持つこと');
-assert.match(closingPage, /data-report-expenses data-min-rows="29"/, '支出内訳表はA4余白を埋める既定行を持つこと');
+assert.match(closingPage, /data-report-expenses data-min-rows="35"/, '支出内訳表はA4余白を埋める既定行を持つこと');
+assert.match(closingCss, /\.daily-report__expense-table th,[\s\S]*\.daily-report__expense-table td\s*\{[\s\S]*height:\s*7\.25mm;/, '支出内訳35行がA4フッター手前へ収まる行高にすること');
 assert.match(closingCss, /\.daily-report__pages\s*\{[\s\S]*flex-direction: row/, '画面では日報3ページを横並びにすること');
 assert.match(closingCss, /@media print[\s\S]*\.daily-report__pages\s*\{[\s\S]*display: block[\s\S]*transform: none !important/, '印刷時は画面用縮小を解除すること');
 
