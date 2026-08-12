@@ -1,35 +1,11 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Features.Shared;
-using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class ClosingDrinkCostModel(
-    IFeatureGate featureGate,
-    IBusinessDayRepository businessDayRepository,
-    ILocalSettingsProvider localSettingsProvider,
-    IStoreClock storeClock) : PageModel
+public partial class ClosingModel
 {
-    private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly IFeatureGate _featureGate = featureGate;
-    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
-    private readonly IStoreClock _storeClock = storeClock;
-
-    public long StoreDepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
-
-    public DateOnly CurrentBusinessDate => _storeClock.GetCurrentBusinessDate();
-
-    public IActionResult OnGet()
-    {
-        return _featureGate.IsEnabled(FeatureNames.Closing)
-            ? RedirectToPage("/Closing/Index", new { modal = "drinkDelivery" })
-            : NotFound();
-    }
-
-    public async Task<IActionResult> OnGetEditorAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetDrinkDeliveryEditorAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
@@ -50,7 +26,7 @@ public class ClosingDrinkCostModel(
         return new JsonResult(new { succeeded = true, editor = result.Value });
     }
 
-    public async Task<IActionResult> OnPostSaveV2Async(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostDrinkDeliverySaveV2Async(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {

@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const exists = async (path) => {
+    try {
+        await access(new URL(`../${path}`, import.meta.url));
+        return true;
+    } catch {
+        return false;
+    }
+};
 const [migration, sql, page, pageModel, repository, source, program] = await Promise.all([
     read('Sql/store_rpc/00a_drink_back_schema.sql'),
     read('Sql/store_rpc/30_current_drink_back_adjustments.sql'),
-    read('Pages/Closing/DrinkBacks.cshtml'),
-    read('Pages/Closing/DrinkBacks.cshtml.cs'),
+    read('Pages/Closing/Index.cshtml'),
+    read('Pages/Closing/Index.DrinkBack.cs'),
     read('Infrastructure/Supabase/SupabaseDrinkBackRepository.cs'),
     read('wwwroot/js/features/drink-back-editor.js'),
     read('Program.cs')
@@ -22,9 +30,10 @@ assert.match(sql, /p_operation_id text/i);
 assert.match(sql, /p_expected_business_day_revision bigint/i);
 assert.match(sql, /current_business_day_operation_results/i);
 assert.match(page, /data-drink-back-editor/);
-assert.match(pageModel, /OnGetEditorAsync/);
-assert.match(pageModel, /OnPostSaveAsync/);
-assert.match(pageModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "drinkBack" \}\)/, '旧ドリンクバックページ表示は締め作業モーダルへ戻すこと');
+assert.match(pageModel, /OnGetDrinkBackEditorAsync/);
+assert.match(pageModel, /OnPostDrinkBackSaveAsync/);
+assert.equal(await exists('Pages/Closing/DrinkBacks.cshtml'), false, '旧ドリンクバックページを残さないこと');
+assert.equal(await exists('Pages/Closing/DrinkBacks.cshtml.cs'), false, '旧ドリンクバックPageModelを残さないこと');
 assert.match(repository, /store\.get_current_drink_back_editor/);
 assert.match(repository, /store\.save_drink_back_adjustments_v2/);
 assert.match(source, /sessionStorage\.getItem\(pendingStorageKey\)/);

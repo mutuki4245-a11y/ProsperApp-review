@@ -470,12 +470,6 @@
 
     renderFinal();
     void refresh().then(() => {
-        const requestedModal = new URLSearchParams(window.location.search).get('modal');
-        if (requestedModal && openClosingModal(requestedModal)) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('modal');
-            window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-        }
         if (pendingCloseCommand) {
             void submitClose(pendingCloseCommand);
         }

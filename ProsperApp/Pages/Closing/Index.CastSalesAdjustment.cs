@@ -1,30 +1,11 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Features.Shared;
 
 namespace ProsperApp.Pages;
 
-public sealed class CastSalesAdjustmentModel(
-    IFeatureGate featureGate,
-    ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
-    ILocalSettingsProvider localSettingsProvider) : PageModel
+public partial class ClosingModel
 {
-    private static readonly JsonSerializerOptions RequestJsonOptions = new(JsonSerializerDefaults.Web);
-    private readonly IFeatureGate _featureGate = featureGate;
-    private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
-
-    public long StoreDepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
-
-    public IActionResult OnGet()
-    {
-        return _featureGate.IsEnabled(FeatureNames.Closing)
-            ? RedirectToPage("/Closing/Index", new { modal = "castSalesAdjustment" })
-            : NotFound();
-    }
-
-    public async Task<IActionResult> OnGetOverviewAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetCastSalesOverviewAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
@@ -42,19 +23,19 @@ public sealed class CastSalesAdjustmentModel(
             });
     }
 
-    public async Task<IActionResult> OnPostSaveV2Async(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostCastSalesSaveV2Async(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
             return NotFound();
         }
 
-        var request = await ReadRequestAsync<SaveRequest>(cancellationToken);
+        var request = await ReadRequestAsync<CastSalesSaveRequest>(cancellationToken);
         var operationId = string.Empty;
         var message = "入力内容が正しくありません。";
-        if (request is null || !TryValidateSaveRequest(request, out operationId, out message))
+        if (request is null || !TryValidateCastSalesSaveRequest(request, out operationId, out message))
         {
-            return BadRequest(ValidationPayload(request?.OperationId, message));
+            return BadRequest(CastSalesValidationPayload(request?.OperationId, message));
         }
 
         var result = await _castSalesAdjustmentRepository.SaveCurrentAsync(
@@ -72,22 +53,22 @@ public sealed class CastSalesAdjustmentModel(
                     value.SlipCastId,
                     value.SalesAmount)).ToArray()),
             cancellationToken);
-        return MutationResponse(result, operationId);
+        return CastSalesMutationResponse(result, operationId);
     }
 
-    public async Task<IActionResult> OnPostConfirmAllV2Async(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostCastSalesConfirmAllV2Async(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
             return NotFound();
         }
 
-        var request = await ReadRequestAsync<ConfirmAllRequest>(cancellationToken);
+        var request = await ReadRequestAsync<CastSalesConfirmAllRequest>(cancellationToken);
         var operationId = string.Empty;
         var message = "入力内容が正しくありません。";
-        if (request is null || !TryValidateConfirmRequest(request, out operationId, out message))
+        if (request is null || !TryValidateCastSalesConfirmRequest(request, out operationId, out message))
         {
-            return BadRequest(ValidationPayload(request?.OperationId, message));
+            return BadRequest(CastSalesValidationPayload(request?.OperationId, message));
         }
 
         var result = await _castSalesAdjustmentRepository.ConfirmCurrentAsync(
@@ -106,7 +87,7 @@ public sealed class CastSalesAdjustmentModel(
                         value.SlipCastId,
                         value.SalesAmount)).ToArray())).ToArray()),
             cancellationToken);
-        return MutationResponse(result, operationId);
+        return CastSalesMutationResponse(result, operationId);
     }
 
     private async Task<T?> ReadRequestAsync<T>(CancellationToken cancellationToken)
@@ -121,7 +102,7 @@ public sealed class CastSalesAdjustmentModel(
         }
     }
 
-    private IActionResult MutationResponse(
+    private IActionResult CastSalesMutationResponse(
         Result<CastSalesAdjustmentMutationResult> result,
         string operationId)
     {
@@ -162,12 +143,12 @@ public sealed class CastSalesAdjustmentModel(
         };
     }
 
-    private static bool TryValidateSaveRequest(
-        SaveRequest request,
+    private static bool TryValidateCastSalesSaveRequest(
+        CastSalesSaveRequest request,
         out string operationId,
         out string message)
     {
-        operationId = NormalizeOperationId(request.OperationId);
+        operationId = NormalizeCastSalesOperationId(request.OperationId);
         if (operationId.Length == 0 ||
             request.ExpectedBusinessDayId <= 0 || request.ExpectedBusinessDayRevision < 0 ||
             request.SlipId <= 0 || request.ExpectedCheckoutId <= 0 ||
@@ -177,7 +158,7 @@ public sealed class CastSalesAdjustmentModel(
             return false;
         }
 
-        if (!ValidAdjustments(request.Adjustments))
+        if (!ValidCastSalesAdjustments(request.Adjustments))
         {
             message = "指名キャスト全員の売上額を0円以上の整数で入力してください。";
             return false;
@@ -187,12 +168,12 @@ public sealed class CastSalesAdjustmentModel(
         return true;
     }
 
-    private static bool TryValidateConfirmRequest(
-        ConfirmAllRequest request,
+    private static bool TryValidateCastSalesConfirmRequest(
+        CastSalesConfirmAllRequest request,
         out string operationId,
         out string message)
     {
-        operationId = NormalizeOperationId(request.OperationId);
+        operationId = NormalizeCastSalesOperationId(request.OperationId);
         if (operationId.Length == 0 || request.ExpectedBusinessDayId <= 0 ||
             request.ExpectedBusinessDayRevision < 0 || request.Slips is not { Count: >= 1 and <= 100 } ||
             request.Slips.Select(slip => slip.SlipId).Distinct().Count() != request.Slips.Count)
@@ -204,7 +185,7 @@ public sealed class CastSalesAdjustmentModel(
         if (request.Slips.Any(slip =>
                 slip.SlipId <= 0 || slip.ExpectedCheckoutId <= 0 ||
                 slip.ExpectedSlipVersion == default || slip.ExpectedCheckoutVersion == default ||
-                !ValidAdjustments(slip.Adjustments)))
+                !ValidCastSalesAdjustments(slip.Adjustments)))
         {
             message = "指名キャスト全員の売上額を0円以上の整数で入力してください。";
             return false;
@@ -214,7 +195,7 @@ public sealed class CastSalesAdjustmentModel(
         return true;
     }
 
-    private static bool ValidAdjustments(IReadOnlyList<AdjustmentRequest>? adjustments)
+    private static bool ValidCastSalesAdjustments(IReadOnlyList<CastSalesAdjustmentRequest>? adjustments)
     {
         return adjustments is { Count: > 0 and <= 100 } &&
                adjustments.Select(value => value.SlipCastId).Distinct().Count() == adjustments.Count &&
@@ -223,12 +204,12 @@ public sealed class CastSalesAdjustmentModel(
                                         decimal.Truncate(value.SalesAmount) == value.SalesAmount);
     }
 
-    private static string NormalizeOperationId(string? value)
+    private static string NormalizeCastSalesOperationId(string? value)
     {
         return Guid.TryParse(value, out var operationId) ? operationId.ToString("D") : string.Empty;
     }
 
-    private static object ValidationPayload(string? operationId, string? message) => new
+    private static object CastSalesValidationPayload(string? operationId, string? message) => new
     {
         succeeded = false,
         status = "validation_error",
@@ -236,9 +217,9 @@ public sealed class CastSalesAdjustmentModel(
         message = string.IsNullOrWhiteSpace(message) ? "入力内容が正しくありません。" : message
     };
 
-    public sealed record AdjustmentRequest(long SlipCastId, decimal SalesAmount);
+    public sealed record CastSalesAdjustmentRequest(long SlipCastId, decimal SalesAmount);
 
-    public sealed record SaveRequest(
+    public sealed record CastSalesSaveRequest(
         string OperationId,
         long ExpectedBusinessDayId,
         long ExpectedBusinessDayRevision,
@@ -248,20 +229,20 @@ public sealed class CastSalesAdjustmentModel(
         DateTimeOffset ExpectedCheckoutVersion,
         string SourceAmountType,
         string SplitMode,
-        IReadOnlyList<AdjustmentRequest>? Adjustments);
+        IReadOnlyList<CastSalesAdjustmentRequest>? Adjustments);
 
-    public sealed record ConfirmSlipRequest(
+    public sealed record CastSalesConfirmSlipRequest(
         long SlipId,
         DateTimeOffset ExpectedSlipVersion,
         long ExpectedCheckoutId,
         DateTimeOffset ExpectedCheckoutVersion,
         string SourceAmountType,
         string SplitMode,
-        IReadOnlyList<AdjustmentRequest>? Adjustments);
+        IReadOnlyList<CastSalesAdjustmentRequest>? Adjustments);
 
-    public sealed record ConfirmAllRequest(
+    public sealed record CastSalesConfirmAllRequest(
         string OperationId,
         long ExpectedBusinessDayId,
         long ExpectedBusinessDayRevision,
-        IReadOnlyList<ConfirmSlipRequest>? Slips);
+        IReadOnlyList<CastSalesConfirmSlipRequest>? Slips);
 }

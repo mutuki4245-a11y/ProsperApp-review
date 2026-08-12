@@ -93,15 +93,10 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 | `/Login` | `LoginModel` | Google ログイン、設定エラー表示 |
 | `/logout` | logout handler | Session と Cookie を破棄 |
 | `/Index` | `IndexModel` | 営業中、伝票作成、営業中編集、会計 |
-| `/Attendance` | `AttendanceModel` | 営業中導線の勤怠入力 |
 | `/Orders/Index` | `Orders.IndexModel` | 注文端末 |
-| `/Closing/Index` | `Closing.IndexModel` | 締め前 readiness と営業日締め |
-| `/Closing/Attendance` | `AttendanceModel` | 締め導線の勤怠入力 |
-| `/Closing/DrinkCost` | `DrinkCostModel` | 酒代入力 |
-| `/Closing/DrinkBacks` | `ClosingDrinkBacksModel` | ドリンクバック調整 |
+| `/Closing/Index` | `ClosingModel` | 締め前確認、勤怠・酒代・キャスト売上額・ドリンクバックのモーダル編集、営業日締め |
 | `/Closing/Receipts` | `ReceiptsModel` | 領収書簡易入力 |
 | `/DrivePreview/{driveFileId}` | `DrivePreviewModel` | Drive 証憑プレビュー |
-| `/Closing/CastSalesAdjustment` | `CastSalesAdjustmentModel` | キャスト売上額調整 |
 | `/Management/Index` | `Management.IndexModel` | 店舗設定メニュー、端末の画面モード・配色設定 |
 | `/Management/Tables` | `TablesModel` | 卓番管理 |
 | `/Management/Casts` | `CastsModel` | キャスト管理 |

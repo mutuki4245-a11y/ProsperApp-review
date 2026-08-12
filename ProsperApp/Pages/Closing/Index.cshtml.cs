@@ -8,10 +8,13 @@ using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public class ClosingModel(
+public partial class ClosingModel(
     IFeatureGate featureGate,
     IClosingApplicationService closingApplicationService,
     IAttendanceApplicationService attendanceApplicationService,
+    IBusinessDayRepository businessDayRepository,
+    ICastSalesAdjustmentRepository castSalesAdjustmentRepository,
+    IDrinkBackRepository drinkBackRepository,
     IAdminModeService adminModeService,
     IDailyReportApplicationService dailyReportApplicationService,
     ILocalSettingsProvider localSettingsProvider,
@@ -21,6 +24,9 @@ public class ClosingModel(
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly IClosingApplicationService _closingApplicationService = closingApplicationService;
     private readonly IAttendanceApplicationService _attendanceApplicationService = attendanceApplicationService;
+    private readonly IBusinessDayRepository _businessDayRepository = businessDayRepository;
+    private readonly ICastSalesAdjustmentRepository _castSalesAdjustmentRepository = castSalesAdjustmentRepository;
+    private readonly IDrinkBackRepository _drinkBackRepository = drinkBackRepository;
     private readonly IAdminModeService _adminModeService = adminModeService;
     private readonly IDailyReportApplicationService _dailyReportApplicationService = dailyReportApplicationService;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;

@@ -1,34 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.RazorPages;
-using ProsperApp.Features.Closing;
-using ProsperApp.Features.Shared;
-using ProsperApp.Services;
 
 namespace ProsperApp.Pages;
 
-public sealed class ClosingDrinkBacksModel(
-    IFeatureGate featureGate,
-    IDrinkBackRepository drinkBackRepository,
-    ILocalSettingsProvider localSettingsProvider,
-    IStoreClock storeClock) : PageModel
+public partial class ClosingModel
 {
-    private readonly IFeatureGate _featureGate = featureGate;
-    private readonly IDrinkBackRepository _drinkBackRepository = drinkBackRepository;
-    private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
-    private readonly IStoreClock _storeClock = storeClock;
-
-    public long DepartmentId => _localSettingsProvider.GetCurrent().StoreDepartmentId;
-
-    public DateOnly CurrentBusinessDate => _storeClock.GetCurrentBusinessDate();
-
-    public IActionResult OnGet()
-    {
-        return _featureGate.IsEnabled(FeatureNames.Closing)
-            ? RedirectToPage("/Closing/Index", new { modal = "drinkBack" })
-            : NotFound();
-    }
-
-    public async Task<IActionResult> OnGetEditorAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetDrinkBackEditorAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {
@@ -55,7 +31,7 @@ public sealed class ClosingDrinkBacksModel(
         });
     }
 
-    public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostDrinkBackSaveAsync(CancellationToken cancellationToken)
     {
         if (!_featureGate.IsEnabled(FeatureNames.Closing))
         {

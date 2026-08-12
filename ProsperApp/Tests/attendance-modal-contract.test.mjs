@@ -11,15 +11,15 @@ const exists = async (path) => {
     }
 };
 
-const [program, topPage, topModel, closingPage, closingModel, drinkCostModel, drinkBackModel, castSalesModel, closingDashboardScript, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
+const [program, topPage, topModel, closingPage, closingModel, drinkDeliveryHandlers, drinkBackHandlers, castSalesHandlers, closingDashboardScript, partial, editorScript, attendanceModels, attendanceService] = await Promise.all([
     read('Program.cs'),
     read('Pages/Index.cshtml'),
     read('Pages/Index.cshtml.cs'),
     read('Pages/Closing/Index.cshtml'),
     read('Pages/Closing/Index.cshtml.cs'),
-    read('Pages/Closing/DrinkCost.cshtml.cs'),
-    read('Pages/Closing/DrinkBacks.cshtml.cs'),
-    read('Pages/Closing/CastSalesAdjustment.cshtml.cs'),
+    read('Pages/Closing/Index.DrinkDelivery.cs'),
+    read('Pages/Closing/Index.DrinkBack.cs'),
+    read('Pages/Closing/Index.CastSalesAdjustment.cs'),
     read('wwwroot/js/features/closing-dashboard.js'),
     read('Pages/Shared/_AttendanceEditorModal.cshtml'),
     read('wwwroot/js/features/attendance-editor.js'),
@@ -29,6 +29,10 @@ const [program, topPage, topModel, closingPage, closingModel, drinkCostModel, dr
 
 assert.equal(await exists('Pages/Attendance.cshtml'), false, '旧 /Attendance Razor page を残さないこと');
 assert.equal(await exists('Pages/Attendance.cshtml.cs'), false, '旧 /Attendance PageModel を残さないこと');
+for (const oldPage of ['DrinkCost', 'DrinkBacks', 'CastSalesAdjustment']) {
+    assert.equal(await exists(`Pages/Closing/${oldPage}.cshtml`), false, `旧 /Closing/${oldPage} Razor page を残さないこと`);
+    assert.equal(await exists(`Pages/Closing/${oldPage}.cshtml.cs`), false, `旧 /Closing/${oldPage} PageModel を残さないこと`);
+}
 assert.doesNotMatch(program, /AddPageRoute\("\/Attendance"/, '旧 /Closing/Attendance 追加ルートを残さないこと');
 assert.match(program, /AddRazorPages\(\)/, 'Razor Pages は追加ルートなしで登録すること');
 
@@ -42,18 +46,21 @@ assert.match(closingPage, /data-closing-panel="attendance"[\s\S]*data-bs-target=
 assert.match(closingPage, /data-closing-panel="drinkDelivery"[\s\S]*data-bs-target="#drinkDeliveryEditorModal"/, '締め作業から酒代入力モーダルを開けること');
 assert.match(closingPage, /data-closing-panel="castSalesAdjustment"[\s\S]*data-bs-target="#castSalesAdjustmentShellModal"/, '締め作業からキャスト売上額調整モーダルを開けること');
 assert.match(closingPage, /data-closing-panel="drinkBack"[\s\S]*data-bs-target="#drinkBackEditorModal"/, '締め作業からドリンクバック調整モーダルを開けること');
-assert.match(closingPage, /data-drink-delivery-editor[\s\S]*data-editor-url="@Url\.Page\("\/Closing\/DrinkCost", "Editor"\)/, '酒代入力エディタを締め作業内に描画すること');
-assert.match(closingPage, /data-cast-sales-editor[\s\S]*data-overview-url="@Url\.Page\("\/Closing\/CastSalesAdjustment", "Overview"\)/, 'キャスト売上額調整エディタを締め作業内に描画すること');
-assert.match(closingPage, /data-drink-back-editor[\s\S]*data-editor-url="@Url\.Page\("\/Closing\/DrinkBacks", "Editor"\)/, 'ドリンクバック調整エディタを締め作業内に描画すること');
+assert.match(closingPage, /data-drink-delivery-editor[\s\S]*data-editor-url="@Url\.Page\("\/Closing\/Index", "DrinkDeliveryEditor"\)/, '酒代入力エディタを締め作業内に描画すること');
+assert.match(closingPage, /data-cast-sales-editor[\s\S]*data-overview-url="@Url\.Page\("\/Closing\/Index", "CastSalesOverview"\)/, 'キャスト売上額調整エディタを締め作業内に描画すること');
+assert.match(closingPage, /data-drink-back-editor[\s\S]*data-editor-url="@Url\.Page\("\/Closing\/Index", "DrinkBackEditor"\)/, 'ドリンクバック調整エディタを締め作業内に描画すること');
 assert.match(closingPage, /<partial name="_AttendanceEditorModal"/, '締め作業に共有勤怠モーダルを描画すること');
 assert.doesNotMatch(closingPage, /\/Closing\/Attendance/, '締め作業から旧勤怠URLへ遷移しないこと');
 assert.match(closingModel, /OnGetAttendanceCurrentAsync/, '締め作業PageModelに勤怠current handlerを持つこと');
 assert.match(closingModel, /OnPostAttendanceSaveAsync/, '締め作業PageModelに勤怠save handlerを持つこと');
-assert.match(drinkCostModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "drinkDelivery" \}\)/, '旧酒代ページ表示は締め作業モーダルへ戻すこと');
-assert.match(drinkBackModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "drinkBack" \}\)/, '旧ドリンクバックページ表示は締め作業モーダルへ戻すこと');
-assert.match(castSalesModel, /RedirectToPage\("\/Closing\/Index", new \{ modal = "castSalesAdjustment" \}\)/, '旧キャスト売上額調整ページ表示は締め作業モーダルへ戻すこと');
+assert.match(drinkDeliveryHandlers, /OnGetDrinkDeliveryEditorAsync/, '締め作業PageModelに酒代取得handlerを持つこと');
+assert.match(drinkDeliveryHandlers, /OnPostDrinkDeliverySaveV2Async/, '締め作業PageModelに酒代保存handlerを持つこと');
+assert.match(drinkBackHandlers, /OnGetDrinkBackEditorAsync/, '締め作業PageModelにドリンクバック取得handlerを持つこと');
+assert.match(drinkBackHandlers, /OnPostDrinkBackSaveAsync/, '締め作業PageModelにドリンクバック保存handlerを持つこと');
+assert.match(castSalesHandlers, /OnGetCastSalesOverviewAsync/, '締め作業PageModelにキャスト売上取得handlerを持つこと');
+assert.match(castSalesHandlers, /OnPostCastSalesSaveV2Async/, '締め作業PageModelにキャスト売上保存handlerを持つこと');
 assert.match(closingDashboardScript, /const modalTargets = \{[\s\S]*drinkDelivery: '#drinkDeliveryEditorModal'[\s\S]*castSalesAdjustment: '#castSalesAdjustmentShellModal'[\s\S]*drinkBack: '#drinkBackEditorModal'/, '締め作業JSで各調整モーダルを明示起動できること');
-assert.match(closingDashboardScript, /new URLSearchParams\(window\.location\.search\)\.get\('modal'\)/, '旧URLから戻ったとき指定モーダルを自動表示すること');
+assert.doesNotMatch(closingDashboardScript, /URLSearchParams[\s\S]*get\('modal'\)/, '旧ページリダイレクト用のモーダル指定を残さないこと');
 
 assert.match(partial, /id="attendanceEditorModal"/, '共有勤怠モーダルのroot IDを持つこと');
 assert.match(partial, /window\.prosperAttendanceEditor/, '共有部分ビューで勤怠エディタ設定を出力すること');

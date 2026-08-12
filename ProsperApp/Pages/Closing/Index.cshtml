@@ -109,8 +109,8 @@
                          data-drink-delivery-editor
                          data-department-id="@Model.DepartmentId"
                          data-current-business-date="@Model.CurrentBusinessDate.ToString("yyyy-MM-dd")"
-                         data-editor-url="@Url.Page("/Closing/DrinkCost", "Editor")"
-                         data-save-url="@Url.Page("/Closing/DrinkCost", "SaveV2")">
+                         data-editor-url="@Url.Page("/Closing/Index", "DrinkDeliveryEditor")"
+                         data-save-url="@Url.Page("/Closing/Index", "DrinkDeliverySaveV2")">
                     <div class="modal-header px-0 pt-0">
                         <div>
                             <p class="store-home__eyebrow mb-1">DRINK COST</p>
@@ -158,9 +158,9 @@
                 <section class="modal-body cast-sales-editor"
                          data-cast-sales-editor
                          data-department-id="@Model.DepartmentId"
-                         data-overview-url="@Url.Page("/Closing/CastSalesAdjustment", "Overview")"
-                         data-save-url="@Url.Page("/Closing/CastSalesAdjustment", "SaveV2")"
-                         data-confirm-url="@Url.Page("/Closing/CastSalesAdjustment", "ConfirmAllV2")">
+                         data-overview-url="@Url.Page("/Closing/Index", "CastSalesOverview")"
+                         data-save-url="@Url.Page("/Closing/Index", "CastSalesSaveV2")"
+                         data-confirm-url="@Url.Page("/Closing/Index", "CastSalesConfirmAllV2")">
                     <div class="modal-header px-0 pt-0">
                         <div>
                             <p class="store-home__eyebrow mb-1">CAST SALES</p>
@@ -245,8 +245,8 @@
                          data-drink-back-editor
                          data-department-id="@Model.DepartmentId"
                          data-current-business-date="@Model.CurrentBusinessDate.ToString("yyyy-MM-dd")"
-                         data-editor-url="@Url.Page("/Closing/DrinkBacks", "Editor")"
-                         data-save-url="@Url.Page("/Closing/DrinkBacks", "Save")">
+                         data-editor-url="@Url.Page("/Closing/Index", "DrinkBackEditor")"
+                         data-save-url="@Url.Page("/Closing/Index", "DrinkBackSave")">
                     <div class="modal-header px-0 pt-0">
                         <div>
                             <p class="store-home__eyebrow mb-1">DRINK BACK</p>
