@@ -4,7 +4,7 @@
 
 2026-08-12時点の正本です。RPC同期は `docs/rpc-synchronization-improvement-plan.md` の横断契約と画面別契約へ全面移行しました。旧RPC、旧Razor POST、旧DTO、旧Repository、旧payload変換、画面内fallbackは互換目的で残していません。
 
-本番Supabaseプロジェクト `zwdecfoecgpzpkallukh` へ営業履歴・過去営業日補正SQLを適用し、`prosper-rpc` Edge Function v40をdeploy済みです。旧RPCとの互換期間は設けず、Azureアプリ、DB、Edge Functionを同じ契約へ切り替えます。
+本番Supabaseプロジェクト `zwdecfoecgpzpkallukh` へ営業履歴・過去営業日補正SQLを適用し、`prosper-rpc` Edge Function v40とAzureアプリをdeploy済みです。旧RPCとの互換期間は設けず、Azureアプリ、DB、Edge Functionを同じ契約へ切り替えました。
 
 確認済み:
 
@@ -13,11 +13,12 @@
 - `node --test Tests/*.test.mjs`: 26/26成功
 - `node --check wwwroot/js/features/*.js`: 成功
 - Edge Function bundle検査: 成功
-- v2アプリ契約31 RPC: 各1定義、旧RPC: 0定義
+- アプリ契約34 RPC: 各1定義、旧RPC: 0定義
 - `anon`、`authenticated`、`service_role` の `store` 関数直接実行権限: 0件
 - ドリンクバック移行: 旧12件から新12件、合計金額一致、旧テーブル削除済み
 - `prosper-rpc` v40: ACTIVE
 - 営業履歴補正RPC: 実データを用いたrollback試験で変更なし、新版追加、旧版不変、監査、競合、4件目拒否、別営業日拒否、冪等再送、不完全状態維持を確認
+- 公開営業履歴: 一覧、営業中誘導、締め済み日報、4タブ補正editorをdesktop/mobileで確認し、console error 0件
 
 ローカル開発サーバーは起動していません。
 
