@@ -465,155 +465,157 @@ public class SupabaseStoreSlipRepository(
             return "伝票を作成できません。";
         }
 
-        if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_not_open", StringComparison.Ordinal))
         {
             return "営業中の営業日がありません。";
         }
 
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_department_not_found", StringComparison.Ordinal))
         {
             return "店舗設定を取得できません。設定画面で利用店舗を選択してください。";
         }
 
-        if (rawError.Contains("store_table_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_table_not_found", StringComparison.Ordinal))
         {
             return "選択した卓番を利用できません。";
         }
 
-        if (rawError.Contains("store_slip_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_slip_not_found", StringComparison.Ordinal))
         {
             return "対象の伝票を利用できません。";
         }
 
-        if (rawError.Contains("store_slip_customer_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_slip_customer_not_found", StringComparison.Ordinal))
         {
             return "退店するお客様を確認してください。";
         }
 
-        if (rawError.Contains("store_order_line_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_order_line_not_found", StringComparison.Ordinal))
         {
             return "対象の注文を確認してください。";
         }
 
-        if (rawError.Contains("store_slip_nomination_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_slip_nomination_not_found", StringComparison.Ordinal))
         {
             return "対象の指名を確認してください。";
         }
 
-        if (rawError.Contains("store_slip_adjustment_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_slip_adjustment_not_found", StringComparison.Ordinal))
         {
             return "対象の自由入力明細を確認してください。";
         }
 
-        if (rawError.Contains("invalid_order_quantity", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_order_quantity", StringComparison.Ordinal))
         {
             return "注文数量を確認してください。";
         }
 
-        if (rawError.Contains("store_cast_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_cast_not_found", StringComparison.Ordinal))
         {
             return "選択したキャストを利用できません。";
         }
 
-        if (rawError.Contains("cast_not_selected", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "cast_not_selected", StringComparison.Ordinal))
         {
             return "指名キャストを候補から選択してください。";
         }
 
-        if (rawError.Contains("duplicate_nomination_cast", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "duplicate_nomination_cast", StringComparison.Ordinal))
         {
             return "このキャストは既に指名登録されています。";
         }
 
-        if (rawError.Contains("invalid_nomination_type", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("invalid_companion_time", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_nomination_type", StringComparison.Ordinal) ||
+            string.Equals(rawError, "invalid_companion_time", StringComparison.Ordinal))
         {
             return "指名区分を確認してください。";
         }
 
-        if (rawError.Contains("invalid_nomination_price", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_nomination_price", StringComparison.Ordinal))
         {
             return "指名料金を確認してください。";
         }
 
-        if (rawError.Contains("store_nomination_fee_item_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_nomination_fee_item_not_found", StringComparison.Ordinal))
         {
             return "指名料金の商品設定を確認してください。";
         }
 
-        if (rawError.Contains("invalid_adjustment_name", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_adjustment_name", StringComparison.Ordinal))
         {
             return "調整明細の名前を確認してください。";
         }
 
-        if (rawError.Contains("invalid_adjustment_amount", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_adjustment_amount", StringComparison.Ordinal))
         {
             return "調整明細の価格を確認してください。";
         }
 
-        if (rawError.Contains("invalid_karaoke_quantity", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_karaoke_quantity", StringComparison.Ordinal))
         {
             return "カラオケ回数を確認してください。";
         }
 
-        if (rawError.Contains("store_karaoke_item_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_karaoke_item_not_found", StringComparison.Ordinal))
         {
             return "商品マスタのカラオケ商品を確認してください。";
         }
 
-        if (rawError.Contains("invalid_customer_count", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_customer_count", StringComparison.Ordinal))
         {
             return "追加するお客様情報を確認してください。";
         }
 
-        if (rawError.Contains("invalid_customer_label", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_customer_label", StringComparison.Ordinal))
         {
             return "お客様名は100文字以内で入力してください。";
         }
 
-        if (rawError.Contains("invalid_customer_time", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_customer_time", StringComparison.Ordinal))
         {
             return "入退店時刻は5分単位で、伝票の入店時刻以降かつ現在時刻までで入力してください。";
         }
 
-        if (rawError.Contains("invalid_left_at", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_left_at", StringComparison.Ordinal))
         {
             return "退店時刻は入店時刻より後にしてください。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"伝票を作成できません。{rawError}";
+        return "伝票を作成できません。";
     }
 
     private static FlushFailure ClassifyFlushFailure(string? rawError)
     {
         var message = ToFriendlyError(rawError);
         var raw = rawError ?? string.Empty;
-        if (raw.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("403", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
+        if (raw is "access_denied" or "invalid_signature")
         {
             return new FlushFailure(ResultFailureKind.PermissionDenied, "permission_denied", message);
         }
 
-        if (raw.Contains("revision_conflict", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("closing_required", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("not_open", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("not_found", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("operation_id_reused", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("batch_id_reused", StringComparison.OrdinalIgnoreCase))
+        if (raw is
+            "business_day_revision_conflict" or
+            "business_day_closing_required" or
+            "business_day_not_open" or
+            "business_day_operation_id_reused" or
+            "business_home_batch_id_reused" or
+            "store_slip_not_found" or
+            "store_slip_customer_not_found" or
+            "store_order_line_not_found")
         {
             return new FlushFailure(ResultFailureKind.Conflict, "conflict", message);
         }
 
-        if (raw.Contains("invalid_", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("not_selected", StringComparison.OrdinalIgnoreCase) ||
-            raw.Contains("duplicate_nomination_cast", StringComparison.OrdinalIgnoreCase))
+        if (raw is
+            "invalid_business_editor_operation" or
+            "invalid_business_editor_payload" or
+            "cast_not_selected" or
+            "duplicate_nomination_cast")
         {
             return new FlushFailure(ResultFailureKind.InvalidInput, "validation_error", message);
         }
@@ -628,18 +630,17 @@ public class SupabaseStoreSlipRepository(
             return "営業中トップの初期データを取得できませんでした。";
         }
 
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_department_not_found", StringComparison.Ordinal))
         {
             return "店舗設定を取得できません。設定画面で利用店舗を選択してください。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"営業中トップの初期データを取得できませんでした。{rawError}";
+        return "営業中トップの初期データを取得できませんでした。";
     }
 
     private static JsonElement EmptyJsonArray()

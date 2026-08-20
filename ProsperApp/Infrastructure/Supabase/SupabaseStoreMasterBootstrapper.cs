@@ -192,9 +192,7 @@ public sealed class SupabaseStoreMasterBootstrapper(
 
     private static bool IsPermissionError(string? error) =>
         !string.IsNullOrWhiteSpace(error) &&
-        (error.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-         error.Contains("403", StringComparison.OrdinalIgnoreCase) ||
-         error.Contains("permission denied", StringComparison.OrdinalIgnoreCase));
+        error is "access_denied" or "invalid_signature";
 
     private static string ToFriendlyError(string? rawError)
     {
@@ -203,13 +201,13 @@ public sealed class SupabaseStoreMasterBootstrapper(
             return "店舗マスタを一括取得できませんでした。";
         }
 
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_department_not_found", StringComparison.Ordinal))
         {
             return "店舗設定を確認してください。";
         }
 
         return IsPermissionError(rawError)
             ? "Edge Function経由のRPC実行権限がありません。prosper-rpcのキー設定を確認してください。"
-            : $"店舗マスタを一括取得できませんでした。{rawError}";
+            : "店舗マスタを一括取得できませんでした。";
     }
 }

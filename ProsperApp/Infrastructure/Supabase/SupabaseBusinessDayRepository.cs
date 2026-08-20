@@ -669,92 +669,91 @@ public class SupabaseBusinessDayRepository(
             return "DB更新に失敗しました。";
         }
 
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_department_not_found", StringComparison.Ordinal))
         {
             return "店舗設定を取得できません。設定画面で利用店舗を選択してください。";
         }
 
-        if (rawError.Contains("business_day_already_open", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("duplicate key", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_already_open", StringComparison.Ordinal) ||
+            string.Equals(rawError, "duplicate key", StringComparison.Ordinal))
         {
             return "既に営業中の営業日があります。";
         }
 
-        if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_not_open", StringComparison.Ordinal))
         {
             return "営業中の営業日がありません。";
         }
 
-        if (rawError.Contains("closing_override_disabled", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "closing_override_disabled", StringComparison.Ordinal))
         {
             return "現在のDBでは締め条件無視が無効です。SQL定義を適用してください。";
         }
 
-        if (rawError.Contains("invalid_drink_delivery_amount", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_drink_delivery_amount", StringComparison.Ordinal))
         {
             return "納品額は0円以上の整数で入力してください。";
         }
 
-        if (rawError.Contains("business_day_revision_conflict", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_revision_conflict", StringComparison.Ordinal))
         {
             return "営業日情報が更新されました。最新の納品額を確認してもう一度保存してください。";
         }
 
-        if (rawError.Contains("business_day_closing_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_closing_required", StringComparison.Ordinal))
         {
             return "対象の営業日が切り替わりました。最新の納品額を確認してください。";
         }
 
-        if (rawError.Contains("open_slips_exist", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "open_slips_exist", StringComparison.Ordinal))
         {
             return "未会計の伝票があります。すべて会計してから締めてください。";
         }
 
-        if (rawError.Contains("drink_delivery_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "drink_delivery_required", StringComparison.Ordinal))
         {
             return "酒代を入力してください。酒代がない場合も0円で保存してください。";
         }
 
-        if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "attendance_required", StringComparison.Ordinal))
         {
             return "出勤者を1名以上入力してください。";
         }
 
-        if (rawError.Contains("attendance_clock_out_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "attendance_clock_out_required", StringComparison.Ordinal))
         {
             return "退勤時刻が未入力の出勤者がいます。";
         }
 
-        if (rawError.Contains("cast_sales_adjustment_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "cast_sales_adjustment_required", StringComparison.Ordinal))
         {
             return "キャスト売上額調整を完了してください。";
         }
 
-        if (rawError.Contains("drink_back_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "drink_back_required", StringComparison.Ordinal))
         {
             return "ドリンクバック調整を入力してください。0円の場合も保存してください。";
         }
 
-        if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_attendance_clock_in_time", StringComparison.Ordinal))
         {
             return "出勤時刻を確認してください。";
         }
 
-        if (rawError.Contains("store_attendance_cast_not_found", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("attendance_cast_required", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("store_attendance_staff_not_found", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("attendance_staff_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_attendance_cast_not_found", StringComparison.Ordinal) ||
+            string.Equals(rawError, "attendance_cast_required", StringComparison.Ordinal) ||
+            string.Equals(rawError, "store_attendance_staff_not_found", StringComparison.Ordinal) ||
+            string.Equals(rawError, "attendance_staff_required", StringComparison.Ordinal))
         {
             return "出勤者の選択内容を確認してください。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"DB更新に失敗しました。{rawError}";
+        return "DB更新に失敗しました。";
     }
 
 }

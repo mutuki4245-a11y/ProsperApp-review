@@ -343,22 +343,21 @@ public sealed class SupabaseCastSalesAdjustmentRepository(
             return "キャスト売上額調整を保存できませんでした。";
         }
 
-        if (rawError.Contains("operation_id_reused", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "business_day_operation_id_reused")
         {
             return "同じ操作IDに異なる内容が指定されました。画面を再読み込みしてください。";
         }
 
-        if (rawError.Contains("invalid_", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "invalid_cast_sales_adjustment_v2_input" or "invalid_cast_sales_adjustment_payload")
         {
             return "キャスト売上額調整の入力内容が正しくありません。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"キャスト売上額調整を保存できませんでした。{rawError}";
+        return "キャスト売上額調整を保存できませんでした。";
     }
 }

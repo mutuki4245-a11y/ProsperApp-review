@@ -6,12 +6,12 @@ namespace ProsperApp.Services;
 
 public class LocalSettingsProvider(
     IHttpContextAccessor httpContextAccessor,
-    IOptions<SupabaseOptions> supabaseOptions) : ILocalSettingsProvider
+    ICurrentUserAccess currentUserAccess) : ILocalSettingsProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
-    private readonly SupabaseOptions _supabaseOptions = supabaseOptions.Value;
+    private readonly ICurrentUserAccess _currentUserAccess = currentUserAccess;
 
     public LocalSettings GetCurrent()
     {
@@ -42,9 +42,7 @@ public class LocalSettingsProvider(
 
     private LocalSettings Normalize(LocalSettings settings)
     {
-        var storeDepartmentId = settings.StoreDepartmentId > 0
-            ? settings.StoreDepartmentId
-            : _supabaseOptions.StoreDepartmentId;
+        var storeDepartmentId = _currentUserAccess.CurrentDepartmentId;
 
         var screenMode = settings.ScreenMode is "sales-management" or "order-entry"
             ? settings.ScreenMode

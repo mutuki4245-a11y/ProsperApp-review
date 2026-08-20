@@ -1,10 +1,9 @@
 import postgres from "https://deno.land/x/postgresjs@v3.4.5/mod.js";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-prosper-rpc-api-key",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import {
+  normalizeScalarSqlValue,
+  safeDatabaseErrorCode,
+  verifySignedEnvelope,
+} from "./security.ts";
 
 type PgType =
   | "bigint"
@@ -35,6 +34,12 @@ type RpcName = {
 };
 
 type RequestBody = {
+  operation?: "rpc" | "bind_access";
+  actor?: {
+    email?: string;
+    google_subject?: string;
+    email_verified?: boolean;
+  };
   function_name?: string;
   payload?: Record<string, unknown> | unknown;
 };
@@ -414,54 +419,121 @@ const rpcDefinitions = new Map<string, RpcDefinition>([
   ],
 ]);
 
-const databaseUrl = Deno.env.get("SUPABASE_DB_URL");
+const databaseUrl = Deno.env.get("PROSPER_RPC_DB_URL");
 const sql = databaseUrl
   ? postgres(databaseUrl, { max: 3, prepare: false })
   : null;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const requestId = crypto.randomUUID();
+  const startedAt = performance.now();
+  let functionName = "";
+  let operationId: string | null = null;
+  let status = 500;
 
   if (req.method !== "POST") {
-    return jsonResponse({ error: "method_not_allowed" }, 405);
-  }
-
-  const authError = validateClientKey(req);
-  if (authError) {
-    return jsonResponse({ error: authError }, 401);
+    return errorResponse("method_not_allowed", requestId, 405);
   }
 
   if (!sql) {
-    return jsonResponse({ error: "missing_supabase_db_url" }, 500);
+    return errorResponse("service_not_configured", requestId, 503);
   }
 
+  const rawBody = await req.text();
   let body: RequestBody;
   try {
-    body = await req.json();
+    body = JSON.parse(rawBody);
   } catch {
-    return jsonResponse({ error: "invalid_json" }, 400);
+    return errorResponse("invalid_json", requestId, 400);
   }
 
-  const requestedFunctionName = body.function_name ?? "";
-  const definition = rpcDefinitions.get(requestedFunctionName);
-  const rpcName = parseRpcName(requestedFunctionName);
-  if (!definition || !rpcName) {
-    return jsonResponse({ error: "invalid_function_name" }, 400);
+  const signed = await validateSignedEnvelope(req, rawBody);
+  const legacyAllowed = Deno.env.get("PROSPER_RPC_ALLOW_LEGACY_KEY") !== "false";
+  if (!signed && !(legacyAllowed && await validateLegacyClientKey(req))) {
+    return errorResponse("invalid_signature", requestId, 401);
   }
 
   try {
-    const result = await runRpc(rpcName, definition, body.payload);
+    if (body.operation === "bind_access") {
+      functionName = "store.bind_app_user_access";
+      if (!signed || !body.actor) {
+        return errorResponse("invalid_signature", requestId, 401);
+      }
+      const rows = await sql.unsafe(
+        "select * from store.bind_app_user_access($1::text, $2::text, $3::boolean)",
+        [body.actor.email ?? "", body.actor.google_subject ?? "", body.actor.email_verified === true],
+      );
+      status = 200;
+      return jsonResponse({ data: rows, request_id: requestId }, status);
+    }
+
+    functionName = body.function_name ?? "";
+    const definition = rpcDefinitions.get(functionName);
+    const rpcName = parseRpcName(functionName);
+    if (!definition || !rpcName) {
+      return errorResponse("invalid_function_name", requestId, 400);
+    }
+
+    const source = isRecord(body.payload) ? body.payload : {};
+    operationId = typeof source.p_operation_id === "string" ? source.p_operation_id : null;
+    let allowedDepartmentIds: Set<string> | null = null;
+    if (signed && functionName === "store.get_departments") {
+      if (!body.actor) {
+        return errorResponse("access_denied", requestId, 403);
+      }
+      const accessRows = await sql.unsafe(
+        "select * from store.get_app_user_access($1::text, $2::text)",
+        [body.actor.email ?? "", body.actor.google_subject ?? ""],
+      );
+      allowedDepartmentIds = new Set(accessRows.map((row) => String(row.department_id)));
+      if (allowedDepartmentIds.size === 0) {
+        return errorResponse("access_denied", requestId, 403);
+      }
+    } else if (signed) {
+      const departmentId = toPositiveBigInt(source.p_department_id);
+      if (!body.actor || departmentId === null) {
+        return errorResponse("access_denied", requestId, 403);
+      }
+      const requiredRole = requiredRoleFor(functionName, source);
+      const accessRows = await sql.unsafe(
+        "select store.authorize_app_user_access($1::text, $2::text, $3::bigint, $4::text) as allowed",
+        [body.actor.email ?? "", body.actor.google_subject ?? "", departmentId, requiredRole],
+      );
+      if (accessRows[0]?.allowed !== true) {
+        return errorResponse("access_denied", requestId, 403);
+      }
+    }
+
+    let result = await runRpc(rpcName, definition, body.payload);
+    if (allowedDepartmentIds && Array.isArray(result)) {
+      result = result.filter((row) =>
+        isRecord(row) && allowedDepartmentIds!.has(String(row.department_id))
+      );
+    }
+    status = 200;
     return definition.result === "scalar"
-      ? jsonResponse({ result }, 200)
-      : jsonResponse({ data: result }, 200);
+      ? jsonResponse({ result, request_id: requestId }, status)
+      : jsonResponse({ data: result, request_id: requestId }, status);
   } catch (error) {
-    console.error(error);
-    return jsonResponse({
-      error: "database_error",
-      message: error instanceof Error ? error.message : String(error),
-    }, 500);
+    const errorCode = safeDatabaseErrorCode(error);
+    status = errorStatus(errorCode);
+    console.error(JSON.stringify({
+      request_id: requestId,
+      function_name: functionName,
+      operation_id: operationId,
+      status,
+      duration_ms: Math.round(performance.now() - startedAt),
+      error_code: errorCode,
+    }));
+    return errorResponse(errorCode, requestId, status);
+  } finally {
+    console.info(JSON.stringify({
+      request_id: requestId,
+      function_name: functionName,
+      operation_id: operationId,
+      status,
+      duration_ms: Math.round(performance.now() - startedAt),
+    }));
   }
 });
 
@@ -482,20 +554,47 @@ async function runRpc(rpcName: RpcName, definition: RpcDefinition, payload: unkn
   return definition.result === "scalar" ? rows[0]?.result ?? null : rows;
 }
 
-function validateClientKey(req: Request): string | null {
+async function validateLegacyClientKey(req: Request): Promise<boolean> {
   const provided = readBearer(req.headers.get("authorization"))
     ?? req.headers.get("x-prosper-rpc-api-key")
     ?? req.headers.get("apikey");
   if (!provided) {
-    return "missing_client_key";
+    return false;
   }
 
   const allowedKeys = getAllowedClientKeys();
   if (allowedKeys.length === 0) {
-    return "missing_allowed_client_keys";
+    return false;
   }
 
-  return allowedKeys.includes(provided) ? null : "invalid_client_key";
+  const providedBytes = new TextEncoder().encode(provided);
+  for (const allowed of allowedKeys) {
+    if (await constantTimeEqual(providedBytes, new TextEncoder().encode(allowed))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function validateSignedEnvelope(req: Request, rawBody: string): Promise<boolean> {
+  const timestamp = req.headers.get("x-prosper-timestamp") ?? "";
+  const signature = req.headers.get("x-prosper-signature") ?? "";
+  return verifySignedEnvelope(rawBody, timestamp, signature, getAllowedClientKeys());
+}
+
+async function constantTimeEqual(left: Uint8Array, right: Uint8Array): Promise<boolean> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new Uint8Array(32),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const [leftMac, rightMac] = await Promise.all([
+    crypto.subtle.sign("HMAC", key, left),
+    crypto.subtle.sign("HMAC", key, right),
+  ]);
+  return crypto.subtle.verify("HMAC", key, rightMac, left);
 }
 
 function getAllowedClientKeys(): string[] {
@@ -557,11 +656,7 @@ function toSqlValue(value: unknown, type: PgType): unknown {
     return Array.isArray(value) ? value : [];
   }
 
-  if (value === undefined || value === "") {
-    return null;
-  }
-
-  return value;
+  return normalizeScalarSqlValue(value, type);
 }
 
 function isJsonType(type: PgType): boolean {
@@ -609,6 +704,32 @@ function isSqlIdentifier(value: string): boolean {
   return /^[a-z_][a-z0-9_]*$/.test(value);
 }
 
+function toPositiveBigInt(value: unknown): bigint | null {
+  try {
+    const parsed = BigInt(typeof value === "number" ? Math.trunc(value) : String(value));
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function requiredRoleFor(functionName: string, payload: Record<string, unknown>): "operator" | "administrator" {
+  if (functionName === "store.delete_non_master_records" ||
+      (functionName === "store.save_management_master_v2" && payload.p_allow_admin_actions === true) ||
+      (functionName === "store.close_business_day_v2" && payload.p_ignore_closing_requirements === true)) {
+    return "administrator";
+  }
+  return "operator";
+}
+
+function errorStatus(errorCode: string): number {
+  if (errorCode === "access_denied") return 403;
+  if (errorCode.includes("not_found")) return 404;
+  if (errorCode.startsWith("invalid_") || errorCode.endsWith("_required")) return 400;
+  if (errorCode.includes("conflict") || errorCode.endsWith("_reused") || errorCode.includes("already_")) return 409;
+  return 500;
+}
+
 function readBearer(value: string | null): string | null {
   if (!value) {
     return null;
@@ -624,8 +745,12 @@ function jsonResponse(body: unknown, status: number): Response {
   )), {
     status,
     headers: {
-      ...corsHeaders,
       "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
     },
   });
+}
+
+function errorResponse(errorCode: string, requestId: string, status: number): Response {
+  return jsonResponse({ error_code: errorCode, request_id: requestId }, status);
 }

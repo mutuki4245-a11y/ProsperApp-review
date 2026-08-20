@@ -241,37 +241,36 @@ public class SupabaseStoreOrderRepository(
             return "注文を登録できません。";
         }
 
-        if (rawError.Contains("store_order_slip_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_order_slip_not_found", StringComparison.Ordinal))
         {
             return "選択した伝票は注文登録できません。";
         }
 
-        if (rawError.Contains("store_order_item_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_order_item_not_found", StringComparison.Ordinal))
         {
             return "注文キューに利用できない商品があります。";
         }
 
-        if (rawError.Contains("store_order_item_not_orderable", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_order_item_not_orderable", StringComparison.Ordinal))
         {
             return "システム商品は注文端末から登録できません。";
         }
 
-        if (rawError.Contains("invalid_order_quantity", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_order_quantity", StringComparison.Ordinal))
         {
             return "注文数量を確認してください。";
         }
 
-        if (rawError.Contains("store_order_attendance_cast_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_order_attendance_cast_not_found", StringComparison.Ordinal))
         {
             return "選択したバック対象キャストは勤怠入力で出勤登録されていません。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"注文を登録できません。{rawError}";
+        return "注文を登録できません。";
     }
 }

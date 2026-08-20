@@ -10,31 +10,22 @@ public class SettingsModel(
     IFeatureGate featureGate,
     ILocalSettingsProvider localSettingsProvider,
     IStoreSettingsRepository storeSettingsRepository,
-    IAdminModeService adminModeService) : PageModel
+    IAdminModeService adminModeService,
+    ICurrentUserAccess currentUserAccess) : PageModel
 {
-    private const string SettingsPassword = "4245";
-    private const string SaveTokenSessionKey = "SettingsSaveToken";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IFeatureGate _featureGate = featureGate;
     private readonly ILocalSettingsProvider _localSettingsProvider = localSettingsProvider;
     private readonly IStoreSettingsRepository _storeSettingsRepository = storeSettingsRepository;
     private readonly IAdminModeService _adminModeService = adminModeService;
-
-    [BindProperty]
-    [Display(Name = "パスワード")]
-    public string? Password { get; set; }
+    private readonly ICurrentUserAccess _currentUserAccess = currentUserAccess;
 
     [BindProperty]
     public SettingsInputModel Input { get; set; } = new();
 
     [BindProperty]
-    public string? SaveToken { get; set; }
-
-    [BindProperty]
     public string? DeleteConfirmation { get; set; }
-
-    public bool IsUnlocked { get; private set; }
 
     public string? SuccessMessage { get; private set; }
 
@@ -57,29 +48,11 @@ public class SettingsModel(
             return NotFound();
         }
 
-        LoadCurrentSettings();
-        LockSettings();
-        await LoadDepartmentsAsync(ct);
-        return Page();
-    }
-
-    public async Task<IActionResult> OnPostUnlockAsync(CancellationToken ct)
-    {
-        if (!_featureGate.IsEnabled(FeatureNames.Settings))
+        if (!_currentUserAccess.IsAdministrator)
         {
-            return NotFound();
+            return Forbid();
         }
 
-        if (Password != SettingsPassword)
-        {
-            IsUnlocked = false;
-            LoadCurrentSettings();
-            await LoadDepartmentsAsync(ct);
-            ModelState.AddModelError(nameof(Password), "パスワードが違います。");
-            return Page();
-        }
-
-        RefreshSaveToken();
         LoadCurrentSettings();
         await LoadDepartmentsAsync(ct);
         return Page();
@@ -92,22 +65,15 @@ public class SettingsModel(
             return NotFound();
         }
 
-        IsUnlocked = IsValidSaveToken();
-        if (!IsUnlocked)
+        if (!_currentUserAccess.IsAdministrator)
         {
-            LockSettings();
-            LoadCurrentSettings();
-            await LoadDepartmentsAsync(ct);
-            ModelState.AddModelError(string.Empty, "設定を変更するには、もう一度パスワードを入力してください。");
-            return Page();
+            return Forbid();
         }
 
         await LoadDepartmentsAsync(ct);
         var selectedDepartment = ValidateSettings();
         if (!ModelState.IsValid || selectedDepartment is null)
         {
-            SaveToken = Guid.NewGuid().ToString("N");
-            HttpContext.Session.SetString(SaveTokenSessionKey, SaveToken);
             return Page();
         }
 
@@ -125,7 +91,6 @@ public class SettingsModel(
         TempData["SuccessMessage"] = Input.AdminMode
             ? "設定を保存し、管理者モードを有効にしました。"
             : "設定を保存し、管理者モードを無効にしました。";
-        LockSettings();
         return RedirectToPage("/Management/Index");
     }
 
@@ -136,9 +101,13 @@ public class SettingsModel(
             return NotFound();
         }
 
+        if (!_currentUserAccess.IsAdministrator)
+        {
+            return Forbid();
+        }
+
         LoadCurrentSettings();
         _adminModeService.SetEnabled(false);
-        LockSettings();
 
         await LoadDepartmentsAsync(ct);
         return Page();
@@ -151,21 +120,15 @@ public class SettingsModel(
             return NotFound();
         }
 
-        IsUnlocked = IsValidSaveToken();
-        if (!IsUnlocked)
+        if (!_currentUserAccess.IsAdministrator)
         {
-            LockSettings();
-            LoadCurrentSettings();
-            await LoadDepartmentsAsync(ct);
-            ModelState.AddModelError(string.Empty, "削除するには、もう一度設定ページを開いてください。");
-            return Page();
+            return Forbid();
         }
 
         await LoadDepartmentsAsync(ct);
         var selectedDepartment = ValidateSettings();
         if (!ModelState.IsValid || selectedDepartment is null)
         {
-            RefreshSaveToken();
             return Page();
         }
 
@@ -175,12 +138,10 @@ public class SettingsModel(
             ModelState.AddModelError(
                 nameof(DeleteConfirmation),
                 $"確認欄に「{expectedConfirmation}」と入力してください。");
-            RefreshSaveToken();
             return Page();
         }
 
         var result = await _storeSettingsRepository.DeleteNonMasterRecordsAsync(selectedDepartment.DepartmentId, ct);
-        RefreshSaveToken();
         if (!result.Succeeded)
         {
             ModelState.AddModelError(string.Empty, result.ErrorMessage ?? "マスタ以外のレコード削除に失敗しました。");
@@ -217,28 +178,6 @@ public class SettingsModel(
         };
     }
 
-    private bool IsValidSaveToken()
-    {
-        var sessionToken = HttpContext.Session.GetString(SaveTokenSessionKey);
-        return !string.IsNullOrWhiteSpace(SaveToken) &&
-               !string.IsNullOrWhiteSpace(sessionToken) &&
-               string.Equals(SaveToken, sessionToken, StringComparison.Ordinal);
-    }
-
-    private void LockSettings()
-    {
-        IsUnlocked = false;
-        SaveToken = null;
-        HttpContext.Session.Remove(SaveTokenSessionKey);
-    }
-
-    private void RefreshSaveToken()
-    {
-        IsUnlocked = true;
-        SaveToken = Guid.NewGuid().ToString("N");
-        HttpContext.Session.SetString(SaveTokenSessionKey, SaveToken);
-    }
-
     private void WriteSettingsCookie(LocalSettings settings)
     {
         var json = JsonSerializer.Serialize(settings, JsonOptions);
@@ -264,7 +203,9 @@ public class SettingsModel(
             return null;
         }
 
-        var selectedDepartment = Departments.FirstOrDefault(x => x.DepartmentId == Input.StoreDepartmentId);
+        var selectedDepartment = Departments.FirstOrDefault(x =>
+            x.DepartmentId == Input.StoreDepartmentId &&
+            _currentUserAccess.CanAccessDepartment(x.DepartmentId));
         if (selectedDepartment is null)
         {
             ModelState.AddModelError("Input.StoreDepartmentId", "店舗マスタから店舗を選択してください。");

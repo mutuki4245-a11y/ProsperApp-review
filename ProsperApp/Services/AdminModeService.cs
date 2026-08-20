@@ -1,11 +1,13 @@
 namespace ProsperApp.Services;
 
-public sealed class AdminModeService(IHttpContextAccessor httpContextAccessor) : IAdminModeService
+public sealed class AdminModeService(
+    IHttpContextAccessor httpContextAccessor,
+    ICurrentUserAccess currentUserAccess) : IAdminModeService
 {
     private const string SessionKey = "ProsperApp.AdminMode";
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
 
-    public bool IsEnabled =>
+    public bool IsEnabled => currentUserAccess.IsAdministrator &&
         string.Equals(
             _httpContextAccessor.HttpContext?.Session.GetString(SessionKey),
             "1",
@@ -19,7 +21,7 @@ public sealed class AdminModeService(IHttpContextAccessor httpContextAccessor) :
             return;
         }
 
-        if (enabled)
+        if (enabled && currentUserAccess.IsAdministrator)
         {
             session.SetString(SessionKey, "1");
         }

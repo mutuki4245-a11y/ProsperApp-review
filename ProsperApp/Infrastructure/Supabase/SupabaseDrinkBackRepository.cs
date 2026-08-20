@@ -222,23 +222,22 @@ public sealed class SupabaseDrinkBackRepository(
             return "ドリンクバック調整を保存できませんでした。";
         }
 
-        if (rawError.Contains("business_day_revision_conflict", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_revision_conflict", StringComparison.Ordinal))
         {
             return "営業日または出勤キャストが更新されています。最新状態を確認してください。";
         }
 
-        if (rawError.Contains("business_day_operation_id_reused", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_operation_id_reused", StringComparison.Ordinal))
         {
             return "同じ保存操作IDに異なる内容が指定されました。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"ドリンクバック調整を保存できませんでした。{rawError}";
+        return "ドリンクバック調整を保存できませんでした。";
     }
 
     private sealed record DrinkBackAdjustmentPayload(

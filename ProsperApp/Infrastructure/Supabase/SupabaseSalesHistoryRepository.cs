@@ -252,16 +252,15 @@ public sealed class SupabaseSalesHistoryRepository(
     {
         var message = source.ErrorMessage ?? fallbackMessage;
         var kind = source.FailureKind ?? ResultFailureKind.Unavailable;
-        if (message.Contains("not_found", StringComparison.OrdinalIgnoreCase))
+        if (message is "sales_history_business_day_not_found" or "business_day_snapshot_not_found")
         {
             kind = ResultFailureKind.NotFound;
         }
-        else if (message.Contains("operation_id_reused", StringComparison.OrdinalIgnoreCase) ||
-                 message.Contains("conflict", StringComparison.OrdinalIgnoreCase))
+        else if (message is "business_day_operation_id_reused" or "business_day_revision_conflict")
         {
             kind = ResultFailureKind.Conflict;
         }
-        else if (message.Contains("invalid_", StringComparison.OrdinalIgnoreCase))
+        else if (message is "invalid_sales_history_correction_input" or "invalid_sales_history_editor_input")
         {
             kind = ResultFailureKind.InvalidInput;
         }

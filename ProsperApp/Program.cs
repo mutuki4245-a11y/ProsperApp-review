@@ -10,6 +10,7 @@ using ProsperApp.Features.Closing;
 using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Features.Synchronization;
 using ProsperApp.Infrastructure.Caching;
+using ProsperApp.Infrastructure.Security;
 using ProsperApp.Options;
 using ProsperApp.Services;
 using System.Security.Claims;
@@ -21,7 +22,6 @@ builder.Services.AddRazorPages();
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
 builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
 builder.Services.Configure<GoogleDriveOptions>(builder.Configuration.GetSection("GoogleDrive"));
-builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection("GoogleAuth"));
 builder.Services.Configure<ReceiptPrinterOptions>(builder.Configuration.GetSection("ReceiptPrinter"));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDistributedMemoryCache();
@@ -29,10 +29,17 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ApplicationMemoryCache>();
 builder.Services.AddSingleton<IApplicationCache>(
     services => services.GetRequiredService<ApplicationMemoryCache>());
-builder.Services.AddSession();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+});
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IFeatureGate, FeatureGate>();
 builder.Services.AddSingleton<IStoreClock, StoreClock>();
+builder.Services.AddScoped<ICurrentUserAccess, CurrentUserAccess>();
 builder.Services.AddScoped<IAdminModeService, AdminModeService>();
 builder.Services.AddScoped<IOrderEntryApplicationService, OrderEntryApplicationService>();
 builder.Services.AddScoped<ILocalSettingsProvider, LocalSettingsProvider>();
@@ -43,8 +50,9 @@ builder.Services.AddScoped<IDailyReportApplicationService, DailyReportApplicatio
 builder.Services.AddScoped<ISalesHistoryApplicationService, SalesHistoryApplicationService>();
 builder.Services.AddScoped<IStoreMasterBootstrapper, SupabaseStoreMasterBootstrapper>();
 builder.Services.AddScoped<IManagementMasterSynchronization, SupabaseManagementMasterSynchronization>();
-builder.Services.AddHttpClient<ISupabaseRpcClient, SupabaseRpcClient>();
-builder.Services.AddScoped<IGoogleDriveAuthService, GoogleDriveAuthService>();
+builder.Services.AddHttpClient<ISupabaseRpcClient, SupabaseRpcClient>(client =>
+    client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient<IGoogleDriveAuthService, GoogleDriveAuthService>();
 builder.Services.AddScoped<IStoreSettingsRepository, SupabaseStoreSettingsRepository>();
 builder.Services.AddScoped<IReceiptRepository, SupabaseReceiptRepository>();
 builder.Services.AddScoped<IDailyReportRepository, SupabaseDailyReportRepository>();
@@ -71,23 +79,26 @@ var authBuilder = builder.Services
     })
     .AddCookie(options =>
     {
+        options.Cookie.Name = "ProsperApp.Auth.v2";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Lax;
         options.LoginPath = "/Login";
         options.AccessDeniedPath = "/Login";
-        options.ExpireTimeSpan = TimeSpan.FromDays(3650);
+        options.ExpireTimeSpan = TimeSpan.FromDays(90);
         options.SlidingExpiration = true;
         options.Events.OnValidatePrincipal = context =>
         {
-            var authOptions = context.HttpContext.RequestServices
-                .GetRequiredService<IOptions<GoogleAuthOptions>>()
-                .Value;
             var driveOptions = context.HttpContext.RequestServices
                 .GetRequiredService<IOptions<GoogleDriveOptions>>()
                 .Value;
             var configured = !string.IsNullOrWhiteSpace(driveOptions.ClientId) &&
                              !string.IsNullOrWhiteSpace(driveOptions.ClientSecret);
             var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
+            var subject = context.Principal?.FindFirst(ProsperAccessClaims.GoogleSubject)?.Value;
+            var departments = context.Principal?.FindAll(ProsperAccessClaims.Department).Any() == true;
 
-            if (!configured || !authOptions.IsAllowed(email))
+            if (!configured || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(subject) || !departments)
             {
                 context.RejectPrincipal();
                 context.HttpContext.Session.Clear();
@@ -106,6 +117,7 @@ if (googleAuthConfigured)
             options.ClientSecret = googleDriveOptions.ClientSecret;
             options.SaveTokens = true;
             options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+            options.AccessType = "offline";
 
             foreach (var scope in googleDriveOptions.Scopes.Where(scope => !string.IsNullOrWhiteSpace(scope)))
             {
@@ -120,11 +132,8 @@ if (googleAuthConfigured)
                 options.Scope.Add("email");
             }
 
-            options.Events.OnCreatingTicket = context =>
+            options.Events.OnCreatingTicket = async context =>
             {
-                var authOptions = context.HttpContext.RequestServices
-                    .GetRequiredService<IOptions<GoogleAuthOptions>>()
-                    .Value;
                 var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
                 if (string.IsNullOrWhiteSpace(email) &&
                     context.User.TryGetProperty("email", out var emailProperty))
@@ -138,20 +147,66 @@ if (googleAuthConfigured)
                     }
                 }
 
-                if (!authOptions.IsAllowed(email))
+                var subject = context.User.TryGetProperty("sub", out var subjectProperty)
+                    ? subjectProperty.GetString()
+                    : context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var emailVerified =
+                    (context.User.TryGetProperty("email_verified", out var emailVerifiedProperty) &&
+                     emailVerifiedProperty.ValueKind == System.Text.Json.JsonValueKind.True) ||
+                    (context.User.TryGetProperty("verified_email", out var verifiedEmailProperty) &&
+                     verifiedEmailProperty.ValueKind == System.Text.Json.JsonValueKind.True);
+
+                if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(subject) || !emailVerified)
                 {
                     context.HttpContext.Items["GoogleAuthErrorMessage"] =
                         "このGoogleアカウントはこのアプリの利用を許可されていません。";
-                    return Task.CompletedTask;
+                    return;
                 }
 
-                var accessToken = context.AccessToken;
-                if (!string.IsNullOrWhiteSpace(accessToken))
+                var rpcClient = context.HttpContext.RequestServices.GetRequiredService<ISupabaseRpcClient>();
+                var access = await rpcClient.BindUserAccessAsync(email, subject, true, context.HttpContext.RequestAborted);
+                if (!access.Succeeded || context.Principal?.Identity is not ClaimsIdentity claimsIdentity)
                 {
-                    context.HttpContext.Session.SetString("GoogleDriveAccessToken", accessToken);
+                    context.HttpContext.Items["GoogleAuthErrorMessage"] =
+                        "このGoogleアカウントはこのアプリの利用を許可されていません。";
+                    return;
                 }
 
-                return Task.CompletedTask;
+                claimsIdentity.AddClaim(new Claim(ProsperAccessClaims.GoogleSubject, subject));
+                foreach (var row in access.Rows)
+                {
+                    if (!row.TryGetProperty("department_id", out var departmentProperty))
+                    {
+                        continue;
+                    }
+
+                    var departmentId = departmentProperty.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? departmentProperty.GetString()
+                        : departmentProperty.GetRawText();
+                    if (string.IsNullOrWhiteSpace(departmentId))
+                    {
+                        continue;
+                    }
+
+                    claimsIdentity.AddClaim(new Claim(ProsperAccessClaims.Department, departmentId));
+                    if (row.TryGetProperty("is_default", out var defaultProperty) && defaultProperty.GetBoolean())
+                    {
+                        claimsIdentity.AddClaim(new Claim(ProsperAccessClaims.DefaultDepartment, departmentId));
+                    }
+                    if (row.TryGetProperty("access_role", out var roleProperty) &&
+                        !string.IsNullOrWhiteSpace(roleProperty.GetString()))
+                    {
+                        claimsIdentity.AddClaim(new Claim(
+                            ProsperAccessClaims.DepartmentRole,
+                            $"{departmentId}:{roleProperty.GetString()}"));
+                    }
+                }
+
+                if (!claimsIdentity.HasClaim(claim => claim.Type == ProsperAccessClaims.Department))
+                {
+                    context.HttpContext.Items["GoogleAuthErrorMessage"] =
+                        "このGoogleアカウントはこのアプリの利用を許可されていません。";
+                }
             };
 
             options.Events.OnTicketReceived = context =>
@@ -161,6 +216,13 @@ if (googleAuthConfigured)
                 {
                     context.Response.Redirect($"/Login?error={Uri.EscapeDataString(message)}");
                     context.HandleResponse();
+                }
+
+                if (context.Properties is { } properties)
+                {
+                    properties.IsPersistent = true;
+                    properties.AllowRefresh = true;
+                    properties.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(90);
                 }
 
                 return Task.CompletedTask;
@@ -189,6 +251,25 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.Use(async (context, next) =>
+{
+    var nonce = CspNonce.Create();
+    context.Items[CspNonce.HttpContextItemKey] = nonce;
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers.ContentSecurityPolicy =
+            $"default-src 'self'; script-src 'self' 'nonce-{nonce}' https://www.sii-ps.com; " +
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+            "connect-src 'self' ws://localhost:* wss://localhost:*; frame-src 'self'; " +
+            "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'";
+        context.Response.Headers.XContentTypeOptions = "nosniff";
+        context.Response.Headers.XFrameOptions = "SAMEORIGIN";
+        context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+        return Task.CompletedTask;
+    });
+    await next();
+});
 
 app.UseRouting();
 

@@ -227,13 +227,12 @@ public class SupabaseReceiptRepository(
             return "領収書の更新に失敗しました。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"領収書の更新に失敗しました。{rawError}";
+        return "領収書の更新に失敗しました。";
     }
 
     private static string? BuildPreviewUrl(string? driveFileId)

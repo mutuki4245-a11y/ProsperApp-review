@@ -363,30 +363,30 @@ public class SupabaseCheckoutRepository(
     private static string ToFriendlyError(string? rawError)
     {
         if (string.IsNullOrWhiteSpace(rawError)) return "会計処理を実行できません。";
-        if (rawError.Contains("checkout_ready_not_found", StringComparison.OrdinalIgnoreCase)) return "会計準備中の伝票を確認してください。";
-        if (rawError.Contains("checkout_statement_slip_not_found", StringComparison.OrdinalIgnoreCase)) return "会計伝票を出力できる伝票を確認してください。";
-        if (rawError.Contains("checkout_already_exists", StringComparison.OrdinalIgnoreCase)) return "この伝票はすでに会計済みです。";
-        if (rawError.Contains("invalid_closed_at", StringComparison.OrdinalIgnoreCase)) return "退店時刻は伝票とすべてのお客様の入店時刻より後にしてください。";
-        if (rawError.Contains("invalid_checkout_total", StringComparison.OrdinalIgnoreCase)) return "決済金額の合計が会計額と一致しません。";
-        if (rawError.Contains("invalid_received_amount", StringComparison.OrdinalIgnoreCase)) return "受取額を確認してください。";
-        if (rawError.Contains("multiple_received_amount_payment_methods", StringComparison.OrdinalIgnoreCase)) return "受取額を入力する決済方法は1つだけ選択してください。";
-        if (rawError.Contains("duplicate_checkout_payment_method", StringComparison.OrdinalIgnoreCase)) return "同じ決済方法を重複して入力できません。";
-        if (rawError.Contains("invalid_checkout_payment", StringComparison.OrdinalIgnoreCase)) return "決済方法と金額を確認してください。";
-        if (rawError.Contains("checkout_unflushed_changes", StringComparison.OrdinalIgnoreCase)) return "未保存の変更または別端末の更新があります。最新状態を確認してください。";
-        if (rawError.Contains("business_day_revision_conflict", StringComparison.OrdinalIgnoreCase)) return "営業中データが更新されています。最新状態を確認してください。";
-        if (rawError.Contains("business_day_closed", StringComparison.OrdinalIgnoreCase)) return "営業日はすでに締められています。";
-        if (rawError.Contains("checkout_statement_already_issued", StringComparison.OrdinalIgnoreCase)) return "会計伝票はすでに発行されています。";
-        if (rawError.Contains("checkout_ready_already_released", StringComparison.OrdinalIgnoreCase)) return "会計準備はすでに解除されています。";
-        if (rawError.Contains("checkout_already_confirmed", StringComparison.OrdinalIgnoreCase)) return "この伝票はすでに会計確定済みです。";
-        if (rawError.Contains("checkout_already_cancelled", StringComparison.OrdinalIgnoreCase)) return "この会計はすでに取り消されています。";
-        if (rawError.Contains("checkout_not_ready", StringComparison.OrdinalIgnoreCase)) return "会計準備中の伝票ではありません。";
-        if (rawError.Contains("checkout_not_confirmed", StringComparison.OrdinalIgnoreCase)) return "会計確定済みの伝票ではありません。";
-        if (rawError.Contains("checkout_target_not_found", StringComparison.OrdinalIgnoreCase)) return "会計対象の伝票が見つかりません。";
-        if (rawError.Contains("checkout_business_day_conflict", StringComparison.OrdinalIgnoreCase)) return "対象伝票の営業日が現在の営業日と一致しません。";
-        if (rawError.Contains("business_day_operation_id_reused", StringComparison.OrdinalIgnoreCase)) return "同じ操作IDが別の会計操作に使われています。";
-        if (rawError.Contains("checkout_state_conflict", StringComparison.OrdinalIgnoreCase)) return "伝票の会計状態が別端末で更新されています。";
-        if (rawError.Contains("invalid_checkout_mutation_input", StringComparison.OrdinalIgnoreCase)) return "会計操作の入力を確認してください。";
-        return $"会計処理を実行できません。{rawError}";
+        if (string.Equals(rawError, "checkout_ready_not_found", StringComparison.Ordinal)) return "会計準備中の伝票を確認してください。";
+        if (string.Equals(rawError, "checkout_statement_slip_not_found", StringComparison.Ordinal)) return "会計伝票を出力できる伝票を確認してください。";
+        if (string.Equals(rawError, "checkout_already_exists", StringComparison.Ordinal)) return "この伝票はすでに会計済みです。";
+        if (string.Equals(rawError, "invalid_closed_at", StringComparison.Ordinal)) return "退店時刻は伝票とすべてのお客様の入店時刻より後にしてください。";
+        if (string.Equals(rawError, "invalid_checkout_total", StringComparison.Ordinal)) return "決済金額の合計が会計額と一致しません。";
+        if (string.Equals(rawError, "invalid_received_amount", StringComparison.Ordinal)) return "受取額を確認してください。";
+        if (string.Equals(rawError, "multiple_received_amount_payment_methods", StringComparison.Ordinal)) return "受取額を入力する決済方法は1つだけ選択してください。";
+        if (string.Equals(rawError, "duplicate_checkout_payment_method", StringComparison.Ordinal)) return "同じ決済方法を重複して入力できません。";
+        if (string.Equals(rawError, "invalid_checkout_payment", StringComparison.Ordinal)) return "決済方法と金額を確認してください。";
+        if (string.Equals(rawError, "checkout_unflushed_changes", StringComparison.Ordinal)) return "未保存の変更または別端末の更新があります。最新状態を確認してください。";
+        if (string.Equals(rawError, "business_day_revision_conflict", StringComparison.Ordinal)) return "営業中データが更新されています。最新状態を確認してください。";
+        if (string.Equals(rawError, "business_day_closed", StringComparison.Ordinal)) return "営業日はすでに締められています。";
+        if (string.Equals(rawError, "checkout_statement_already_issued", StringComparison.Ordinal)) return "会計伝票はすでに発行されています。";
+        if (string.Equals(rawError, "checkout_ready_already_released", StringComparison.Ordinal)) return "会計準備はすでに解除されています。";
+        if (string.Equals(rawError, "checkout_already_confirmed", StringComparison.Ordinal)) return "この伝票はすでに会計確定済みです。";
+        if (string.Equals(rawError, "checkout_already_cancelled", StringComparison.Ordinal)) return "この会計はすでに取り消されています。";
+        if (string.Equals(rawError, "checkout_not_ready", StringComparison.Ordinal)) return "会計準備中の伝票ではありません。";
+        if (string.Equals(rawError, "checkout_not_confirmed", StringComparison.Ordinal)) return "会計確定済みの伝票ではありません。";
+        if (string.Equals(rawError, "checkout_target_not_found", StringComparison.Ordinal)) return "会計対象の伝票が見つかりません。";
+        if (string.Equals(rawError, "checkout_business_day_conflict", StringComparison.Ordinal)) return "対象伝票の営業日が現在の営業日と一致しません。";
+        if (string.Equals(rawError, "business_day_operation_id_reused", StringComparison.Ordinal)) return "同じ操作IDが別の会計操作に使われています。";
+        if (string.Equals(rawError, "checkout_state_conflict", StringComparison.Ordinal)) return "伝票の会計状態が別端末で更新されています。";
+        if (string.Equals(rawError, "invalid_checkout_mutation_input", StringComparison.Ordinal)) return "会計操作の入力を確認してください。";
+        return "会計処理を実行できません。";
     }
 
 }
