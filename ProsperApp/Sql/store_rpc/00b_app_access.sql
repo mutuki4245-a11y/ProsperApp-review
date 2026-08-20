@@ -158,7 +158,7 @@ revoke all on function store.get_app_user_access(text, text)
 
 insert into store.app_users(normalized_email)
 values
-  ('mutuk4245@goat-takahashi.com'),
+  ('mutuki4245@goat-takahashi.com'),
   ('goat1234.prosper@gmail.com')
 on conflict (normalized_email) do update
 set is_active = true,
@@ -168,7 +168,7 @@ insert into store.app_user_department_access(app_user_id, department_id, access_
 select au.app_user_id, 1, 'administrator', true
   from store.app_users au
  where au.normalized_email in (
-   'mutuk4245@goat-takahashi.com',
+   'mutuki4245@goat-takahashi.com',
    'goat1234.prosper@gmail.com'
  )
 on conflict (app_user_id, department_id) do update

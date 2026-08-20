@@ -1,11 +1,16 @@
 begin;
 set local search_path = extensions, pg_catalog, public, store;
 
-select plan(10);
+select plan(11);
 
 select ok(
   (select count(*) = 2 from store.app_users where is_active),
   'two active application users are registered'
+);
+select ok(
+  (select count(*) = 1 from store.app_users
+    where normalized_email = 'mutuki4245@goat-takahashi.com' and is_active),
+  'the initial administrator email is registered without a typo'
 );
 select ok(
   (select count(*) = 2 from store.app_user_department_access
