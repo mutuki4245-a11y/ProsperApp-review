@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [markup, pageModel, inputModel, source, sql, receiptSql] = await Promise.all([
+const [markup, pageModel, inputModel, source, sql, receiptSql, cleanupSql] = await Promise.all([
     readFile(new URL('../Pages/Closing/Receipts.cshtml', import.meta.url), 'utf8'),
     readFile(new URL('../Pages/Closing/Receipts.cshtml.cs', import.meta.url), 'utf8'),
     readFile(new URL('../Features/Receipts/QuickEntryInputModel.cs', import.meta.url), 'utf8'),
     readFile(new URL('../wwwroot/js/features/receipt-work-queue.js', import.meta.url), 'utf8'),
     readFile(new URL('../Sql/store_rpc/21_receipt_work_queue.sql', import.meta.url), 'utf8'),
-    readFile(new URL('../Sql/store_rpc/06_receipts.sql', import.meta.url), 'utf8')
+    readFile(new URL('../Sql/store_rpc/06_receipts.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../Sql/store_rpc/32_operation_result_cleanup.sql', import.meta.url), 'utf8')
 ]);
 const closingCss = await readFile(new URL('../wwwroot/css/features/closing.css', import.meta.url), 'utf8');
 
@@ -34,7 +35,8 @@ assert.match(source, /resumeCursor/, 'bufferを使い切った場合だけresume
 
 assert.match(sql, /create or replace function store\.get_current_receipt_work_queue/, 'work queue read RPCを定義すること');
 assert.match(sql, /create or replace function store\.advance_receipt_work_queue_v2/, '唯一の永続進行mutationを定義すること');
-assert.match(sql, /interval '30 days'/, 'operation結果を30日保持すること');
+assert.match(cleanupSql, /interval '30 days'/, 'operation結果を30日保持すること');
+assert.match(cleanupSql, /receipt_work_queue_operations/, '領収書operation結果を中央cleanupの対象にすること');
 assert.match(sql, /request_hash/, '同じoperation IDへ異なる本文を再利用できないこと');
 assert.match(receiptSql, /store_business_day_receipt_expenses/, '領収書支出は入力した営業日へ紐づけること');
 assert.match(sql, /receipt_reimbursement_business_day_required/, '保存時に現在営業日を必須にすること');

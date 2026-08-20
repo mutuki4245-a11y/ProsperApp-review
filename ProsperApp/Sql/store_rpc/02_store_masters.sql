@@ -307,7 +307,7 @@ begin
         p_department_id,
         v_display_name,
         v_drink_memo,
-        (now() at time zone 'Asia/Tokyo')::date,
+        (now() at time zone store.business_timezone())::date,
         'active',
         v_sort_order,
         true
@@ -528,7 +528,7 @@ begin
         p_department_id,
         v_display_name,
         v_employment_type,
-        (now() at time zone 'Asia/Tokyo')::date,
+        (now() at time zone store.business_timezone())::date,
         'active',
         v_sort_order,
         true

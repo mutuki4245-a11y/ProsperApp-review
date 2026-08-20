@@ -323,7 +323,7 @@ begin
             v_print_data := v_print_data || jsonb_build_object(
                 'subtotal_amount', v_checkout.subtotal_amount,
                 'service_charge_amount', v_checkout.service_charge_amount,
-                'consumption_tax_amount', round(v_checkout.total_amount * 10 / 110, 0),
+                'consumption_tax_amount', round(v_checkout.total_amount * store.consumption_tax_inclusive_ratio(), 0),
                 'total_amount', v_checkout.total_amount,
                 'backfilled_from_checkout', true
             );
@@ -407,7 +407,7 @@ begin
        set print_data = ss.print_data || jsonb_build_object(
                'subtotal_amount', c.subtotal_amount,
                'service_charge_amount', c.service_charge_amount,
-               'consumption_tax_amount', round(c.total_amount * 10 / 110, 0),
+               'consumption_tax_amount', round(c.total_amount * store.consumption_tax_inclusive_ratio(), 0),
                'total_amount', c.total_amount,
                'backfilled_from_checkout', true
            ),

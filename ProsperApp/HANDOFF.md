@@ -67,6 +67,7 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 00_schema.sql
 00_legacy_rpc_cutover.sql
 00a_drink_back_schema.sql
+00b_app_access.sql
 01_business_day.sql
 02_store_masters.sql
 03_slips.sql
@@ -97,6 +98,7 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 29_current_cast_sales_adjustment.sql
 22_current_business_day_close.sql
 31_sales_history.sql
+32_operation_result_cleanup.sql
 99_grants.sql
 ```
 

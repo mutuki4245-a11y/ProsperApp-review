@@ -311,7 +311,7 @@ begin
 
         v_started_at := case
             when v_nomination_type = 'companion'
-                then (((v_business_day.business_date + case when v_companion_time < time '12:00' then 1 else 0 end)::timestamp + v_companion_time) at time zone 'Asia/Tokyo')
+                then (((v_business_day.business_date + case when v_companion_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_companion_time) at time zone store.business_timezone())
             else p_opened_at
         end;
 

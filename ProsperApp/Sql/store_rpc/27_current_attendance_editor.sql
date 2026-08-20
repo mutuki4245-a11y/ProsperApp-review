@@ -67,10 +67,10 @@ begin
                   'display_name', c.display_name,
                   'department_name', department.department_name,
                   'attendance_status', attendance.attendance_status,
-                  'clock_in_time', to_char(attendance.clock_in_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                  'clock_in_time', to_char(attendance.clock_in_at at time zone store.business_timezone(), 'HH24:MI'),
                   'clock_out_time', case
                       when attendance.clock_out_at is null then null
-                      else to_char(attendance.clock_out_at at time zone 'Asia/Tokyo', 'HH24:MI')
+                      else to_char(attendance.clock_out_at at time zone store.business_timezone(), 'HH24:MI')
                   end,
                   'uses_send_service', coalesce(attendance.uses_send_service, false),
                   'version', to_char(attendance.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
@@ -98,10 +98,10 @@ begin
                   'display_name', staff.display_name,
                   'department_name', department.department_name,
                   'attendance_status', attendance.attendance_status,
-                  'clock_in_time', to_char(attendance.clock_in_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                  'clock_in_time', to_char(attendance.clock_in_at at time zone store.business_timezone(), 'HH24:MI'),
                   'clock_out_time', case
                       when attendance.clock_out_at is null then null
-                      else to_char(attendance.clock_out_at at time zone 'Asia/Tokyo', 'HH24:MI')
+                      else to_char(attendance.clock_out_at at time zone store.business_timezone(), 'HH24:MI')
                   end,
                   'uses_send_service', coalesce(attendance.uses_send_service, false),
                   'version', to_char(attendance.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')

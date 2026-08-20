@@ -218,7 +218,7 @@ begin
        and cl.status = 'active';
 
     v_subtotal_amount := v_order_subtotal_amount + v_pricing_subtotal_amount;
-    v_service_charge_amount := round(v_subtotal_amount * 0.20, 0);
+    v_service_charge_amount := round(v_subtotal_amount * store.service_charge_rate(), 0);
     v_applied_adjustment_amount := greatest(v_adjustment_amount, -(v_subtotal_amount + v_service_charge_amount));
     v_total_amount := v_subtotal_amount + v_service_charge_amount + v_applied_adjustment_amount;
 
@@ -326,7 +326,7 @@ begin
         'pricing_subtotal_amount', v_pricing_subtotal_amount,
         'subtotal_amount', v_subtotal_amount,
         'service_charge_amount', v_service_charge_amount,
-        'consumption_tax_amount', round(v_total_amount * 10 / 110, 0),
+        'consumption_tax_amount', round(v_total_amount * store.consumption_tax_inclusive_ratio(), 0),
         'total_amount', v_total_amount
     );
 end;
@@ -728,7 +728,7 @@ begin
         'particulars', 'ご飲食代として',
         'total_amount', v_checkout.total_amount,
         'taxable_amount_including_tax', v_checkout.total_amount,
-        'consumption_tax_amount', round(v_checkout.total_amount * 10 / 110, 0),
+        'consumption_tax_amount', round(v_checkout.total_amount * store.consumption_tax_inclusive_ratio(), 0),
         'payments', coalesce((
             select jsonb_agg(jsonb_build_object(
                 'method_name', case when p.payment_method_code = 'cat' then 'クレジット' else p.payment_method_name end,

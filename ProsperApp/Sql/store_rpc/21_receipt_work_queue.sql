@@ -209,9 +209,6 @@ begin
         format('receipt_work_queue:%s:%s', p_department_id, v_document_id),
         0));
 
-    delete from store.receipt_work_queue_operations
-     where created_at < now() - interval '30 days';
-
     select operation.action, operation.document_id, operation.request_hash, operation.response
       into v_existing_action, v_existing_document_id, v_existing_request_hash, v_response
       from store.receipt_work_queue_operations operation
@@ -245,8 +242,8 @@ begin
         begin
             if v_action = 'save' then
                 if p_payment_date is null or
-                   p_payment_date < ((now() at time zone 'Asia/Tokyo')::date - interval '1 year') or
-                   p_payment_date > (now() at time zone 'Asia/Tokyo')::date or
+                   p_payment_date < ((now() at time zone store.business_timezone())::date - interval '1 year') or
+                   p_payment_date > (now() at time zone store.business_timezone())::date or
                    p_amount is null or p_amount <= 0 or p_amount > 9999999 or trunc(p_amount) <> p_amount or
                    nullif(trim(coalesce(p_account_subject, '')), '') is null or
                    char_length(trim(p_account_subject)) > 100 or

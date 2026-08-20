@@ -6,6 +6,45 @@ revoke usage on schema store from public, anon, authenticated, service_role;
 alter default privileges in schema store revoke execute on functions from public;
 alter default privileges in schema store revoke execute on functions from anon, authenticated, service_role;
 
+create table if not exists store.current_business_day_operation_results (
+    department_id bigint not null,
+    operation_id text not null,
+    operation_type text not null,
+    request_body jsonb not null,
+    response jsonb not null,
+    created_at timestamp with time zone not null default now(),
+    primary key (department_id, operation_id)
+);
+
+revoke all on table store.current_business_day_operation_results from public, anon, authenticated, service_role;
+create index if not exists current_business_day_operation_results_created_at_idx
+    on store.current_business_day_operation_results (created_at);
+
+create or replace function store.business_timezone()
+returns text language sql immutable parallel safe
+set search_path = pg_catalog
+as $$ select 'Asia/Tokyo'::text $$;
+
+create or replace function store.business_day_cutover_time()
+returns time without time zone language sql immutable parallel safe
+set search_path = pg_catalog
+as $$ select time '12:00:00' $$;
+
+create or replace function store.service_charge_rate()
+returns numeric language sql immutable parallel safe
+set search_path = pg_catalog
+as $$ select 0.20::numeric $$;
+
+create or replace function store.consumption_tax_inclusive_ratio()
+returns numeric language sql immutable parallel safe
+set search_path = pg_catalog
+as $$ select (10::numeric / 110::numeric) $$;
+
+revoke all on function store.business_timezone() from public, anon, authenticated, service_role;
+revoke all on function store.business_day_cutover_time() from public, anon, authenticated, service_role;
+revoke all on function store.service_charge_rate() from public, anon, authenticated, service_role;
+revoke all on function store.consumption_tax_inclusive_ratio() from public, anon, authenticated, service_role;
+
 drop function if exists public.to_base36_3(integer);
 drop function if exists public.get_store_departments();
 drop function if exists public.get_store_context(bigint);

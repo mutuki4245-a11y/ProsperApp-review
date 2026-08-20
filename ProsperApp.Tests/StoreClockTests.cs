@@ -48,6 +48,22 @@ public class StoreClockTests
         Assert.Equal(new DateTime(2026, 7, 31, 2, 0, 0), input.OpenedAt);
     }
 
+    [Fact]
+    public void GetStoreNow_FallsBackToFixedUtcPlusNine_WhenTimeZonesAreUnavailable()
+    {
+        var requestedTimeZones = new List<string>();
+        var clock = new StoreClock(
+            new FixedTimeProvider(new DateTimeOffset(2026, 7, 30, 3, 0, 0, TimeSpan.Zero)),
+            id =>
+            {
+                requestedTimeZones.Add(id);
+                throw new TimeZoneNotFoundException();
+            });
+
+        Assert.Equal(new DateTime(2026, 7, 30, 12, 0, 0), clock.GetStoreNow());
+        Assert.Equal(["Tokyo Standard Time", "Asia/Tokyo"], requestedTimeZones);
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => value;

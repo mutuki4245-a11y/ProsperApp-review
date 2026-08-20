@@ -196,9 +196,6 @@ begin
         format('store_management_master:%s:%s', p_department_id, v_area),
         0));
 
-    delete from store.management_master_operation_results
-     where created_at < now() - interval '30 days';
-
     select operation.request_body, operation.response
       into v_existing_request, v_response
       from store.management_master_operation_results operation

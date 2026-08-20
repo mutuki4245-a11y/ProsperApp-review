@@ -158,7 +158,7 @@ as $$
                 'pricingCode', pl.pricing_code,
                 'lineName', pl.line_name,
                 'occurredAt', pl.occurred_at,
-                'occurredTime', to_char(pl.occurred_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                'occurredTime', to_char(pl.occurred_at at time zone store.business_timezone(), 'HH24:MI'),
                 'customerCount', pl.customer_count,
                 'quantity', pl.quantity,
                 'unitPrice', pl.unit_price,
@@ -262,7 +262,7 @@ as $$
                 else greatest(
                     coalesce(os.order_subtotal_amount, 0) +
                     coalesce(pricing.pricing_subtotal_amount, 0) +
-                    round((coalesce(os.order_subtotal_amount, 0) + coalesce(pricing.pricing_subtotal_amount, 0)) * 0.20, 0) +
+                    round((coalesce(os.order_subtotal_amount, 0) + coalesce(pricing.pricing_subtotal_amount, 0)) * store.service_charge_rate(), 0) +
                     coalesce(charges.adjustment_amount, 0),
                     0
                 )
@@ -288,7 +288,7 @@ as $$
                 'id', s.slip_id,
                 'tableDisplay', coalesce(nullif(concat_ws(' ', s.table_code, s.table_name), ''), '-'),
                 'openedAt', s.opened_at,
-                'openedTime', to_char(s.opened_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                'openedTime', to_char(s.opened_at at time zone store.business_timezone(), 'HH24:MI'),
                 'closedAt', s.closed_at,
                 'status', s.status,
                 'statusDisplay', case s.status
@@ -320,9 +320,9 @@ as $$
                         'displayName', coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
                         'customerLabel', c.customer_label,
                         'enteredAt', c.entered_at,
-                        'enteredTime', to_char(c.entered_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                        'enteredTime', to_char(c.entered_at at time zone store.business_timezone(), 'HH24:MI'),
                         'leftAt', c.left_at,
-                        'leftTime', case when c.left_at is null then null else to_char(c.left_at at time zone 'Asia/Tokyo', 'HH24:MI') end,
+                        'leftTime', case when c.left_at is null then null else to_char(c.left_at at time zone store.business_timezone(), 'HH24:MI') end,
                         'status', c.status
                     ) order by c.line_no)
                     from public.store_slip_customers c
@@ -339,7 +339,7 @@ as $$
                         'nominationDisplayName', coalesce(nm.display_name, sc.nomination_kind, sc.nomination_type),
                         'nominationPrice', sc.nomination_price,
                         'startedAt', sc.started_at,
-                        'startedTime', case when sc.started_at is null then null else to_char(sc.started_at at time zone 'Asia/Tokyo', 'HH24:MI') end,
+                        'startedTime', case when sc.started_at is null then null else to_char(sc.started_at at time zone store.business_timezone(), 'HH24:MI') end,
                         'status', sc.status
                     ) order by sc.started_at asc nulls last, sc.slip_cast_id asc)
                     from public.store_slip_casts sc
@@ -362,7 +362,7 @@ as $$
                         'unitPrice', ol.unit_price,
                         'amount', ol.amount,
                         'orderedAt', ol.ordered_at,
-                        'orderedTime', to_char(ol.ordered_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                        'orderedTime', to_char(ol.ordered_at at time zone store.business_timezone(), 'HH24:MI'),
                         'status', ol.status,
                         'sourceType', ol.source_type,
                         'sourceId', ol.source_id,
@@ -381,7 +381,7 @@ as $$
                         'lineName', cl.line_name,
                         'amount', cl.amount,
                         'createdAt', cl.created_at,
-                        'createdTime', to_char(cl.created_at at time zone 'Asia/Tokyo', 'HH24:MI'),
+                        'createdTime', to_char(cl.created_at at time zone store.business_timezone(), 'HH24:MI'),
                         'status', cl.status
                     ) order by cl.line_no asc)
                     from public.store_slip_charge_lines cl
@@ -536,7 +536,7 @@ begin
         if mod(extract(minute from v_time_text::time)::integer, 5) <> 0 then
             raise exception 'invalid_customer_time';
         end if;
-        v_operation_at := ((v_slip.business_date + case when v_time_text::time < time '12:00' then 1 else 0 end)::timestamp + v_time_text::time) at time zone 'Asia/Tokyo';
+        v_operation_at := ((v_slip.business_date + case when v_time_text::time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_time_text::time) at time zone store.business_timezone();
         if v_operation_at < v_slip.opened_at or v_operation_at > now() + interval '5 minutes' then
             raise exception 'invalid_customer_time';
         end if;
@@ -560,7 +560,7 @@ begin
         if mod(extract(minute from v_time_text::time)::integer, 5) <> 0 then
             raise exception 'invalid_customer_time';
         end if;
-        v_operation_at := ((v_slip.business_date + case when v_time_text::time < time '12:00' then 1 else 0 end)::timestamp + v_time_text::time) at time zone 'Asia/Tokyo';
+        v_operation_at := ((v_slip.business_date + case when v_time_text::time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_time_text::time) at time zone store.business_timezone();
         if v_operation_at > now() + interval '5 minutes' or not exists (
             select 1 from public.store_slip_customers c
             where c.slip_customer_id = v_customer_id and c.slip_id = p_slip_id and c.status = 'active'

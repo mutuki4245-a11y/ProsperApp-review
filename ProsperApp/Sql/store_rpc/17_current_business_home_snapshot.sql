@@ -25,9 +25,9 @@ declare
     v_snapshot jsonb;
     v_attendance_casts jsonb := '[]'::jsonb;
     v_business_date date := case
-        when (now() at time zone 'Asia/Tokyo')::time < time '12:00'
-            then ((now() at time zone 'Asia/Tokyo')::date - 1)
-        else (now() at time zone 'Asia/Tokyo')::date
+        when (now() at time zone store.business_timezone())::time < store.business_day_cutover_time()
+            then ((now() at time zone store.business_timezone())::date - 1)
+        else (now() at time zone store.business_timezone())::date
     end;
 begin
     select business_day.*

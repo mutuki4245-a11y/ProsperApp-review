@@ -1,7 +1,7 @@
 begin;
 
 alter table public.cast_master
-    add column if not exists joined_on date not null default ((now() at time zone 'Asia/Tokyo')::date);
+    add column if not exists joined_on date not null default ((now() at time zone store.business_timezone())::date);
 
 create or replace function store.get_context_internal(p_department_id bigint)
 returns table (
@@ -241,7 +241,7 @@ begin
                 v_business_day.business_date,
                 v_cast_id,
                 'checked_in',
-                (((v_business_day.business_date + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_in_time) at time zone 'Asia/Tokyo'),
+                (((v_business_day.business_date + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_clock_in_time) at time zone store.business_timezone()),
                 'manual'
             )
             on conflict on constraint uq_store_cast_attendance_day_cast
@@ -383,7 +383,7 @@ begin
                 v_business_day.business_date,
                 v_staff_id,
                 'checked_in',
-                (((v_business_day.business_date + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_in_time) at time zone 'Asia/Tokyo'),
+                (((v_business_day.business_date + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_clock_in_time) at time zone store.business_timezone()),
                 'manual'
             )
             on conflict on constraint uq_store_staff_attendance_day_staff
@@ -608,8 +608,8 @@ begin
         end if;
 
         v_uses_send_service := coalesce((v_entry->>'uses_send_service')::boolean, false);
-        v_clock_in_at := (((v_business_day.business_date + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_in_time) at time zone 'Asia/Tokyo');
-        v_clock_out_at := (((v_business_day.business_date + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_out_time) at time zone 'Asia/Tokyo');
+        v_clock_in_at := (((v_business_day.business_date + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_clock_in_time) at time zone store.business_timezone());
+        v_clock_out_at := (((v_business_day.business_date + case when v_clock_out_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_clock_out_time) at time zone store.business_timezone());
 
         select *
           into v_attendance
@@ -721,8 +721,8 @@ begin
         end if;
 
         v_uses_send_service := coalesce((v_entry->>'uses_send_service')::boolean, false);
-        v_clock_in_at := (((v_business_day.business_date + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_in_time) at time zone 'Asia/Tokyo');
-        v_clock_out_at := (((v_business_day.business_date + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp + v_clock_out_time) at time zone 'Asia/Tokyo');
+        v_clock_in_at := (((v_business_day.business_date + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_clock_in_time) at time zone store.business_timezone());
+        v_clock_out_at := (((v_business_day.business_date + case when v_clock_out_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_clock_out_time) at time zone store.business_timezone());
 
         select *
           into v_attendance

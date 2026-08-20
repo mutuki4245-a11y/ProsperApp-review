@@ -1,16 +1,5 @@
 begin;
 
-create table if not exists store.current_business_day_operation_results (
-    department_id bigint not null,
-    operation_id text not null,
-    operation_type text not null,
-    request_body jsonb not null,
-    response jsonb not null,
-    created_at timestamp with time zone not null default now(),
-    primary key (department_id, operation_id)
-);
-
-revoke all on table store.current_business_day_operation_results from public, anon, authenticated, service_role;
 
 drop function if exists store.submit_current_order_entry_v2(bigint, text, bigint, bigint, jsonb);
 
@@ -85,9 +74,6 @@ begin
     perform pg_advisory_xact_lock(hashtextextended(
         format('store_business_day_state:%s', p_department_id),
         0));
-
-    delete from store.current_business_day_operation_results
-     where created_at < now() - interval '30 days';
 
     select operation.request_body, operation.response
       into v_existing_request, v_response

@@ -20,7 +20,7 @@ as $$
         d.department_name,
         case
             when a.clock_in_at is null then null
-            else to_char(a.clock_in_at at time zone 'Asia/Tokyo', 'HH24:MI')
+            else to_char(a.clock_in_at at time zone store.business_timezone(), 'HH24:MI')
         end as clock_in_time
     from public.store_cast_attendance a
     join public.cast_master c
