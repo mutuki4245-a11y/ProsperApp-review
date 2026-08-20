@@ -92,12 +92,12 @@ as $$
         coalesce(snapshot.closing_data ? 'correction', false) as is_corrected,
         day.status = 'closed'
             and day.business_day_rank <= 3
-            and snapshot.closing_data#>>'{daily_report,schemaVersion}' = 'daily-report-v3' as can_edit,
+            and snapshot.closing_data#>>'{daily_report,schemaVersion}' is not distinct from 'daily-report-v3' as can_edit,
         case
             when day.status = 'open' then '営業中の編集は締め作業で行ってください。'
             when day.business_day_rank is null or day.business_day_rank > 3 then '直近3営業日を超えているため閲覧のみです。'
             when snapshot.closing_snapshot_id is null then '締めスナップショットがないため補正できません。'
-            when snapshot.closing_data#>>'{daily_report,schemaVersion}' <> 'daily-report-v3' then '旧形式の日報は閲覧のみです。'
+            when snapshot.closing_data#>>'{daily_report,schemaVersion}' is distinct from 'daily-report-v3' then '旧形式の日報は閲覧のみです。'
             else null
         end as edit_reason
     from selected_days day
@@ -188,12 +188,12 @@ begin
 
     v_can_edit := v_business_day.status = 'closed'
         and v_rank <= 3
-        and v_snapshot.closing_data#>>'{daily_report,schemaVersion}' = 'daily-report-v3';
+        and v_snapshot.closing_data#>>'{daily_report,schemaVersion}' is not distinct from 'daily-report-v3';
     v_edit_reason := case
         when v_business_day.status = 'open' then '営業中の編集は締め作業で行ってください。'
         when v_rank is null or v_rank > 3 then '直近3営業日を超えているため閲覧のみです。'
         when v_snapshot.closing_snapshot_id is null then '締めスナップショットがないため補正できません。'
-        when v_snapshot.closing_data#>>'{daily_report,schemaVersion}' <> 'daily-report-v3' then '旧形式の日報は閲覧のみです。'
+        when v_snapshot.closing_data#>>'{daily_report,schemaVersion}' is distinct from 'daily-report-v3' then '旧形式の日報は閲覧のみです。'
         else null
     end;
 
@@ -227,9 +227,9 @@ begin
         'is_active_candidate', cast_member.is_active and cast_member.status = 'active' and department.is_active,
         'is_selected', coalesce(attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out'), false),
         'clock_in_time', case when attendance.clock_in_at is null then null
-            else to_char(attendance.clock_in_at at time zone 'Asia/Tokyo', 'HH24:MI') end,
+            else to_char(attendance.clock_in_at at time zone store.business_timezone(), 'HH24:MI') end,
         'clock_out_time', case when attendance.clock_out_at is null then null
-            else to_char(attendance.clock_out_at at time zone 'Asia/Tokyo', 'HH24:MI') end,
+            else to_char(attendance.clock_out_at at time zone store.business_timezone(), 'HH24:MI') end,
         'uses_send_service', coalesce(attendance.uses_send_service, false),
         'version', case when attendance.updated_at is null then null
             else to_char(attendance.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end
@@ -265,9 +265,9 @@ begin
         'is_active_candidate', staff.is_active and staff.status = 'active',
         'is_selected', coalesce(attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out'), false),
         'clock_in_time', case when attendance.clock_in_at is null then null
-            else to_char(attendance.clock_in_at at time zone 'Asia/Tokyo', 'HH24:MI') end,
+            else to_char(attendance.clock_in_at at time zone store.business_timezone(), 'HH24:MI') end,
         'clock_out_time', case when attendance.clock_out_at is null then null
-            else to_char(attendance.clock_out_at at time zone 'Asia/Tokyo', 'HH24:MI') end,
+            else to_char(attendance.clock_out_at at time zone store.business_timezone(), 'HH24:MI') end,
         'uses_send_service', coalesce(attendance.uses_send_service, false),
         'version', case when attendance.updated_at is null then null
             else to_char(attendance.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end
@@ -587,10 +587,6 @@ begin
     perform pg_advisory_xact_lock(hashtextextended(
         format('store_business_day_state:%s', p_department_id), 0));
 
-    delete from store.current_business_day_operation_results
-     where created_at < now() - interval '30 days'
-       and operation_type <> 'save_sales_history_correction_v1';
-
     select operation.request_body, operation.response
       into v_existing_request_body, v_response
       from store.current_business_day_operation_results operation
@@ -674,7 +670,7 @@ begin
          for share;
 
         if v_snapshot.closing_snapshot_id is null
-           or v_snapshot.closing_data#>>'{daily_report,schemaVersion}' <> 'daily-report-v3' then
+           or v_snapshot.closing_data#>>'{daily_report,schemaVersion}' is distinct from 'daily-report-v3' then
             v_status := 'permission_denied';
             v_message := 'この営業日は旧形式または日報未作成のため補正できません。';
             exit save_attempt;
@@ -1033,11 +1029,11 @@ begin
                 v_clock_in_time := (v_entry->>'clock_in_time')::time;
                 v_clock_out_time := (v_entry->>'clock_out_time')::time;
                 v_clock_in_at := (((v_business_day.business_date
-                    + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp
-                    + v_clock_in_time) at time zone 'Asia/Tokyo');
+                    + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                    + v_clock_in_time) at time zone store.business_timezone());
                 v_clock_out_at := (((v_business_day.business_date
-                    + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp
-                    + v_clock_out_time) at time zone 'Asia/Tokyo');
+                    + case when v_clock_out_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                    + v_clock_out_time) at time zone store.business_timezone());
                 if v_clock_out_at <= v_clock_in_at then
                     v_status := 'validation_error';
                     v_message := 'キャストの退勤時刻は出勤時刻より後にしてください。';
@@ -1073,11 +1069,11 @@ begin
                 v_clock_in_time := (v_entry->>'clock_in_time')::time;
                 v_clock_out_time := (v_entry->>'clock_out_time')::time;
                 v_clock_in_at := (((v_business_day.business_date
-                    + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp
-                    + v_clock_in_time) at time zone 'Asia/Tokyo');
+                    + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                    + v_clock_in_time) at time zone store.business_timezone());
                 v_clock_out_at := (((v_business_day.business_date
-                    + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp
-                    + v_clock_out_time) at time zone 'Asia/Tokyo');
+                    + case when v_clock_out_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                    + v_clock_out_time) at time zone store.business_timezone());
                 if v_clock_out_at <= v_clock_in_at then
                     v_status := 'validation_error';
                     v_message := 'スタッフの退勤時刻は出勤時刻より後にしてください。';
@@ -1216,11 +1212,11 @@ begin
                         v_clock_in_time := (v_entry->>'clock_in_time')::time;
                         v_clock_out_time := (v_entry->>'clock_out_time')::time;
                         v_clock_in_at := (((v_business_day.business_date
-                            + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp
-                            + v_clock_in_time) at time zone 'Asia/Tokyo');
+                            + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                            + v_clock_in_time) at time zone store.business_timezone());
                         v_clock_out_at := (((v_business_day.business_date
-                            + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp
-                            + v_clock_out_time) at time zone 'Asia/Tokyo');
+                            + case when v_clock_out_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                            + v_clock_out_time) at time zone store.business_timezone());
                         insert into public.store_cast_attendance (
                             company_id, department_id, business_day_id, business_date, cast_id,
                             attendance_status, clock_in_at, clock_out_at, uses_send_service, source)
@@ -1257,11 +1253,11 @@ begin
                         v_clock_in_time := (v_entry->>'clock_in_time')::time;
                         v_clock_out_time := (v_entry->>'clock_out_time')::time;
                         v_clock_in_at := (((v_business_day.business_date
-                            + case when v_clock_in_time < time '12:00' then 1 else 0 end)::timestamp
-                            + v_clock_in_time) at time zone 'Asia/Tokyo');
+                            + case when v_clock_in_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                            + v_clock_in_time) at time zone store.business_timezone());
                         v_clock_out_at := (((v_business_day.business_date
-                            + case when v_clock_out_time < time '12:00' then 1 else 0 end)::timestamp
-                            + v_clock_out_time) at time zone 'Asia/Tokyo');
+                            + case when v_clock_out_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp
+                            + v_clock_out_time) at time zone store.business_timezone());
                         insert into public.store_staff_attendance (
                             company_id, department_id, business_day_id, business_date, staff_id,
                             attendance_status, clock_in_at, clock_out_at, uses_send_service, source)

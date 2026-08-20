@@ -1662,9 +1662,6 @@ create table if not exists public.store_business_day_closing_snapshots (
     )
 );
 
-create unique index if not exists ux_store_business_day_closing_snapshots_day
-    on public.store_business_day_closing_snapshots(business_day_id);
-
 create index if not exists idx_store_business_day_closing_snapshots_lookup
     on public.store_business_day_closing_snapshots(department_id, business_date desc);
 

@@ -13,6 +13,7 @@
     const list = root.querySelector('[data-history-list]');
     const loading = root.querySelector('[data-history-loading]');
     const empty = root.querySelector('[data-history-empty]');
+    const preferredNotFound = root.querySelector('[data-history-preferred-not-found]');
     const error = root.querySelector('[data-history-error]');
     const count = root.querySelector('[data-history-count]');
     const loadMoreButton = root.querySelector('[data-history-load-more]');
@@ -38,8 +39,12 @@
         editor: null,
         operationId: null,
         requestSequence: 0,
-        loading: false
+        loading: false,
+        activeFilter: { fromBusinessDate: '', toBusinessDate: '' }
     };
+    const initialSearchPageLimit = 5;
+    let activeInitialHistoryLoad = null;
+    let pendingInitialHistoryRequest = null;
 
     const yenFormatter = new Intl.NumberFormat('ja-JP', {
         style: 'currency',
@@ -143,6 +148,11 @@
         error.textContent = message;
         error.hidden = !message;
     };
+
+    const readHistoryFilter = () => ({
+        fromBusinessDate: fromDateInput.value,
+        toBusinessDate: toDateInput.value
+    });
 
     const updateUrl = () => {
         const url = new URL(window.location.href);
@@ -266,18 +276,19 @@
         });
         renderDetail();
         if (updateBrowserUrl) {
+            preferredNotFound.hidden = true;
             updateUrl();
         }
         return true;
     };
 
-    const buildHistoryPageUrl = (append) => {
+    const buildHistoryPageUrl = (append, filter) => {
         const url = new URL(historyUrl, window.location.href);
-        if (fromDateInput.value) {
-            url.searchParams.set('fromBusinessDate', fromDateInput.value);
+        if (filter.fromBusinessDate) {
+            url.searchParams.set('fromBusinessDate', filter.fromBusinessDate);
         }
-        if (toDateInput.value) {
-            url.searchParams.set('toBusinessDate', toDateInput.value);
+        if (filter.toBusinessDate) {
+            url.searchParams.set('toBusinessDate', filter.toBusinessDate);
         }
         if (append && state.nextBeforeBusinessDate && state.nextBeforeBusinessDayId) {
             url.searchParams.set('beforeBusinessDate', state.nextBeforeBusinessDate);
@@ -286,7 +297,7 @@
         return `${url.pathname}${url.search}`;
     };
 
-    const loadHistoryPage = async ({ append = false, render = true } = {}) => {
+    const loadHistoryPage = async ({ append = false, render = true, filter = state.activeFilter } = {}) => {
         if (state.loading || (append && !state.hasMore)) {
             return false;
         }
@@ -298,7 +309,7 @@
             loadMoreButton.textContent = '取得中';
         }
         try {
-            const page = normalizePage(await requestJson(buildHistoryPageUrl(append)));
+            const page = normalizePage(await requestJson(buildHistoryPageUrl(append, filter)));
             if (sequence !== state.requestSequence) {
                 return false;
             }
@@ -330,25 +341,30 @@
         }
     };
 
-    const loadInitialHistory = async (preferredBusinessDayId = null) => {
+    const loadInitialHistory = async (preferredBusinessDayId = null, filter = readHistoryFilter()) => {
         state.items = [];
         state.hasMore = true;
         state.nextBeforeBusinessDate = null;
         state.nextBeforeBusinessDayId = null;
         state.selectedBusinessDayId = null;
+        state.activeFilter = filter;
+        preferredNotFound.hidden = true;
         renderDetail();
-        const loaded = await loadHistoryPage();
+        const loaded = await loadHistoryPage({ filter });
         if (!loaded) {
             return;
         }
 
+        let loadedPageCount = 1;
         while (preferredBusinessDayId &&
                !state.items.some((item) => item.businessDayId === preferredBusinessDayId) &&
-               state.hasMore) {
-            const appended = await loadHistoryPage({ append: true, render: false });
+               state.hasMore &&
+               loadedPageCount < initialSearchPageLimit) {
+            const appended = await loadHistoryPage({ append: true, render: false, filter });
             if (!appended) {
                 break;
             }
+            loadedPageCount += 1;
         }
         renderList();
         const selected = preferredBusinessDayId && selectBusinessDay(preferredBusinessDayId, false);
@@ -357,6 +373,30 @@
         } else if (selected) {
             updateUrl();
         }
+        preferredNotFound.hidden = !preferredBusinessDayId || Boolean(selected);
+    };
+
+    const requestInitialHistoryLoad = (preferredBusinessDayId = null) => {
+        const request = {
+            preferredBusinessDayId,
+            filter: readHistoryFilter()
+        };
+        if (activeInitialHistoryLoad) {
+            pendingInitialHistoryRequest = request;
+            return activeInitialHistoryLoad;
+        }
+
+        activeInitialHistoryLoad = (async () => {
+            let nextRequest = request;
+            while (nextRequest) {
+                pendingInitialHistoryRequest = null;
+                await loadInitialHistory(nextRequest.preferredBusinessDayId, nextRequest.filter);
+                nextRequest = pendingInitialHistoryRequest;
+            }
+        })().finally(() => {
+            activeInitialHistoryLoad = null;
+        });
+        return activeInitialHistoryLoad;
     };
 
     const normalizeAttendanceEntry = (entry, type) => ({
@@ -753,14 +793,14 @@
         }
         toDateInput.setCustomValidity('');
         updateUrl();
-        void loadInitialHistory();
+        void requestInitialHistoryLoad();
     });
     root.querySelector('[data-history-filter-clear]').addEventListener('click', () => {
         fromDateInput.value = '';
         toDateInput.value = '';
         toDateInput.setCustomValidity('');
         updateUrl();
-        void loadInitialHistory();
+        void requestInitialHistoryLoad();
     });
     toDateInput.addEventListener('input', () => toDateInput.setCustomValidity(''));
 
@@ -824,7 +864,7 @@
             const unchanged = result.status === 'unchanged';
             updateCorrectionStatus(unchanged ? '変更はありません。' : '補正を保存しました。');
             const businessDayId = mutation.businessDayId;
-            await loadInitialHistory(businessDayId);
+            await requestInitialHistoryLoad(businessDayId);
             window.setTimeout(() => modal?.hide(), 400);
         } catch (requestError) {
             const fallback = requestError?.status === 409
@@ -840,5 +880,5 @@
     fromDateInput.value = initialUrl.searchParams.get('fromBusinessDate') || '';
     toDateInput.value = initialUrl.searchParams.get('toBusinessDate') || '';
     const initialBusinessDayId = asNullableNumber(initialUrl.searchParams.get('businessDayId'));
-    void loadInitialHistory(initialBusinessDayId);
+    void requestInitialHistoryLoad(initialBusinessDayId);
 })();
