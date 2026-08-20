@@ -88,3 +88,13 @@ test('CSPと安全なレスポンスヘッダーを一元適用する', () => {
   assert.match(program, /XFrameOptions = "SAMEORIGIN"/);
   assert.match(program, /strict-origin-when-cross-origin/);
 });
+
+test('Google OAuth scopeは旧Azure設定に影響されずDrive読取専用へ固定する', () => {
+  const program = read('Program.cs');
+  const driveOptions = read('Options/GoogleDriveOptions.cs');
+  const appSettings = read('appsettings.json');
+  assert.match(program, /options\.Scope\.Clear\(\)/);
+  assert.match(program, /options\.Scope\.Add\("https:\/\/www\.googleapis\.com\/auth\/drive\.readonly"\)/);
+  assert.doesNotMatch(program, /googleDriveOptions\.Scopes/);
+  assert.doesNotMatch(driveOptions + appSettings, /\bScopes\b|https:\/\/www\.googleapis\.com\/auth\/drive(?!\.readonly)/);
+});

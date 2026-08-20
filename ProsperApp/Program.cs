@@ -118,19 +118,11 @@ if (googleAuthConfigured)
             options.SaveTokens = true;
             options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.AccessType = "offline";
-
-            foreach (var scope in googleDriveOptions.Scopes.Where(scope => !string.IsNullOrWhiteSpace(scope)))
-            {
-                if (!options.Scope.Contains(scope))
-                {
-                    options.Scope.Add(scope);
-                }
-            }
-
-            if (!options.Scope.Contains("email"))
-            {
-                options.Scope.Add("email");
-            }
+            options.Scope.Clear();
+            options.Scope.Add("openid");
+            options.Scope.Add("profile");
+            options.Scope.Add("email");
+            options.Scope.Add("https://www.googleapis.com/auth/drive.readonly");
 
             options.Events.OnCreatingTicket = async context =>
             {
