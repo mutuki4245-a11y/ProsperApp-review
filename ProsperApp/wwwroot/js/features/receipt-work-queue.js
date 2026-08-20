@@ -78,9 +78,7 @@
         ...state.pending.map((command) => command.documentId),
         ...state.failed.map((command) => command.documentId)
     ]);
-    const escapeHtml = (value) => String(value ?? '')
-        .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+    const escapeHtml = window.ProsperHtml.escape;
     const setError = (message = '') => {
         if (!errorElement) return;
         errorElement.textContent = message;

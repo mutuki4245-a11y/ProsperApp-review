@@ -515,10 +515,23 @@
                     loaded: false,
                     failed: false
                 };
+                (() => {
+                    const scriptId = 'prosperSiiReceiptSdk';
+                    const finish = (event, state) => {
+                        if (event.target?.id !== scriptId) {
+                            return;
+                        }
+                        window.prosperSiiReceiptSdkScript[state] = true;
+                        document.removeEventListener('load', onLoad, true);
+                        document.removeEventListener('error', onError, true);
+                    };
+                    const onLoad = (event) => finish(event, 'loaded');
+                    const onError = (event) => finish(event, 'failed');
+                    document.addEventListener('load', onLoad, true);
+                    document.addEventListener('error', onError, true);
+                })();
             </script>
-            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"
-                    onload="window.prosperSiiReceiptSdkScript.loaded = true"
-                    onerror="window.prosperSiiReceiptSdkScript.failed = true"></script>
+            <script id="prosperSiiReceiptSdk" src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"></script>
         }
         <script>
             window.prosperSiiReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);

@@ -21,12 +21,7 @@
         return;
     }
 
-    const escapeHtml = (value) => String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    const escapeHtml = window.ProsperHtml.escape;
 
     const asArray = (value) => Array.isArray(value) ? value : [];
     const asNumber = (value, fallback = 0) => {

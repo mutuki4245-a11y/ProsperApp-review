@@ -28,12 +28,18 @@
     <meta name="apple-mobile-web-app-title" content="店舗アプリ" />
     <meta name="apple-mobile-web-app-status-bar-style" content="@appleStatusBarStyle" />
     <title>@ViewData["Title"] - 店舗用アプリ</title>
-    <script type="importmap"></script>
     <link rel="manifest" href="~/site.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="~/icons/store-app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="~/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/base.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/opening.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/slips.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/orders.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/closing.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/sales-history.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/layout.css" asp-append-version="true" />
     @if (isDarkTheme)
     {
         <link rel="stylesheet" href="~/css/dark-theme.css" asp-append-version="true" />
@@ -130,7 +136,6 @@
         </footer>
     }
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (() => {

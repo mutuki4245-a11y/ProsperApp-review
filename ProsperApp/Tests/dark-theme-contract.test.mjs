@@ -5,7 +5,6 @@ import test from "node:test";
 const layoutPath = new URL("../Pages/Shared/_Layout.cshtml", import.meta.url);
 const manifestPath = new URL("../wwwroot/site.webmanifest", import.meta.url);
 const iconPath = new URL("../wwwroot/icons/store-app-icon.svg", import.meta.url);
-const siteCssPath = new URL("../wwwroot/css/site.css", import.meta.url);
 const themePath = new URL("../wwwroot/css/dark-theme.css", import.meta.url);
 const localSettingsPath = new URL("../Features/Settings/LocalSettings.cs", import.meta.url);
 const localSettingsProviderPath = new URL("../Services/LocalSettingsProvider.cs", import.meta.url);
@@ -36,21 +35,25 @@ test("the default dark theme is enabled at the document and PWA level", async ()
 });
 
 test("the dark theme is conditionally loaded after all feature styles", async () => {
-  const [layout, siteCss] = await Promise.all([
-    readFile(layoutPath, "utf8"),
-    readFile(siteCssPath, "utf8"),
-  ]);
-  const imports = [...siteCss.matchAll(/@import url\("([^"]+)"\);/g)].map(
-    ([, path]) => path,
-  );
-  const siteCssIndex = layout.indexOf('href="~/css/site.css"');
+  const layout = await readFile(layoutPath, "utf8");
+  const orderedStyles = [
+    "base.css",
+    "features/opening.css",
+    "features/slips.css",
+    "features/orders.css",
+    "features/closing.css",
+    "features/sales-history.css",
+    "features/settings.css",
+    "layout.css",
+  ];
+  const styleIndexes = orderedStyles.map((path) => layout.indexOf(`href="~/css/${path}"`));
   const darkThemeGuardIndex = layout.indexOf("@if (isDarkTheme)");
   const darkThemeIndex = layout.indexOf('href="~/css/dark-theme.css"');
   const scopedCssIndex = layout.indexOf('href="~/ProsperApp.styles.css"');
 
-  assert.ok(!imports.includes("./dark-theme.css"));
-  assert.ok(siteCssIndex >= 0);
-  assert.ok(darkThemeGuardIndex > siteCssIndex);
+  assert.ok(styleIndexes.every((index) => index >= 0));
+  assert.deepEqual(styleIndexes, [...styleIndexes].sort((left, right) => left - right));
+  assert.ok(darkThemeGuardIndex > styleIndexes.at(-1));
   assert.ok(darkThemeIndex > darkThemeGuardIndex);
   assert.ok(scopedCssIndex > darkThemeIndex);
 });

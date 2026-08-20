@@ -38,7 +38,7 @@
         const currentNumber = Number(current);
         const incomingNumber = Number(incoming);
         if (Number.isFinite(currentNumber) && Number.isFinite(incomingNumber)) {
-            return incomingNumber >= currentNumber;
+            return incomingNumber > currentNumber;
         }
 
         return incoming !== current;

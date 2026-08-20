@@ -72,12 +72,7 @@
     const castModal = castModalElement ? bootstrap.Modal.getOrCreateInstance(castModalElement) : null;
     let castModalTargetRow = null;
     const nominationKindOptions = Array.isArray(config.nominationKindOptions) ? config.nominationKindOptions : [];
-    const escapeHtml = (value) => String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    const escapeHtml = window.ProsperHtml.escape;
     const nominationKindOptionsHtml = nominationKindOptions
         .map((option, index) => `<option value="${escapeHtml(option.value)}" ${index === 0 ? 'selected' : ''} data-companion="${option.isCompanion === true ? 'true' : 'false'}">${escapeHtml(option.label)}</option>`)
         .join('');
