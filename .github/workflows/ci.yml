@@ -42,3 +42,61 @@ jobs:
           deno-version: v2.x
       - run: deno check ProsperApp/supabase/functions/prosper-rpc/index.ts
       - run: deno test ProsperApp/supabase/functions/prosper-rpc/security_test.ts
+
+  database:
+    name: Postgres schema build and pgTAP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 本番はSupabase上のPostgreSQL 17ですが、ここで確かめたいのは
+      # 「Sql/ 配下だけで空のDBを一から組み立てられるか」なので、
+      # runnerに入っているPostgreSQLをそのまま使い捨てDBとして使います。
+      # pgTAPのテストがpg_cronの登録内容まで見るため、両方の拡張を入れます。
+      - name: Install Postgres extensions
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-16-pgtap postgresql-16-cron
+
+      - name: Start Postgres with pg_cron
+        run: |
+          sudo tee -a /etc/postgresql/16/main/postgresql.conf > /dev/null <<'CONF'
+          shared_preload_libraries = 'pg_cron'
+          cron.database_name = 'prosper_ci'
+          CONF
+          # runnerのクラスタは停止状態で配布されるため、restartが失敗する場合に備えます。
+          sudo pg_ctlcluster 16 main restart || sudo pg_ctlcluster 16 main start
+          sudo -u postgres psql -c "alter role postgres password 'postgres';"
+          sudo -u postgres psql -c "create database prosper_ci;"
+
+      # Supabaseは pgtap を extensions schema に置くため、テストの
+      # search_path に合わせてこちらも同じ場所に作ります。
+      - name: Create extensions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d prosper_ci \
+            -c "create schema if not exists extensions;" \
+            -c "create extension if not exists pg_cron;" \
+            -c "create extension if not exists pgtap schema extensions;"
+
+      - name: Build schema from SQL sources
+        env:
+          PGPASSWORD: postgres
+        run: ProsperApp/Sql/apply_all.sh --with-test-fixtures "postgresql://postgres@localhost:5432/prosper_ci"
+
+      # 2回目を流して、全ファイルが冪等なことを確かめます。適用順を
+      # 一度きりの移行に依存させないための歯止めです。
+      - name: Re-apply to prove idempotency
+        env:
+          PGPASSWORD: postgres
+        run: ProsperApp/Sql/apply_all.sh --with-test-fixtures "postgresql://postgres@localhost:5432/prosper_ci"
+
+      - name: Run pgTAP suite
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d prosper_ci \
+            --set ON_ERROR_STOP=1 \
+            --no-psqlrc \
+            -f ProsperApp/Sql/tests/security_and_retention_pgtap.sql
