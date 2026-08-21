@@ -20,6 +20,31 @@ freeプランは**1ユーザーあたり同時2プロジェクト**までで、�
 一時停止したプロジェクトは枠を消費しません。旧プロジェクトは削除していないので、
 データはそのまま残っています。
 
+## Exposed schemas をSQLで上書きしています
+
+`cast_race` と `nightqueen_gp` をPostgRESTに公開するため、ダッシュボードではなく
+SQLで設定しました。
+
+```sql
+alter role authenticator set pgrst.db_schemas = 'public, graphql_public, cast_race, nightqueen_gp';
+notify pgrst, 'reload config';
+notify pgrst, 'reload schema';
+```
+
+**この設定はダッシュボードの Settings > API > Exposed schemas より優先されます。**
+つまり今後ダッシュボードで公開スキーマを足しても反映されません。ハマる前提で覚えておいてください。
+
+ダッシュボード側で管理したくなったら、まずUIで同じ4スキーマを設定してから、
+この上書きを外します。
+
+```sql
+alter role authenticator reset pgrst.db_schemas;
+notify pgrst, 'reload config';
+```
+
+スキーマを足したあとは `notify pgrst, 'reload schema'` も必要です。これを忘れると、
+公開はされているのにテーブルが404になります。
+
 ## DB作業時の注意
 
 **ProsperAppの作業が同居スキーマを壊さないこと。** 特に次を確認してください。
@@ -48,5 +73,7 @@ ProsperAppのテーブルは従来どおりanonから到達できません
 2. 旧プロジェクトのPostgREST経由でデータを取得し、本番へupsert
    （一時的に `http` 拡張を入れ、完了後に `drop extension http` で撤去）
 3. 全9テーブルについて、件数と内容のハッシュが移管元と一致することを確認
-4. 各アプリの接続先を本番プロジェクトへ変更
-5. `cast_race_newbee` を一時停止（**削除していない**）
+4. `pgrst.db_schemas` に2スキーマを追加し、PostgRESTをreload
+5. NightQueenGPの編集者クレーム `nightqueen_gp_editor` を本番の同名アカウントへ付与
+6. 各アプリの接続先を本番プロジェクトへ変更
+7. `cast_race_newbee` を一時停止（**削除していない**）
