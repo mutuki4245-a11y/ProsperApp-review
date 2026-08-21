@@ -1,5 +1,8 @@
+@using Microsoft.Extensions.Options
+@using ProsperApp.Options
 @inject IFeatureGate FeatureGate
 @inject ILocalSettingsProvider LocalSettingsProvider
+@inject IOptions<AppOptions> AppOptionsAccessor
 @{
     var localSettings = LocalSettingsProvider.GetCurrent();
     var isDarkTheme = localSettings.ThemeMode != LocalSettings.ThemeModeWhite;
@@ -16,6 +19,7 @@
     var bodyClass = isOrdersPage
         ? "order-terminal"
         : currentPath == "/" ? "sales-hub-page" : string.Empty;
+    var environmentBanner = AppOptionsAccessor.Value.EnvironmentBanner;
 }
 <!DOCTYPE html>
 <html lang="ja" data-bs-theme="@bootstrapTheme">
@@ -47,6 +51,10 @@
     <link rel="stylesheet" href="~/ProsperApp.styles.css" asp-append-version="true" />
 </head>
 <body class="@bodyClass">
+    @if (!string.IsNullOrWhiteSpace(environmentBanner))
+    {
+        <div class="app-environment-banner" role="status">@environmentBanner</div>
+    }
     @if (!isOrdersPage)
     {
         <header>
