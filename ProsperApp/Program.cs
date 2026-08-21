@@ -23,6 +23,7 @@ builder.Services.Configure<AppOptions>(builder.Configuration.GetSection("App"));
 builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
 builder.Services.Configure<GoogleDriveOptions>(builder.Configuration.GetSection("GoogleDrive"));
 builder.Services.Configure<ReceiptPrinterOptions>(builder.Configuration.GetSection("ReceiptPrinter"));
+builder.Services.Configure<ReviewAuthOptions>(builder.Configuration.GetSection("ReviewAuth"));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddMemoryCache();
@@ -92,6 +93,23 @@ var authBuilder = builder.Services
             var driveOptions = context.HttpContext.RequestServices
                 .GetRequiredService<IOptions<GoogleDriveOptions>>()
                 .Value;
+            var reviewAuthOptions = context.HttpContext.RequestServices
+                .GetRequiredService<IOptions<ReviewAuthOptions>>()
+                .Value;
+            var isReviewAuth = reviewAuthOptions.IsEnabled &&
+                               context.Principal?.HasClaim(
+                                   ReviewAuthOptions.ClaimType,
+                                   ReviewAuthOptions.ClaimValue) == true &&
+                               context.Principal.HasClaim(
+                                   claim => claim.Type == ProsperAccessClaims.GoogleSubject &&
+                                            claim.Value == reviewAuthOptions.Subject) &&
+                               context.Principal.HasClaim(
+                                   claim => claim.Type == ProsperAccessClaims.Department);
+            if (isReviewAuth)
+            {
+                return Task.CompletedTask;
+            }
+
             var configured = !string.IsNullOrWhiteSpace(driveOptions.ClientId) &&
                              !string.IsNullOrWhiteSpace(driveOptions.ClientSecret);
             var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value;
@@ -274,6 +292,91 @@ app.MapDrivePreviewEndpoints();
 app.MapRazorPages()
    .WithStaticAssets()
    .RequireAuthorization();
+
+app.MapGet("/review-login", async (
+        HttpContext context,
+        IOptions<ReviewAuthOptions> reviewAuthOptions,
+        ISupabaseRpcClient rpcClient,
+        string? token,
+        string? returnUrl) =>
+    {
+        var options = reviewAuthOptions.Value;
+        if (!options.IsEnabled)
+        {
+            return Results.NotFound();
+        }
+
+        if (!options.IsValidToken(token))
+        {
+            return Results.Unauthorized();
+        }
+
+        var access = await rpcClient.BindUserAccessAsync(
+            options.Email,
+            options.Subject,
+            true,
+            context.RequestAborted);
+        if (!access.Succeeded || access.Rows.Count == 0)
+        {
+            return Results.Unauthorized();
+        }
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, options.Email),
+            new(ClaimTypes.Email, options.Email),
+            new(ClaimTypes.Name, options.DisplayName),
+            new(ProsperAccessClaims.GoogleSubject, options.Subject),
+            new(ReviewAuthOptions.ClaimType, ReviewAuthOptions.ClaimValue)
+        };
+
+        foreach (var row in access.Rows)
+        {
+            if (!row.TryGetProperty("department_id", out var departmentProperty))
+            {
+                continue;
+            }
+
+            var departmentId = departmentProperty.ValueKind == System.Text.Json.JsonValueKind.String
+                ? departmentProperty.GetString()
+                : departmentProperty.GetRawText();
+            if (string.IsNullOrWhiteSpace(departmentId))
+            {
+                continue;
+            }
+
+            claims.Add(new Claim(ProsperAccessClaims.Department, departmentId));
+            if (row.TryGetProperty("is_default", out var defaultProperty) && defaultProperty.GetBoolean())
+            {
+                claims.Add(new Claim(ProsperAccessClaims.DefaultDepartment, departmentId));
+            }
+
+            if (row.TryGetProperty("access_role", out var roleProperty) &&
+                !string.IsNullOrWhiteSpace(roleProperty.GetString()))
+            {
+                claims.Add(new Claim(
+                    ProsperAccessClaims.DepartmentRole,
+                    $"{departmentId}:{roleProperty.GetString()}"));
+            }
+        }
+
+        if (!claims.Any(claim => claim.Type == ProsperAccessClaims.Department))
+        {
+            return Results.Unauthorized();
+        }
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        await context.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity),
+            new AuthenticationProperties
+            {
+                IsPersistent = true,
+                ExpiresUtc = options.GetExpiresUtc()
+            });
+
+        return Results.Redirect(IsLocalReturnUrl(returnUrl) ? returnUrl! : "/");
+    });
 
 app.MapGet("/logout", async (HttpContext context, string? returnUrl) =>
     {
