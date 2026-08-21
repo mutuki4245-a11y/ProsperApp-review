@@ -1,0 +1,60 @@
+name: Delete branches
+
+# One-shot manual deletion for branches the scheduled sweep will not touch.
+#
+# The sweep only deletes ancestors of the default branch, which is what makes
+# it safe to leave on a schedule. Retiring a branch that still carries its own
+# commits is a decision, not a chore, so it is spelled out here by name.
+#
+# This workflow is expected to be removed once the branches it was added for
+# are gone.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: 'Branches to delete, separated by spaces'
+        type: string
+        required: true
+      dry_run:
+        description: 'List what would be deleted without deleting it'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Delete the named branches
+        env:
+          BRANCHES: ${{ inputs.branches }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          for branch in $BRANCHES; do
+            if [ "$branch" = "$DEFAULT_BRANCH" ]; then
+              echo "refusing to delete the default branch"
+              exit 1
+            fi
+            if ! git rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null; then
+              echo "skip    $branch -- no such branch"
+              continue
+            fi
+
+            sha=$(git rev-parse "refs/remotes/origin/$branch")
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "would delete $branch at $sha"
+            else
+              git push origin --delete "$branch"
+              echo "deleted $branch at $sha -- restore with: git push origin $sha:refs/heads/$branch"
+            fi
+          done | tee -a "$GITHUB_STEP_SUMMARY"
