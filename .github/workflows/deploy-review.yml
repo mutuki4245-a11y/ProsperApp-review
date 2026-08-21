@@ -9,14 +9,22 @@ name: Deploy review environment
 #   secret AZURE_REVIEW_PUBLISH_PROFILE  レビュー用App Serviceのpublish profile(XMLそのまま)
 #   variable AZURE_REVIEW_APP_NAME       レビュー用App Serviceの名前
 #
-# App Service側の設定は ProsperApp/docs/review-environment.md を参照してください。
-# 特に ASPNETCORE_ENVIRONMENT=Staging と、テスト用Supabaseを指す接続設定は
-# App Serviceのアプリケーション設定側で行います。ここでは何も注入しません。
+# App Service側の環境差分は ProsperApp/docs/system-specification.md を参照してください。
+# 接続情報と秘密値はApp Serviceの環境変数側で管理し、workflowには注入しません。
 
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - ".github/**"
+      - "ProsperApp/.codex/**"
+      - "ProsperApp/.mcp.json"
+      - "ProsperApp/AGENTS.md"
+      - "ProsperApp/HANDOFF*.md"
+      - "ProsperApp/Sql/**"
+      - "ProsperApp/Tests/**"
+      - "ProsperApp/docs/**"
   workflow_dispatch:
 
 permissions:
@@ -48,7 +56,7 @@ jobs:
               echo
               echo "secret \`AZURE_REVIEW_PUBLISH_PROFILE\` と variable \`AZURE_REVIEW_APP_NAME\` を登録すると、"
               echo "このリポジトリのmainへのpushでレビュー環境へ配信されます。"
-              echo "手順は \`ProsperApp/docs/review-environment.md\` にあります。"
+              echo "環境差分は \`ProsperApp/docs/system-specification.md\` にあります。"
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"

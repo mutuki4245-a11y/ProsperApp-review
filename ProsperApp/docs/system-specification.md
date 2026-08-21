@@ -1,399 +1,464 @@
 # ProsperApp システム仕様書
 
-作成日: 2026-07-30
+最終更新日: 2026-08-22
 
-対象: 現行 `main` 実装を正とした ProsperApp のシステム構成、画面、アプリケーションサービス、DB/RPC、外部連携、運用仕様。
+対象: ProsperApp 現行実装（レビュー環境を含む）
 
-注記:
+## 1. 文書の目的
 
-- 本書はコード、SQL、Edge Function、画面実装、契約テストから確認できる現行仕様を整理したもの。
-- 秘密値、接続先URL、APIキー、publish profile の内容は記載しない。
+本書は、ProsperApp のシステム構成、実行方式、認証・認可、画面、データ、RPC、外部連携、環境差分を定義する。
 
-## 1. システム概要
+秘密値、接続先URLの実値、デプロイ資格情報、環境構築手順、開発作業メモは記載しない。
 
-ProsperApp は ASP.NET Core Razor Pages で構成された店舗営業管理アプリである。ブラウザから Razor Pages にアクセスし、アプリケーションサービスが Repository を通じて Supabase Edge Function `prosper-rpc` を呼び出す。Edge Function は許可済み PostgreSQL RPC だけを実行する。
+## 2. システム概要
+
+ProsperApp は ASP.NET Core Razor Pages で実装された店舗営業管理Webアプリである。ブラウザからの操作をASP.NET Coreアプリが受け付け、業務データはSupabase Edge Functionを経由してPostgreSQL RPCへ読み書きする。
 
 ```mermaid
 flowchart LR
-    Browser["Browser / 店舗端末"] --> App["ASP.NET Core Razor Pages"]
-    App --> Services["Application Services"]
-    Services --> Repos["Supabase Repositories"]
-    Repos --> RpcClient["SupabaseRpcClient"]
-    RpcClient --> Edge["Supabase Edge Function: prosper-rpc"]
-    Edge --> Db["PostgreSQL store.* RPC"]
-    App --> Google["Google OAuth / Drive API"]
-    Browser --> Printer["SII Web SDK Server"]
+    Browser[店舗ブラウザ] --> Web[ASP.NET Core Razor Pages]
+    Web --> App[Application Services]
+    App --> Repo[Repositories]
+    Repo --> Client[SupabaseRpcClient]
+    Client --> Edge[Supabase Edge Function]
+    Edge --> Rpc[PostgreSQL store RPC]
+    Web --> Google[Google OAuth / Drive API]
+    Browser --> Printer[SII Web SDK Server]
 ```
 
-## 2. 実行基盤
+アプリは業務テーブルへ直接SQLを発行しない。Edge Functionが許可した `store.*` 関数だけを、専用DBロールで実行する。
 
-- フレームワーク: ASP.NET Core Razor Pages
-- ターゲット: .NET `net10.0`
-- 認証: Cookie 認証、Google OAuth
-- DB 接続境界: Supabase Edge Function 経由の PostgreSQL RPC
-- 外部API: Google Drive API v3
-- 印刷: SII Web SDK Server
-- クライアント保存: Cookie、localStorage、Session
-- キャッシュ: ASP.NET Core MemoryCache
+## 3. 実行技術
 
-## 3. 主要設定
+| 区分 | 仕様 |
+| --- | --- |
+| Webフレームワーク | ASP.NET Core Razor Pages |
+| ターゲット | .NET `net10.0` |
+| 認証 | Cookie認証、Google OAuth、レビュー環境限定ReviewAuth |
+| DB | Supabase PostgreSQL |
+| DB接続境界 | Supabase Edge Function `prosper-rpc` |
+| Edge実行環境 | Supabase Edge Functions |
+| 外部API | Google Drive API v3 |
+| 印刷 | SII Web SDK Server |
+| サーバーキャッシュ | ASP.NET Core MemoryCache |
+| クライアント保存 | Cookie、localStorage、IndexedDB |
+| ホスティング | Azure App Service |
+
+## 4. 環境構成
+
+### 4.1 本番環境
+
+- 本番用App Serviceと本番用Supabaseを使用する。
+- 通常のGoogle OAuth認証を使用する。
+- ReviewAuthを有効化しない。
+- プリンタ設定は本番端末要件に従う。
+
+### 4.2 レビュー環境
+
+- 本番とは別のApp ServiceとSupabaseを使用する。
+- アプリ機能はReviewAuthを除いて同時点の本番コードと同じにする。
+- `Staging` 環境として実行し、テスト環境バナーを表示する。
+- ReviewAuthを利用できるが、ReviewAuth利用者もテストDBの利用者・店舗権限へ結び付ける。
+- DB、Edge Function、APIキー、ReviewAuthトークンを本番と共有しない。
+- Staging既定ではブラウザプリンタ連携を無効にする。
+
+## 5. 主要設定
 
 | 設定 | 用途 |
 | --- | --- |
-| `App:EnabledFeatures` | 機能フラグ制御 |
-| `Supabase:Url` | Supabase プロジェクト URL |
-| `Supabase:RpcEdgeFunctionUrl` | RPC Edge Function の明示URL |
-| `Supabase:RpcProxyFunctionName` | Edge Function 名。既定は `prosper-rpc` |
-| `Supabase:StoreDepartmentId` | 端末設定がない場合の店舗部門ID |
-| `Supabase:PendingStatus` | 未処理領収書ステータス |
-| `Supabase:CompletedStatus` | 領収書入力済みステータス |
-| `Supabase:ScanMistakeStatus` | スキャンミス除外ステータス |
-| `GoogleDrive:ClientId` | Google OAuth クライアントID |
-| `GoogleDrive:ClientSecret` | Google OAuth クライアントシークレット |
-| `GoogleDrive:Scopes` | Google Drive API スコープ |
-| `GoogleAuth:AllowedEmails` | 許可メールアドレス |
-| `GoogleAuth:AllowedDomains` | 許可ドメイン |
-| `ReceiptPrinter:Enabled` | ブラウザプリンタ連携の有効化 |
-| `ReceiptPrinter:BrowserSdkScriptUrl` | SII Web SDK のスクリプトURL |
-| `ReceiptPrinter:BrowserWebSocketHost` | SII Web SDK Server の host |
-| `ReceiptPrinter:BrowserCodePage` | 印字コードページ |
+| `ASPNETCORE_ENVIRONMENT` | 実行環境の選択 |
+| `App:EnabledFeatures` | 機能フラグ |
+| `App:EnvironmentBanner` | 非本番環境の識別表示 |
+| `Supabase:Url` | SupabaseプロジェクトURL |
+| `Supabase:RpcProxyFunctionName` | Edge Function名 |
+| `SUPABASE_RPC_EDGE_FUNCTION_URL` | Edge Function URLの環境変数指定 |
+| `Supabase_Edge_Key` | Edge要求署名に使う秘密値 |
+| `GoogleDrive:ClientId` | Google OAuthクライアントID |
+| `GoogleDrive:ClientSecret` | Google OAuthクライアントシークレット |
+| `ReceiptPrinter:Enabled` | プリンタ連携の有効化 |
+| `ReceiptPrinter:BrowserSdkScriptUrl` | SII Web SDKスクリプト |
+| `ReceiptPrinter:BrowserWebSocketHost` | ローカル印刷サービスhost |
 | `ReceiptPrinter:LineWidth` | 印字行幅 |
+| `ReviewAuth:Enabled` | ReviewAuthの有効化 |
+| `ReviewAuth:Token` | ReviewAuthトークン |
+| `ReviewAuth:Email` | ReviewAuth利用者メール |
+| `ReviewAuth:DisplayName` | ReviewAuth表示名 |
+| `ReviewAuth:CookieHours` | ReviewAuth Cookie有効時間 |
 
-Supabase RPC キーは環境変数または設定から取得する。値は秘密情報として扱う。
+秘密値はホスティング環境またはSupabase secretsで管理し、設定ファイルへ保存しない。
 
-## 4. 認証・セッション仕様
+## 6. 認証・認可
 
-- `MapRazorPages().RequireAuthorization()` により、ログイン画面を除く Razor Pages は認証必須である。
-- Google OAuth 設定がある場合、未ログイン時の challenge は Google を利用する。
-- Google OAuth 設定がない場合は Cookie 認証のみで動作する。
-- Google ログイン成功時に access token を保存し、Google Drive プレビューで利用する。
-- Google 認証では許可メールまたは許可ドメインを必須とし、未許可ユーザーは認証チケット作成時または Principal 検証時に拒否する。
-- ログアウト時は Session と Cookie を破棄する。
-- ログイン後リダイレクトはローカルURLだけを許可する。
-- 管理者設定は固定パスワードと保存トークンで保護し、管理者モードはサーバー側 Session にだけ保持する。商品カテゴリ操作と締め条件無視のPOSTは管理者モードを再検証する。
+### 6.1 Google OAuth
 
-## 5. 機能フラグ
+1. `/Login` がGoogle OAuth challengeを開始する。
+2. `openid`、`profile`、`email`、Drive読み取り専用scopeを要求する。
+3. Googleが返す確認済みメールとsubjectを取得する。
+4. Edge Function経由で `store.bind_app_user_access` を呼ぶ。
+5. `store.app_users` と `store.app_user_department_access` から店舗権限を取得する。
+6. メール、subject、許可店舗、既定店舗、店舗別ロールをCookie principalへ格納する。
 
-| 機能名 | 主な対象 |
+登録されていない利用者、無効な利用者、店舗権限を持たない利用者は拒否する。Google subjectは初回認証時に登録メールへ結び付け、以後異なるsubjectへの置換を許可しない。
+
+### 6.2 ReviewAuth
+
+1. ReviewAuth設定が完全な場合だけ `/review-login` を有効にする。
+2. トークンは固定時間比較で照合する。
+3. ReviewAuthのメールと専用subjectを `store.bind_app_user_access` へ渡す。
+4. テストDBが返した店舗権限とロールをCookie principalへ格納する。
+5. Cookie有効時間は1時間から24時間の範囲へ制限する。
+
+ReviewAuthは認証開始方法だけを置き換える。ログイン後のRPC署名、利用者認可、店舗認可、管理者認可は通常ログインと同じ経路を使う。
+
+### 6.3 現在店舗とロール
+
+- principalの店舗claimから利用可能店舗を決定する。
+- 端末Cookieの優先店舗が許可範囲内なら採用する。
+- それ以外は既定店舗claim、続いて許可店舗の先頭を使用する。
+- 店舗別ロールは `operator` または `administrator` とする。
+- 管理者モードは管理者ロールかつサーバーSessionが有効な場合だけ成立する。
+
+### 6.4 Cookieとセッション
+
+- 認証CookieはHttpOnly、Secure、SameSite=Laxとする。
+- 通常認証Cookieは90日、sliding expirationを使用する。
+- Sessionのidle timeoutは30分とする。
+- ログアウト時はSessionを消去して認証Cookieを破棄する。
+- リダイレクト先はローカルURLだけを許可する。
+
+## 7. 機能フラグ
+
+| フラグ | 主な対象 |
 | --- | --- |
-| `Opening` | 営業中、店舗設定導線 |
-| `Slips` | 伝票作成 |
+| `Opening` | 営業中、店舗マスタ、表示設定 |
+| `Slips` | 伝票作成・編集 |
 | `Orders` | 注文端末 |
-| `Checkout` | 会計、決済、領収書印字 |
-| `Closing` | 勤怠、酒代、締め、キャスト売上額調整 |
-| `Receipts` | 領収書簡易入力、Drive 証憑プレビュー |
+| `Checkout` | 会計準備、決済、取消、印刷 |
+| `Closing` | 勤怠、酒代、締め、日報、売上調整 |
+| `SalesHistory` | 売上履歴、過去営業日補正 |
+| `Receipts` | 領収書ワークキュー、Driveプレビュー |
 | `Settings` | 管理者設定 |
 
-無効な機能のページは NotFound とする。
+ページとハンドラは利用前に対応フラグを確認し、無効な場合はNotFoundを返す。
 
-## 6. ルート仕様
+## 8. ルート
 
-| ルート | 主な PageModel | 概要 |
-| --- | --- | --- |
-| `/Login` | `LoginModel` | Google ログイン、設定エラー表示 |
-| `/logout` | logout handler | Session と Cookie を破棄 |
-| `/Index` | `IndexModel` | 営業中、伝票作成、営業中編集、会計 |
-| `/Orders/Index` | `Orders.IndexModel` | 注文端末 |
-| `/Closing/Index` | `ClosingModel` | 締め前確認、勤怠・酒代・キャスト売上額・ドリンクバックのモーダル編集、営業日締め |
-| `/Closing/Receipts` | `ReceiptsModel` | 領収書簡易入力 |
-| `/DrivePreview/{driveFileId}` | `DrivePreviewModel` | Drive 証憑プレビュー |
-| `/Management/Index` | `Management.IndexModel` | 店舗設定メニュー、端末の画面モード・配色設定 |
-| `/Management/Tables` | `TablesModel` | 卓番管理 |
-| `/Management/Casts` | `CastsModel` | キャスト管理 |
-| `/Management/Items` | `ItemsModel` | 商品カテゴリ・商品管理 |
-| `/Management/NominationBacks` | `NominationBacksModel` | 指名バック管理 |
-| `/Management/Pricing` | `PricingModel` | 時間料金管理 |
-| `/Settings/Index` | `SettingsModel` | 利用店舗・管理者モード設定、キャッシュ、デバッグ削除 |
+| ルート | 役割 |
+| --- | --- |
+| `/Login` | Googleログイン開始、認証エラー表示 |
+| `/review-login` | レビュー環境限定ログイン |
+| `/logout` | Sessionと認証Cookieの破棄 |
+| `/` | 営業中、勤怠、伝票、会計 |
+| `/Orders` | 注文端末 |
+| `/Closing` | 締めダッシュボード、勤怠、酒代、各種調整、日報 |
+| `/Closing/Receipts` | 領収書ワークキュー |
+| `/SalesHistory` | 売上履歴、過去営業日補正、日報 |
+| `/Management` | 店舗マスタメニュー、表示設定、キャッシュ管理 |
+| `/Management/Tables` | 卓番管理 |
+| `/Management/Casts` | キャスト管理 |
+| `/Management/Staffs` | スタッフ管理 |
+| `/Management/Items` | 商品カテゴリ・商品管理 |
+| `/Management/NominationBacks` | 指名バック管理 |
+| `/Management/Pricing` | 時間料金管理 |
+| `/Settings` | 利用店舗、管理者モード、非マスタデータ削除 |
+| `/DrivePreview/{driveFileId}` | 許可済み領収書証憑のinline表示 |
 
-`/Attendance` は `/Closing/Attendance` にもマップされる。
+Razor Pagesは `/Login` を除き認証必須とする。Driveプレビューとlogout endpointも認証を必須とする。
 
-## 7. アプリケーション層
+## 9. サーバーアプリケーション構成
+
+### 9.1 Application Services
 
 | コンポーネント | 役割 |
 | --- | --- |
-| `IBusinessHomeApplicationService` | 営業中画面の初期ロード、営業日スナップショット、伝票作成、会計系操作 |
-| `IAttendanceApplicationService` | 勤怠画面ロード、勤怠保存、営業日の自動作成 |
-| `IClosingApplicationService` | 締め画面ロード、readiness 取得、営業日締め |
-| `IOrderEntryApplicationService` | 注文端末ロード、伝票選択肢取得、注文登録 |
-| `IOrderQueueService` | 注文キューの入力復元と検証補助 |
-| `ILocalSettingsProvider` | Cookie から端末設定を復元 |
-| `IFeatureGate` | 機能フラグ判定 |
-| `IStoreClock` | 店舗営業日と時刻表示の計算 |
-| `IApplicationCache` | MemoryCache とキャッシュ状態表示 |
-| `ISupabaseRpcClient` | Edge Function RPC 呼び出し |
-| `IGoogleDriveAuthService` | Google 認証設定、access token 取得 |
-| `IDriveFileService` | Drive metadata/media 取得 |
+| `IBusinessHomeApplicationService` | 営業中shell、伝票、会計操作の調停 |
+| `IAttendanceApplicationService` | 勤怠読込・保存、営業日開始 |
+| `IOrderEntryApplicationService` | 注文候補取得、注文登録 |
+| `IClosingApplicationService` | 締めダッシュボード、営業日締め |
+| `IDailyReportApplicationService` | 現在・過去営業日の日報取得 |
+| `ISalesHistoryApplicationService` | 売上履歴、補正エディタ、補正保存 |
+| `IStoreMasterBootstrapper` | 営業画面用マスタbootstrap |
+| `IManagementMasterSynchronization` | 店舗マスタsnapshotとmutation |
 
-Repository は Supabase RPC を通じて、店舗文脈、マスタ、営業日、伝票、注文、会計、締め、領収書、キャスト売上額調整を取得・保存する。
+### 9.2 Repositories
 
-## 8. データモデル概要
+Repositoryは業務領域ごとにRPC payloadと結果を型へ変換する。
 
-### 8.1 マスタ
+- 店舗設定・マスタ
+- 営業日・勤怠
+- 伝票・営業中同期
+- 注文
+- 会計
+- 締め・酒代・ドリンクバック・キャスト売上額
+- 日報・売上履歴
+- 領収書
+
+RepositoryはHTTPやSQLの詳細をPageModelへ露出しない。
+
+### 9.3 SupabaseRpcClient
+
+- Edge Function URLと署名キーを設定から解決する。
+- principalからメールとGoogle subjectを取り出し、actor envelopeへ付与する。
+- JSON本文に対してHMAC-SHA256署名を生成する。
+- UNIX時刻と署名を専用HTTP headerへ設定する。
+- 読み取りRPCだけを限定的に再試行する。
+- status、duration、operation ID、request IDを構造化ログへ記録する。
+- Edge応答の `data` または `result` を正規化してRepositoryへ返す。
+
+## 10. ブラウザ同期
+
+### 10.1 営業中
+
+- Razor GETは画面shellを返す。
+- マスタキャッシュがcoldの場合だけbootstrap RPCでマスタと同時点snapshotを取得する。
+- warmの場合はブラウザがcurrent snapshotを取得する。
+- focus、online、定期更新の重複要求をsingle-flightで統合する。
+- 伝票編集操作はlocalStorageへ下書き保存し、楽観反映後に一括flushする。
+
+### 10.2 注文端末
+
+- 現在営業日の `open` 伝票と商品候補を取得する。
+- 注文キューを店舗・営業日単位でlocalStorageへ保持する。
+- 一括登録はoperation ID付きで送信し、confirmed応答後にキューを更新する。
+
+### 10.3 領収書
+
+- resume cursor付きのワークキューを取得する。
+- 入力結果をIndexedDB outboxへ保持する。
+- 先頭操作をoperation ID付きで送信し、結果不明時は同じIDで再送する。
+
+## 11. データモデル
+
+### 11.1 認証・権限
+
+| テーブル | 役割 |
+| --- | --- |
+| `store.app_users` | 正規化メール、Google subject、有効状態 |
+| `store.app_user_department_access` | 店舗部門、ロール、既定店舗 |
+
+認証テーブルは `store` schemaに置き、公開ロールから直接参照できない。
+
+### 11.2 マスタ
 
 | 区分 | 主なテーブル |
 | --- | --- |
-| 店舗 | `store_department_master`, `store_table_master` |
-| キャスト | `cast_master` |
+| 会社・店舗 | `company_master`, `department_master`, `store_table_master` |
+| 人員 | `cast_master`, `store_staff_master` |
 | 商品 | `store_item_category_master`, `store_item_master` |
-| 指名バック | `store_nomination_back_master` |
-| 決済方法 | `payment_method_master` |
-| 時間料金 | `store_pricing_plan_master` |
+| 料金・バック | `store_pricing_plan_master`, `store_nomination_back_master` |
+| 決済 | `payment_method_master` |
 
-卓番と標準商品は物理削除できるため、伝票・注文明細側は削除可能マスタへのFKを持たず、IDと表示用snapshotを保持する。注文明細は商品名・単価に加えてカテゴリID・コード・名称も注文時に固定する。商品カテゴリは配下商品がない場合だけ物理削除できる。
-
-### 8.2 営業中データ
+### 11.3 営業データ
 
 | 区分 | 主なテーブル |
 | --- | --- |
 | 営業日 | `store_business_days` |
-| 勤怠 | `store_cast_attendance` |
-| 伝票 | `store_slips` |
-| 顧客 | `store_slip_customers` |
-| 指名 | `store_slip_casts` |
+| 勤怠 | `store_cast_attendance`, `store_staff_attendance` |
+| 伝票 | `store_slips`, `store_slip_customers`, `store_slip_casts` |
 | 注文 | `store_order_lines`, `store_order_line_cast_backs` |
-| 自由入力・自動料金 | `store_slip_charge_lines`, `store_slip_pricing_lines` |
-| キャストバック | `store_order_line_cast_backs`, `store_slip_cast_backs`, `store_business_day_drink_back_adjustments` |
+| 料金 | `store_slip_charge_lines`, `store_slip_pricing_lines` |
+| バック | `store_slip_cast_backs`, `store_business_day_drink_back_adjustments` |
 
-### 8.3 会計・締め
+### 11.4 会計・締め・経費
 
 | 区分 | 主なテーブル |
 | --- | --- |
 | 会計 | `store_checkouts`, `store_checkout_payments` |
 | 会計固定 | `store_slip_accounting_snapshots` |
-| キャスト売上額調整 | `store_slip_cast_sales_adjustments` |
+| キャスト売上額 | `store_slip_cast_sales_adjustments` |
 | 営業日締め固定 | `store_business_day_closing_snapshots` |
+| 領収書経費 | `store_business_day_receipt_expenses` |
+| 会計連携 | `accounting.documents`, `accounting.journal_entries`, `accounting.journal_entry_lines` |
 
-## 9. 状態遷移
+### 11.5 冪等操作
 
-### 9.1 営業日
+次のテーブルでoperation ID、payload hash、結果を保持する。
+
+- `store.business_home_sync_results`
+- `store.current_business_day_operation_results`
+- `store.management_master_operation_results`
+- `store.receipt_work_queue_operations`
+
+## 12. 状態遷移
+
+### 12.1 営業日
 
 ```mermaid
 stateDiagram-v2
-    [*] --> open: open_business_day
-    open --> closed: close_business_day
-    open --> cancelled: cancellation path
+    [*] --> open: 営業開始
+    open --> closed: 営業日締め
+    open --> cancelled: 取消
 ```
 
-- `closed` 後の営業日データ更新は DB トリガで拒否する。
-- `close_business_day` は readiness を再確認し、条件未達の場合は失敗する。ただし管理者モードの締め条件無視ではこの条件確認を省略できる。
+`closed` 後は対象営業日の主要業務テーブル更新をDB triggerで拒否する。
 
-### 9.2 伝票
+### 12.2 伝票
 
 ```mermaid
 stateDiagram-v2
-    [*] --> open: create_slip
-    open --> checkout_ready: issue_checkout_statement
-    checkout_ready --> open: release_checkout_ready
-    checkout_ready --> checked_out: confirm_checkout
-    checked_out --> open: cancel_checkout
-    open --> cancelled: cancellation path
+    [*] --> open: 伝票作成
+    open --> checkout_ready: 会計伝票発行
+    checkout_ready --> open: 会計準備解除
+    checkout_ready --> checked_out: 決済確定
+    checked_out --> open: 会計取消
+    open --> cancelled: 伝票取消
 ```
 
-- `open` のみ営業中編集と注文追加を許可する。
-- `checkout_ready` は会計金額と印字データを固定した状態である。
-- `checked_out` は決済確定済みである。
+- `open`: 営業中編集と注文追加が可能。
+- `checkout_ready`: 会計金額と印字データを固定済み。
+- `checked_out`: 決済確定済み。
 
-## 10. RPC 境界
+## 13. RPC境界
 
-C# アプリは `ISupabaseRpcClient` で以下の形式を Edge Function に POST する。
+### 13.1 要求形式
+
+通常RPCは次の情報を署名対象JSONとして送る。
 
 ```json
 {
+  "operation": "rpc",
+  "actor": {
+    "email": "authenticated-user",
+    "google_subject": "authenticated-subject"
+  },
   "function_name": "store.some_function",
-  "payload": {
-    "p_department_id": 1
-  }
+  "payload": {}
 }
 ```
 
-Edge Function は allowlist 済みの `store.*` 関数のみを実行する。C#、Edge allowlist、SQL定義は自動テストで完全一致させる。代表的なRPCは以下である。
+認証開始時のaccess bindは専用operationを使用する。
 
-### 10.1 設定・店舗
+### 13.2 Edge Function検証
 
-- `store.get_departments`
-- `store.delete_non_master_records`
-- `store.get_business_home_bootstrap_v2`
-- `store.get_management_master_snapshot`
-- `store.save_management_master_v2`
+- POST以外を拒否する。
+- 署名時刻の許容範囲を検証する。
+- HMAC署名を固定時間で検証する。
+- allowlistにない関数を拒否する。
+- 関数ごとに引数名と型を正規化する。
+- actorのメールとsubjectから店舗権限を検証する。
+- 管理者操作ではadministratorロールを要求する。
+- DBエラーは公開可能なエラーコードへ正規化する。
 
-### 10.2 営業日・締め
+### 13.3 主なRPC群
 
-- `store.get_attendance_editor_bootstrap_v2`
-- `store.get_current_attendance_editor_snapshot`
-- `store.save_current_business_day_attendance_v2`
-- `store.get_current_closing_dashboard`
-- `store.close_business_day_v2`
-- `store.get_current_drink_delivery_editor`
-- `store.save_current_business_day_drink_delivery_amount_v2`
-- `store.get_current_drink_back_editor`
-- `store.save_drink_back_adjustments_v2`
-- `store.get_current_cast_sales_adjustment_overview`
-- `store.save_current_cast_sales_adjustment_v2`
-- `store.confirm_current_cast_sales_adjustments_v2`
+| 領域 | 主なRPC |
+| --- | --- |
+| 認証 | `bind_app_user_access` |
+| 店舗 | `get_departments` |
+| 営業中 | `get_business_home_bootstrap_v2`, `get_current_business_home_snapshot`, `sync_business_home_changes_v2` |
+| 注文 | `get_current_order_entry_candidates`, `submit_current_order_entry_v2` |
+| 勤怠 | `get_attendance_editor_bootstrap_v2`, `get_current_attendance_editor_snapshot`, `save_current_business_day_attendance_v2` |
+| 会計 | `issue_checkout_statement_v2`, `release_checkout_ready_v2`, `confirm_checkout_v2`, `cancel_checkout_v2` |
+| 締め | `get_current_closing_dashboard`, `close_business_day_v2` |
+| 調整 | `get_current_drink_back_editor`, `save_drink_back_adjustments_v2`, `save_current_cast_sales_adjustment_v2` |
+| 日報・履歴 | `get_business_day_daily_report`, `get_sales_history_page`, `save_sales_history_correction_v1` |
+| 領収書 | `get_current_receipt_work_queue`, `advance_receipt_work_queue_v2`, `is_pending_receipt_drive_file_allowed` |
+| マスタ | `get_management_master_snapshot`, `save_management_master_v2` |
 
-### 10.3 営業中・注文
+## 14. 主要業務フロー
 
-- `store.get_current_business_home_snapshot`
-- `store.sync_business_home_changes_v2`
-- `store.get_current_order_entry_candidates`
-- `store.submit_current_order_entry_v2`
+### 14.1 伝票作成・編集
 
-### 10.4 会計
+1. ブラウザが卓番、入店時刻、顧客、指名を検証する。
+2. 操作を端末下書きへ保存して画面へ楽観反映する。
+3. `sync_business_home_changes_v2` へバッチ送信する。
+4. DBが営業日、revision、卓番、出勤状態、伝票状態を再検証する。
+5. 操作別結果と最新snapshotを返す。
 
-- `store.issue_checkout_statement_v2`
-- `store.release_checkout_ready_v2`
-- `store.confirm_checkout_v2`
-- `store.cancel_checkout_v2`
-- `store.get_checkout_statement_print_data`
-- `store.get_checkout_receipt_print_data`
+### 14.2 会計
 
-### 10.5 領収書・日報
+1. `issue_checkout_statement_v2` が時間料金と会計明細を計算する。
+2. 会計スナップショットと印字データを固定する。
+3. 伝票を `checkout_ready` にする。
+4. `confirm_checkout_v2` が固定合計と決済入力を照合する。
+5. 決済確定後に領収書印字データを返す。
 
-- `store.get_current_receipt_work_queue`
-- `store.advance_receipt_work_queue_v2`
-- `store.is_pending_receipt_drive_file_allowed`
-- `store.get_business_day_daily_report`
+### 14.3 営業日締め
 
-旧RPCは `00_legacy_rpc_cutover.sql` で削除する。SQL内部ヘルパーは `_internal` 契約、時間料金計算、会計スナップショット作成、営業日締めスナップショット作成、締め後更新ガードに限定し、Edge Function allowlistから直接呼ばない。
+1. `get_current_closing_dashboard` で全締め条件を取得する。
+2. ブラウザは条件達成時だけ通常締めを有効化する。
+3. `close_business_day_v2` が同一transaction内で条件を再確認する。
+4. 営業日締めスナップショットを保存する。
+5. 営業日を `closed` に更新する。
 
-## 11. 主要処理フロー
+### 14.4 売上履歴補正
 
-### 11.1 営業中画面ロード
+1. 対象営業日の補正editorを取得する。
+2. 利用者が勤怠、ドリンクバック、キャスト売上額を編集する。
+3. actorメール、現在営業日、operation IDとともに補正RPCへ送る。
+4. DBが対象日、revision、金額整合性を検証して補正結果を返す。
 
-1. Razor GETは認可後に状態非依存shellを返す。
-2. master cache cold時だけ `get_business_home_bootstrap_v2` でmasterと同時点snapshotを取得する。
-3. warm時はGET中のRPCを0回とし、browserが `get_current_business_home_snapshot` を1回呼ぶ。
-4. 出勤キャスト候補はcurrent snapshotに含め、modal専用readを行わない。
-5. 定期更新、focus、onlineの重複要求はsingle-flightで1本にする。
-
-### 11.2 伝票作成
-
-1. 利用者が卓番、入店時刻、顧客、指名、メモを入力する。
-2. `create_slip` commandを営業中変更キューへ追加し、即時flushする。
-3. `sync_business_home_changes_v2` が営業日、revision、卓、指名キャストの出勤状態をDB内で再検証する。
-4. 成功応答の作成伝票IDと最新snapshotを適用し、追加readやredirectを行わない。
-
-### 11.3 営業中編集 flush
-
-1. クライアントは顧客、指名、注文、自由入力明細、カラオケの操作を localStorage に保存する。
-2. 操作は画面上で楽観反映する。
-3. `client_batch_id` と操作配列を `OnPostFlushBusinessHomeChangesAsync` に送る。
-4. サーバーは操作内容を検証し、`store.sync_business_home_changes_v2` を呼ぶ。
-5. RPC は操作単位の結果と新しいスナップショットを返す。
-6. クライアントは成功分を確定し、失敗分を画面上で扱う。
-
-### 11.4 注文端末登録
-
-1. 注文端末は現在営業日の open 伝票を取得する。
-2. 利用者が伝票と商品を選び、注文キューへ追加する。
-3. バック対象商品ではキャスト指定を受け付ける。
-4. キューは localStorage に保存する。
-5. 一括登録時に同じ `operation_id` とpayloadを `store.submit_current_order_entry_v2` へ送る。
-6. confirmed応答の登録行と候補deltaだけを適用し、追加readを行わない。
-
-### 11.5 会計
-
-1. `open` 伝票で退店時刻を選択する。
-2. `store.issue_checkout_statement_v2` が時間料金と会計明細を計算し、会計スナップショットを固定する。
-3. 伝票は `checkout_ready` になる。
-4. クライアントは会計伝票を印刷する。
-5. 決済確定時は決済方法と金額を検証し、`store.confirm_checkout_v2` を呼ぶ。
-6. 確定後、領収書印字データを使って領収書を印刷する。
-
-### 11.6 締め
-
-1. 締め画面は `store.get_current_closing_dashboard` を1回取得する。
-2. dashboardは未会計、酒代、勤怠、キャスト売上額調整、ドリンクバック調整を返す。
-3. 条件達成時だけ営業日締めボタンを有効化する。
-4. `store.close_business_day_v2` は同一transaction内で条件を再確認する。
-5. 締め成功時に営業日締めスナップショットを保存し、営業日を `closed` にする。
-6. DB トリガにより締め後更新を拒否する。
-7. 未処理領収書の件数は独立して表示し、領収書入力は締め可否に影響させない。
-
-### 11.7 領収書簡易入力
-
-1. `store.get_current_receipt_work_queue` でresume cursor付きキューを取得する。
-2. Drive ファイルがある場合、許可対象のファイルだけをプレビューする。
-3. 利用者が取引日、金額、科目、摘要を入力する。取引日は領収書上の取引日であり、入力した現在営業日を店舗から従業員へ立替分を返済した営業日として記録する。
-4. 仕訳payloadまたはスキャンミスcommandをIndexedDB outboxへ積み、次票を即時表示する。
-5. `store.advance_receipt_work_queue_v2` へ先頭1件だけ送り、結果不明時は同じ `operation_id` を再送する。
-
-## 12. 時間・営業日仕様
+## 15. 時間・料金
 
 - 店舗時刻は日本時間を基準とする。
-- 営業日の切替は 12:00 とする。
-- 12:00 より前の実時刻は前営業日に属する。
-- 営業日上の時刻入力では、12:00 より前の時刻を翌暦日として合成する。
-- 画面表示では深夜帯を 24 時以降表記にできる。
-- 入力候補は店舗文脈の分単位に従う。未設定または不正な場合は既定値を使う。
+- 営業日の境界は12:00とする。
+- 正午前の時刻は営業日上の翌暦日として合成する。
+- 画面では深夜時刻を24時以降表記にできる。
+- 時間料金はDBで計算する。
+- 営業中の見込み額は現在時刻、会計準備は指定退店時刻を基準にする。
+- 会計準備後の自動料金は固定済み明細として扱う。
 
-## 13. 時間料金仕様
+## 16. キャッシュ
 
-- 料金プランは `set_extension_v1` を扱う。
-- セット時間は 5 から 480 分で管理する。
-- セット料金と延長料金は、1名時料金と複数名時の人数単価を持つ。
-- 有効な料金プランがない場合、自動時間料金は発生しない。
-- 時間料金は DB 側で計算する。
-- 営業中の見込みでは現在時刻を基準に計算する。
-- 会計伝票発行時は指定された退店時刻を基準に固定する。
-- 固定された自動料金は `automatic_pricing` 明細として扱う。
-
-## 14. 印刷仕様
-
-### 14.1 会計伝票
-
-- SII Web SDK Server を使って印刷する。
-- 卓番、入店時刻、退店時刻、人数、注文、調整、指名料、時間料金、税額、合計を出力する。
-- 商品種別は、セット料金、延長料金、指名料、カラオケ、その他の順序で扱う。
-- 会計伝票印刷に失敗した場合、`checkout_ready` の伝票から印字データを再取得できる。
-
-### 14.2 領収書
-
-- SII Web SDK Server を使って印刷する。
-- 店舗情報、宛名、但し書き、合計、税額、決済方法を出力する。
-- 再印刷時は再発行扱いの情報を付与する。
-- 一定金額以上の場合は収入印紙欄を出力する。
-- 印刷失敗時は localStorage の再印刷待ちに保存する。
-
-## 15. キャッシュ仕様
-
-| キャッシュ | 期間 | 主な対象 |
+| キャッシュ | 有効期間 | 対象 |
 | --- | --- | --- |
-| マスタ | 更新時まで | 店舗文脈、卓番、キャスト、スタッフ、商品、商品管理カタログ、料金、指名バック、決済方法 |
-| Drive プレビュー | 10 分 | Drive metadata/media |
-| browser SyncStore | revision更新まで | 画面shell用master、直近read model |
-| browser outbox | confirmedまで | 営業中、注文、領収書などの未確定command |
+| サーバーマスタ | 明示削除・更新まで | 店舗、卓番、キャスト、スタッフ、商品、料金、決済方法 |
+| サーバーruntime | 30秒 | 営業中の短期状態 |
+| Driveファイル | 10分 | 許可済み証憑metadata・media |
+| browser SyncStore | revision更新まで | 画面マスタ、直近read model |
+| browser outbox | confirmedまで | 未確定command |
 
-`store.get_business_home_bootstrap_v2` はmaster cache cold時だけ、営業中shell用masterと同時点snapshotを返す。App Serviceのmaster cacheに現在営業日、出勤状態、伝票、締め状態、領収書キューを保存しない。runtime stateはcurrent read/mutation応答だけで更新する。
+営業日、伝票、締め状態などのruntimeデータは長期マスタキャッシュへ保存しない。
 
-## 16. エラー処理
+## 17. 外部連携
 
-- Repository は成功、未設定、権限不足、利用不可などを `Result<T>` として返す。
-- Supabase 未設定または RPC 利用不可の場合、画面は読み込み問題として表示する。
-- 保存系ハンドラは検証エラー、競合、外部サービス不可を適切な HTTP ステータスまたは画面エラーで返す。
-- Google Drive 認証が必要な場合はログインへ誘導する。
-- 営業中 flush の部分失敗は、操作単位の結果としてクライアントに返す。
+### 17.1 Google Drive
 
-## 17. セキュリティ仕様
+- OAuth access tokenは認証propertiesへ保存する。
+- Drive scopeは読み取り専用へ固定する。
+- DBが未処理領収書への紐付きを許可したファイルだけを取得する。
+- metadata取得後にmediaを取得し、inlineで返す。
+- access token不足時はGoogle再認証へ誘導する。
 
-- Razor Pages は認証必須である。
-- Google 認証は許可メールまたは許可ドメインを必須にする。
-- RPC Edge Function は API キー allowlist と HTTP method を検証する。
-- Edge Function は allowlist に存在する `store.*` 関数だけを実行する。
-- PostgreSQL の公開ロールから `store` schema の usage/execute を revoke する。
-- アプリが使う RPC は `security definer` と固定 `search_path` を持つ。
-- 締め後の更新禁止は DB トリガで保証する。
-- ローカルリダイレクト以外の戻り先は許可しない。
+### 17.2 SII Web SDK Server
 
-## 18. 契約テスト・検証対象
+- ブラウザからローカルWebSocket hostへ接続する。
+- 会計伝票と領収書のコマンド列を生成する。
+- SDK URL、host、コードページ、国際文字、行幅、ロゴ条件を設定で変更できる。
+- 無効環境では印刷要求を実行しない。
 
-現行テストでは主に以下を検査する。
+## 18. セキュリティ
 
-- C# の RPC 呼び出し名、Edge Function allowlist、SQL 定義の一致。
-- RPC の `security definer`、固定 `search_path`、公開ロールへの execute revoke。
-- 会計スナップショットの作成、取得、解除、取消の契約。
-- 時間料金プランと自動料金計算の契約。
-- 注文端末の下書き保存と伝票状態変化時のキュー整理。
-- 営業中の下書き保存、楽観更新、UI契約。
-- 決済 UI の金額一致、受取額、0円会計の契約。
-- 領収書レイアウト、会計伝票レイアウト、モーダルスクロール位置、テーマ契約。
+- HTTPS redirectと非Development環境のHSTSを有効にする。
+- 全画面を認証必須にする。
+- CSP nonceを生成し、許可されたscriptだけを実行する。
+- `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、referrer policyを設定する。
+- Edge Function要求を時刻付きHMAC署名で保護する。
+- `store` schemaと専用関数を公開ロールからrevokeする。
+- 専用DBロールにはallowlist関数の実行に必要な最小権限だけを付与する。
+- `security definer` 関数は固定 `search_path` を使用する。
+- 締め済み更新禁止と重要整合性をDB制約・triggerで保証する。
+
+## 19. エラー処理・ログ
+
+- Application ServiceとRepositoryは成功、入力不正、競合、権限不足、未設定、外部障害を区別する。
+- Page handlerは失敗種別に応じて400、403、404、409、503等を返す。
+- Edge Functionはrequest IDと安定したerror codeを返す。
+- SupabaseRpcClientは関数名、operation ID、HTTP status、処理時間、request IDを記録する。
+- Google Drive障害はrequest ID付きで画面へ返し、秘密情報や生DBエラーを表示しない。
+
+## 20. テスト契約
+
+自動テストは次を検証対象とする。
+
+- C#のRPC呼出名、Edge Function allowlist、SQL関数定義の一致。
+- actor署名、access bind、店舗権限、管理者権限の契約。
+- `security definer`、固定 `search_path`、公開ロールからの権限剥奪。
+- 営業中同期、注文、勤怠、会計、締め、領収書、売上履歴の冪等性と状態遷移。
+- 会計スナップショット、営業日締めスナップショット、締め後更新禁止。
+- 主要画面、テーマ、モーダル、印刷レイアウト、端末下書きのUI契約。
+- ReviewAuthがテストDBの利用者権限を経由すること。
+
+## 21. 公開情報の範囲
+
+本リポジトリで公開する製品文書は、本書と「要件定義書」だけとする。秘密値、環境構築手順、設計メモ、実装調査、作業引継ぎ、Codex向け指示は公開対象に含めない。

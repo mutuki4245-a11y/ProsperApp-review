@@ -2,9 +2,7 @@
 #
 # ProsperAppのDBスキーマを、記載順どおりに適用します。
 #
-# これまで適用順は HANDOFF.md に散文で書かれているだけで、実際の順番は
-# 人が読んで psql を並べる運用でした。テスト用DBとCIが同じ順番を再現できるよう、
-# ここを実行可能な正本にします。
+# テスト用DBとCIが同じ順番を再現できるよう、このファイルを適用順の正本にします。
 #
 # 使い方:
 #   Sql/apply_all.sh "postgres://user:pass@host:5432/postgres"
@@ -51,7 +49,7 @@ CORE=(
     store_settings_functions.sql
 )
 
-# store schemaのRPC。順番は HANDOFF.md の "SQL Apply Order" と一致させること。
+# store schemaのRPC。依存関係に従って記載順に適用します。
 RPC=(
     store_rpc/00_schema.sql
     store_rpc/00_legacy_rpc_cutover.sql
