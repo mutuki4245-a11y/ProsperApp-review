@@ -40,10 +40,22 @@ $function$;
 revoke all on function store.cleanup_operation_results(timestamp with time zone)
   from public, anon, authenticated, service_role;
 
-select cron.schedule(
-  'prosper-operation-results-cleanup',
-  '30 3 * * *',
-  $cron$select store.cleanup_operation_results();$cron$
-);
+-- 保持期間の定期実行はpg_cronに任せます。pg_cronが入っていないDB
+-- （CIの素のPostgreSQLやローカル検証用）ではスケジュール登録だけを飛ばし、
+-- cleanup関数自体は同じように作ります。手動実行もそのまま可能です。
+do $$
+begin
+  if to_regnamespace('cron') is null then
+    raise notice 'pg_cron is not installed; skipping cleanup schedule registration';
+    return;
+  end if;
+
+  perform cron.schedule(
+    'prosper-operation-results-cleanup',
+    '30 3 * * *',
+    $cron$select store.cleanup_operation_results();$cron$
+  );
+end;
+$$;
 
 commit;

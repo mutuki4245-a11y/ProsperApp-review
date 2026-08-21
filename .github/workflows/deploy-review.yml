@@ -1,0 +1,94 @@
+name: Deploy review environment
+
+# reviewブランチを、本番とは別のAzure App Serviceへ公開します。
+#
+# 本番(prosper-web)へは一切触れません。トリガーをreviewブランチだけに絞り、
+# 参照するpublish profileもレビュー用App Serviceのものだけです。
+#
+# 事前にリポジトリへ登録が必要なもの:
+#   secret AZURE_REVIEW_PUBLISH_PROFILE  レビュー用App Serviceのpublish profile(XMLそのまま)
+#   variable AZURE_REVIEW_APP_NAME       レビュー用App Serviceの名前
+#
+# App Service側の設定は ProsperApp/docs/review-environment.md を参照してください。
+# 特に ASPNETCORE_ENVIRONMENT=Staging と、テスト用Supabaseを指す接続設定は
+# App Serviceのアプリケーション設定側で行います。ここでは何も注入しません。
+
+on:
+  push:
+    branches:
+      - claude/review-branch-setup-o050l2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-review
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy to the review App Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 未設定のままpushされた時に赤いバツを残さないよう、
+      # 設定が揃っているかを最初に見て、無ければスキップします。
+      - name: Check deployment configuration
+        id: config
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_REVIEW_PUBLISH_PROFILE }}
+          APP_NAME: ${{ vars.AZURE_REVIEW_APP_NAME }}
+        run: |
+          if [ -z "$PUBLISH_PROFILE" ] || [ -z "$APP_NAME" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### レビュー環境は未設定です"
+              echo
+              echo "secret \`AZURE_REVIEW_PUBLISH_PROFILE\` と variable \`AZURE_REVIEW_APP_NAME\` を登録すると、"
+              echo "このブランチへのpushでレビュー環境へ配信されます。"
+              echo "手順は \`ProsperApp/docs/review-environment.md\` にあります。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@v5
+        if: steps.config.outputs.configured == 'true'
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build and test
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          dotnet restore ProsperApp.slnx
+          dotnet build ProsperApp.slnx --configuration Release --no-restore
+          dotnet test ProsperApp.slnx --configuration Release --no-build
+
+      - name: Publish
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          dotnet publish ProsperApp/ProsperApp.csproj \
+            --configuration Release \
+            --no-build \
+            --output publish \
+            /p:UseAppHost=false
+
+      - name: Deploy to Azure App Service
+        if: steps.config.outputs.configured == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_REVIEW_APP_NAME }}
+          publish-profile: ${{ secrets.AZURE_REVIEW_PUBLISH_PROFILE }}
+          package: publish
+
+      - name: Report the review URL
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          {
+            echo "### レビュー環境へ配信しました"
+            echo
+            echo "App Service: \`${{ vars.AZURE_REVIEW_APP_NAME }}\`"
+            echo "commit: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

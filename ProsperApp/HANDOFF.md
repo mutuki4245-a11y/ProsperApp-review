@@ -61,7 +61,17 @@ C#呼出し、Edge allowlist、SQL定義は `Tests/rpc-contract.test.mjs` で完
 
 ## SQL Apply Order
 
-`Sql/store_rpc_functions.sql` は説明用で実行しません。DB再構築時は次を記載順に適用します。
+実行するときは `Sql/apply_all.sh` を使ってください。この節の順番をそのまま持っており、
+本番より前に存在していたテーブル群（`Sql/baseline/`）も含めて適用します。
+
+```bash
+Sql/apply_all.sh "postgresql://..."                       # 本番・既存DBへの適用
+Sql/apply_all.sh --with-test-fixtures "postgresql://..."  # 空のDBからテスト用DBを作る
+```
+
+テスト用DBとレビュー環境の作り方は `docs/review-environment.md` にあります。
+
+`Sql/store_rpc_functions.sql` は説明用で実行しません。順番は次のとおりです。
 
 ```text
 00_schema.sql
