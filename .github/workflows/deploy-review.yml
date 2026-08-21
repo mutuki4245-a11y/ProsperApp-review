@@ -1,8 +1,8 @@
 name: Deploy review environment
 
-# reviewブランチを、本番とは別のAzure App Serviceへ公開します。
+# レビュー用リポジトリのmainを、本番とは別のAzure App Serviceへ公開します。
 #
-# 本番(prosper-web)へは一切触れません。トリガーをreviewブランチだけに絞り、
+# 本番(prosper-web)へは一切触れません。トリガーをこのリポジトリのmainだけに絞り、
 # 参照するpublish profileもレビュー用App Serviceのものだけです。
 #
 # 事前にリポジトリへ登録が必要なもの:
@@ -16,7 +16,7 @@ name: Deploy review environment
 on:
   push:
     branches:
-      - claude/review-branch-setup-o050l2
+      - main
   workflow_dispatch:
 
 permissions:
@@ -47,7 +47,7 @@ jobs:
               echo "### レビュー環境は未設定です"
               echo
               echo "secret \`AZURE_REVIEW_PUBLISH_PROFILE\` と variable \`AZURE_REVIEW_APP_NAME\` を登録すると、"
-              echo "このブランチへのpushでレビュー環境へ配信されます。"
+              echo "このリポジトリのmainへのpushでレビュー環境へ配信されます。"
               echo "手順は \`ProsperApp/docs/review-environment.md\` にあります。"
             } >> "$GITHUB_STEP_SUMMARY"
           else
