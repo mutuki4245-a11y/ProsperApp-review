@@ -1,0 +1,40 @@
+#!/bin/sh
+# Refuse an ordinary commit on the default branch.
+#
+# Branch before editing. The failure this catches is not forgetting the rule,
+# it is a previous merge leaving the default branch checked out, so the next
+# session's work lands on it without anyone deciding to.
+#
+# A merge commit is allowed: merging a branch into the default branch is the
+# intended way work arrives there, and that commit is created with MERGE_HEAD
+# present. Set ALLOW_COMMIT_ON_MAIN=1 for the rare deliberate exception.
+
+branch=$(git symbolic-ref --quiet --short HEAD) || exit 0
+
+default_branch=$(git config --get init.defaultBranch || echo main)
+case "$branch" in
+  main|master|"$default_branch") ;;
+  *) exit 0 ;;
+esac
+
+[ -n "$ALLOW_COMMIT_ON_MAIN" ] && exit 0
+[ -e "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
+[ -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" ] && exit 0
+[ -e "$(git rev-parse --git-path REVERT_HEAD)" ] && exit 0
+[ -d "$(git rev-parse --git-path rebase-merge)" ] && exit 0
+[ -d "$(git rev-parse --git-path rebase-apply)" ] && exit 0
+
+cat >&2 <<'MESSAGE'
+
+  Refusing to commit on the default branch.
+
+  A previous merge probably left it checked out. Move this work onto a
+  branch, keeping the staged changes:
+
+      git switch -c <branch-name>
+      git commit
+
+  Deliberate exception:  ALLOW_COMMIT_ON_MAIN=1 git commit ...
+
+MESSAGE
+exit 1

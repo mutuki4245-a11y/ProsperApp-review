@@ -1,0 +1,31 @@
+<Project>
+
+  <!-- Configure the clone so branch hygiene needs no attention.
+
+       This is the .NET counterpart of an npm `prepare` script: a build is the
+       one thing everyone runs, so it is where the setup belongs. Hooks under
+       .git/hooks are not tracked and would have to be reinstalled per clone;
+       core.hooksPath makes the tracked .githooks directory authoritative.
+       remote.origin.prune lets a branch deleted on the remote disappear
+       locally on the next fetch.
+
+       Skipped on CI, where there is no clone to keep tidy. Never fails the
+       build: a source drop without git, or a setting the developer chose
+       deliberately, both continue silently. -->
+
+  <Target Name="ConfigureLocalGit"
+          BeforeTargets="Build"
+          Condition="'$(CI)' != 'true' AND '$(ConfigureLocalGit)' != 'false' AND Exists('$(MSBuildThisFileDirectory).git')">
+    <Exec Command="git config --get core.hooksPath || git config core.hooksPath .githooks"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ContinueOnError="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+    <Exec Command="git config --get remote.origin.prune || git config remote.origin.prune true"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ContinueOnError="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low" />
+  </Target>
+
+</Project>
