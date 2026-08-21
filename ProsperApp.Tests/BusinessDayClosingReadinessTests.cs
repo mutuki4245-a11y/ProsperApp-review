@@ -22,9 +22,7 @@ public class BusinessDayClosingReadinessTests
             IsDrinkDeliveryAmountEntered = false,
             AttendanceCount = 3,
             MissingClockOutCount = 1,
-            CastSalesMissingSlipCount = 1,
-            ReceiptsEnabled = true,
-            PendingReceiptCount = 4
+            CastSalesMissingSlipCount = 1
         };
 
         Assert.False(readiness.CanClose);
@@ -32,9 +30,8 @@ public class BusinessDayClosingReadinessTests
             [
                 "未会計伝票が 2 件あります。",
                 "酒代が未入力です。酒代がない場合も0円で保存してください。",
-                "退勤時刻が未入力のキャストが 1 名います。",
-                "キャスト売上額調整が未完了です。",
-                "未入力領収書が 4 件あります。"
+                "退勤時刻が未入力の出勤者が 1 名います。",
+                "キャスト売上額調整が未完了です。"
             ],
             readiness.BlockReasons);
     }
@@ -46,7 +43,7 @@ public class BusinessDayClosingReadinessTests
 
         Assert.False(readiness.CanClose);
         Assert.Equal(
-            ["勤怠入力に出勤キャストが登録されていません。"],
+            ["勤怠入力に出勤者が登録されていません。"],
             readiness.BlockReasons);
     }
 
@@ -91,8 +88,6 @@ public class BusinessDayClosingReadinessTests
             AttendanceCount = attendanceCount,
             MissingClockOutCount = missingClockOutCount,
             CastSalesMissingSlipCount = 0,
-            ReceiptsEnabled = true,
-            PendingReceiptCount = 0,
             CanCloseFromStore = canCloseFromStore,
             BlockReasonsFromStore = blockReasonsFromStore ?? []
         };

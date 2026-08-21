@@ -1,15 +1,21 @@
 using System.Text.Json;
+using ProsperApp.Features.StoreBootstrap;
 using ProsperApp.Infrastructure.Caching;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
 namespace ProsperApp.Infrastructure.Supabase;
 
-public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IApplicationCache cache)
-    : SupabaseRepositoryBase(rpcClient), IStoreSettingsRepository
+public class SupabaseStoreSettingsRepository(
+    ISupabaseRpcClient rpcClient,
+    ILocalSettingsProvider localSettingsProvider,
+    IApplicationCache cache,
+    IStoreMasterBootstrapper masterBootstrapper)
+    : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IStoreSettingsRepository
 {
     private const string DebugDeleteConfirmation = "DELETE_NON_MASTER_RECORDS";
 
     private readonly IApplicationCache _cache = cache;
+    private readonly IStoreMasterBootstrapper _masterBootstrapper = masterBootstrapper;
 
     public async Task<StoreSettingsLoadResult> GetDepartmentsAsync(CancellationToken ct)
     {
@@ -22,6 +28,28 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IAppl
             cachedDepartments is { Count: > 0 })
         {
             return StoreSettingsLoadResult.Success(cachedDepartments, $"cache: {cachedDepartments.Count}件");
+        }
+
+        if (CurrentStoreDepartmentId > 0)
+        {
+            var bootstrap = await _masterBootstrapper.EnsureAsync(ct);
+            if (!bootstrap.Succeeded)
+            {
+                return StoreSettingsLoadResult.Failed(
+                    BuildDiagnosticMessage(bootstrap.ErrorMessage ?? "RPC failed"),
+                    bootstrap.ErrorMessage ?? "RPC failed");
+            }
+
+            var departments = ParseDepartments(StoreBootstrapJson.ReadArray(bootstrap.Value.Row, "departments"));
+            if (departments.Count > 0)
+            {
+                StoreMasterCacheKeys.SetMaster(
+                    _cache,
+                    StoreMasterCacheKeys.Departments,
+                    departments,
+                    "店舗一覧");
+                return StoreSettingsLoadResult.Success(departments, $"bootstrap cache: {departments.Count}件");
+            }
         }
 
         var rpcResult = await GetDepartmentsFromRpcAsync(ct);
@@ -66,7 +94,6 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IAppl
 
         var tableCounts = ParseDebugDeleteCounts(result.Rows);
         StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
-        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
         return DebugDeleteNonMasterRecordsResult.Success(tableCounts);
     }
 
@@ -89,26 +116,17 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IAppl
 
     private static string BuildDiagnosticMessage(string rpcStatus)
     {
-        if (rpcStatus.Contains("404", StringComparison.OrdinalIgnoreCase) ||
-            rpcStatus.Contains("PGRST202", StringComparison.OrdinalIgnoreCase) ||
-            rpcStatus.Contains("Could not find", StringComparison.OrdinalIgnoreCase))
-        {
-            return "店舗一覧取得RPCが見つかりません。Supabase SQL Editorで Sql/store_settings_functions.sql を実行してください。";
-        }
-
-        if (rpcStatus.Contains("400", StringComparison.OrdinalIgnoreCase) ||
-            rpcStatus.Contains("invalid_function_name", StringComparison.OrdinalIgnoreCase))
+        if (rpcStatus is "invalid_function_name")
         {
             return "店舗一覧取得RPC名がprosper-rpc Edge Functionの許可リストと一致していません。アプリとprosper-rpcを同じstore.*版へデプロイしてください。";
         }
 
-        if (rpcStatus.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rpcStatus.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rpcStatus is "access_denied" or "invalid_signature")
         {
             return "店舗一覧取得RPCの認証に失敗しました。AzureのSupabase_Edge_KeyとSupabaseのProsperApp_API_KEYが一致しているか確認してください。";
         }
 
-        if (rpcStatus.Contains("0件", StringComparison.OrdinalIgnoreCase))
+        if (rpcStatus is "RPC ok but 0件")
         {
             return "有効な店舗が0件です。department_masterのis_active=trueの店舗を確認してください。";
         }
@@ -169,24 +187,23 @@ public class SupabaseStoreSettingsRepository(ISupabaseRpcClient rpcClient, IAppl
             return "マスタ以外のレコード削除に失敗しました。";
         }
 
-        if (rawError.Contains("debug_delete_confirmation_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "debug_delete_confirmation_required", StringComparison.Ordinal))
         {
             return "削除確認トークンが一致しません。";
         }
 
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_department_not_found", StringComparison.Ordinal))
         {
             return "店舗マスタから店舗を選択してください。";
         }
 
-        if (rawError.Contains("invalid_function_name", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("400", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_function_name", StringComparison.Ordinal) ||
+            string.Equals(rawError, "400", StringComparison.Ordinal))
         {
             return "マスタ以外のレコード削除RPCがprosper-rpcの許可リストと一致していません。アプリとprosper-rpcを同じstore.*版へデプロイしてください。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }

@@ -70,12 +70,13 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 - Google 認証では許可メールまたは許可ドメインを必須とし、未許可ユーザーは認証チケット作成時または Principal 検証時に拒否する。
 - ログアウト時は Session と Cookie を破棄する。
 - ログイン後リダイレクトはローカルURLだけを許可する。
+- 管理者設定は固定パスワードと保存トークンで保護し、管理者モードはサーバー側 Session にだけ保持する。商品カテゴリ操作と締め条件無視のPOSTは管理者モードを再検証する。
 
 ## 5. 機能フラグ
 
 | 機能名 | 主な対象 |
 | --- | --- |
-| `Opening` | 営業中、マスタ設定導線 |
+| `Opening` | 営業中、店舗設定導線 |
 | `Slips` | 伝票作成 |
 | `Orders` | 注文端末 |
 | `Checkout` | 会計、決済、領収書印字 |
@@ -92,20 +93,17 @@ Supabase RPC キーは環境変数または設定から取得する。値は秘�
 | `/Login` | `LoginModel` | Google ログイン、設定エラー表示 |
 | `/logout` | logout handler | Session と Cookie を破棄 |
 | `/Index` | `IndexModel` | 営業中、伝票作成、営業中編集、会計 |
-| `/Attendance` | `AttendanceModel` | 営業中導線の勤怠入力 |
 | `/Orders/Index` | `Orders.IndexModel` | 注文端末 |
-| `/Closing/Index` | `Closing.IndexModel` | 締め前 readiness と営業日締め |
-| `/Closing/Attendance` | `AttendanceModel` | 締め導線の勤怠入力 |
-| `/Closing/DrinkCost` | `DrinkCostModel` | 酒代入力 |
+| `/Closing/Index` | `ClosingModel` | 締め前確認、勤怠・酒代・キャスト売上額・ドリンクバックのモーダル編集、営業日締め |
 | `/Closing/Receipts` | `ReceiptsModel` | 領収書簡易入力 |
 | `/DrivePreview/{driveFileId}` | `DrivePreviewModel` | Drive 証憑プレビュー |
-| `/Closing/CastSalesAdjustment` | `CastSalesAdjustmentModel` | キャスト売上額調整 |
-| `/Management/Index` | `Management.IndexModel` | マスタ設定メニュー |
+| `/Management/Index` | `Management.IndexModel` | 店舗設定メニュー、端末の画面モード・配色設定 |
+| `/Management/Tables` | `TablesModel` | 卓番管理 |
 | `/Management/Casts` | `CastsModel` | キャスト管理 |
 | `/Management/Items` | `ItemsModel` | 商品カテゴリ・商品管理 |
 | `/Management/NominationBacks` | `NominationBacksModel` | 指名バック管理 |
 | `/Management/Pricing` | `PricingModel` | 時間料金管理 |
-| `/Settings/Index` | `SettingsModel` | 端末設定、キャッシュ、デバッグ削除 |
+| `/Settings/Index` | `SettingsModel` | 利用店舗・管理者モード設定、キャッシュ、デバッグ削除 |
 
 `/Attendance` は `/Closing/Attendance` にもマップされる。
 
@@ -141,6 +139,8 @@ Repository は Supabase RPC を通じて、店舗文脈、マスタ、営業日�
 | 決済方法 | `payment_method_master` |
 | 時間料金 | `store_pricing_plan_master` |
 
+卓番と標準商品は物理削除できるため、伝票・注文明細側は削除可能マスタへのFKを持たず、IDと表示用snapshotを保持する。注文明細は商品名・単価に加えてカテゴリID・コード・名称も注文時に固定する。商品カテゴリは配下商品がない場合だけ物理削除できる。
+
 ### 8.2 営業中データ
 
 | 区分 | 主なテーブル |
@@ -152,7 +152,7 @@ Repository は Supabase RPC を通じて、店舗文脈、マスタ、営業日�
 | 指名 | `store_slip_casts` |
 | 注文 | `store_order_lines`, `store_order_line_cast_backs` |
 | 自由入力・自動料金 | `store_slip_charge_lines`, `store_slip_pricing_lines` |
-| キャストバック | `store_slip_cast_backs` |
+| キャストバック | `store_order_line_cast_backs`, `store_slip_cast_backs`, `store_business_day_drink_back_adjustments` |
 
 ### 8.3 会計・締め
 
@@ -175,7 +175,7 @@ stateDiagram-v2
 ```
 
 - `closed` 後の営業日データ更新は DB トリガで拒否する。
-- `close_business_day` は readiness を再確認し、条件未達の場合は失敗する。
+- `close_business_day` は readiness を再確認し、条件未達の場合は失敗する。ただし管理者モードの締め条件無視ではこの条件確認を省略できる。
 
 ### 9.2 伝票
 
@@ -206,103 +206,79 @@ C# アプリは `ISupabaseRpcClient` で以下の形式を Edge Function に POS
 }
 ```
 
-Edge Function は allowlist 済みの `store.*` 関数のみを実行する。代表的な RPC は以下である。
+Edge Function は allowlist 済みの `store.*` 関数のみを実行する。C#、Edge allowlist、SQL定義は自動テストで完全一致させる。代表的なRPCは以下である。
 
 ### 10.1 設定・店舗
 
 - `store.get_departments`
 - `store.delete_non_master_records`
-- `store.get_context`
+- `store.get_business_home_bootstrap_v2`
+- `store.get_management_master_snapshot`
+- `store.save_management_master_v2`
 
 ### 10.2 営業日・締め
 
-- `store.get_current_business_day`
-- `store.open_business_day`
-- `store.open_business_day_with_attendance`
-- `store.save_business_day_attendance`
-- `store.get_open_slip_count`
-- `store.get_business_day_drink_delivery_status`
-- `store.save_business_day_drink_delivery_amount`
-- `store.get_business_day_closing_attendance`
-- `store.save_business_day_closing_attendance`
-- `store.get_business_day_closing_readiness`
-- `store.close_business_day`
+- `store.get_attendance_editor_bootstrap_v2`
+- `store.get_current_attendance_editor_snapshot`
+- `store.save_current_business_day_attendance_v2`
+- `store.get_current_closing_dashboard`
+- `store.close_business_day_v2`
+- `store.get_current_drink_delivery_editor`
+- `store.save_current_business_day_drink_delivery_amount_v2`
+- `store.get_current_drink_back_editor`
+- `store.save_drink_back_adjustments_v2`
+- `store.get_current_cast_sales_adjustment_overview`
+- `store.save_current_cast_sales_adjustment_v2`
+- `store.confirm_current_cast_sales_adjustments_v2`
 
-### 10.3 マスタ
+### 10.3 営業中・注文
 
-- `store.get_tables`
-- `store.get_casts`
-- `store.get_casts_admin`
-- `store.create_cast`
-- `store.update_cast_drink_memo`
-- `store.delete_cast`
-- `store.get_order_entry_slips`
-- `store.get_order_items`
-- `store.get_item_admin_catalog`
-- `store.upsert_item_category`
-- `store.upsert_item`
-- `store.delete_item`
-- `store.reorder_items`
-- `store.get_nomination_back_master`
-- `store.save_nomination_back_master`
-- `store.get_pricing_plan`
-- `store.save_pricing_plan`
-- `store.get_payment_methods`
+- `store.get_current_business_home_snapshot`
+- `store.sync_business_home_changes_v2`
+- `store.get_current_order_entry_candidates`
+- `store.submit_current_order_entry_v2`
 
-### 10.4 営業中・注文
+### 10.4 会計
 
-- `store.create_slip`
-- `store.get_business_day_snapshot`
-- `store.flush_business_home_changes`
-- `store.get_order_attending_casts`
-- `store.add_order_lines`
-
-### 10.5 会計・領収書
-
-- `store.issue_checkout_statement`
+- `store.issue_checkout_statement_v2`
+- `store.release_checkout_ready_v2`
+- `store.confirm_checkout_v2`
+- `store.cancel_checkout_v2`
 - `store.get_checkout_statement_print_data`
-- `store.release_checkout_ready`
-- `store.confirm_checkout`
 - `store.get_checkout_receipt_print_data`
-- `store.cancel_checkout`
-- `store.get_pending_receipts`
-- `store.quick_enter_receipt`
-- `store.mark_receipt_scan_mistake`
 
-### 10.6 キャスト売上額調整
+### 10.5 領収書・日報
 
-- `store.get_business_day_cast_sales_adjustment_overview`
-- `store.get_business_day_cast_sales_adjustment_status`
-- `store.get_cast_sales_adjustment_slips`
-- `store.get_cast_sales_adjustment_detail`
-- `store.save_cast_sales_adjustment`
-- `store.save_business_day_cast_sales_adjustments`
+- `store.get_current_receipt_work_queue`
+- `store.advance_receipt_work_queue_v2`
+- `store.is_pending_receipt_drive_file_allowed`
+- `store.get_business_day_daily_report`
 
-SQL 内部ヘルパーには、時間料金計算、会計スナップショット作成、営業日締めスナップショット作成、締め後更新ガードなどがある。これらは Edge Function allowlist 経由で直接呼ばず、RPC または DB トリガから利用する。
+旧RPCは `00_legacy_rpc_cutover.sql` で削除する。SQL内部ヘルパーは `_internal` 契約、時間料金計算、会計スナップショット作成、営業日締めスナップショット作成、締め後更新ガードに限定し、Edge Function allowlistから直接呼ばない。
 
 ## 11. 主要処理フロー
 
 ### 11.1 営業中画面ロード
 
-1. 端末設定から店舗部門IDを決定する。
-2. 店舗文脈、現在営業日、卓番、指名設定、注文商品、決済方法を取得する。
-3. 必要に応じて出勤キャストを取得する。
-4. 現在営業日がある場合、営業日スナップショットを取得する。
-5. 画面は定期更新と手動更新でスナップショットを再取得する。
+1. Razor GETは認可後に状態非依存shellを返す。
+2. master cache cold時だけ `get_business_home_bootstrap_v2` でmasterと同時点snapshotを取得する。
+3. warm時はGET中のRPCを0回とし、browserが `get_current_business_home_snapshot` を1回呼ぶ。
+4. 出勤キャスト候補はcurrent snapshotに含め、modal専用readを行わない。
+5. 定期更新、focus、onlineの重複要求はsingle-flightで1本にする。
 
 ### 11.2 伝票作成
 
 1. 利用者が卓番、入店時刻、顧客、指名、メモを入力する。
-2. PageModel が入力値、店舗文脈、営業日、出勤キャスト、指名設定を検証する。
-3. `store.create_slip` を呼び出す。
-4. 作成成功後、営業中画面を再表示する。
+2. `create_slip` commandを営業中変更キューへ追加し、即時flushする。
+3. `sync_business_home_changes_v2` が営業日、revision、卓、指名キャストの出勤状態をDB内で再検証する。
+4. 成功応答の作成伝票IDと最新snapshotを適用し、追加readやredirectを行わない。
 
 ### 11.3 営業中編集 flush
 
 1. クライアントは顧客、指名、注文、自由入力明細、カラオケの操作を localStorage に保存する。
 2. 操作は画面上で楽観反映する。
 3. `client_batch_id` と操作配列を `OnPostFlushBusinessHomeChangesAsync` に送る。
-4. サーバーは操作内容を検証し、`store.flush_business_home_changes` を呼ぶ。
+4. サーバーは操作内容を検証し、`store.sync_business_home_changes_v2` を呼ぶ。
 5. RPC は操作単位の結果と新しいスナップショットを返す。
 6. クライアントは成功分を確定し、失敗分を画面上で扱う。
 
@@ -312,34 +288,35 @@ SQL 内部ヘルパーには、時間料金計算、会計スナップショッ�
 2. 利用者が伝票と商品を選び、注文キューへ追加する。
 3. バック対象商品ではキャスト指定を受け付ける。
 4. キューは localStorage に保存する。
-5. 一括登録時に入力を検証し、`store.add_order_lines` を呼ぶ。
-6. 登録成功後、端末キューを破棄する。
+5. 一括登録時に同じ `operation_id` とpayloadを `store.submit_current_order_entry_v2` へ送る。
+6. confirmed応答の登録行と候補deltaだけを適用し、追加readを行わない。
 
 ### 11.5 会計
 
 1. `open` 伝票で退店時刻を選択する。
-2. `store.issue_checkout_statement` が時間料金と会計明細を計算し、会計スナップショットを固定する。
+2. `store.issue_checkout_statement_v2` が時間料金と会計明細を計算し、会計スナップショットを固定する。
 3. 伝票は `checkout_ready` になる。
 4. クライアントは会計伝票を印刷する。
-5. 決済確定時は決済方法と金額を検証し、`store.confirm_checkout` を呼ぶ。
+5. 決済確定時は決済方法と金額を検証し、`store.confirm_checkout_v2` を呼ぶ。
 6. 確定後、領収書印字データを使って領収書を印刷する。
 
 ### 11.6 締め
 
-1. 締め画面は現在営業日の readiness を取得する。
-2. readiness は未会計、酒代、勤怠、キャスト売上額調整、未処理領収書を確認する。
+1. 締め画面は `store.get_current_closing_dashboard` を1回取得する。
+2. dashboardは未会計、酒代、勤怠、キャスト売上額調整、ドリンクバック調整を返す。
 3. 条件達成時だけ営業日締めボタンを有効化する。
-4. `store.close_business_day` は readiness を再確認する。
+4. `store.close_business_day_v2` は同一transaction内で条件を再確認する。
 5. 締め成功時に営業日締めスナップショットを保存し、営業日を `closed` にする。
 6. DB トリガにより締め後更新を拒否する。
+7. 未処理領収書の件数は独立して表示し、領収書入力は締め可否に影響させない。
 
 ### 11.7 領収書簡易入力
 
-1. 未処理領収書をステータスで取得する。
+1. `store.get_current_receipt_work_queue` でresume cursor付きキューを取得する。
 2. Drive ファイルがある場合、許可対象のファイルだけをプレビューする。
-3. 利用者が支払日、金額、科目、摘要を入力する。
-4. 仕訳 payload を生成し、`store.quick_enter_receipt` を呼ぶ。
-5. スキャンミスの場合は `store.mark_receipt_scan_mistake` を呼ぶ。
+3. 利用者が取引日、金額、科目、摘要を入力する。取引日は領収書上の取引日であり、入力した現在営業日を店舗から従業員へ立替分を返済した営業日として記録する。
+4. 仕訳payloadまたはスキャンミスcommandをIndexedDB outboxへ積み、次票を即時表示する。
+5. `store.advance_receipt_work_queue_v2` へ先頭1件だけ送り、結果不明時は同じ `operation_id` を再送する。
 
 ## 12. 時間・営業日仕様
 
@@ -382,12 +359,12 @@ SQL 内部ヘルパーには、時間料金計算、会計スナップショッ�
 
 | キャッシュ | 期間 | 主な対象 |
 | --- | --- | --- |
-| マスタ | 10 分 | 店舗文脈、卓番、キャスト、商品、商品管理カタログ |
-| 実行時 | 30 秒 | 現在営業日、出勤キャスト、注文対象、営業中関連状態 |
+| マスタ | 更新時まで | 店舗文脈、卓番、キャスト、スタッフ、商品、商品管理カタログ、料金、指名バック、決済方法 |
 | Drive プレビュー | 10 分 | Drive metadata/media |
-| 未処理領収書 | 30 秒 | 領収書一覧 |
+| browser SyncStore | revision更新まで | 画面shell用master、直近read model |
+| browser outbox | confirmedまで | 営業中、注文、領収書などの未確定command |
 
-管理者設定画面からアプリ内キャッシュを全削除できる。マスタ更新時は関連キャッシュを削除する。
+`store.get_business_home_bootstrap_v2` はmaster cache cold時だけ、営業中shell用masterと同時点snapshotを返す。App Serviceのmaster cacheに現在営業日、出勤状態、伝票、締め状態、領収書キューを保存しない。runtime stateはcurrent read/mutation応答だけで更新する。
 
 ## 16. エラー処理
 

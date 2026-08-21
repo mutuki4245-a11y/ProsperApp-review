@@ -1,0 +1,936 @@
+drop function if exists store.get_slip_detail(bigint, bigint);
+
+-- store.get_slip_detail was removed with the legacy /Slips/Edit module.
+
+drop function if exists store.add_slip_customers(bigint, bigint, text[]);
+
+create or replace function store.add_slip_customers(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_customer_labels text[] default array[]::text[],
+    p_entered_at timestamp with time zone default null
+)
+returns table (
+    inserted_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_line_no integer;
+    v_label text;
+    v_index integer;
+    v_inserted_count integer := 0;
+begin
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    if coalesce(array_length(p_customer_labels, 1), 0) <= 0 then
+        raise exception 'invalid_customer_count';
+    end if;
+
+    v_line_no := coalesce((
+        select max(c.line_no)
+        from public.store_slip_customers c
+        where c.slip_id = p_slip_id
+    ), 0);
+
+    for v_index in 1..array_length(p_customer_labels, 1) loop
+        v_label := nullif(trim(coalesce(p_customer_labels[v_index], '')), '');
+        v_line_no := v_line_no + 1;
+
+        insert into public.store_slip_customers (
+            slip_id,
+            line_no,
+            customer_label,
+            entered_at,
+            status
+        )
+        values (
+            p_slip_id,
+            v_line_no,
+            v_label,
+            coalesce(p_entered_at, now()),
+            'active'
+        );
+
+        v_inserted_count := v_inserted_count + 1;
+    end loop;
+
+    update public.store_slips s
+       set customer_count = (
+               select count(*)::integer
+               from public.store_slip_customers c
+               where c.slip_id = p_slip_id
+                 and c.status = 'active'
+           ),
+           updated_at = now()
+     where s.slip_id = p_slip_id;
+
+    return query select v_inserted_count;
+end;
+$$;
+
+create or replace function store.add_slip_nominations(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_cast_nominations jsonb default '[]'::jsonb
+)
+returns table (
+    inserted_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_slip public.store_slips%rowtype;
+    v_nomination jsonb;
+    v_cast_id bigint;
+    v_allow_duplicate boolean;
+    v_nomination_kind text;
+    v_nomination_type text;
+    v_nomination_price numeric(12, 0);
+    v_companion_time time;
+    v_started_at timestamp with time zone;
+    v_slip_cast_id bigint;
+    v_nomination_fee_item public.store_item_master%rowtype;
+    v_line_no integer;
+    v_inserted_count integer := 0;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    for v_nomination in
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_cast_nominations) = 'array' then p_cast_nominations
+                else '[]'::jsonb
+            end
+        )
+    loop
+        v_cast_id := nullif(v_nomination->>'cast_id', '')::bigint;
+        v_allow_duplicate := case
+            when v_nomination ? 'allow_duplicate' and v_nomination->>'allow_duplicate' = 'true' then true
+            when not (v_nomination ? 'allow_duplicate') or v_nomination->>'allow_duplicate' = 'false' then false
+            else null
+        end;
+        v_nomination_kind := nullif(trim(coalesce(v_nomination->>'nomination_kind', '')), '');
+        v_nomination_price := nullif(v_nomination->>'nomination_price', '')::numeric;
+
+        if v_cast_id is null then
+            raise exception 'cast_not_selected';
+        end if;
+
+        if v_allow_duplicate is null then
+            raise exception 'invalid_allow_duplicate';
+        end if;
+
+        if not v_allow_duplicate and exists (
+            select 1
+            from public.store_slip_casts sc
+            where sc.slip_id = p_slip_id
+              and sc.cast_id = v_cast_id
+              and sc.status = 'active'
+        ) then
+            raise exception 'duplicate_nomination_cast';
+        end if;
+
+        if v_nomination_price is null or
+           v_nomination_price < 1000 or
+           v_nomination_price > 20000 or
+           mod(v_nomination_price, 1000) <> 0 then
+            raise exception 'invalid_nomination_price';
+        end if;
+
+        select
+            m.nomination_type,
+            m.companion_time
+          into v_nomination_type, v_companion_time
+        from public.store_nomination_back_master m
+        where m.company_id = v_company_id
+          and m.department_id = p_department_id
+          and m.nomination_kind = v_nomination_kind
+          and m.back_type = 'nomination'
+          and m.is_active = true
+        limit 1;
+
+        if v_nomination_type is null then
+            raise exception 'invalid_nomination_type';
+        end if;
+
+        if v_nomination_type = 'companion' and v_companion_time is null then
+            raise exception 'invalid_companion_time';
+        end if;
+
+        v_started_at := case
+            when v_nomination_type = 'companion'
+                then (((v_slip.business_date + case when v_companion_time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_companion_time) at time zone store.business_timezone())
+            else now()
+        end;
+
+        if not exists (
+            select 1
+            from public.cast_master c
+            join public.department_master d
+              on d.department_id = c.department_id
+            where c.cast_id = v_cast_id
+              and c.company_id = v_company_id
+              and c.is_active = true
+              and c.status = 'active'
+              and d.is_active = true
+        ) then
+            raise exception 'store_cast_not_found';
+        end if;
+
+        insert into public.store_slip_casts (
+            slip_id,
+            cast_id,
+            nomination_kind,
+            nomination_type,
+            nomination_price,
+            started_at,
+            status
+        )
+        values (
+            p_slip_id,
+            v_cast_id,
+            v_nomination_kind,
+            v_nomination_type,
+            v_nomination_price,
+            v_started_at,
+            'active'
+        )
+        returning store_slip_casts.slip_cast_id into v_slip_cast_id;
+
+        insert into public.store_slip_cast_backs (
+            slip_cast_id,
+            slip_id,
+            business_day_id,
+            business_date,
+            company_id,
+            department_id,
+            cast_id,
+            nomination_kind,
+            nomination_type,
+            back_type,
+            quantity,
+            back_unit_amount,
+            back_amount,
+            status
+        )
+        select
+            v_slip_cast_id,
+            p_slip_id,
+            v_slip.business_day_id,
+            v_slip.business_date,
+            v_company_id,
+            p_department_id,
+            v_cast_id,
+            v_nomination_kind,
+            v_nomination_type,
+            'nomination',
+            1,
+            m.back_unit_amount,
+            m.back_unit_amount,
+            'active'
+        from public.store_nomination_back_master m
+        where m.company_id = v_company_id
+          and m.department_id = p_department_id
+          and m.nomination_kind = v_nomination_kind
+          and m.back_type = 'nomination'
+          and m.is_active = true
+          and m.back_unit_amount > 0;
+
+        if v_nomination_fee_item.item_id is null then
+            select *
+              into v_nomination_fee_item
+            from public.store_item_master i
+            where i.company_id = v_company_id
+              and i.department_id = p_department_id
+              and i.item_type = 'nomination_fee'
+              and i.is_active = true
+            order by i.sort_order asc, i.item_id asc
+            limit 1;
+
+            if v_nomination_fee_item.item_id is null then
+                raise exception 'store_nomination_fee_item_not_found';
+            end if;
+        end if;
+
+        select coalesce(max(ol.line_no), 0) + 1
+          into v_line_no
+        from public.store_order_lines ol
+        where ol.slip_id = p_slip_id;
+
+        insert into public.store_order_lines (
+            slip_id,
+            line_no,
+            item_id,
+            item_name_snapshot,
+            quantity,
+            unit_price,
+            amount,
+            ordered_at,
+            status,
+            source_type,
+            source_id
+        )
+        values (
+            p_slip_id,
+            v_line_no,
+            v_nomination_fee_item.item_id,
+            v_nomination_fee_item.item_name,
+            1,
+            v_nomination_price,
+            v_nomination_price,
+            v_started_at,
+            'active',
+            'nomination_fee',
+            v_slip_cast_id
+        );
+
+        v_inserted_count := v_inserted_count + 1;
+    end loop;
+
+    return query select v_inserted_count;
+end;
+$$;
+
+create or replace function store.leave_slip_customer(
+    p_department_id bigint,
+    p_slip_customer_id bigint,
+    p_left_at timestamp with time zone
+)
+returns table (
+    slip_customer_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_customer public.store_slip_customers%rowtype;
+    v_slip_id bigint;
+begin
+    select c.*
+      into v_customer
+    from public.store_slip_customers c
+    join public.store_slips s
+      on s.slip_id = c.slip_id
+    where c.slip_customer_id = p_slip_customer_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+      and c.status = 'active'
+    limit 1;
+
+    if v_customer.slip_customer_id is null then
+        raise exception 'store_slip_customer_not_found';
+    end if;
+
+    if p_left_at is null or p_left_at <= v_customer.entered_at then
+        raise exception 'invalid_left_at';
+    end if;
+
+    v_slip_id := v_customer.slip_id;
+
+    update public.store_slip_customers c
+       set left_at = p_left_at,
+           left_at_source = 'manual',
+           status = 'left',
+           updated_at = now()
+     where c.slip_customer_id = p_slip_customer_id;
+
+    update public.store_slips s
+       set customer_count = (
+               select count(*)::integer
+               from public.store_slip_customers c
+               where c.slip_id = v_slip_id
+                 and c.status = 'active'
+           ),
+           updated_at = now()
+     where s.slip_id = v_slip_id;
+
+    return query select p_slip_customer_id;
+end;
+$$;
+
+drop function if exists store.save_slip_adjustments(bigint, bigint, jsonb);
+
+create or replace function store.add_slip_adjustment(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_line_name text,
+    p_amount numeric
+)
+returns table (
+    inserted_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_line_name text;
+    v_amount numeric(12, 0);
+    v_line_no integer;
+begin
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    v_line_name := nullif(trim(coalesce(p_line_name, '')), '');
+    v_amount := p_amount;
+
+    if v_line_name is null or length(v_line_name) > 160 then
+        raise exception 'invalid_adjustment_name';
+    end if;
+
+    if v_amount is null or v_amount <> trunc(v_amount) or abs(v_amount) > 99999999 then
+        raise exception 'invalid_adjustment_amount';
+    end if;
+
+    select coalesce(max(cl.line_no), 0) + 1
+      into v_line_no
+    from public.store_slip_charge_lines cl
+    where cl.slip_id = p_slip_id;
+
+    insert into public.store_slip_charge_lines (
+        slip_id,
+        business_day_id,
+        business_date,
+        company_id,
+        department_id,
+        line_no,
+        charge_type,
+        line_name,
+        quantity,
+        unit_price,
+        amount,
+        status
+    )
+    values (
+        p_slip_id,
+        v_slip.business_day_id,
+        v_slip.business_date,
+        v_slip.company_id,
+        v_slip.department_id,
+        v_line_no,
+        'adjustment',
+        v_line_name,
+        1,
+        v_amount,
+        v_amount,
+        'active'
+    );
+
+    return query select 1;
+end;
+$$;
+
+create or replace function store.save_karaoke_lines(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_karaoke_lines jsonb default '[]'::jsonb
+)
+returns table (
+    saved_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_company_id bigint;
+    v_line jsonb;
+    v_slip public.store_slips%rowtype;
+    v_karaoke_item public.store_item_master%rowtype;
+    v_slip_id bigint;
+    v_quantity numeric(10, 2);
+    v_line_no integer;
+    v_order_line_id bigint;
+    v_entered_at timestamp with time zone;
+    v_saved_count integer := 0;
+begin
+    select d.company_id
+      into v_company_id
+    from public.department_master d
+    where d.department_id = p_department_id
+      and d.is_active = true
+    limit 1;
+
+    if v_company_id is null then
+        raise exception 'store_department_not_found';
+    end if;
+
+    if not exists (
+        select 1
+        from public.store_business_days b
+        where b.business_day_id = p_business_day_id
+          and b.department_id = p_department_id
+          and b.status = 'open'
+    ) then
+        raise exception 'business_day_not_open';
+    end if;
+
+    select *
+      into v_karaoke_item
+    from public.store_item_master i
+    where i.company_id = v_company_id
+      and i.department_id = p_department_id
+      and i.item_type = 'karaoke'
+      and i.is_active = true
+    order by i.sort_order asc, i.item_id asc
+    limit 1;
+
+    if v_karaoke_item.item_id is null then
+        raise exception 'store_karaoke_item_not_found';
+    end if;
+
+    for v_line in
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_karaoke_lines) = 'array' then p_karaoke_lines
+                else '[]'::jsonb
+            end
+        )
+    loop
+        v_slip_id := nullif(v_line->>'slip_id', '')::bigint;
+        v_quantity := coalesce(nullif(v_line->>'quantity', '')::numeric, 0);
+
+        if v_slip_id is null or v_quantity < 0 or v_quantity <> trunc(v_quantity) or v_quantity > 999 then
+            raise exception 'invalid_karaoke_quantity';
+        end if;
+
+        select *
+          into v_slip
+        from public.store_slips s
+        where s.slip_id = v_slip_id
+          and s.department_id = p_department_id
+          and s.business_day_id = p_business_day_id
+          and s.status = 'open'
+        limit 1;
+
+        if v_slip.slip_id is null then
+            raise exception 'store_slip_not_found';
+        end if;
+
+        select coalesce(min(c.entered_at), v_slip.opened_at)
+          into v_entered_at
+        from public.store_slip_customers c
+        where c.slip_id = v_slip_id
+          and c.status <> 'cancelled';
+
+        select ol.order_line_id
+          into v_order_line_id
+        from public.store_order_lines ol
+        join public.store_item_master i
+          on i.item_id = ol.item_id
+        where ol.slip_id = v_slip_id
+          and ol.status = 'active'
+          and i.item_type = 'karaoke'
+        order by ol.line_no asc
+        limit 1;
+
+        update public.store_order_lines ol
+           set status = 'voided',
+               voided_at = coalesce(ol.voided_at, now()),
+               updated_at = now()
+        from public.store_item_master i
+        where i.item_id = ol.item_id
+          and ol.slip_id = v_slip_id
+          and ol.status = 'active'
+          and i.item_type = 'karaoke'
+          and (v_order_line_id is null or ol.order_line_id <> v_order_line_id);
+
+        if v_quantity <= 0 then
+            if v_order_line_id is not null then
+                update public.store_order_lines ol
+                   set status = 'voided',
+                       voided_at = coalesce(ol.voided_at, now()),
+                       updated_at = now()
+                 where ol.order_line_id = v_order_line_id;
+            end if;
+        elsif v_order_line_id is null then
+            v_line_no := coalesce((
+                select max(ol.line_no)
+                from public.store_order_lines ol
+                where ol.slip_id = v_slip_id
+            ), 0) + 1;
+
+            insert into public.store_order_lines (
+                slip_id,
+                line_no,
+                item_id,
+                item_name_snapshot,
+                quantity,
+                unit_price,
+                amount,
+                ordered_at,
+                status
+            )
+            values (
+                v_slip_id,
+                v_line_no,
+                v_karaoke_item.item_id,
+                v_karaoke_item.item_name,
+                v_quantity,
+                v_karaoke_item.default_price,
+                v_karaoke_item.default_price * v_quantity,
+                v_entered_at,
+                'active'
+            );
+        else
+            update public.store_order_lines ol
+               set item_id = v_karaoke_item.item_id,
+                   item_name_snapshot = v_karaoke_item.item_name,
+                   quantity = v_quantity,
+                   unit_price = v_karaoke_item.default_price,
+                   amount = v_karaoke_item.default_price * v_quantity,
+                   ordered_at = v_entered_at,
+                   status = 'active',
+                   voided_at = null,
+                   updated_at = now()
+             where ol.order_line_id = v_order_line_id;
+        end if;
+
+        update public.store_slip_charge_lines cl
+           set status = 'voided',
+               updated_at = now()
+         where cl.slip_id = v_slip_id
+           and cl.charge_type = 'karaoke'
+           and cl.status = 'active';
+
+        v_saved_count := v_saved_count + 1;
+    end loop;
+
+    return query select v_saved_count;
+end;
+$$;
+
+drop function if exists store.save_order_line_quantities(bigint, bigint, jsonb);
+
+create or replace function store.save_order_line_quantities(
+    p_department_id bigint,
+    p_slip_id bigint,
+    p_order_lines jsonb default '[]'::jsonb
+)
+returns table (
+    saved_count integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_line jsonb;
+    v_order_line public.store_order_lines%rowtype;
+    v_order_line_id_text text;
+    v_quantity_text text;
+    v_order_line_id bigint;
+    v_quantity numeric(10, 0);
+    v_saved_count integer := 0;
+begin
+    select *
+      into v_slip
+    from public.store_slips s
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+    limit 1;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    for v_line in
+        select value
+        from jsonb_array_elements(
+            case
+                when jsonb_typeof(p_order_lines) = 'array' then p_order_lines
+                else '[]'::jsonb
+            end
+        )
+    loop
+        v_order_line_id_text := nullif(trim(coalesce(v_line->>'order_line_id', '')), '');
+        v_quantity_text := nullif(trim(coalesce(v_line->>'quantity', '')), '');
+
+        if v_order_line_id_text is null or v_order_line_id_text !~ '^[0-9]+$' then
+            raise exception 'store_order_line_not_found';
+        end if;
+
+        if v_quantity_text is null or v_quantity_text !~ '^[0-9]+(\.0+)?$' then
+            raise exception 'invalid_order_quantity';
+        end if;
+
+        v_order_line_id := v_order_line_id_text::bigint;
+        v_quantity := v_quantity_text::numeric;
+
+        if v_quantity < 0 or v_quantity > 999 or v_quantity <> trunc(v_quantity) then
+            raise exception 'invalid_order_quantity';
+        end if;
+
+        select ol.*
+          into v_order_line
+        from public.store_order_lines ol
+        left join public.store_item_master i
+          on i.item_id = ol.item_id
+        where ol.order_line_id = v_order_line_id
+          and ol.slip_id = p_slip_id
+          and ol.status = 'active'
+          and coalesce(i.item_type, 'standard') = 'standard'
+        limit 1;
+
+        if not found then
+            raise exception 'store_order_line_not_found';
+        end if;
+
+        if v_quantity <= 0 then
+            update public.store_order_lines ol
+               set status = 'voided',
+                   voided_at = coalesce(ol.voided_at, now()),
+                   updated_at = now()
+             where ol.order_line_id = v_order_line_id;
+
+            update public.store_order_line_cast_backs b
+               set status = 'voided',
+                   updated_at = now()
+             where b.order_line_id = v_order_line_id
+               and b.status = 'active';
+        else
+            update public.store_order_lines ol
+               set quantity = v_quantity,
+                   amount = ol.unit_price * v_quantity,
+                   updated_at = now()
+             where ol.order_line_id = v_order_line_id;
+
+            update public.store_order_line_cast_backs b
+               set quantity = v_quantity,
+                   back_amount = b.back_unit_amount * v_quantity,
+                   updated_at = now()
+             where b.order_line_id = v_order_line_id
+               and b.status = 'active';
+        end if;
+
+        v_saved_count := v_saved_count + 1;
+    end loop;
+
+    return query select v_saved_count;
+end;
+$$;
+
+create or replace function store.update_slip_customer_label(
+    p_department_id bigint,
+    p_slip_customer_id bigint,
+    p_customer_label text default null
+)
+returns table (
+    slip_customer_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    return query
+    update public.store_slip_customers c
+       set customer_label = nullif(trim(coalesce(p_customer_label, '')), ''),
+           updated_at = now()
+      from public.store_slips s
+     where s.slip_id = c.slip_id
+       and c.slip_customer_id = p_slip_customer_id
+       and s.department_id = p_department_id
+       and s.status = 'open'
+       and c.status <> 'cancelled'
+    returning c.slip_customer_id;
+
+    if not found then
+        raise exception 'store_slip_customer_not_found';
+    end if;
+end;
+$$;
+
+create or replace function store.void_order_line(
+    p_department_id bigint,
+    p_order_line_id bigint
+)
+returns table (
+    order_line_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_order_line public.store_order_lines%rowtype;
+begin
+    select ol.*
+      into v_order_line
+    from public.store_order_lines ol
+    join public.store_slips s
+      on s.slip_id = ol.slip_id
+    left join public.store_item_master i
+      on i.item_id = ol.item_id
+    where ol.order_line_id = p_order_line_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+      and ol.status = 'active'
+      and coalesce(i.item_type, 'standard') = 'standard'
+    limit 1;
+
+    if v_order_line.order_line_id is null then
+        raise exception 'store_order_line_not_found';
+    end if;
+
+    update public.store_order_lines ol
+       set status = 'voided',
+           updated_at = now()
+     where ol.order_line_id = p_order_line_id;
+
+    update public.store_order_line_cast_backs b
+       set status = 'voided',
+           updated_at = now()
+     where b.order_line_id = p_order_line_id
+       and b.status = 'active';
+
+    return query select p_order_line_id;
+end;
+$$;
+
+create or replace function store.cancel_slip_nomination(
+    p_department_id bigint,
+    p_slip_cast_id bigint
+)
+returns table (
+    slip_cast_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip_cast public.store_slip_casts%rowtype;
+begin
+    select sc.*
+      into v_slip_cast
+    from public.store_slip_casts sc
+    join public.store_slips s
+      on s.slip_id = sc.slip_id
+    where sc.slip_cast_id = p_slip_cast_id
+      and s.department_id = p_department_id
+      and s.status = 'open'
+      and sc.status = 'active'
+    limit 1
+    for update;
+
+    if v_slip_cast.slip_cast_id is null then
+        raise exception 'store_slip_nomination_not_found';
+    end if;
+
+    update public.store_slip_casts sc
+       set status = 'cancelled',
+           updated_at = now()
+     where sc.slip_cast_id = p_slip_cast_id;
+
+    update public.store_slip_cast_backs b
+       set status = 'cancelled',
+           updated_at = now()
+     where b.slip_cast_id = p_slip_cast_id
+       and b.status = 'active';
+
+    update public.store_order_line_cast_backs b
+       set status = 'voided',
+           updated_at = now()
+      from public.store_order_lines ol
+     where ol.order_line_id = b.order_line_id
+       and ol.slip_id = v_slip_cast.slip_id
+       and ol.source_type = 'nomination_fee'
+       and ol.source_id = p_slip_cast_id
+       and b.status = 'active';
+
+    update public.store_order_lines ol
+       set status = 'voided',
+           updated_at = now()
+     where ol.slip_id = v_slip_cast.slip_id
+       and ol.source_type = 'nomination_fee'
+       and ol.source_id = p_slip_cast_id
+       and ol.status = 'active';
+
+    return query select p_slip_cast_id;
+end;
+$$;
+
+create or replace function store.void_slip_adjustment(
+    p_department_id bigint,
+    p_charge_line_id bigint
+)
+returns table (
+    charge_line_id bigint
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    return query
+    update public.store_slip_charge_lines cl
+       set status = 'voided',
+           updated_at = now()
+      from public.store_slips s
+     where cl.charge_line_id = p_charge_line_id
+       and s.slip_id = cl.slip_id
+       and s.department_id = p_department_id
+       and s.status = 'open'
+       and cl.charge_type = 'adjustment'
+       and cl.status = 'active'
+    returning cl.charge_line_id;
+
+    if not found then
+        raise exception 'store_slip_adjustment_not_found';
+    end if;
+end;
+$$;

@@ -1,0 +1,114 @@
+<div class="modal fade" id="salesHistoryCorrectionModal" tabindex="-1" aria-labelledby="salesHistoryCorrectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <form data-sales-history-correction-form novalidate>
+                @Html.AntiForgeryToken()
+                <input type="hidden" data-correction-business-day-id />
+                <input type="hidden" data-correction-snapshot-version />
+
+                <div class="modal-header">
+                    <div>
+                        <p class="store-home__eyebrow mb-1">SALES CORRECTION</p>
+                        <h2 class="modal-title fs-4" id="salesHistoryCorrectionModalLabel">営業内容の補正</h2>
+                        <p class="text-muted small mb-0" data-correction-subtitle>補正対象を取得しています。</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                </div>
+
+                <div class="modal-body sales-history-correction">
+                    <div class="alert alert-danger" role="alert" data-correction-error hidden></div>
+                    <div class="sales-history-correction__loading" role="status" data-correction-loading>
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                        <span>最新の補正対象を取得しています。</span>
+                    </div>
+
+                    <div data-correction-editor hidden>
+                        <ul class="nav nav-tabs sales-history-correction__tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="correction-basic-tab" data-bs-toggle="tab" data-bs-target="#correction-basic-pane" type="button" role="tab" aria-controls="correction-basic-pane" aria-selected="true">基本情報</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="correction-attendance-tab" data-bs-toggle="tab" data-bs-target="#correction-attendance-pane" type="button" role="tab" aria-controls="correction-attendance-pane" aria-selected="false">勤怠</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="correction-drink-back-tab" data-bs-toggle="tab" data-bs-target="#correction-drink-back-pane" type="button" role="tab" aria-controls="correction-drink-back-pane" aria-selected="false">ドリンクバック</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="correction-cast-sales-tab" data-bs-toggle="tab" data-bs-target="#correction-cast-sales-pane" type="button" role="tab" aria-controls="correction-cast-sales-pane" aria-selected="false">キャスト売上</button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content sales-history-correction__tab-content">
+                            <section class="tab-pane fade show active" id="correction-basic-pane" role="tabpanel" aria-labelledby="correction-basic-tab" tabindex="0">
+                                <div class="sales-history-correction__basic-grid">
+                                    <div>
+                                        <label class="form-label" for="salesHistoryCorrectionMemo">締めメモ</label>
+                                        <textarea class="form-control" id="salesHistoryCorrectionMemo" rows="4" maxlength="500" data-correction-memo></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="salesHistoryCorrectionDrinkDelivery">酒代</label>
+                                        <div class="input-group">
+                                            <input class="form-control" id="salesHistoryCorrectionDrinkDelivery" type="number" min="0" max="999999999999" step="1" inputmode="numeric" required data-correction-drink-delivery />
+                                            <span class="input-group-text">円</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section class="tab-pane fade" id="correction-attendance-pane" role="tabpanel" aria-labelledby="correction-attendance-tab" tabindex="0">
+                                <section class="sales-history-correction__group" aria-labelledby="correctionCastAttendanceTitle">
+                                    <div class="sales-history-correction__group-heading">
+                                        <h3 id="correctionCastAttendanceTitle">キャスト勤怠</h3>
+                                        <span class="text-muted small">出勤者にはドリンクバック0円以上の設定が必要です。</span>
+                                    </div>
+                                    <div class="sales-history-correction__attendance-list" data-correction-cast-entries></div>
+                                </section>
+                                <section class="sales-history-correction__group" aria-labelledby="correctionStaffAttendanceTitle">
+                                    <div class="sales-history-correction__group-heading">
+                                        <h3 id="correctionStaffAttendanceTitle">スタッフ勤怠</h3>
+                                    </div>
+                                    <div class="sales-history-correction__attendance-list" data-correction-staff-entries></div>
+                                </section>
+                            </section>
+
+                            <section class="tab-pane fade" id="correction-drink-back-pane" role="tabpanel" aria-labelledby="correction-drink-back-tab" tabindex="0">
+                                <div class="sales-history-correction__table-heading">
+                                    <div>
+                                        <h3>ドリンクバック調整</h3>
+                                        <p>出勤キャストは有効のまま金額を入力してください。</p>
+                                    </div>
+                                    <strong data-correction-drink-back-total>合計 0円</strong>
+                                </div>
+                                <div class="sales-history-correction__drink-list" data-correction-drink-back-entries></div>
+                            </section>
+
+                            <section class="tab-pane fade" id="correction-cast-sales-pane" role="tabpanel" aria-labelledby="correction-cast-sales-tab" tabindex="0">
+                                <div class="sales-history-correction__table-heading">
+                                    <div>
+                                        <h3>キャスト売上額</h3>
+                                        <p>会計済み伝票ごとに、指名キャストへの売上配分を補正します。</p>
+                                    </div>
+                                </div>
+                                <div class="sales-history-correction__sales-list" data-correction-cast-sales-slips></div>
+                            </section>
+                        </div>
+
+                        <section class="sales-history-correction__reason" aria-labelledby="salesHistoryCorrectionReasonLabel">
+                            <div class="d-flex align-items-end justify-content-between gap-3">
+                                <label class="form-label" id="salesHistoryCorrectionReasonLabel" for="salesHistoryCorrectionReason">補正理由 <span class="text-danger">必須</span></label>
+                                <span class="text-muted small" data-correction-reason-count>0 / 500</span>
+                            </div>
+                            <textarea class="form-control" id="salesHistoryCorrectionReason" rows="3" maxlength="500" required data-correction-reason></textarea>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="modal-footer sales-history-correction__footer">
+                    <output class="terminal-save-status me-auto" data-correction-status data-save-state="idle" aria-live="polite">未保存</output>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">閉じる</button>
+                    <button type="submit" class="btn btn-primary" disabled data-correction-submit>全体を保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

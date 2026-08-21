@@ -66,8 +66,11 @@
             <header class="sales-summary business-floor__header" aria-label="営業中サマリー">
                 <div class="sales-summary__items business-floor__summary">
                     <span class="sales-summary__item sales-summary__item--estimated business-floor__summary-item business-floor__summary-item--sales">
-                        <strong>見込み売上</strong>
-                        <span data-business-estimated-sales-amount>@(Model.HasCurrentBusinessDay ? "取得中" : StoreUiText.Yen(0))</span>
+                        <strong>見込み総売上</strong>
+                        <span class="sales-summary__amount" aria-label="見込み総売上" data-business-estimated-sales-amount-container>
+                            <span data-business-estimated-sales-amount-mask hidden>**** 円</span>
+                            <span data-business-estimated-sales-amount>@(Model.HasCurrentBusinessDay ? "取得中" : StoreUiText.Yen(0))</span>
+                        </span>
                     </span>
                     <span class="sales-summary__item business-floor__summary-item">
                         <strong>未会計伝票</strong>
@@ -96,7 +99,12 @@
                             新しい伝票
                         </button>
                     }
-                    <a class="btn sales-summary__attendance business-floor__attendance" asp-page="/Attendance">勤怠管理</a>
+                    <button class="btn sales-summary__attendance business-floor__attendance"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#attendanceEditorModal">
+                        勤怠管理
+                    </button>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(Model.CreateSlipDisabledMessage))
                 {
@@ -110,27 +118,26 @@
                     <div class="business-floor__toolbar">
                         <nav class="business-slip-filter" aria-label="伝票の絞り込み">
                             <button class="is-active" type="button" data-business-slip-filter="all" aria-pressed="true">
-                                すべて <span data-business-filter-count="all">0</span>
+                                <span class="business-slip-filter__label">すべて</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="all">0</span>
                             </button>
                             <button type="button" data-business-slip-filter="open" aria-pressed="false">
-                                接客中 <span data-business-filter-count="open">0</span>
+                                <span class="business-slip-filter__label">接客中</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="open">0</span>
                             </button>
                             <button type="button" data-business-slip-filter="checkout_ready" aria-pressed="false">
-                                会計準備 <span data-business-filter-count="checkout_ready">0</span>
+                                <span class="business-slip-filter__label">会計準備</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="checkout_ready">0</span>
                             </button>
                             <button type="button" data-business-slip-filter="checked_out" aria-pressed="false">
-                                会計済み <span data-business-filter-count="checked_out">0</span>
+                                <span class="business-slip-filter__label">会計済み</span>
+                                <span class="business-slip-filter__count" data-business-filter-count="checked_out">0</span>
                             </button>
                         </nav>
                         <div class="business-floor__toolbar-meta">
-                            <div class="business-floor__legend" aria-label="伝票ステータス">
-                                <span class="is-open">接客中</span>
-                                <span class="is-checkout-ready">会計準備中</span>
-                                <span class="is-checked-out">会計済み</span>
-                            </div>
                             <label class="business-amount-toggle" data-slip-amount-toggle-container hidden>
                                 <span>会計表示</span>
-                                <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額を表示" />
+                                <input type="checkbox" role="switch" data-slip-amount-toggle aria-label="会計額と見込み総売上を表示" />
                             </label>
                         </div>
                         <div class="slip-list-section__statusbar">
@@ -489,6 +496,11 @@
             </div>
         </div>
     }
+
+    @if (Model.AttendanceModal is not null)
+    {
+        <partial name="_AttendanceEditorModal" model="Model.AttendanceModal" />
+    }
 </section>
 
 @section Scripts {
@@ -503,10 +515,23 @@
                     loaded: false,
                     failed: false
                 };
+                (() => {
+                    const scriptId = 'prosperSiiReceiptSdk';
+                    const finish = (event, state) => {
+                        if (event.target?.id !== scriptId) {
+                            return;
+                        }
+                        window.prosperSiiReceiptSdkScript[state] = true;
+                        document.removeEventListener('load', onLoad, true);
+                        document.removeEventListener('error', onError, true);
+                    };
+                    const onLoad = (event) => finish(event, 'loaded');
+                    const onError = (event) => finish(event, 'failed');
+                    document.addEventListener('load', onLoad, true);
+                    document.addEventListener('error', onError, true);
+                })();
             </script>
-            <script src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"
-                    onload="window.prosperSiiReceiptSdkScript.loaded = true"
-                    onerror="window.prosperSiiReceiptSdkScript.failed = true"></script>
+            <script id="prosperSiiReceiptSdk" src="@Url.Content(Model.ReceiptPrinterBrowserSdkScriptUrl)"></script>
         }
         <script>
             window.prosperSiiReceiptPrinter = @Json.Serialize(Model.ReceiptPrinterBrowserOptions);
@@ -530,6 +555,7 @@
             businessDate = Model.DisplayBusinessDate.ToString("yyyy-MM-dd"),
             departmentId = Model.StoreContext?.DepartmentId,
             businessDayId = Model.CurrentBusinessDayId,
+            initialSnapshot = Model.InitialSnapshot,
             receiptPrinterEnabled = Model.IsReceiptPrinterEnabled,
             editorOperationTypes = BusinessHomeOperationTypes.All,
             paymentMethods = Model.PaymentMethods.Select(method => new
@@ -583,10 +609,14 @@
     <script src="~/js/features/business-home.js" asp-append-version="true"></script>
     <script src="~/js/features/business-slip-editor.js" asp-append-version="true"></script>
     <script src="~/js/features/business-checkout.js" asp-append-version="true"></script>
+    @if (Model.AttendanceModal?.State.LoadIssues.Count == 0 &&
+        Model.AttendanceModal.State.Input.Entries.Count > 0)
+    {
+        <script src="~/js/features/attendance-editor.js" asp-append-version="true"></script>
+    }
     <script>
         window.prosperCreateSlip = @Json.Serialize(new
         {
-            attendanceCastsUrl = Url.Page("/Index", "AttendanceCasts"),
             showCreateSlipModal = Model.ShowCreateSlipModal,
             castOptions = Model.AttendanceCasts.Select(c => new
             {

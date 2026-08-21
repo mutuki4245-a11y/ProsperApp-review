@@ -60,14 +60,34 @@ public abstract class SupabaseRepositoryBase(
     protected static Result<T> RpcFailure<T>(string? rawError, string fallbackMessage)
     {
         var message = string.IsNullOrWhiteSpace(rawError) ? fallbackMessage : rawError;
-        if (message.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("403", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("permission denied", StringComparison.OrdinalIgnoreCase))
+        if (message is "access_denied" or "invalid_signature")
         {
             return Result<T>.Failure(ResultFailureKind.PermissionDenied, PermissionErrorMessage());
         }
 
-        return Result<T>.Failure(ResultFailureKind.Unavailable, message);
+        if (message is
+            "business_day_revision_conflict" or
+            "business_day_operation_id_reused" or
+            "management_master_operation_id_reused" or
+            "receipt_operation_id_reused" or
+            "business_home_batch_id_reused" or
+            "checkout_state_conflict")
+        {
+            return Result<T>.Failure(ResultFailureKind.Conflict, message);
+        }
+
+        if (message is
+            "invalid_business_editor_operation" or
+            "invalid_business_editor_payload" or
+            "invalid_sales_history_correction_input" or
+            "invalid_checkout_payment" or
+            "invalid_order_entry_lines" or
+            "cast_not_selected")
+        {
+            return Result<T>.Failure(ResultFailureKind.InvalidInput, message);
+        }
+
+        return Result<T>.Failure(ResultFailureKind.Unavailable, fallbackMessage);
     }
 
     protected static long? NormalizeId(long? id)

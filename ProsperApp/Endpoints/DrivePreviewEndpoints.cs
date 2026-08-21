@@ -1,19 +1,15 @@
 using System.Text.Json;
 using ProsperApp.Services;
+using ProsperApp.Infrastructure.Security;
 
 namespace ProsperApp.Endpoints;
 
 public static class DrivePreviewEndpoints
 {
-    public static IEndpointRouteBuilder MapDrivePreviewEndpoints(
-        this IEndpointRouteBuilder endpoints,
-        bool requireAuthorization = true)
+    public static IEndpointRouteBuilder MapDrivePreviewEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var builder = endpoints.MapGet("/DrivePreview/{driveFileId}", HandleAsync);
-        if (requireAuthorization)
-        {
-            builder.RequireAuthorization();
-        }
+        endpoints.MapGet("/DrivePreview/{driveFileId}", HandleAsync)
+            .RequireAuthorization();
 
         return endpoints;
     }
@@ -43,8 +39,15 @@ public static class DrivePreviewEndpoints
             }
 
             context.Response.ContentType = "text/plain; charset=utf-8";
+            context.Response.StatusCode = result.ErrorCode switch
+            {
+                "not_allowed" or "drive_not_found" => StatusCodes.Status404NotFound,
+                "missing_access_token" or "drive_auth_failed" => StatusCodes.Status401Unauthorized,
+                "pending_lookup_failed" => StatusCodes.Status503ServiceUnavailable,
+                _ => StatusCodes.Status502BadGateway
+            };
             await context.Response.WriteAsync(
-                $"Driveプレビューを表示できません。\nエラー: {result.ErrorCode}\n内容: {result.ErrorMessage}\nFileId: {driveFileId}",
+                $"Driveプレビューを表示できません。\nRequest ID: {result.RequestId}",
                 cancellationToken);
             return;
         }
@@ -65,12 +68,13 @@ public static class DrivePreviewEndpoints
     private static bool IsAuthenticationFailure(string? errorCode)
     {
         return errorCode is "missing_access_token" ||
-               errorCode?.EndsWith("_401", StringComparison.OrdinalIgnoreCase) == true;
+               errorCode is "drive_auth_failed";
     }
 
     private static async Task WriteGoogleLoginRedirectHtmlAsync(HttpContext context, CancellationToken cancellationToken)
     {
         context.Response.ContentType = "text/html; charset=utf-8";
+        var nonce = CspNonce.Get(context) ?? string.Empty;
         var loginUrl = $"/Login?returnUrl={Uri.EscapeDataString(BuildPreviewReturnUrl(context))}&forceGoogle=true";
         var html =
             $$"""
@@ -82,7 +86,7 @@ public static class DrivePreviewEndpoints
             </head>
             <body style="font-family: sans-serif; padding: 1rem;">
                 <p>Google認証が必要です。Googleログインへ進みます。</p>
-                <script>
+                <script nonce="{{nonce}}">
                     window.top.location.href = {{JsonSerializer.Serialize(loginUrl)}};
                 </script>
             </body>

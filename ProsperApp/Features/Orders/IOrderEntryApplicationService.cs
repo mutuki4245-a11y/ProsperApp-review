@@ -8,18 +8,9 @@ public interface IOrderEntryApplicationService
 
     Task<Result<IReadOnlyList<StoreOrderSlipOption>>> GetOpenSlipsAsync(CancellationToken ct);
 
-    IReadOnlyList<OrderQueueInputModel> ReadPostedQueue(
-        string? queueJson,
-        IReadOnlyList<OrderQueueInputModel> fallbackLines);
+    Task<Result<OrderEntryCandidates>> GetCandidatesAsync(CancellationToken ct);
 
-    IReadOnlyList<string> ValidateQueue(
-        IReadOnlyList<OrderQueueInputModel> lines,
-        IReadOnlyList<StoreOrderItemOption> items,
-        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts);
-
-    Task<AddStoreOrderLinesResult> AddOrderLinesAsync(
-        IReadOnlyList<OrderQueueInputModel> lines,
-        CancellationToken ct);
+    Task<Result<OrderEntrySubmitResult>> SubmitAsync(OrderEntrySubmitInput input, CancellationToken ct);
 }
 
 public sealed record OrderEntryPageState(

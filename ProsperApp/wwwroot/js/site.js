@@ -163,6 +163,12 @@
 
     const formatMoneyAmount = (value) => Math.round(Number(value) || 0).toLocaleString('ja-JP');
     const formatMoneyYen = (value) => `${formatMoneyAmount(value)} 円`;
+    const escapeHtml = (value) => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
     const hasValidationErrors = (root) =>
         root.querySelector('.validation-summary-errors, .field-validation-error, .input-validation-error') !== null;
     const parseValidation = (root) => {
@@ -302,6 +308,9 @@
         amount: formatMoneyAmount,
         yen: formatMoneyYen
     };
+    window.ProsperHtml = Object.freeze({
+        escape: escapeHtml
+    });
     window.TerminalSaveStatus = {
         set: setTerminalSaveStatus,
         saved: (target, message) => setTerminalSaveStatus(target, 'saved', message),

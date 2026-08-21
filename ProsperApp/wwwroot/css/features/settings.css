@@ -18,6 +18,14 @@
   margin-bottom: 0.85rem;
 }
 
+.settings-card--display {
+  padding: 0.85rem;
+}
+
+.settings-card--display h2 {
+  margin-bottom: 0.6rem;
+}
+
 .settings-card--danger {
   border-color: #fecaca;
 }
@@ -102,6 +110,30 @@
 
 .settings-radio small {
   color: #52606d;
+}
+
+.settings-card--display .settings-radio-grid {
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.settings-card--display .settings-radio {
+  border-radius: 10px;
+  border-width: 1px;
+  min-height: 70px;
+  padding: 0.65rem;
+}
+
+.settings-card--display .settings-radio strong {
+  font-size: 0.96rem;
+}
+
+.settings-card--display .settings-radio small {
+  font-size: 0.75rem;
+}
+
+.settings-card--display .settings-actions {
+  margin-top: 0.75rem;
 }
 
 .settings-actions {

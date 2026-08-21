@@ -50,15 +50,15 @@ public class LoginModel(
             return LocalRedirect(ReturnUrl);
         }
 
-        return Challenge(
-            new AuthenticationProperties
-            {
-                RedirectUri = ReturnUrl,
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddYears(20),
-                AllowRefresh = true
-            },
-            GoogleDefaults.AuthenticationScheme);
+        var properties = new AuthenticationProperties
+        {
+            RedirectUri = ReturnUrl,
+            IsPersistent = true,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddDays(90),
+            AllowRefresh = true
+        };
+        properties.Parameters["prompt"] = "consent";
+        return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
     private string GetSafeReturnUrl(string? returnUrl)

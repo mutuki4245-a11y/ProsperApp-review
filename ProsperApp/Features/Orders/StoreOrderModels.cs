@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ProsperApp.Features.Orders;
 
 public class StoreOrderSlipOption
@@ -76,6 +78,8 @@ public class StoreOrderAttendanceCastOption
 
 public class OrderQueueInputModel
 {
+    public string ClientLineId { get; set; } = Guid.NewGuid().ToString("D");
+
     public long? SlipId { get; set; }
 
     public long ItemId { get; set; }
@@ -85,19 +89,18 @@ public class OrderQueueInputModel
     public long? CastBackCastId { get; set; }
 }
 
-public class AddStoreOrderLinesResult
-{
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-    public int InsertedCount { get; init; }
+public sealed record OrderEntrySubmitInput(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    IReadOnlyList<OrderQueueInputModel> Lines);
 
-    public static AddStoreOrderLinesResult Success(int insertedCount)
-    {
-        return new AddStoreOrderLinesResult { Succeeded = true, InsertedCount = insertedCount };
-    }
-
-    public static AddStoreOrderLinesResult Failed(string message)
-    {
-        return new AddStoreOrderLinesResult { Succeeded = false, ErrorMessage = message };
-    }
-}
+public sealed record OrderEntrySubmitResult(
+    string Status,
+    string OperationId,
+    int InsertedCount,
+    JsonElement InsertedLines,
+    long? BusinessDayId,
+    long BusinessDayRevision,
+    string Message,
+    JsonElement? RecoveryCandidates);

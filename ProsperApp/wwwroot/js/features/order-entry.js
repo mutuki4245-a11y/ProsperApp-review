@@ -3,21 +3,20 @@
     const pageData = dataElement ? JSON.parse(dataElement.textContent || '{}') : {};
     let slips = pageData.slips ?? [];
     const items = pageData.items ?? [];
-    const castOptions = pageData.castOptions ?? [];
+    let castOptions = pageData.castOptions ?? [];
     const initialQueue = pageData.initialQueue ?? [];
     const initialSlipId = pageData.initialSlipId;
     const slipOptionsUrl = pageData.slipOptionsUrl || '';
+    const submitUrl = pageData.submitUrl || '';
     const refreshIntervalMs = pageData.refreshIntervalMs || 10000;
+    const saveResponse = window.ProsperSaveResponse;
 
     const selectedSlipInput = document.getElementById('selectedSlipId');
-    const orderQueueJson = document.getElementById('orderQueueJson');
-    const orderQueueSummaryJson = document.getElementById('orderQueueSummaryJson');
     const orderForm = document.getElementById('orderForm');
     const selectedSlipBadge = document.getElementById('selectedSlipBadge');
     const selectedSlipQueueLabel = document.getElementById('selectedSlipQueueLabel');
     const slipPicker = document.querySelector('[data-order-slip-picker]');
     const slipOptionsWarning = document.getElementById('slipOptionsWarning');
-    const queueFields = document.getElementById('queueFields');
     const queueList = document.getElementById('queueList');
     const queueEmpty = document.getElementById('queueEmpty');
     const queueTotal = document.getElementById('queueTotal');
@@ -27,11 +26,16 @@
     const slipCountBadge = document.getElementById('orderSlipCountBadge');
     const refreshSlipOptionsButton = document.getElementById('refreshSlipOptionsButton');
     const itemSelectionWarning = document.getElementById('orderItemSelectionWarning');
+    const businessDayWarning = document.getElementById('orderBusinessDayWarning');
     const queue = new Map();
     const submitBaseDisabled = submitOrderButton?.disabled ?? false;
-    const draftStorageKey = pageData.departmentId && pageData.businessDayId
+    let currentBusinessDayId = pageData.businessDayId || null;
+    let currentBusinessDayRevision = pageData.businessDayRevision ?? null;
+    let draftStorageKey = pageData.departmentId && currentBusinessDayId
         ? `prosper:order-entry-draft:v1:${pageData.departmentId}:${pageData.businessDayId}`
         : '';
+    let restoredDraftKey = '';
+    let pendingSubmitCommand = null;
     let pendingBackItemId = null;
     let pendingBackCastSelection = new Map();
     let slipOptionsLoaded = slips.length > 0;
@@ -45,6 +49,7 @@
         if (line.slipId > 0 && line.itemId > 0 && line.quantity > 0) {
             const key = makeQueueKey(line.slipId, line.itemId, line.castBackCastId);
             queue.set(key, {
+                clientLineId: line.clientLineId || crypto.randomUUID(),
                 slipId: String(line.slipId),
                 itemId: String(line.itemId),
                 castBackCastId: line.castBackCastId ? String(line.castBackCastId) : null,
@@ -97,13 +102,14 @@
         const lines = Array.from(queue.values())
             .map((line) => ({
                 slipId: Number(line.slipId),
+                clientLineId: line.clientLineId || crypto.randomUUID(),
                 itemId: Number(line.itemId),
                 castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null,
                 quantity: Math.max(0, Math.trunc(Number(line.quantity) || 0))
             }))
             .filter((line) => line.slipId > 0 && line.itemId > 0 && line.quantity > 0);
 
-        if (lines.length === 0) {
+        if (lines.length === 0 && !pendingSubmitCommand) {
             clearStoredDraft();
             return;
         }
@@ -112,8 +118,9 @@
             localStorage.setItem(draftStorageKey, JSON.stringify({
                 version: 1,
                 departmentId: pageData.departmentId,
-                businessDayId: pageData.businessDayId,
+                businessDayId: currentBusinessDayId,
                 selectedSlipId: selectedSlipInput?.value || null,
+                pendingSubmitCommand,
                 lines
             }));
         } catch {
@@ -126,6 +133,7 @@
             if (line.slipId > 0 && line.itemId > 0 && line.quantity > 0) {
                 const key = makeQueueKey(line.slipId, line.itemId, line.castBackCastId);
                 queue.set(key, {
+                    clientLineId: line.clientLineId || crypto.randomUUID(),
                     slipId: String(line.slipId),
                     itemId: String(line.itemId),
                     castBackCastId: line.castBackCastId ? String(line.castBackCastId) : null,
@@ -141,6 +149,11 @@
             return;
         }
 
+        if (!draftStorageKey || restoredDraftKey === draftStorageKey) {
+            return;
+        }
+        restoredDraftKey = draftStorageKey;
+
         if (queue.size > 0) {
             return;
         }
@@ -151,6 +164,10 @@
         }
 
         hydrateQueueLines(draft.lines);
+        if (draft.pendingSubmitCommand?.operationId &&
+            Number(draft.pendingSubmitCommand.expectedBusinessDayId) === Number(currentBusinessDayId)) {
+            pendingSubmitCommand = draft.pendingSubmitCommand;
+        }
         if (selectedSlipInput && !selectedSlipInput.value && draft.selectedSlipId) {
             selectedSlipInput.value = String(draft.selectedSlipId);
         }
@@ -295,19 +312,48 @@
             removed = true;
         }
 
-        queue.forEach((line, key) => {
+        queue.forEach((line) => {
             if (!hasSlip(line.slipId)) {
-                queue.delete(key);
                 removed = true;
             }
         });
 
         if (removed) {
-            setSlipWarning('会計済みまたは利用できなくなった卓番をキューから外しました。');
+            setSlipWarning('会計済みまたは利用できなくなった卓番があります。注文内容を残したまま卓番を選び直してください。');
             persistDraft();
         }
 
         return removed;
+    };
+
+    const applyRecoveryCandidates = (candidates) => {
+        if (!candidates || typeof candidates !== 'object') return;
+        const businessDay = candidates.business_day || candidates.businessDay || null;
+        currentBusinessDayId = businessDay?.business_day_id ?? businessDay?.businessDayId ?? null;
+        currentBusinessDayRevision = businessDay?.business_ui_revision ?? businessDay?.businessUiRevision ?? null;
+        slips = Array.isArray(candidates.slips) ? candidates.slips.map((slip) => ({
+            id: slip.slip_id ?? slip.id,
+            display: slip.table_name || slip.table_code || slip.display,
+            openedTime: slip.opened_at || slip.openedTime,
+            customerCount: slip.customer_count ?? slip.customerCount,
+            customerNames: slip.customer_names ?? slip.customerNames,
+            nominationCastIds: slip.nomination_cast_ids ?? slip.nominationCastIds,
+            nominationCastNames: slip.nomination_cast_names ?? slip.nominationCastNames,
+            memo: slip.memo
+        })) : [];
+        castOptions = Array.isArray(candidates.attendance_casts)
+            ? candidates.attendance_casts.map((cast) => ({
+                id: cast.cast_id,
+                name: cast.display_name,
+                display: cast.search_display_name || cast.display_name,
+                drinkMemo: cast.drink_memo,
+                department: cast.department_name
+            }))
+            : castOptions;
+        slipOptionsLoaded = true;
+        if (businessDayWarning) businessDayWarning.hidden = Boolean(currentBusinessDayId);
+        removeUnavailableSlipLines();
+        render();
     };
 
     const loadSlipOptions = async (manual = false) => {
@@ -331,7 +377,15 @@
             }
 
             const result = await response.json();
+            currentBusinessDayId = result.businessDay?.businessDayId || null;
+            currentBusinessDayRevision = result.businessDay?.businessUiRevision ?? null;
+            if (pageData.departmentId && currentBusinessDayId) {
+                draftStorageKey = `prosper:order-entry-draft:v1:${pageData.departmentId}:${currentBusinessDayId}`;
+                restoreStoredDraft();
+            }
+            if (businessDayWarning) businessDayWarning.hidden = Boolean(currentBusinessDayId);
             slips = Array.isArray(result.slips) ? result.slips : [];
+            castOptions = Array.isArray(result.attendanceCasts) ? result.attendanceCasts : [];
             slipOptionsLoaded = true;
             const removedUnavailableLines = removeUnavailableSlipLines();
             if (!removedUnavailableLines) {
@@ -380,6 +434,10 @@
     };
 
     const addToQueue = (itemId, castBackCastId = null) => {
+        if (pendingSubmitCommand) {
+            setSlipWarning('前回の送信結果を確認するまで注文内容は変更できません。');
+            return;
+        }
         const slipId = selectedSlipInput?.value ?? '';
         if (!slipId || !hasSlip(slipId)) {
             return;
@@ -387,6 +445,7 @@
 
         const key = makeQueueKey(slipId, itemId, castBackCastId);
         const current = queue.get(key) ?? {
+            clientLineId: crypto.randomUUID(),
             slipId: String(slipId),
             itemId: String(itemId),
             castBackCastId: castBackCastId ? String(castBackCastId) : null,
@@ -413,20 +472,16 @@
             itemSelectionWarning.hidden = hasSelectedSlip;
         }
         document.querySelectorAll('[data-item-id]').forEach((button) => {
-            button.classList.toggle('is-disabled', !hasSelectedSlip);
-            button.setAttribute('aria-disabled', hasSelectedSlip ? 'false' : 'true');
+            const disabled = !hasSelectedSlip || Boolean(pendingSubmitCommand);
+            button.classList.toggle('is-disabled', disabled);
+            button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
         });
 
-        if (queueFields) {
-            queueFields.innerHTML = '';
-        }
         if (queueList) {
             queueList.innerHTML = '';
         }
 
-        let index = 0;
         let total = 0;
-        const serializedLines = [];
         const renderedLines = [];
         queue.forEach((line, key) => {
             const item = items.find((candidate) => String(candidate.id) === String(line.itemId));
@@ -445,24 +500,7 @@
             const cast = line.castBackCastId
                 ? castOptions.find((candidate) => String(candidate.id) === String(line.castBackCastId))
                 : null;
-            serializedLines.push({
-                slipId: Number(lineSlip.id),
-                itemId: Number(item.id),
-                quantity,
-                castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null
-            });
-
-            if (queueFields) {
-                queueFields.insertAdjacentHTML('beforeend', `
-                    <input type="hidden" name="QueueLines[${index}].ItemId" value="${item.id}" />
-                    <input type="hidden" name="QueueLines[${index}].SlipId" value="${lineSlip.id}" />
-                    <input type="hidden" name="QueueLines[${index}].Quantity" value="${quantity}" />
-                    ${line.castBackCastId ? `<input type="hidden" name="QueueLines[${index}].CastBackCastId" value="${line.castBackCastId}" />` : ''}
-                `);
-            }
-
             renderedLines.push({ key, item, lineSlip, quantity, cast, subtotal });
-            index += 1;
         });
 
         const queueGroups = new Map();
@@ -508,6 +546,7 @@
             remove.type = 'button';
             remove.dataset.removeItem = line.key;
             remove.textContent = '削除';
+            remove.disabled = Boolean(pendingSubmitCommand);
             row.append(name, amount, cast, remove);
             return row;
         };
@@ -530,19 +569,7 @@
             queueList?.appendChild(groupElement);
         });
 
-        if (orderQueueJson) {
-            orderQueueJson.value = JSON.stringify(serializedLines);
-        }
-
-        if (orderQueueSummaryJson) {
-            orderQueueSummaryJson.value = JSON.stringify(Array.from(queueGroups.values()).map((group) => ({
-                slipId: Number(group.slip.id),
-                display: group.slip.display,
-                count: group.lines.length
-            })));
-        }
-
-        const hasQueue = serializedLines.length > 0;
+        const hasQueue = renderedLines.length > 0;
         if (queueEmpty) {
             queueEmpty.hidden = hasQueue;
             if (!hasQueue) {
@@ -554,7 +581,10 @@
             queueTotal.textContent = formatYen(total);
         }
         if (submitOrderButton) {
-            submitOrderButton.disabled = submitBaseDisabled || !hasQueue;
+            submitOrderButton.disabled = submitBaseDisabled || (!hasQueue && !pendingSubmitCommand);
+        }
+        if (clearQueueButton) {
+            clearQueueButton.disabled = !hasQueue || Boolean(pendingSubmitCommand);
         }
         persistDraft();
     };
@@ -599,7 +629,7 @@
 
     queueList?.addEventListener('click', (event) => {
         const button = event.target.closest('[data-remove-item]');
-        if (!button) {
+        if (!button || pendingSubmitCommand) {
             return;
         }
 
@@ -608,13 +638,84 @@
     });
 
     clearQueueButton?.addEventListener('click', () => {
+        if (pendingSubmitCommand) {
+            return;
+        }
         queue.clear();
         render();
     });
 
-    orderForm?.addEventListener('submit', () => {
+    orderForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!currentBusinessDayId || currentBusinessDayRevision === null ||
+            (!pendingSubmitCommand && queue.size === 0) || !submitUrl) {
+            setSlipWarning('営業日と注文内容を確認してください。');
+            return;
+        }
+
+        pendingSubmitCommand ??= {
+            operationId: crypto.randomUUID(),
+            expectedBusinessDayId: Number(currentBusinessDayId),
+            expectedBusinessDayRevision: Number(currentBusinessDayRevision),
+            lines: Array.from(queue.values()).map((line) => ({
+                clientLineId: line.clientLineId || crypto.randomUUID(),
+                slipId: Number(line.slipId),
+                itemId: Number(line.itemId),
+                quantity: Math.max(1, Math.trunc(Number(line.quantity) || 0)),
+                castBackCastId: line.castBackCastId ? Number(line.castBackCastId) : null
+            }))
+        };
+        persistDraft();
+
         render();
         window.TerminalSaveStatus.saving(queueStatus);
+        submitOrderButton && (submitOrderButton.disabled = true);
+        try {
+            const token = orderForm.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            const response = await fetch(submitUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    ...(token ? { RequestVerificationToken: token } : {})
+                },
+                body: JSON.stringify(pendingSubmitCommand)
+            });
+            const result = await response.json().catch(() => null);
+            const classification = saveResponse?.classify({ response, payload: result }) ?? {
+                confirmed: result?.status === 'confirmed',
+                rejected: ['conflict', 'validation_error', 'permission_denied', 'stale_work_item'].includes(result?.status),
+                retry: !result || response.status >= 500 || result?.status === 'unavailable'
+            };
+            if (!classification.confirmed) {
+                if (result?.recoveryCandidates) {
+                    applyRecoveryCandidates(result.recoveryCandidates);
+                }
+                if (classification.rejected) {
+                    pendingSubmitCommand = null;
+                    persistDraft();
+                }
+                throw new Error(result?.message || '注文を登録できませんでした。');
+            }
+
+            const confirmedIds = new Set((result.insertedLines || []).map((line) => String(line.client_line_id || line.clientLineId || '')));
+            Array.from(queue.entries()).forEach(([key, line]) => {
+                if (confirmedIds.has(String(line.clientLineId))) queue.delete(key);
+            });
+            pendingSubmitCommand = null;
+            persistDraft();
+            currentBusinessDayId = result.businessDayId ?? currentBusinessDayId;
+            currentBusinessDayRevision = result.businessDayRevision ?? currentBusinessDayRevision;
+            window.TerminalSaveStatus.saved(queueStatus);
+            setSlipWarning(null);
+            render();
+        } catch (error) {
+            window.TerminalSaveStatus.error(queueStatus, error?.message || '注文を登録できませんでした。');
+            setSlipWarning(error?.message || '注文を登録できませんでした。');
+        } finally {
+            submitOrderButton && (submitOrderButton.disabled = queue.size === 0);
+        }
     });
 
     document.querySelectorAll('[data-category-tab]').forEach((button) => {

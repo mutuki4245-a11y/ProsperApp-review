@@ -186,7 +186,7 @@ public static class CreateSlipEditor
 
         if (context.Tables.Count == 0)
         {
-            errors.Add(new CreateSlipValidationError(string.Empty, "卓番マスタが未登録です。store_table_masterにこの店舗の卓番を登録してください。"));
+            errors.Add(new CreateSlipValidationError(string.Empty, "卓番が未登録です。店舗設定の「卓番情報」から登録してください。"));
         }
 
         if (context.CanCreateSalesInput && context.AttendanceCasts.Count == 0)

@@ -1,14 +1,27 @@
 namespace ProsperApp.Features.Shared;
 
-public sealed class StoreClock(TimeProvider timeProvider) : IStoreClock
+public sealed class StoreClock : IStoreClock
 {
     private static readonly TimeOnly BusinessDaySwitchTime = new(12, 0);
-    private static readonly TimeZoneInfo StoreTimeZone = GetStoreTimeZone();
-    private readonly TimeProvider _timeProvider = timeProvider;
+    private readonly TimeProvider _timeProvider;
+    private readonly TimeZoneInfo _storeTimeZone;
+
+    public StoreClock(TimeProvider timeProvider)
+        : this(timeProvider, TimeZoneInfo.FindSystemTimeZoneById)
+    {
+    }
+
+    internal StoreClock(
+        TimeProvider timeProvider,
+        Func<string, TimeZoneInfo> timeZoneResolver)
+    {
+        _timeProvider = timeProvider;
+        _storeTimeZone = GetStoreTimeZone(timeZoneResolver);
+    }
 
     public DateTime GetStoreNow()
     {
-        return TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), StoreTimeZone).DateTime;
+        return TimeZoneInfo.ConvertTime(_timeProvider.GetUtcNow(), _storeTimeZone).DateTime;
     }
 
     public DateOnly GetCurrentBusinessDate()
@@ -48,13 +61,13 @@ public sealed class StoreClock(TimeProvider timeProvider) : IStoreClock
 
     public DateTime ToStoreDateTime(DateTimeOffset value)
     {
-        return TimeZoneInfo.ConvertTime(value, StoreTimeZone).DateTime;
+        return TimeZoneInfo.ConvertTime(value, _storeTimeZone).DateTime;
     }
 
     public DateTimeOffset ToStoreDateTimeOffset(DateTime value)
     {
         var unspecified = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
-        return new DateTimeOffset(unspecified, StoreTimeZone.GetUtcOffset(unspecified));
+        return new DateTimeOffset(unspecified, _storeTimeZone.GetUtcOffset(unspecified));
     }
 
     public IReadOnlyList<string> BuildTimeOptions(int minuteStep)
@@ -104,15 +117,29 @@ public sealed class StoreClock(TimeProvider timeProvider) : IStoreClock
         return value is null ? fallback : FormatBusinessTime(value.Value);
     }
 
-    private static TimeZoneInfo GetStoreTimeZone()
+    private static TimeZoneInfo GetStoreTimeZone(
+        Func<string, TimeZoneInfo> timeZoneResolver)
     {
         try
         {
-            return TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time");
+            return timeZoneResolver("Tokyo Standard Time");
         }
-        catch (TimeZoneNotFoundException)
+        catch (Exception exception) when (
+            exception is TimeZoneNotFoundException or InvalidTimeZoneException)
         {
-            return TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+            try
+            {
+                return timeZoneResolver("Asia/Tokyo");
+            }
+            catch (Exception fallbackException) when (
+                fallbackException is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                return TimeZoneInfo.CreateCustomTimeZone(
+                    "ProsperApp-Tokyo-Fallback",
+                    TimeSpan.FromHours(9),
+                    "ProsperApp Tokyo (UTC+09:00)",
+                    "ProsperApp Tokyo (UTC+09:00)");
+            }
         }
     }
 }

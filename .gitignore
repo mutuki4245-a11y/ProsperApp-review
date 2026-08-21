@@ -362,8 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# Codex/review local artifacts
-**/.codex/
-**/.codex-remote-attachments/
-**/output/
-*.PublishSettings
+# Local Codex publish profiles and deployment artifacts
+ProsperApp/.codex/*.PublishSettings
+ProsperApp/.codex/deploy/

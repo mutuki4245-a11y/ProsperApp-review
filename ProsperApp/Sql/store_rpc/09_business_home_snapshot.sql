@@ -1,0 +1,649 @@
+-- 営業中トップ用の全伝票スナップショットと、1操作単位の編集RPCです。
+-- このファイルは 00_schema.sql ～ 05_checkout.sql の後、99_grants.sql の前に適用します。
+
+drop function if exists store.get_business_day_snapshot(bigint, bigint);
+drop function if exists store.get_business_day_snapshot_at(bigint, bigint, timestamp with time zone);
+
+create or replace function store.get_business_day_snapshot_at(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_as_of timestamp with time zone
+)
+returns table (
+    business_day_revision bigint,
+    snapshot jsonb
+)
+language sql
+security definer
+set search_path = public
+as $$
+    with target_day as (
+        select
+            b.business_day_id,
+            b.business_date,
+            b.business_ui_revision
+        from public.store_business_days b
+        where b.business_day_id = p_business_day_id
+          and b.department_id = p_department_id
+    ),
+    target_slips as (
+        select
+            s.slip_id,
+            s.company_id,
+            s.department_id,
+            s.table_id,
+            case when s.table_code_snapshot is not null then s.table_code_snapshot else t.table_code end as table_code,
+            case when s.table_code_snapshot is not null then s.table_name_snapshot else t.table_name end as table_name,
+            s.opened_at,
+            s.closed_at,
+            s.status,
+            s.customer_count,
+            s.memo,
+            ss.business_home_data
+        from public.store_slips s
+        join target_day d
+          on d.business_day_id = s.business_day_id
+        left join public.store_table_master t
+          on t.table_id = s.table_id
+        left join public.store_slip_accounting_snapshots ss
+          on ss.slip_id = s.slip_id
+         and ss.status = 'active'
+    ),
+    customer_summary as (
+        select
+            c.slip_id,
+            count(*) filter (where c.status = 'active')::integer as customer_count,
+            string_agg(
+                coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
+                '、' order by c.line_no
+            ) filter (where c.status = 'active') as customer_names
+        from public.store_slip_customers c
+        join target_slips s on s.slip_id = c.slip_id
+        group by c.slip_id
+    ),
+    cast_summary as (
+        select
+            rows.slip_id,
+            string_agg(rows.display_name, '、' order by rows.started_at asc nulls last, rows.slip_cast_id asc) as cast_names
+        from (
+            select distinct on (sc.slip_id, sc.cast_id)
+                sc.slip_id,
+                sc.slip_cast_id,
+                sc.started_at,
+                cm.display_name
+            from public.store_slip_casts sc
+            join target_slips s on s.slip_id = sc.slip_id
+            join public.cast_master cm on cm.cast_id = sc.cast_id
+            where sc.status <> 'cancelled'
+              and sc.nomination_type in ('nomination', 'in_store', 'companion')
+            order by sc.slip_id, sc.cast_id, sc.started_at asc nulls last, sc.slip_cast_id asc
+        ) rows
+        group by rows.slip_id
+    ),
+    order_summary as (
+        select
+            l.slip_id,
+            count(*) filter (where l.status = 'active')::integer as order_count,
+            coalesce(sum(l.amount) filter (where l.status = 'active'), 0) as order_subtotal_amount,
+            coalesce(sum(l.quantity) filter (where l.status = 'active' and coalesce(i.item_type, 'standard') = 'karaoke'), 0) as karaoke_quantity
+        from public.store_order_lines l
+        join target_slips s on s.slip_id = l.slip_id
+        left join public.store_item_master i on i.item_id = l.item_id
+        group by l.slip_id
+    ),
+    charge_summary as (
+        select
+            cl.slip_id,
+            coalesce(sum(cl.amount) filter (where cl.charge_type = 'adjustment' and cl.status = 'active'), 0) as adjustment_amount
+        from public.store_slip_charge_lines cl
+        join target_slips s on s.slip_id = cl.slip_id
+        group by cl.slip_id
+    ),
+    pricing_lines as (
+        select
+            s.slip_id,
+            calculated.pricing_code,
+            calculated.line_name,
+            calculated.occurred_at,
+            calculated.customer_count,
+            calculated.quantity,
+            calculated.unit_price,
+            calculated.amount,
+            calculated.pricing_plan_version,
+            calculated.is_materialized
+        from target_slips s
+        cross join lateral (
+            select
+                calculated.pricing_code,
+                calculated.line_name,
+                calculated.occurred_at,
+                calculated.customer_count,
+                calculated.quantity,
+                calculated.unit_price,
+                calculated.amount,
+                calculated.pricing_plan_version,
+                false as is_materialized
+            from store.calculate_slip_pricing(s.department_id, s.slip_id, p_as_of) calculated
+            where s.status = 'open'
+
+            union all
+
+            select
+                pl.pricing_code,
+                pl.line_name,
+                pl.occurred_at,
+                pl.customer_count,
+                pl.quantity,
+                pl.unit_price,
+                pl.amount,
+                pl.pricing_plan_version,
+                exists (
+                    select 1
+                    from public.store_order_lines ol
+                    where ol.source_type = 'automatic_pricing'
+                      and ol.source_id = pl.pricing_line_id
+                      and ol.status = 'active'
+                ) as is_materialized
+            from public.store_slip_pricing_lines pl
+            where pl.slip_id = s.slip_id
+              and s.status <> 'open'
+              and pl.status = 'active'
+        ) calculated
+    ),
+    pricing_summary as (
+        select
+            pl.slip_id,
+            coalesce(sum(pl.amount) filter (where not pl.is_materialized), 0) as pricing_subtotal_amount,
+            coalesce(jsonb_agg(jsonb_build_object(
+                'pricingCode', pl.pricing_code,
+                'lineName', pl.line_name,
+                'occurredAt', pl.occurred_at,
+                'occurredTime', to_char(pl.occurred_at at time zone store.business_timezone(), 'HH24:MI'),
+                'customerCount', pl.customer_count,
+                'quantity', pl.quantity,
+                'unitPrice', pl.unit_price,
+                'amount', pl.amount,
+                'pricingPlanVersion', pl.pricing_plan_version,
+                'isMaterialized', pl.is_materialized,
+                'status', 'active'
+            ) order by pl.occurred_at, pl.pricing_code), '[]'::jsonb) as pricing_lines
+        from pricing_lines pl
+        group by pl.slip_id
+    ),
+    order_payloads as (
+        select
+            ol.slip_id,
+            ol.order_line_id::text as id,
+            ol.line_no,
+            ol.item_name_snapshot as item_name,
+            coalesce(i.item_type, case when ol.source_type = 'nomination_fee' then 'nomination_fee' else 'standard' end) as item_type,
+            ol.quantity,
+            ol.unit_price,
+            ol.amount,
+            ol.ordered_at,
+            ol.status,
+            ol.source_type,
+            ol.source_id,
+            back.cast_id as back_cast_id,
+            cm.display_name as back_cast_display_name,
+            d.department_name as back_cast_department_name,
+            false as is_dynamic_pricing
+        from public.store_order_lines ol
+        join target_slips s on s.slip_id = ol.slip_id
+        left join public.store_item_master i on i.item_id = ol.item_id
+        left join lateral (
+            select b.cast_id
+            from public.store_order_line_cast_backs b
+            where b.order_line_id = ol.order_line_id
+              and b.status = 'active'
+            order by b.order_line_cast_back_id asc
+            limit 1
+        ) back on true
+        left join public.cast_master cm on cm.cast_id = back.cast_id
+        left join public.department_master d on d.department_id = cm.department_id
+
+        union all
+
+        -- 営業中は未保存の見積りも、確定後と同じシステム商品形式で返します。
+        select
+            pl.slip_id,
+            format('pricing:%s:%s', pl.pricing_code, extract(epoch from pl.occurred_at)::bigint) as id,
+            1000000 + row_number() over (partition by pl.slip_id order by pl.occurred_at, pl.pricing_code)::integer as line_no,
+            pl.line_name as item_name,
+            case pl.pricing_code when 'set' then 'set_fee' else 'extension_fee' end as item_type,
+            pl.quantity,
+            pl.unit_price,
+            pl.amount,
+            pl.occurred_at as ordered_at,
+            'active'::text as status,
+            'automatic_pricing'::text as source_type,
+            null::bigint as source_id,
+            null::bigint as back_cast_id,
+            null::text as back_cast_display_name,
+            null::text as back_cast_department_name,
+            true as is_dynamic_pricing
+        from pricing_lines pl
+        join target_slips s on s.slip_id = pl.slip_id
+        where s.status = 'open'
+    ),
+    summaries as (
+        select
+            s.*,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'customerCount', '')::integer, 0)
+                else coalesce(cs.customer_count, s.customer_count)
+            end as customer_count_display,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(s.business_home_data->>'customerNames', '')
+                else coalesce(cs.customer_names, '')
+            end as customer_names,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(s.business_home_data->>'castNames', '')
+                else coalesce(casts.cast_names, '')
+            end as cast_names,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'orderCount', '')::integer, 0)
+                else coalesce(os.order_count, 0)::integer
+            end as order_count,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'orderSubtotalAmount', '')::numeric, 0)
+                else coalesce(os.order_subtotal_amount, 0)
+            end as order_subtotal_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'pricingSubtotalAmount', '')::numeric, 0)
+                else coalesce(pricing.pricing_subtotal_amount, 0)
+            end as pricing_subtotal_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'adjustmentAmount', '')::numeric, 0)
+                else coalesce(charges.adjustment_amount, 0)
+            end as adjustment_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'accountingAmount', '')::numeric, 0)
+                else greatest(
+                    coalesce(os.order_subtotal_amount, 0) +
+                    coalesce(pricing.pricing_subtotal_amount, 0) +
+                    round((coalesce(os.order_subtotal_amount, 0) + coalesce(pricing.pricing_subtotal_amount, 0)) * store.service_charge_rate(), 0) +
+                    coalesce(charges.adjustment_amount, 0),
+                    0
+                )
+            end as accounting_amount,
+            case when s.status <> 'open' and s.business_home_data is not null
+                then coalesce(nullif(s.business_home_data->>'karaokeQuantity', '')::numeric, 0)
+                else coalesce(os.karaoke_quantity, 0)
+            end as karaoke_quantity
+        from target_slips s
+        left join customer_summary cs on cs.slip_id = s.slip_id
+        left join cast_summary casts on casts.slip_id = s.slip_id
+        left join order_summary os on os.slip_id = s.slip_id
+        left join charge_summary charges on charges.slip_id = s.slip_id
+        left join pricing_summary pricing on pricing.slip_id = s.slip_id
+    ),
+    slip_payloads as (
+        select
+            s.slip_id,
+            s.opened_at,
+            s.status,
+            s.business_home_data,
+            jsonb_build_object(
+                'id', s.slip_id,
+                'tableDisplay', coalesce(nullif(concat_ws(' ', s.table_code, s.table_name), ''), '-'),
+                'openedAt', s.opened_at,
+                'openedTime', to_char(s.opened_at at time zone store.business_timezone(), 'HH24:MI'),
+                'closedAt', s.closed_at,
+                'status', s.status,
+                'statusDisplay', case s.status
+                    when 'open' then '在席'
+                    when 'checkout_ready' then '会計準備中'
+                    when 'checked_out' then '会計済み'
+                    when 'cancelled' then '取消'
+                    else s.status end,
+                'statusBadgeClass', case s.status
+                    when 'open' then 'text-bg-success'
+                    when 'checkout_ready' then 'text-bg-warning'
+                    when 'checked_out' then 'text-bg-secondary'
+                    when 'cancelled' then 'text-bg-danger'
+                    else 'text-bg-secondary' end,
+                'customerCount', s.customer_count_display,
+                'customerNames', coalesce(nullif(s.customer_names, ''), 'お客様名なし'),
+                'castNames', coalesce(nullif(s.cast_names, ''), '指名なし'),
+                'orderCount', s.order_count,
+                'orderSubtotalAmount', s.order_subtotal_amount,
+                'pricingSubtotalAmount', s.pricing_subtotal_amount,
+                'adjustmentAmount', s.adjustment_amount,
+                'memo', coalesce(nullif(s.memo, ''), '-'),
+                'accountingAmount', s.accounting_amount,
+                'karaokeQuantity', s.karaoke_quantity,
+                'customers', coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                        'id', c.slip_customer_id,
+                        'lineNo', c.line_no,
+                        'displayName', coalesce(nullif(c.customer_label, ''), 'ご新規様' || c.line_no::text),
+                        'customerLabel', c.customer_label,
+                        'enteredAt', c.entered_at,
+                        'enteredTime', to_char(c.entered_at at time zone store.business_timezone(), 'HH24:MI'),
+                        'leftAt', c.left_at,
+                        'leftTime', case when c.left_at is null then null else to_char(c.left_at at time zone store.business_timezone(), 'HH24:MI') end,
+                        'status', c.status
+                    ) order by c.line_no)
+                    from public.store_slip_customers c
+                    where c.slip_id = s.slip_id
+                ), '[]'::jsonb),
+                'nominations', coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                        'id', sc.slip_cast_id,
+                        'castId', sc.cast_id,
+                        'displayName', cm.display_name,
+                        'departmentName', d.department_name,
+                        'nominationKind', sc.nomination_kind,
+                        'nominationType', sc.nomination_type,
+                        'nominationDisplayName', coalesce(nm.display_name, sc.nomination_kind, sc.nomination_type),
+                        'nominationPrice', sc.nomination_price,
+                        'startedAt', sc.started_at,
+                        'startedTime', case when sc.started_at is null then null else to_char(sc.started_at at time zone store.business_timezone(), 'HH24:MI') end,
+                        'status', sc.status
+                    ) order by sc.started_at asc nulls last, sc.slip_cast_id asc)
+                    from public.store_slip_casts sc
+                    join public.cast_master cm on cm.cast_id = sc.cast_id
+                    left join public.department_master d on d.department_id = cm.department_id
+                    left join public.store_nomination_back_master nm
+                      on nm.company_id = cm.company_id
+                     and nm.department_id = s.department_id
+                     and nm.nomination_kind = sc.nomination_kind
+                     and nm.back_type = 'nomination'
+                    where sc.slip_id = s.slip_id
+                ), '[]'::jsonb),
+                'orders', coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                        'id', ol.id,
+                        'lineNo', ol.line_no,
+                        'itemName', ol.item_name,
+                        'itemType', ol.item_type,
+                        'quantity', ol.quantity,
+                        'unitPrice', ol.unit_price,
+                        'amount', ol.amount,
+                        'orderedAt', ol.ordered_at,
+                        'orderedTime', to_char(ol.ordered_at at time zone store.business_timezone(), 'HH24:MI'),
+                        'status', ol.status,
+                        'sourceType', ol.source_type,
+                        'sourceId', ol.source_id,
+                        'backCastId', ol.back_cast_id,
+                        'backCastDisplayName', ol.back_cast_display_name,
+                        'backCastDepartmentName', ol.back_cast_department_name,
+                        'isDynamicPricing', ol.is_dynamic_pricing
+                    ) order by ol.ordered_at asc, ol.line_no asc)
+                    from order_payloads ol
+                    where ol.slip_id = s.slip_id
+                ), '[]'::jsonb),
+                'adjustments', coalesce((
+                    select jsonb_agg(jsonb_build_object(
+                        'id', cl.charge_line_id,
+                        'lineNo', cl.line_no,
+                        'lineName', cl.line_name,
+                        'amount', cl.amount,
+                        'createdAt', cl.created_at,
+                        'createdTime', to_char(cl.created_at at time zone store.business_timezone(), 'HH24:MI'),
+                        'status', cl.status
+                    ) order by cl.line_no asc)
+                    from public.store_slip_charge_lines cl
+                    where cl.slip_id = s.slip_id
+                      and cl.charge_type = 'adjustment'
+                ), '[]'::jsonb),
+                'pricingLines', coalesce((
+                    select ps.pricing_lines
+                    from pricing_summary ps
+                    where ps.slip_id = s.slip_id
+                ), '[]'::jsonb)
+            ) as computed_slip
+        from summaries s
+    ),
+    resolved_slip_payloads as (
+        select
+            sp.slip_id,
+            sp.opened_at,
+            case
+                when sp.status <> 'open' and sp.business_home_data is not null then
+                    jsonb_set(
+                        jsonb_set(
+                            jsonb_set(
+                                sp.business_home_data,
+                                '{status}',
+                                to_jsonb(sp.status),
+                                true
+                            ),
+                            '{statusDisplay}',
+                            to_jsonb(case sp.status
+                                when 'checkout_ready' then '会計準備中'
+                                when 'checked_out' then '会計済み'
+                                when 'cancelled' then '取消'
+                                else sp.status end),
+                            true
+                        ),
+                        '{statusBadgeClass}',
+                        to_jsonb(case sp.status
+                            when 'checkout_ready' then 'text-bg-warning'
+                            when 'checked_out' then 'text-bg-secondary'
+                            when 'cancelled' then 'text-bg-danger'
+                            else 'text-bg-secondary' end),
+                        true
+                    )
+                else sp.computed_slip
+            end as slip
+        from slip_payloads sp
+    )
+    select
+        d.business_ui_revision,
+        jsonb_build_object(
+            'businessDayId', d.business_day_id,
+            'businessDate', to_char(d.business_date, 'YYYY-MM-DD'),
+            'businessDateDisplay', to_char(d.business_date, 'YYYY-MM-DD'),
+            'businessDayRevision', d.business_ui_revision,
+            'hasBusinessDay', true,
+            'openSlipCount', coalesce((select count(*) from summaries where status in ('open', 'checkout_ready')), 0),
+            'checkedOutSlipCount', coalesce((select count(*) from summaries where status = 'checked_out'), 0),
+            'estimatedSalesAmount', coalesce((select sum(accounting_amount) from summaries where status <> 'cancelled'), 0),
+            'slips', coalesce((select jsonb_agg(sp.slip order by sp.opened_at asc) from resolved_slip_payloads sp), '[]'::jsonb)
+        )
+    from target_day d;
+$$;
+
+create or replace function store.get_business_day_snapshot_internal(
+    p_department_id bigint,
+    p_business_day_id bigint
+)
+returns table (
+    business_day_revision bigint,
+    snapshot jsonb
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select s.business_day_revision, s.snapshot
+      from store.get_business_day_snapshot_at(
+          p_department_id,
+          p_business_day_id,
+          now()
+      ) s;
+$$;
+
+create or replace function store.apply_business_slip_editor_operation_internal(
+    p_department_id bigint,
+    p_business_day_id bigint,
+    p_slip_id bigint,
+    p_operation_type text,
+    p_operation_id text,
+    p_payload jsonb default '{}'::jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_slip public.store_slips%rowtype;
+    v_customer_id bigint;
+    v_customer_label text;
+    v_time_text text;
+    v_operation_at timestamp with time zone;
+    v_nomination jsonb;
+    v_adjustment_name text;
+    v_adjustment_amount numeric(12, 0);
+    v_slip_cast_id bigint;
+    v_charge_line_id bigint;
+    v_order_line_id bigint;
+    v_order_item_id bigint;
+    v_order_quantity integer;
+    v_order_cast_back_cast_id bigint;
+begin
+    if p_operation_type not in (
+        'add_customer', 'update_customer', 'leave_customer',
+        'add_nomination', 'cancel_nomination',
+        'add_adjustment', 'void_adjustment',
+        'add_order', 'void_order') then
+        raise exception 'invalid_business_editor_operation';
+    end if;
+
+    if jsonb_typeof(p_payload) <> 'object' then
+        raise exception 'invalid_business_editor_payload';
+    end if;
+
+    select *
+      into v_slip
+    from public.store_slips s
+    join public.store_business_days b
+      on b.business_day_id = s.business_day_id
+     and b.department_id = p_department_id
+     and b.status = 'open'
+    where s.slip_id = p_slip_id
+      and s.department_id = p_department_id
+      and s.business_day_id = p_business_day_id
+      and s.status = 'open'
+    for update;
+
+    if v_slip.slip_id is null then
+        raise exception 'store_slip_not_found';
+    end if;
+
+    if p_operation_type = 'add_customer' then
+        v_customer_label := nullif(trim(coalesce(p_payload->>'customer_label', '')), '');
+        v_time_text := nullif(trim(coalesce(p_payload->>'entered_time', '')), '');
+        if v_customer_label is not null and char_length(v_customer_label) > 100 then
+            raise exception 'invalid_customer_label';
+        end if;
+        if v_time_text is null or v_time_text !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then
+            raise exception 'invalid_customer_time';
+        end if;
+        if mod(extract(minute from v_time_text::time)::integer, 5) <> 0 then
+            raise exception 'invalid_customer_time';
+        end if;
+        v_operation_at := ((v_slip.business_date + case when v_time_text::time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_time_text::time) at time zone store.business_timezone();
+        if v_operation_at < v_slip.opened_at or v_operation_at > now() + interval '5 minutes' then
+            raise exception 'invalid_customer_time';
+        end if;
+        perform store.add_slip_customers(p_department_id, p_slip_id, array[v_customer_label], v_operation_at);
+    elsif p_operation_type = 'update_customer' then
+        v_customer_id := nullif(p_payload->>'slip_customer_id', '')::bigint;
+        v_customer_label := nullif(trim(coalesce(p_payload->>'customer_label', '')), '');
+        if v_customer_id is null or (v_customer_label is not null and char_length(v_customer_label) > 100) or not exists (
+            select 1 from public.store_slip_customers c
+            where c.slip_customer_id = v_customer_id and c.slip_id = p_slip_id and c.status <> 'cancelled'
+        ) then
+            raise exception 'store_slip_customer_not_found';
+        end if;
+        perform store.update_slip_customer_label(p_department_id, v_customer_id, v_customer_label);
+    elsif p_operation_type = 'leave_customer' then
+        v_customer_id := nullif(p_payload->>'slip_customer_id', '')::bigint;
+        v_time_text := nullif(trim(coalesce(p_payload->>'left_time', '')), '');
+        if v_customer_id is null or v_time_text is null or v_time_text !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' then
+            raise exception 'invalid_customer_time';
+        end if;
+        if mod(extract(minute from v_time_text::time)::integer, 5) <> 0 then
+            raise exception 'invalid_customer_time';
+        end if;
+        v_operation_at := ((v_slip.business_date + case when v_time_text::time < store.business_day_cutover_time() then 1 else 0 end)::timestamp + v_time_text::time) at time zone store.business_timezone();
+        if v_operation_at > now() + interval '5 minutes' or not exists (
+            select 1 from public.store_slip_customers c
+            where c.slip_customer_id = v_customer_id and c.slip_id = p_slip_id and c.status = 'active'
+        ) then
+            raise exception 'invalid_left_at';
+        end if;
+        perform store.leave_slip_customer(p_department_id, v_customer_id, v_operation_at);
+    elsif p_operation_type = 'add_nomination' then
+        if coalesce(p_payload->>'cast_id', '') !~ '^[1-9][0-9]*$' or not exists (
+            select 1
+              from public.cast_master cast_member
+              join public.store_cast_attendance attendance
+                on attendance.cast_id = cast_member.cast_id
+               and attendance.department_id = p_department_id
+               and attendance.business_day_id = p_business_day_id
+               and attendance.attendance_status in ('scheduled', 'checked_in', 'checked_out')
+             where cast_member.cast_id = (p_payload->>'cast_id')::bigint
+               and cast_member.department_id = p_department_id
+               and cast_member.is_active = true
+        ) then
+            raise exception 'nomination_cast_not_attending';
+        end if;
+        v_nomination := jsonb_build_array(jsonb_build_object(
+            'cast_id', p_payload->>'cast_id',
+            'nomination_kind', p_payload->>'nomination_kind',
+            'nomination_price', p_payload->>'nomination_price',
+            'allow_duplicate', coalesce(p_payload->'allow_duplicate', 'false'::jsonb)
+        ));
+        perform store.add_slip_nominations(p_department_id, p_slip_id, v_nomination);
+    elsif p_operation_type = 'cancel_nomination' then
+        if coalesce(p_payload->>'slip_cast_id', '') !~ '^[1-9][0-9]*$' then
+            raise exception 'store_slip_nomination_not_found';
+        end if;
+        v_slip_cast_id := (p_payload->>'slip_cast_id')::bigint;
+        perform store.cancel_slip_nomination(p_department_id, v_slip_cast_id);
+    elsif p_operation_type = 'add_adjustment' then
+        v_adjustment_name := nullif(trim(coalesce(p_payload->>'line_name', '')), '');
+        v_adjustment_amount := nullif(p_payload->>'amount', '')::numeric;
+        if v_adjustment_name is null or char_length(v_adjustment_name) > 160 then
+            raise exception 'invalid_adjustment_name';
+        end if;
+        if v_adjustment_amount is null or v_adjustment_amount <> trunc(v_adjustment_amount) or abs(v_adjustment_amount) > 99999999 then
+            raise exception 'invalid_adjustment_amount';
+        end if;
+        perform store.add_slip_adjustment(p_department_id, p_slip_id, v_adjustment_name, v_adjustment_amount);
+    elsif p_operation_type = 'void_adjustment' then
+        if coalesce(p_payload->>'charge_line_id', '') !~ '^[1-9][0-9]*$' then
+            raise exception 'store_slip_adjustment_not_found';
+        end if;
+        v_charge_line_id := (p_payload->>'charge_line_id')::bigint;
+        perform store.void_slip_adjustment(p_department_id, v_charge_line_id);
+    elsif p_operation_type = 'add_order' then
+        if coalesce(p_payload->>'item_id', '') !~ '^[1-9][0-9]*$' or
+           coalesce(p_payload->>'quantity', '') !~ '^[1-9][0-9]*$' or
+           (nullif(p_payload->>'cast_back_cast_id', '') is not null and p_payload->>'cast_back_cast_id' !~ '^[1-9][0-9]*$') then
+            raise exception 'invalid_order_quantity';
+        end if;
+        v_order_item_id := (p_payload->>'item_id')::bigint;
+        v_order_quantity := (p_payload->>'quantity')::integer;
+        if v_order_quantity > 999 then
+            raise exception 'invalid_order_quantity';
+        end if;
+        v_order_cast_back_cast_id := nullif(p_payload->>'cast_back_cast_id', '')::bigint;
+        perform store.add_order_lines_internal(
+            p_department_id,
+            p_slip_id,
+            jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+                'item_id', v_order_item_id,
+                'quantity', v_order_quantity,
+                'cast_back_cast_id', v_order_cast_back_cast_id
+            )))
+        );
+    else
+        if coalesce(p_payload->>'order_line_id', '') !~ '^[1-9][0-9]*$' then
+            raise exception 'store_order_line_not_found';
+        end if;
+        v_order_line_id := (p_payload->>'order_line_id')::bigint;
+        perform store.void_order_line(p_department_id, v_order_line_id);
+    end if;
+
+    return;
+end;
+$$;
+
+revoke all on function store.apply_business_slip_editor_operation_internal(bigint, bigint, bigint, text, text, jsonb)
+    from public, anon, authenticated, service_role;

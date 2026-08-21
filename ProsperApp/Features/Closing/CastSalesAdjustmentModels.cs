@@ -1,9 +1,8 @@
-using System.ComponentModel.DataAnnotations;
 using ProsperApp.Services;
 
 namespace ProsperApp.Features.Closing;
 
-public class CastSalesAdjustmentStatus
+public sealed class CastSalesAdjustmentStatus
 {
     public int RequiredSlipCount { get; init; }
 
@@ -14,20 +13,34 @@ public class CastSalesAdjustmentStatus
     public bool IsCompleted => MissingSlipCount == 0;
 }
 
-public class CastSalesAdjustmentOverview
+public sealed class CastSalesAdjustmentOverview
 {
+    public long DepartmentId { get; init; }
+
+    public bool HasBusinessDay { get; init; }
+
+    public long? BusinessDayId { get; init; }
+
+    public long BusinessDayRevision { get; init; }
+
+    public DateOnly? BusinessDate { get; init; }
+
+    public string SourceAmountType { get; init; } = LocalSettings.CastSalesAmountBasisTotal;
+
+    public string SplitMode { get; init; } = LocalSettings.CastSalesSplitModeSplit;
+
     public CastSalesAdjustmentStatus Status { get; init; } = new();
 
     public IReadOnlyList<CastSalesAdjustmentSlip> Slips { get; init; } = [];
 
     public IReadOnlyList<CastSalesAdjustmentDetail> Details { get; init; } = [];
+
+    public DateTimeOffset CheckedAt { get; init; }
 }
 
-public class CastSalesAdjustmentSlip
+public sealed class CastSalesAdjustmentSlip
 {
     public long SlipId { get; init; }
-
-    public string? SlipNo { get; init; }
 
     public long? TableId { get; init; }
 
@@ -37,7 +50,13 @@ public class CastSalesAdjustmentSlip
 
     public string? CustomerNames { get; init; }
 
+    public long CheckoutId { get; init; }
+
     public DateTimeOffset CheckoutAt { get; init; }
+
+    public DateTimeOffset SlipVersion { get; init; }
+
+    public DateTimeOffset CheckoutVersion { get; init; }
 
     public decimal SubtotalAmount { get; init; }
 
@@ -57,29 +76,18 @@ public class CastSalesAdjustmentSlip
 
     public string TotalAmountText => StoreUiText.Yen(TotalAmount);
 
-    public string TableDisplayName
-    {
-        get
-        {
-            if (!string.IsNullOrWhiteSpace(TableCode) && !string.IsNullOrWhiteSpace(TableName))
-            {
-                return $"{TableCode} {TableName}";
-            }
-
-            return TableCode ?? TableName ?? "-";
-        }
-    }
+    public string TableDisplayName => !string.IsNullOrWhiteSpace(TableCode) && !string.IsNullOrWhiteSpace(TableName)
+        ? $"{TableCode} {TableName}"
+        : TableCode ?? TableName ?? "-";
 
     public string CustomerDisplayNames => string.IsNullOrWhiteSpace(CustomerNames)
         ? "お客様名なし"
         : CustomerNames;
 }
 
-public class CastSalesAdjustmentDetail
+public sealed class CastSalesAdjustmentDetail
 {
     public long SlipId { get; init; }
-
-    public string? SlipNo { get; init; }
 
     public long BusinessDayId { get; init; }
 
@@ -93,33 +101,24 @@ public class CastSalesAdjustmentDetail
 
     public DateTimeOffset CheckoutAt { get; init; }
 
+    public DateTimeOffset SlipVersion { get; init; }
+
+    public DateTimeOffset CheckoutVersion { get; init; }
+
     public decimal SubtotalAmount { get; init; }
 
     public decimal ServiceChargeAmount { get; init; }
 
     public decimal TotalAmount { get; init; }
 
-    public bool UsesTimeBasedInitialSalesAmount { get; set; }
+    public IReadOnlyList<CastSalesAdjustmentCastRow> Casts { get; init; } = [];
 
-    public string? InitialSalesAmountFallbackReason { get; set; }
-
-    public List<CastSalesAdjustmentCastRow> Casts { get; } = [];
-
-    public string TableDisplayName
-    {
-        get
-        {
-            if (!string.IsNullOrWhiteSpace(TableCode) && !string.IsNullOrWhiteSpace(TableName))
-            {
-                return $"{TableCode} {TableName}";
-            }
-
-            return TableCode ?? TableName ?? "-";
-        }
-    }
+    public string TableDisplayName => !string.IsNullOrWhiteSpace(TableCode) && !string.IsNullOrWhiteSpace(TableName)
+        ? $"{TableCode} {TableName}"
+        : TableCode ?? TableName ?? "-";
 }
 
-public class CastSalesAdjustmentCastRow
+public sealed class CastSalesAdjustmentCastRow
 {
     public long SlipCastId { get; init; }
 
@@ -139,8 +138,6 @@ public class CastSalesAdjustmentCastRow
 
     public decimal? SalesAmount { get; init; }
 
-    public decimal InitialSalesAmount { get; set; }
-
     public string? SourceAmountType { get; init; }
 
     public string? SplitMode { get; init; }
@@ -153,12 +150,6 @@ public class CastSalesAdjustmentCastRow
 
     public string? TotalSuggestionFallbackReason { get; init; }
 
-    public decimal EffectiveSalesAmount => SalesAmount ?? InitialSalesAmount;
-
-    public string EffectiveSalesAmountText => StoreUiText.Yen(EffectiveSalesAmount);
-
-    public string EffectiveSalesAmountInputValue => StoreUiText.NumberInputValue(EffectiveSalesAmount);
-
     public string CastDisplayName => DisplayName;
 
     public string NominationDisplayName => !string.IsNullOrWhiteSpace(NominationDisplayNameFromMaster)
@@ -168,43 +159,92 @@ public class CastSalesAdjustmentCastRow
             : NominationType;
 }
 
-public class CastSalesAdjustmentSaveInput
+public sealed record CastSalesAdjustmentValue(long SlipCastId, decimal SalesAmount);
+
+public sealed record SaveCurrentCastSalesAdjustmentMutation(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    long SlipId,
+    DateTimeOffset ExpectedSlipVersion,
+    long ExpectedCheckoutId,
+    DateTimeOffset ExpectedCheckoutVersion,
+    string SourceAmountType,
+    string SplitMode,
+    IReadOnlyList<CastSalesAdjustmentValue> Adjustments);
+
+public sealed record ConfirmCurrentCastSalesAdjustmentSlip(
+    long SlipId,
+    DateTimeOffset ExpectedSlipVersion,
+    long ExpectedCheckoutId,
+    DateTimeOffset ExpectedCheckoutVersion,
+    string SourceAmountType,
+    string SplitMode,
+    IReadOnlyList<CastSalesAdjustmentValue> Adjustments);
+
+public sealed record ConfirmCurrentCastSalesAdjustmentsMutation(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    IReadOnlyList<ConfirmCurrentCastSalesAdjustmentSlip> Slips);
+
+public sealed class CastSalesAdjustmentSavedRow
 {
-    public long? BusinessDayId { get; set; }
+    public long AdjustmentId { get; init; }
 
-    public long? SlipId { get; set; }
+    public long SlipId { get; init; }
 
-    public string SourceAmountType { get; set; } = LocalSettings.CastSalesAmountBasisTotal;
+    public long CheckoutId { get; init; }
 
-    public string SplitMode { get; set; } = LocalSettings.CastSalesSplitModeSplit;
+    public long SlipCastId { get; init; }
 
-    public List<CastSalesAdjustmentCastInput> Casts { get; set; } = [];
+    public long CastId { get; init; }
+
+    public decimal SalesAmount { get; init; }
+
+    public string SourceAmountType { get; init; } = string.Empty;
+
+    public string SplitMode { get; init; } = string.Empty;
+
+    public DateTimeOffset UpdatedAt { get; init; }
 }
 
-public class CastSalesAdjustmentCastInput
+public sealed class CastSalesAdjustmentDashboardDelta
 {
-    public long SlipCastId { get; set; }
+    public long DepartmentId { get; init; }
 
-    [Display(Name = "売上額")]
-    [Range(0, 999999999999, ErrorMessage = "売上額は0円以上の整数で入力してください。")]
-    public decimal SalesAmount { get; set; }
+    public long BusinessDayId { get; init; }
+
+    public long BusinessDayRevision { get; init; }
+
+    public int CastSalesRequiredSlipCount { get; init; }
+
+    public int CastSalesCompletedSlipCount { get; init; }
+
+    public int CastSalesMissingSlipCount { get; init; }
+
+    public DateTimeOffset CheckedAt { get; init; }
 }
 
-public class CastSalesAdjustmentSaveResult
+public sealed class CastSalesAdjustmentMutationResult
 {
-    public bool Succeeded { get; init; }
+    public string Status { get; init; } = string.Empty;
 
-    public string? ErrorMessage { get; init; }
+    public string OperationId { get; init; } = string.Empty;
 
-    public int SavedCount { get; init; }
+    public string? Message { get; init; }
 
-    public static CastSalesAdjustmentSaveResult Success(int savedCount)
-    {
-        return new CastSalesAdjustmentSaveResult { Succeeded = true, SavedCount = savedCount };
-    }
+    public long? BusinessDayId { get; init; }
 
-    public static CastSalesAdjustmentSaveResult Failed(string message)
-    {
-        return new CastSalesAdjustmentSaveResult { Succeeded = false, ErrorMessage = message };
-    }
+    public long BusinessDayRevision { get; init; }
+
+    public IReadOnlyList<CastSalesAdjustmentSavedRow> SavedAdjustments { get; init; } = [];
+
+    public CastSalesAdjustmentDetail? Detail { get; init; }
+
+    public CastSalesAdjustmentStatus? OverviewStatus { get; init; }
+
+    public CastSalesAdjustmentDashboardDelta? DashboardDelta { get; init; }
+
+    public CastSalesAdjustmentOverview? LatestOverview { get; init; }
 }

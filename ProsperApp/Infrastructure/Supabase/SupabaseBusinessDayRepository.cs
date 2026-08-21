@@ -1,10 +1,7 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using Microsoft.Extensions.Options;
+using ProsperApp.Features.Closing;
 using ProsperApp.Features.Shared;
 using ProsperApp.Infrastructure.Caching;
-using ProsperApp.Options;
 using static ProsperApp.Infrastructure.Supabase.SupabaseJson;
 
 namespace ProsperApp.Infrastructure.Supabase;
@@ -12,530 +9,621 @@ namespace ProsperApp.Infrastructure.Supabase;
 public class SupabaseBusinessDayRepository(
     ISupabaseRpcClient rpcClient,
     ILocalSettingsProvider localSettingsProvider,
-    IStoreClock storeClock,
-    IApplicationCache cache,
-    IOptions<SupabaseOptions> options) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
+    IApplicationCache cache) : SupabaseRepositoryBase(rpcClient, localSettingsProvider), IBusinessDayRepository
 {
-    private readonly IStoreClock _storeClock = storeClock;
     private readonly IApplicationCache _cache = cache;
-    private readonly SupabaseOptions _options = options.Value;
 
-    public async Task<Result<StoreBusinessDay?>> GetCurrentAsync(CancellationToken ct, bool forceRefresh = false)
+    public async Task<Result<CurrentBusinessDayCloseOutput>> CloseCurrentBusinessDayAsync(
+        CurrentBusinessDayCloseMutation input,
+        CancellationToken ct)
+    {
+        var departmentId = CurrentStoreDepartmentId;
+        var result = await PostRpcArrayResultAsync(
+            "store.close_business_day_v2",
+            new
+            {
+                p_department_id = departmentId,
+                p_operation_id = input.OperationId,
+                p_expected_business_day_id = input.ExpectedBusinessDayId,
+                p_expected_business_day_revision = input.ExpectedBusinessDayRevision,
+                p_memo = string.IsNullOrWhiteSpace(input.Memo) ? null : input.Memo.Trim(),
+                p_ignore_closing_requirements = input.IgnoreClosingRequirements
+            },
+            ct);
+        if (!result.Succeeded)
+        {
+            return Result<CurrentBusinessDayCloseOutput>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "営業日を締められませんでした。");
+        }
+
+        if (result.Value.Count != 1)
+        {
+            return Result<CurrentBusinessDayCloseOutput>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "営業日締めの応答形式が正しくありません。");
+        }
+
+        var row = result.Value[0];
+        if (!row.TryGetProperty("dashboard", out var dashboardElement) ||
+            dashboardElement.ValueKind != JsonValueKind.Object ||
+            !dashboardElement.TryGetProperty("drink_back_editor", out var editorElement) ||
+            !SupabaseDrinkBackRepository.TryParseEditor(editorElement, out var editor))
+        {
+            return Result<CurrentBusinessDayCloseOutput>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "営業日締め後の画面状態が正しくありません。");
+        }
+
+        var status = ReadString(row, "status") ?? "validation_error";
+        var output = new CurrentBusinessDayCloseOutput(
+            ReadString(row, "operation_id") ?? input.OperationId,
+            status,
+            ReadString(row, "message"),
+            ReadLong(row, "closed_business_day_id"),
+            ReadDateOnly(row, "business_date"),
+            ReadDateTimeOffset(row, "closed_at"),
+            ReadLong(row, "report_business_day_id"),
+            ParseCurrentClosingDashboard(dashboardElement, editor));
+
+        if (status == "confirmed")
+        {
+            StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
+            if (output.ClosedBusinessDayId is long businessDayId)
+            {
+                StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
+            }
+        }
+
+        return Result<CurrentBusinessDayCloseOutput>.Success(output);
+    }
+
+    public async Task<Result<CurrentClosingDashboard>> GetCurrentClosingDashboardAsync(
+        string? knownCastMasterRevision,
+        CancellationToken ct)
+    {
+        var result = await PostRpcArrayResultAsync(
+            "store.get_current_closing_dashboard",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_known_cast_master_revision = string.IsNullOrWhiteSpace(knownCastMasterRevision)
+                    ? null
+                    : knownCastMasterRevision
+            },
+            ct);
+        if (!result.Succeeded)
+        {
+            return Result<CurrentClosingDashboard>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "締め状況を取得できませんでした。");
+        }
+
+        if (result.Value.Count != 1)
+        {
+            return Result<CurrentClosingDashboard>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "締め状況の応答形式が正しくありません。");
+        }
+
+        var row = result.Value[0];
+        if (!row.TryGetProperty("drink_back_editor", out var editorElement) ||
+            !SupabaseDrinkBackRepository.TryParseEditor(editorElement, out var editor))
+        {
+            return Result<CurrentClosingDashboard>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "締め状況のドリンクバック調整情報が正しくありません。");
+        }
+
+        return Result<CurrentClosingDashboard>.Success(ParseCurrentClosingDashboard(row, editor));
+    }
+
+    public async Task<Result<AttendanceShellBootstrap>> GetAttendanceShellAsync(CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return Result<StoreBusinessDay?>.Failure(
+            return Result<AttendanceShellBootstrap>.Failure(
                 ResultFailureKind.NotConfigured,
                 "店舗設定またはSupabase Edge Function設定が未設定です。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
-        var cacheKey = StoreMasterCacheKeys.CurrentBusinessDay(departmentId);
-        if (!forceRefresh && _cache.TryGetValue(cacheKey, out StoreBusinessDay? cachedBusinessDay))
+        if (_cache.TryGetValue(StoreMasterCacheKeys.StoreContext(departmentId), out StoreContext? context) &&
+            context is not null &&
+            _cache.TryGetValue(StoreMasterCacheKeys.StoreCasts(departmentId), out IReadOnlyList<CastOption>? casts) &&
+            casts is not null &&
+            _cache.TryGetValue(StoreMasterCacheKeys.StoreStaffs(departmentId), out IReadOnlyList<StaffOption>? staffs) &&
+            staffs is not null)
         {
-            if (IsValidBusinessDay(cachedBusinessDay))
-            {
-                return Result<StoreBusinessDay?>.Success(cachedBusinessDay);
-            }
-
-            _cache.Remove(cacheKey);
+            return Result<AttendanceShellBootstrap>.Success(new AttendanceShellBootstrap(
+                context,
+                BuildAttendanceRoster(casts, staffs),
+                null,
+                false));
         }
 
         var result = await PostRpcArrayResultAsync(
-            "store.get_current_business_day",
+            "store.get_attendance_editor_bootstrap_v2",
             new { p_department_id = departmentId },
             ct);
-        if (!result.Succeeded)
+        if (!result.Succeeded || result.Value.Count == 0)
         {
-            return Result<StoreBusinessDay?>.Failure(
+            return Result<AttendanceShellBootstrap>.Failure(
                 result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "現在営業日を取得できませんでした。");
-        }
-
-        if (result.Value.Count == 0)
-        {
-            _cache.Remove(cacheKey);
-            return Result<StoreBusinessDay?>.Success(null);
-        }
-
-        var businessDay = ParseBusinessDay(result.Value[0]);
-        if (!IsValidBusinessDay(businessDay))
-        {
-            _cache.Remove(cacheKey);
-            return Result<StoreBusinessDay?>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "現在営業日の応答形式が正しくありません。");
-        }
-
-        StoreMasterCacheKeys.SetRuntime(_cache, cacheKey, businessDay, "現在営業日");
-        return Result<StoreBusinessDay?>.Success(businessDay);
-    }
-
-    public async Task<BusinessDayEnsureResult> EnsureCurrentAsync(CancellationToken ct)
-    {
-        var currentBusinessDate = _storeClock.GetCurrentBusinessDate();
-        var currentResult = await GetCurrentAsync(ct);
-        if (!currentResult.Succeeded)
-        {
-            return BusinessDayEnsureResult.Failed(
-                currentResult.ErrorMessage ?? "現在営業日を確認できませんでした。",
-                currentBusinessDate);
-        }
-
-        var current = currentResult.Value;
-        if (current is not null)
-        {
-            if (current.BusinessDate == currentBusinessDate)
-            {
-                return BusinessDayEnsureResult.Success(current, currentBusinessDate);
-            }
-
-            if (current.BusinessDate < currentBusinessDate)
-            {
-                return BusinessDayEnsureResult.ClosingRequired(current, currentBusinessDate);
-            }
-
-            return BusinessDayEnsureResult.Failed(
-                $"営業日 {current.BusinessDate:yyyy-MM-dd} が現在時刻から見た営業日 {currentBusinessDate:yyyy-MM-dd} より未来です。店舗設定と時刻を確認してください。",
-                currentBusinessDate);
-        }
-
-        var openResult = await OpenAsync(currentBusinessDate, null, [], ct);
-        if (openResult.Succeeded && openResult.BusinessDay is not null)
-        {
-            return BusinessDayEnsureResult.Success(openResult.BusinessDay, currentBusinessDate);
-        }
-
-        var afterOpenResult = await GetCurrentAsync(ct);
-        var afterOpen = afterOpenResult.Succeeded ? afterOpenResult.Value : null;
-        if (afterOpen is not null)
-        {
-            if (afterOpen.BusinessDate == currentBusinessDate)
-            {
-                return BusinessDayEnsureResult.Success(afterOpen, currentBusinessDate);
-            }
-
-            if (afterOpen.BusinessDate < currentBusinessDate)
-            {
-                return BusinessDayEnsureResult.ClosingRequired(afterOpen, currentBusinessDate);
-            }
-        }
-
-        return BusinessDayEnsureResult.Failed(
-            openResult.ErrorMessage ?? "営業日を自動作成できませんでした。",
-            currentBusinessDate);
-    }
-
-    public async Task<BusinessDayOperationResult> OpenAsync(
-        DateOnly businessDate,
-        string? memo,
-        IReadOnlyCollection<BusinessDayAttendanceInput>? attendanceEntries,
-        CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
-        }
-
-        var attendancePayload = attendanceEntries?
-            .Where(x => x.CastId > 0 && x.IsSelected && !string.IsNullOrWhiteSpace(x.ClockInTime))
-            .GroupBy(x => x.CastId)
-            .Select(x => x.First())
-            .Select(x => new AttendanceEntryPayload(x.CastId, x.ClockInTime, x.IsSelected))
-            .ToArray() ?? [];
-        var trimmedMemo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim();
-        var departmentId = CurrentStoreDepartmentId;
-
-        var result = attendancePayload.Length == 0
-            ? await RpcClient.PostArrayAsync(
-                "store.open_business_day",
-                new
-                {
-                    p_department_id = departmentId,
-                    p_business_date = businessDate,
-                    p_memo = trimmedMemo
-                },
-                ct)
-            : await RpcClient.PostArrayAsync(
-                "store.open_business_day_with_attendance",
-                new
-                {
-                    p_department_id = departmentId,
-                    p_business_date = businessDate,
-                    p_attendance_entries = attendancePayload,
-                    p_memo = trimmedMemo
-                },
-                ct);
-
-        if (!result.Succeeded)
-        {
-            return BusinessDayOperationResult.Failed(ToFriendlyError(result.ErrorMessage));
-        }
-
-        if (result.Rows.Count == 0)
-        {
-            return BusinessDayOperationResult.Failed("営業日を開始できませんでした。");
-        }
-
-        var businessDay = ParseBusinessDay(result.Rows[0]);
-        StoreMasterCacheKeys.SetRuntime(
-            _cache,
-            StoreMasterCacheKeys.CurrentBusinessDay(departmentId),
-            businessDay,
-            "現在営業日");
-        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDay.BusinessDayId);
-        return BusinessDayOperationResult.Success(businessDay);
-    }
-
-    public async Task<BusinessDayOperationResult> CloseAsync(
-        long businessDayId,
-        string? memo,
-        bool includePendingReceipts,
-        CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。営業日を更新できません。");
-        }
-
-        var departmentId = CurrentStoreDepartmentId;
-        var result = await RpcClient.PostArrayAsync(
-            "store.close_business_day",
-            new
-            {
-                p_department_id = departmentId,
-                p_business_day_id = businessDayId,
-                p_memo = string.IsNullOrWhiteSpace(memo) ? null : memo.Trim(),
-                p_pending_receipt_status = includePendingReceipts ? _options.PendingStatus : null
-            },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return BusinessDayOperationResult.Failed(ToFriendlyError(result.ErrorMessage));
-        }
-
-        if (result.Rows.Count == 0)
-        {
-            return BusinessDayOperationResult.Failed("現在営業中の営業日が見つかりません。");
-        }
-
-        StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
-        StoreMasterCacheKeys.ClearNominationBacks(_cache, departmentId);
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
-        return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
-    }
-
-    public async Task<Result<BusinessDayClosingReadiness>> GetClosingReadinessAsync(
-        StoreBusinessDay businessDay,
-        bool includePendingReceipts,
-        CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.NotConfigured,
-                "Supabase Edge Function設定が未設定です。締め条件を確認できません。");
-        }
-
-        if (!IsValidBusinessDay(businessDay))
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.InvalidInput,
-                "営業日情報が正しくありません。");
-        }
-
-        var result = await PostRpcArrayResultAsync(
-            "store.get_business_day_closing_readiness",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDay.BusinessDayId,
-                p_pending_receipt_status = includePendingReceipts ? _options.PendingStatus : null
-            },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return await GetLegacyClosingReadinessAsync(businessDay, includePendingReceipts, ct);
-        }
-
-        if (result.Value.Count == 0)
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.NotFound,
-                "営業中の営業日が見つかりません。");
+                result.ErrorMessage ?? "勤怠入力の名簿を取得できませんでした。");
         }
 
         var row = result.Value[0];
-        return Result<BusinessDayClosingReadiness>.Success(new BusinessDayClosingReadiness
+        if (!StoreBootstrapJson.TryReadObject(row, "store_context", out var contextRow))
         {
-            BusinessDay = businessDay,
-            OpenSlipCount = (int)(ReadLong(row, "open_slip_count") ?? 0),
-            DrinkDeliveryAmount = ReadDecimal(row, "drink_delivery_amount") ?? 0,
-            IsDrinkDeliveryAmountEntered = ReadBool(row, "is_drink_delivery_amount_entered") ?? false,
-            AttendanceCount = (int)(ReadLong(row, "attendance_count") ?? 0),
-            MissingClockOutCount = (int)(ReadLong(row, "missing_clock_out_count") ?? 0),
-            CastSalesRequiredSlipCount = (int)(ReadLong(row, "cast_sales_required_slip_count") ?? 0),
-            CastSalesCompletedSlipCount = (int)(ReadLong(row, "cast_sales_completed_slip_count") ?? 0),
-            CastSalesMissingSlipCount = (int)(ReadLong(row, "cast_sales_missing_slip_count") ?? 0),
-            PendingReceiptCount = (int)(ReadLong(row, "pending_receipt_count") ?? 0),
-            ReceiptsEnabled = includePendingReceipts,
-            CanCloseFromStore = ReadBool(row, "can_close") ?? false,
-            BlockReasonsFromStore = ReadStringArray(row, "block_reasons"),
-            CheckedAt = ReadDateTimeOffset(row, "checked_at")
-        });
-    }
-
-    public async Task<BusinessDayOperationResult> SaveAttendanceAsync(
-        long businessDayId,
-        IReadOnlyCollection<BusinessDayAttendanceInput> attendanceEntries,
-        CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return BusinessDayOperationResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を更新できません。");
-        }
-
-        var payload = attendanceEntries
-            .Where(x => x.CastId > 0)
-            .GroupBy(x => x.CastId)
-            .Select(x => x.Last())
-            .Select(x => new AttendanceEntryPayload(x.CastId, x.ClockInTime, x.IsSelected))
-            .ToArray();
-
-        if (payload.Length == 0)
-        {
-            return BusinessDayOperationResult.Failed("出勤キャストを選択してください。");
-        }
-
-        var departmentId = CurrentStoreDepartmentId;
-        var result = await RpcClient.PostArrayAsync(
-            "store.save_business_day_attendance",
-            new
-            {
-                p_department_id = departmentId,
-                p_business_day_id = businessDayId,
-                p_attendance_entries = payload
-            },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return BusinessDayOperationResult.Failed(ToFriendlyError(result.ErrorMessage));
-        }
-
-        if (result.Rows.Count == 0)
-        {
-            return BusinessDayOperationResult.Failed("勤怠入力を更新できませんでした。");
-        }
-
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
-        return BusinessDayOperationResult.Success(ParseBusinessDay(result.Rows[0]));
-    }
-
-    public async Task<Result<int>> GetOpenSlipCountAsync(long businessDayId, CancellationToken ct)
-    {
-        if (businessDayId <= 0)
-        {
-            return Result<int>.Failure(ResultFailureKind.InvalidInput, "営業日情報が正しくありません。");
-        }
-
-        var result = await PostRpcScalarResultAsync(
-            "store.get_open_slip_count",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-        if (!result.Succeeded)
-        {
-            return Result<int>.Failure(
-                result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "未会計伝票数を取得できませんでした。");
-        }
-
-        var value = NormalizeScalarBody(result.Value);
-        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
-            ? Result<int>.Success(count)
-            : Result<int>.Failure(
+            return Result<AttendanceShellBootstrap>.Failure(
                 ResultFailureKind.InvalidResponse,
-                "未会計伝票数の応答形式が正しくありません。");
-    }
-
-    public async Task<Result<BusinessDayDrinkDeliveryStatus>> GetDrinkDeliveryStatusAsync(
-        long businessDayId,
-        CancellationToken ct)
-    {
-        if (businessDayId <= 0)
-        {
-            return Result<BusinessDayDrinkDeliveryStatus>.Failure(
-                ResultFailureKind.InvalidInput,
-                "営業日情報が正しくありません。");
+                "勤怠入力の店舗情報が正しくありません。");
         }
 
-        var result = await PostRpcArrayResultAsync(
-            "store.get_business_day_drink_delivery_status",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-        if (!result.Succeeded)
-        {
-            return Result<BusinessDayDrinkDeliveryStatus>.Failure(
-                result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "酒代入力状況を取得できませんでした。");
-        }
-
-        if (result.Value.Count == 0)
-        {
-            return Result<BusinessDayDrinkDeliveryStatus>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "酒代入力状況の応答がありません。");
-        }
-
-        return Result<BusinessDayDrinkDeliveryStatus>.Success(new BusinessDayDrinkDeliveryStatus
-        {
-            Amount = ReadDecimal(result.Value[0], "drink_delivery_amount") ?? 0,
-            IsEntered = ReadBool(result.Value[0], "is_entered") ?? false
-        });
-    }
-
-    public async Task<BusinessDayAmountSaveResult> SaveDrinkDeliveryAmountAsync(
-        long businessDayId,
-        decimal amount,
-        CancellationToken ct)
-    {
-        if (!HasRpcAccess())
-        {
-            return BusinessDayAmountSaveResult.Failed("Supabase Edge Function設定が未設定です。納品額を保存できません。");
-        }
-
-        if (amount < 0 || decimal.Truncate(amount) != amount)
-        {
-            return BusinessDayAmountSaveResult.Failed("納品額は0円以上の整数で入力してください。");
-        }
-
-        var result = await RpcClient.PostScalarAsync(
-            "store.save_business_day_drink_delivery_amount",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId,
-                p_drink_delivery_amount = amount
-            },
-            ct);
-
-        if (!result.Succeeded)
-        {
-            return BusinessDayAmountSaveResult.Failed(ToFriendlyError(result.ErrorMessage));
-        }
-
-        var value = NormalizeScalarBody(result.Body);
-        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedAmount)
-            ? BusinessDayAmountSaveResult.Success(savedAmount)
-            : BusinessDayAmountSaveResult.Failed("納品額を保存できませんでした。");
-    }
-
-    public async Task<Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>> GetClosingAttendanceAsync(
-        long businessDayId,
-        CancellationToken ct)
-    {
-        if (businessDayId <= 0)
-        {
-            return Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>.Failure(
-                ResultFailureKind.InvalidInput,
-                "営業日情報が正しくありません。");
-        }
-
-        var result = await PostRpcArrayResultAsync(
-            "store.get_business_day_closing_attendance",
-            new
-            {
-                p_department_id = CurrentStoreDepartmentId,
-                p_business_day_id = businessDayId
-            },
-            ct);
-        if (!result.Succeeded)
-        {
-            return Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>.Failure(
-                result.FailureKind ?? ResultFailureKind.Unavailable,
-                result.ErrorMessage ?? "勤怠入力を取得できませんでした。");
-        }
-
-        var attendance = result.Value
-            .Select(ParseClosingAttendanceItem)
-            .Where(x => x.AttendanceId > 0 && !string.IsNullOrWhiteSpace(x.DisplayName))
+        context = ParseAttendanceStoreContext(contextRow, departmentId);
+        casts = StoreBootstrapJson.ReadArray(row, "casts")
+            .Select(ParseAttendanceCast)
+            .Where(cast => cast.CastId > 0 && !string.IsNullOrWhiteSpace(cast.DisplayName))
             .ToList();
-        return Result<IReadOnlyList<BusinessDayClosingAttendanceItem>>.Success(attendance);
+        staffs = StoreBootstrapJson.ReadArray(row, "staffs")
+            .Select(ParseAttendanceStaff)
+            .Where(staff => staff.StaffId > 0 && !string.IsNullOrWhiteSpace(staff.DisplayName))
+            .ToList();
+
+        StoreMasterCacheKeys.SetMaster(
+            _cache,
+            StoreMasterCacheKeys.StoreContext(departmentId),
+            context,
+            "店舗コンテキスト");
+        StoreMasterCacheKeys.SetMaster(
+            _cache,
+            StoreMasterCacheKeys.StoreCasts(departmentId),
+            casts,
+            "キャスト候補");
+        StoreMasterCacheKeys.SetMaster(
+            _cache,
+            StoreMasterCacheKeys.StoreStaffs(departmentId),
+            staffs,
+            "スタッフ候補");
+
+        var snapshot = ParseAttendanceEditorSnapshot(row);
+        ApplyAttendanceRuntimeCache(departmentId, snapshot, null);
+        return Result<AttendanceShellBootstrap>.Success(new AttendanceShellBootstrap(
+            context,
+            BuildAttendanceRoster(casts, staffs),
+            snapshot,
+            true));
     }
 
-    public async Task<BusinessDayAttendanceSaveResult> SaveClosingAttendanceAsync(
-        long businessDayId,
-        IReadOnlyCollection<BusinessDayClosingAttendanceInput> attendanceEntries,
+    public async Task<Result<AttendanceEditorSnapshot>> GetCurrentAttendanceEditorAsync(
+        long? knownBusinessDayId,
+        long? knownBusinessDayRevision,
         CancellationToken ct)
     {
         if (!HasRpcAccess())
         {
-            return BusinessDayAttendanceSaveResult.Failed("Supabase Edge Function設定が未設定です。勤怠入力を保存できません。");
-        }
-
-        var payload = attendanceEntries
-            .Where(x => x.AttendanceId > 0)
-            .GroupBy(x => x.AttendanceId)
-            .Select(x => x.Last())
-            .Select(x => new ClosingAttendanceEntryPayload(
-                x.AttendanceId,
-                x.ClockInTime?.Trim() ?? string.Empty,
-                x.ClockOutTime?.Trim() ?? string.Empty,
-                x.UsesSendService))
-            .ToArray();
-
-        if (payload.Length == 0)
-        {
-            return BusinessDayAttendanceSaveResult.Failed("退勤情報を1名以上入力してください。");
+            return Result<AttendanceEditorSnapshot>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。勤怠入力を取得できません。");
         }
 
         var departmentId = CurrentStoreDepartmentId;
-        var result = await RpcClient.PostScalarAsync(
-            "store.save_business_day_closing_attendance",
+        var result = await PostRpcArrayResultAsync(
+            "store.get_current_attendance_editor_snapshot",
             new
             {
                 p_department_id = departmentId,
-                p_business_day_id = businessDayId,
-                p_attendance_entries = payload
+                p_known_business_day_id = knownBusinessDayId,
+                p_known_business_day_revision = knownBusinessDayRevision
+            },
+            ct);
+        if (!result.Succeeded || result.Value.Count == 0)
+        {
+            return Result<AttendanceEditorSnapshot>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "現在の勤怠入力を取得できませんでした。");
+        }
+
+        var snapshot = ParseAttendanceEditorSnapshot(result.Value[0]);
+        ApplyAttendanceRuntimeCache(departmentId, snapshot, knownBusinessDayId);
+        return Result<AttendanceEditorSnapshot>.Success(snapshot);
+    }
+
+    public async Task<Result<CurrentBusinessDayAttendanceSaveOutput>> SaveCurrentAttendanceAsync(
+        CurrentBusinessDayAttendanceMutation input,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<CurrentBusinessDayAttendanceSaveOutput>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。勤怠入力を更新できません。");
+        }
+
+        if (input.BusinessDate == default ||
+            input.CastEntries.Any(entry => entry.PersonId <= 0) ||
+            input.StaffEntries.Any(entry => entry.PersonId <= 0))
+        {
+            return Result<CurrentBusinessDayAttendanceSaveOutput>.Failure(
+                ResultFailureKind.InvalidInput,
+                "勤怠入力を確認してください。");
+        }
+
+        var departmentId = CurrentStoreDepartmentId;
+        var result = await PostRpcArrayResultAsync(
+            "store.save_current_business_day_attendance_v2",
+            new
+            {
+                p_department_id = departmentId,
+                p_operation_id = input.OperationId,
+                p_expected_business_day_id = input.ExpectedBusinessDayId,
+                p_expected_business_day_revision = input.ExpectedBusinessDayRevision,
+                p_business_date = input.BusinessDate,
+                p_cast_entries = input.CastEntries.Select(entry => new
+                {
+                    cast_id = entry.PersonId,
+                    is_selected = entry.IsSelected,
+                    clock_in_time = entry.ClockInTime?.Trim(),
+                    clock_out_time = entry.ClockOutTime?.Trim(),
+                    uses_send_service = entry.UsesSendService,
+                    expected_version = entry.ExpectedVersion
+                }),
+                p_staff_entries = input.StaffEntries.Select(entry => new
+                {
+                    staff_id = entry.PersonId,
+                    is_selected = entry.IsSelected,
+                    clock_in_time = entry.ClockInTime?.Trim(),
+                    clock_out_time = entry.ClockOutTime?.Trim(),
+                    uses_send_service = entry.UsesSendService,
+                    expected_version = entry.ExpectedVersion
+                })
             },
             ct);
 
-        if (!result.Succeeded)
+        if (!result.Succeeded || result.Value.Count == 0)
         {
-            return BusinessDayAttendanceSaveResult.Failed(ToClosingAttendanceFriendlyError(result.ErrorMessage));
+            return Result<CurrentBusinessDayAttendanceSaveOutput>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                ToFriendlyError(result.ErrorMessage));
         }
 
-        var value = NormalizeScalarBody(result.Body);
-        if (!int.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var savedCount))
-        {
-            return BusinessDayAttendanceSaveResult.Failed("勤怠入力を保存できませんでした。");
-        }
+        var row = result.Value[0];
+        var status = ReadString(row, "status") ?? "validation_error";
+        var snapshot = ParseAttendanceEditorSnapshot(row);
+        var savedCount = (int)(ReadLong(row, "saved_count") ?? 0);
+        var savedClockOutCount = (int)(ReadLong(row, "saved_clock_out_count") ?? 0);
+        var rowResults = StoreBootstrapJson.ReadArray(row, "row_results")
+            .Select(resultRow => new AttendanceSaveRowResult(
+                AttendancePersonTypes.Normalize(ReadString(resultRow, "person_type")),
+                ReadLong(resultRow, "person_id") ?? 0,
+                ReadString(resultRow, "status") ?? status,
+                ReadString(resultRow, "message")))
+            .Where(resultRow => resultRow.PersonId > 0)
+            .ToList();
 
-        StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, businessDayId);
-        return BusinessDayAttendanceSaveResult.Success(savedCount);
+        ApplyAttendanceRuntimeCache(departmentId, snapshot, input.ExpectedBusinessDayId);
+
+        return Result<CurrentBusinessDayAttendanceSaveOutput>.Success(
+            new CurrentBusinessDayAttendanceSaveOutput(
+                ReadString(row, "operation_id") ?? input.OperationId,
+                status,
+                ReadString(row, "message") ?? (status == "confirmed"
+                    ? "勤怠入力を保存しました。"
+                    : "勤怠入力を保存できませんでした。"),
+                snapshot,
+                savedCount,
+                savedClockOutCount,
+                rowResults));
     }
 
-    private sealed record AttendanceEntryPayload(
-        [property: JsonPropertyName("cast_id")] long CastId,
-        [property: JsonPropertyName("clock_in_time")] string ClockInTime,
-        [property: JsonPropertyName("is_selected")] bool IsSelected);
+    public async Task<Result<CurrentDrinkDeliveryEditorState>> GetCurrentDrinkDeliveryEditorAsync(
+        CancellationToken ct)
+    {
+        var result = await PostRpcArrayResultAsync(
+            "store.get_current_drink_delivery_editor",
+            new { p_department_id = CurrentStoreDepartmentId },
+            ct);
+        if (!result.Succeeded)
+        {
+            return Result<CurrentDrinkDeliveryEditorState>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                result.ErrorMessage ?? "納品額入力状況を取得できませんでした。");
+        }
 
-    private sealed record ClosingAttendanceEntryPayload(
-        [property: JsonPropertyName("attendance_id")] long AttendanceId,
-        [property: JsonPropertyName("clock_in_time")] string ClockInTime,
-        [property: JsonPropertyName("clock_out_time")] string ClockOutTime,
-        [property: JsonPropertyName("uses_send_service")] bool UsesSendService);
+        if (result.Value.Count != 1)
+        {
+            return Result<CurrentDrinkDeliveryEditorState>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "納品額入力状況の応答形式が正しくありません。");
+        }
+
+        return Result<CurrentDrinkDeliveryEditorState>.Success(
+            ParseCurrentDrinkDeliveryEditor(result.Value[0]));
+    }
+
+    public async Task<Result<CurrentBusinessDayDrinkDeliverySaveOutput>> SaveCurrentDrinkDeliveryAmountAsync(
+        CurrentBusinessDayDrinkDeliveryMutation input,
+        CancellationToken ct)
+    {
+        if (!HasRpcAccess())
+        {
+            return Result<CurrentBusinessDayDrinkDeliverySaveOutput>.Failure(
+                ResultFailureKind.NotConfigured,
+                "Supabase Edge Function設定が未設定です。納品額を保存できません。");
+        }
+
+        if (input.BusinessDate == default || input.Amount < 0 ||
+            input.Amount > 999999999999m || decimal.Truncate(input.Amount) != input.Amount)
+        {
+            return Result<CurrentBusinessDayDrinkDeliverySaveOutput>.Failure(
+                ResultFailureKind.InvalidInput,
+                "納品額は0円以上の整数で入力してください。");
+        }
+
+        var result = await PostRpcArrayResultAsync(
+            "store.save_current_business_day_drink_delivery_amount_v2",
+            new
+            {
+                p_department_id = CurrentStoreDepartmentId,
+                p_operation_id = input.OperationId,
+                p_expected_business_day_id = input.ExpectedBusinessDayId,
+                p_expected_business_day_revision = input.ExpectedBusinessDayRevision,
+                p_business_date = input.BusinessDate,
+                p_drink_delivery_amount = input.Amount
+            },
+            ct);
+        if (!result.Succeeded)
+        {
+            return Result<CurrentBusinessDayDrinkDeliverySaveOutput>.Failure(
+                result.FailureKind ?? ResultFailureKind.Unavailable,
+                ToFriendlyError(result.ErrorMessage));
+        }
+
+        if (result.Value.Count != 1 ||
+            !result.Value[0].TryGetProperty("editor", out var editorJson) ||
+            editorJson.ValueKind != JsonValueKind.Object)
+        {
+            return Result<CurrentBusinessDayDrinkDeliverySaveOutput>.Failure(
+                ResultFailureKind.InvalidResponse,
+                "納品額保存結果の応答形式が正しくありません。");
+        }
+
+        var row = result.Value[0];
+        StoreBusinessDay? businessDay = null;
+        if (row.TryGetProperty("business_day", out var businessDayJson) &&
+            businessDayJson.ValueKind == JsonValueKind.Object)
+        {
+            businessDay = ParseBusinessDay(businessDayJson);
+            if (!IsValidBusinessDay(businessDay))
+            {
+                businessDay = null;
+            }
+        }
+
+        if (businessDay is not null)
+        {
+            StoreMasterCacheKeys.SetRuntime(
+                _cache,
+                StoreMasterCacheKeys.CurrentBusinessDay(CurrentStoreDepartmentId),
+                businessDay,
+                "現在営業日");
+        }
+
+        ClosingDashboardDrinkDelta? dashboardDelta = null;
+        if (row.TryGetProperty("dashboard_delta", out var dashboardDeltaJson) &&
+            dashboardDeltaJson.ValueKind == JsonValueKind.Object)
+        {
+            dashboardDelta = ParseClosingDashboardDrinkDelta(dashboardDeltaJson);
+        }
+
+        var status = ReadString(row, "status") ?? "validation_error";
+        var message = ReadString(row, "message");
+        return Result<CurrentBusinessDayDrinkDeliverySaveOutput>.Success(
+            new CurrentBusinessDayDrinkDeliverySaveOutput(
+                status,
+                ReadString(row, "operation_id") ?? input.OperationId,
+                string.IsNullOrWhiteSpace(message) ? null : ToFriendlyError(message),
+                ParseCurrentDrinkDeliveryEditor(editorJson),
+                dashboardDelta,
+                businessDay));
+    }
+
+    private static StoreContext ParseAttendanceStoreContext(JsonElement row, long departmentId) =>
+        new()
+        {
+            CompanyId = ReadLong(row, "company_id") ?? 0,
+            DepartmentId = ReadLong(row, "department_id") ?? departmentId,
+            DepartmentName = ReadString(row, "department_name"),
+            AttendanceMinuteStep = NormalizeAttendanceMinuteStep(ReadLong(row, "attendance_minute_step"))
+        };
+
+    private static CastOption ParseAttendanceCast(JsonElement row) =>
+        new()
+        {
+            CastId = ReadLong(row, "cast_id") ?? 0,
+            CastCode = ReadString(row, "cast_code"),
+            DisplayName = ReadString(row, "display_name") ?? string.Empty,
+            DepartmentName = ReadString(row, "department_name")
+        };
+
+    private static StaffOption ParseAttendanceStaff(JsonElement row) =>
+        new()
+        {
+            StaffId = ReadLong(row, "staff_id") ?? 0,
+            StaffCode = ReadString(row, "staff_code"),
+            DisplayName = ReadString(row, "display_name") ?? string.Empty,
+            DepartmentName = ReadString(row, "department_name"),
+            EmploymentType = StoreStaffEmploymentTypes.Normalize(ReadString(row, "employment_type"))
+        };
+
+    private static IReadOnlyList<AttendanceRosterPerson> BuildAttendanceRoster(
+        IReadOnlyList<CastOption> casts,
+        IReadOnlyList<StaffOption> staffs) =>
+        casts.Select(cast => new AttendanceRosterPerson(
+                AttendancePersonTypes.Cast,
+                cast.CastId,
+                cast.DisplayName,
+                cast.DepartmentName,
+                true))
+            .Concat(staffs.Select(staff => new AttendanceRosterPerson(
+                AttendancePersonTypes.Staff,
+                staff.StaffId,
+                staff.DisplayName,
+                staff.DepartmentName,
+                true)))
+            .ToList();
+
+    private static AttendanceEditorSnapshot ParseAttendanceEditorSnapshot(JsonElement row)
+    {
+        var hasBusinessDay = ReadBool(row, "has_business_day") ?? false;
+        StoreBusinessDay? businessDay = null;
+        if (hasBusinessDay &&
+            row.TryGetProperty("business_day", out var businessDayJson) &&
+            businessDayJson.ValueKind == JsonValueKind.Object)
+        {
+            var parsed = ParseBusinessDay(businessDayJson);
+            if (IsValidBusinessDay(parsed))
+            {
+                businessDay = parsed;
+            }
+        }
+
+        var attendanceEntries = StoreBootstrapJson.ReadArray(row, "attendance_entries")
+            .Select(entry => new AttendanceEditorEntrySnapshot(
+                ReadLong(entry, "attendance_id") ?? 0,
+                AttendancePersonTypes.Normalize(ReadString(entry, "person_type")),
+                ReadLong(entry, "person_id") ?? 0,
+                ReadString(entry, "display_name") ?? string.Empty,
+                ReadString(entry, "department_name"),
+                ReadString(entry, "attendance_status") ?? string.Empty,
+                ReadString(entry, "clock_in_time") ?? string.Empty,
+                ReadString(entry, "clock_out_time"),
+                ReadBool(entry, "uses_send_service") ?? false,
+                ReadString(entry, "version") ?? string.Empty))
+            .Where(entry => entry.AttendanceId > 0 && entry.PersonId > 0)
+            .ToList();
+        var attendingCasts = StoreBootstrapJson.ReadArray(row, "attending_casts")
+            .Select(entry => new StoreOrderAttendanceCastOption
+            {
+                CastId = ReadLong(entry, "cast_id") ?? 0,
+                DisplayName = ReadString(entry, "display_name") ?? string.Empty,
+                DrinkMemo = ReadString(entry, "drink_memo"),
+                DepartmentName = ReadString(entry, "department_name"),
+                ClockInTime = ReadString(entry, "clock_in_time")
+            })
+            .Where(entry => entry.CastId > 0 && !string.IsNullOrWhiteSpace(entry.DisplayName))
+            .ToList();
+
+        return new AttendanceEditorSnapshot(
+            hasBusinessDay && businessDay is not null,
+            ReadBool(row, "unchanged") ?? false,
+            businessDay,
+            ReadLong(row, "business_day_revision") ?? businessDay?.BusinessUiRevision ?? 0,
+            attendanceEntries,
+            attendingCasts);
+    }
+
+    private void ApplyAttendanceRuntimeCache(
+        long departmentId,
+        AttendanceEditorSnapshot snapshot,
+        long? previousBusinessDayId)
+    {
+        if (!snapshot.HasBusinessDay || snapshot.BusinessDay is null)
+        {
+            StoreMasterCacheKeys.ClearCurrentBusinessDay(_cache, departmentId);
+            if (previousBusinessDayId is > 0)
+            {
+                StoreMasterCacheKeys.ClearOrderAttendingCasts(_cache, departmentId, previousBusinessDayId.Value);
+            }
+
+            return;
+        }
+
+        StoreMasterCacheKeys.SetRuntime(
+            _cache,
+            StoreMasterCacheKeys.CurrentBusinessDay(departmentId),
+            snapshot.BusinessDay,
+            "現在営業日");
+        if (!snapshot.Unchanged)
+        {
+            StoreMasterCacheKeys.SetRuntime(
+                _cache,
+                StoreMasterCacheKeys.OrderAttendingCasts(departmentId, snapshot.BusinessDay.BusinessDayId),
+                snapshot.AttendingCasts,
+                "出勤キャスト");
+        }
+    }
+
+    private static int NormalizeAttendanceMinuteStep(long? value) =>
+        value is 5L or 10L or 15L or 20L or 30L or 60L ? (int)value.Value : 15;
+
+    private static CurrentClosingDashboard ParseCurrentClosingDashboard(
+        JsonElement row,
+        DrinkBackEditorFragment drinkBackEditor)
+    {
+        IReadOnlyList<DrinkBackCastOption>? activeCasts = null;
+        if (row.TryGetProperty("active_casts", out var activeCastsElement) &&
+            activeCastsElement.ValueKind == JsonValueKind.Array)
+        {
+            activeCasts = activeCastsElement
+                .EnumerateArray()
+                .Select(SupabaseDrinkBackRepository.ParseCastOption)
+                .Where(cast => cast.CastId > 0 && !string.IsNullOrWhiteSpace(cast.DisplayName))
+                .ToList();
+        }
+
+        return new CurrentClosingDashboard(
+            ReadLong(row, "department_id") ?? 0,
+            ReadBool(row, "has_business_day") ?? false,
+            ReadLong(row, "business_day_id"),
+            ReadLong(row, "business_day_revision") ?? 0,
+            ReadDateOnly(row, "business_date"),
+            ReadString(row, "memo"),
+            (int)(ReadLong(row, "open_slip_count") ?? 0),
+            ReadDecimal(row, "drink_delivery_amount") ?? 0,
+            ReadBool(row, "is_drink_delivery_amount_entered") ?? false,
+            (int)(ReadLong(row, "attendance_count") ?? 0),
+            (int)(ReadLong(row, "missing_clock_out_count") ?? 0),
+            (int)(ReadLong(row, "cast_sales_required_slip_count") ?? 0),
+            (int)(ReadLong(row, "cast_sales_completed_slip_count") ?? 0),
+            (int)(ReadLong(row, "cast_sales_missing_slip_count") ?? 0),
+            (int)(ReadLong(row, "drink_back_required_cast_count") ?? 0),
+            (int)(ReadLong(row, "drink_back_completed_cast_count") ?? 0),
+            (int)(ReadLong(row, "drink_back_missing_cast_count") ?? 0),
+            ReadLong(row, "drink_back_total_amount") ?? 0,
+            drinkBackEditor,
+            ReadString(row, "cast_master_revision") ?? string.Empty,
+            activeCasts,
+            (int)(ReadLong(row, "pending_receipt_count") ?? 0),
+            ReadBool(row, "can_close") ?? false,
+            ReadStringArray(row, "block_reasons"),
+            ReadDateTimeOffset(row, "checked_at") ?? DateTimeOffset.UtcNow);
+    }
+
+    private static CurrentDrinkDeliveryEditorState ParseCurrentDrinkDeliveryEditor(JsonElement row)
+    {
+        return new CurrentDrinkDeliveryEditorState(
+            ReadLong(row, "department_id") ?? 0,
+            ReadBool(row, "has_business_day") ?? false,
+            ReadLong(row, "business_day_id"),
+            ReadLong(row, "business_day_revision") ?? 0,
+            ReadDateOnly(row, "business_date"),
+            ReadDecimal(row, "drink_delivery_amount") ?? 0,
+            ReadBool(row, "is_entered") ?? false,
+            ReadDateTimeOffset(row, "checked_at") ?? DateTimeOffset.UtcNow);
+    }
+
+    private static ClosingDashboardDrinkDelta ParseClosingDashboardDrinkDelta(JsonElement row)
+    {
+        return new ClosingDashboardDrinkDelta(
+            ReadLong(row, "department_id") ?? 0,
+            ReadLong(row, "business_day_id") ?? 0,
+            ReadLong(row, "business_day_revision") ?? 0,
+            ReadDecimal(row, "drink_delivery_amount") ?? 0,
+            ReadBool(row, "is_drink_delivery_amount_entered") ?? false,
+            ReadDateTimeOffset(row, "checked_at") ?? DateTimeOffset.UtcNow);
+    }
 
     private static StoreBusinessDay ParseBusinessDay(JsonElement row)
     {
@@ -548,118 +636,14 @@ public class SupabaseBusinessDayRepository(
             OpenedAt = ReadDateTimeOffset(row, "opened_at") ?? DateTimeOffset.MinValue,
             ClosedAt = ReadDateTimeOffset(row, "closed_at"),
             Status = ReadString(row, "status") ?? string.Empty,
-            Memo = ReadString(row, "memo")
+            Memo = ReadString(row, "memo"),
+            BusinessUiRevision = ReadLong(row, "business_ui_revision") ?? 0
         };
     }
 
     private static bool IsValidBusinessDay(StoreBusinessDay? businessDay)
     {
         return businessDay is { BusinessDayId: > 0 } && businessDay.BusinessDate != DateOnly.MinValue;
-    }
-
-    private static BusinessDayClosingAttendanceItem ParseClosingAttendanceItem(JsonElement row)
-    {
-        return new BusinessDayClosingAttendanceItem
-        {
-            AttendanceId = ReadLong(row, "attendance_id") ?? 0,
-            CastId = ReadLong(row, "cast_id") ?? 0,
-            DisplayName = ReadString(row, "cast_display_name") ?? string.Empty,
-            DepartmentName = ReadString(row, "cast_department_name"),
-            AttendanceStatus = ReadString(row, "attendance_status") ?? string.Empty,
-            ClockInAt = ReadDateTimeOffset(row, "clock_in_at"),
-            ClockOutAt = ReadDateTimeOffset(row, "clock_out_at"),
-            UsesSendService = ReadBool(row, "uses_send_service") ?? false
-        };
-    }
-
-    private static string? NormalizeScalarBody(string? body)
-    {
-        return string.IsNullOrWhiteSpace(body)
-            ? null
-            : body.Trim().Trim('"');
-    }
-
-    private async Task<Result<BusinessDayClosingReadiness>> GetLegacyClosingReadinessAsync(
-        StoreBusinessDay businessDay,
-        bool includePendingReceipts,
-        CancellationToken ct)
-    {
-        var departmentId = CurrentStoreDepartmentId;
-        var openSlipsTask = RpcClient.PostScalarAsync(
-            "store.get_open_slip_count",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var drinkTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_drink_delivery_status",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var attendanceTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_closing_attendance",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var castTask = RpcClient.PostArrayAsync(
-            "store.get_business_day_cast_sales_adjustment_status",
-            new { p_department_id = departmentId, p_business_day_id = businessDay.BusinessDayId },
-            ct);
-        var receiptsTask = includePendingReceipts
-            ? RpcClient.PostArrayAsync(
-                "store.get_pending_receipts",
-                new { p_department_id = departmentId, p_status = _options.PendingStatus },
-                ct)
-            : Task.FromResult(SupabaseRpcResult.Success("[]") with { Rows = [] });
-
-        await Task.WhenAll(openSlipsTask, drinkTask, attendanceTask, castTask, receiptsTask);
-
-        var openSlips = await openSlipsTask;
-        var drink = await drinkTask;
-        var attendance = await attendanceTask;
-        var cast = await castTask;
-        var receipts = await receiptsTask;
-        if (!openSlips.Succeeded ||
-            !drink.Succeeded ||
-            !attendance.Succeeded ||
-            !cast.Succeeded ||
-            !receipts.Succeeded)
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.Unavailable,
-                "締め条件の一部を取得できませんでした。時間をおいて再表示してください。");
-        }
-
-        if (!int.TryParse(
-                NormalizeScalarBody(openSlips.Body),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var openSlipCount))
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "未会計伝票数を確認できませんでした。");
-        }
-
-        var drinkRow = drink.Rows.FirstOrDefault();
-        var castRow = cast.Rows.FirstOrDefault();
-        if (drink.Rows.Count == 0 || cast.Rows.Count == 0)
-        {
-            return Result<BusinessDayClosingReadiness>.Failure(
-                ResultFailureKind.InvalidResponse,
-                "締め条件の応答が不足しています。");
-        }
-
-        return Result<BusinessDayClosingReadiness>.Success(new BusinessDayClosingReadiness
-        {
-            BusinessDay = businessDay,
-            OpenSlipCount = openSlipCount,
-            DrinkDeliveryAmount = ReadDecimal(drinkRow, "drink_delivery_amount") ?? 0,
-            IsDrinkDeliveryAmountEntered = ReadBool(drinkRow, "is_entered") ?? false,
-            AttendanceCount = attendance.Rows.Count,
-            MissingClockOutCount = attendance.Rows.Count(row => ReadDateTimeOffset(row, "clock_out_at") is null),
-            CastSalesRequiredSlipCount = (int)(ReadLong(castRow, "required_slip_count") ?? 0),
-            CastSalesCompletedSlipCount = (int)(ReadLong(castRow, "completed_slip_count") ?? 0),
-            CastSalesMissingSlipCount = (int)(ReadLong(castRow, "missing_slip_count") ?? 0),
-            PendingReceiptCount = receipts.Rows.Count,
-            ReceiptsEnabled = includePendingReceipts
-        });
     }
 
     private static IReadOnlyList<string> ReadStringArray(JsonElement row, string propertyName)
@@ -685,104 +669,91 @@ public class SupabaseBusinessDayRepository(
             return "DB更新に失敗しました。";
         }
 
-        if (rawError.Contains("store_department_not_found", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_department_not_found", StringComparison.Ordinal))
         {
             return "店舗設定を取得できません。設定画面で利用店舗を選択してください。";
         }
 
-        if (rawError.Contains("business_day_already_open", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("duplicate key", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_already_open", StringComparison.Ordinal) ||
+            string.Equals(rawError, "duplicate key", StringComparison.Ordinal))
         {
             return "既に営業中の営業日があります。";
         }
 
-        if (rawError.Contains("business_day_not_open", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_not_open", StringComparison.Ordinal))
         {
             return "営業中の営業日がありません。";
         }
 
-        if (rawError.Contains("invalid_drink_delivery_amount", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "closing_override_disabled", StringComparison.Ordinal))
+        {
+            return "現在のDBでは締め条件無視が無効です。SQL定義を適用してください。";
+        }
+
+        if (string.Equals(rawError, "invalid_drink_delivery_amount", StringComparison.Ordinal))
         {
             return "納品額は0円以上の整数で入力してください。";
         }
 
-        if (rawError.Contains("open_slips_exist", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "business_day_revision_conflict", StringComparison.Ordinal))
+        {
+            return "営業日情報が更新されました。最新の納品額を確認してもう一度保存してください。";
+        }
+
+        if (string.Equals(rawError, "business_day_closing_required", StringComparison.Ordinal))
+        {
+            return "対象の営業日が切り替わりました。最新の納品額を確認してください。";
+        }
+
+        if (string.Equals(rawError, "open_slips_exist", StringComparison.Ordinal))
         {
             return "未会計の伝票があります。すべて会計してから締めてください。";
         }
 
-        if (rawError.Contains("drink_delivery_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "drink_delivery_required", StringComparison.Ordinal))
         {
             return "酒代を入力してください。酒代がない場合も0円で保存してください。";
         }
 
-        if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "attendance_required", StringComparison.Ordinal))
         {
-            return "出勤キャストを1名以上入力してください。";
+            return "出勤者を1名以上入力してください。";
         }
 
-        if (rawError.Contains("attendance_clock_out_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "attendance_clock_out_required", StringComparison.Ordinal))
         {
-            return "退勤時刻が未入力のキャストがいます。";
+            return "退勤時刻が未入力の出勤者がいます。";
         }
 
-        if (rawError.Contains("cast_sales_adjustment_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "cast_sales_adjustment_required", StringComparison.Ordinal))
         {
             return "キャスト売上額調整を完了してください。";
         }
 
-        if (rawError.Contains("pending_receipts_exist", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "drink_back_required", StringComparison.Ordinal))
         {
-            return "未入力領収書があります。領収書入力を確認してください。";
+            return "ドリンクバック調整を入力してください。0円の場合も保存してください。";
         }
 
-        if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "invalid_attendance_clock_in_time", StringComparison.Ordinal))
         {
             return "出勤時刻を確認してください。";
         }
 
-        if (rawError.Contains("store_attendance_cast_not_found", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("attendance_cast_required", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(rawError, "store_attendance_cast_not_found", StringComparison.Ordinal) ||
+            string.Equals(rawError, "attendance_cast_required", StringComparison.Ordinal) ||
+            string.Equals(rawError, "store_attendance_staff_not_found", StringComparison.Ordinal) ||
+            string.Equals(rawError, "attendance_staff_required", StringComparison.Ordinal))
         {
-            return "出勤キャストの選択内容を確認してください。";
+            return "出勤者の選択内容を確認してください。";
         }
 
-        if (rawError.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-            rawError.Contains("403", StringComparison.OrdinalIgnoreCase))
+        if (rawError is "access_denied" or "invalid_signature")
         {
             return PermissionErrorMessage();
         }
 
-        return $"DB更新に失敗しました。{rawError}";
+        return "DB更新に失敗しました。";
     }
 
-    private static string ToClosingAttendanceFriendlyError(string? rawError)
-    {
-        if (string.IsNullOrWhiteSpace(rawError))
-        {
-            return "勤怠入力を保存できませんでした。";
-        }
-
-        if (rawError.Contains("invalid_attendance_clock_out_time", StringComparison.OrdinalIgnoreCase))
-        {
-            return "退勤時刻を確認してください。";
-        }
-
-        if (rawError.Contains("invalid_attendance_clock_in_time", StringComparison.OrdinalIgnoreCase))
-        {
-            return "出勤時刻を確認してください。";
-        }
-
-        if (rawError.Contains("attendance_not_found", StringComparison.OrdinalIgnoreCase))
-        {
-            return "勤怠入力のキャスト選択内容を確認してください。";
-        }
-
-        if (rawError.Contains("attendance_required", StringComparison.OrdinalIgnoreCase))
-        {
-            return "退勤情報を1名以上入力してください。";
-        }
-
-        return ToFriendlyError(rawError);
-    }
 }

@@ -7,6 +7,7 @@ public static class FeatureNames
     public const string Orders = "Orders";
     public const string Checkout = "Checkout";
     public const string Closing = "Closing";
+    public const string SalesHistory = "SalesHistory";
     public const string Receipts = "Receipts";
     public const string Settings = "Settings";
 }

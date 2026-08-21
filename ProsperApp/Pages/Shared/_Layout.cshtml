@@ -1,5 +1,8 @@
+@using Microsoft.Extensions.Options
+@using ProsperApp.Options
 @inject IFeatureGate FeatureGate
 @inject ILocalSettingsProvider LocalSettingsProvider
+@inject IOptions<AppOptions> AppOptionsAccessor
 @{
     var localSettings = LocalSettingsProvider.GetCurrent();
     var isDarkTheme = localSettings.ThemeMode != LocalSettings.ThemeModeWhite;
@@ -8,14 +11,15 @@
     var appleStatusBarStyle = isDarkTheme ? "black-translucent" : "default";
     var currentPath = Context.Request.Path.Value ?? "/";
     var isOrdersPage = currentPath.StartsWith("/Orders", StringComparison.OrdinalIgnoreCase);
-    var isSalesAttendance = currentPath.StartsWith("/Attendance", StringComparison.OrdinalIgnoreCase);
     var isManagementActive = currentPath.StartsWith("/Management", StringComparison.OrdinalIgnoreCase);
-    var isSalesActive = currentPath == "/" || isSalesAttendance;
+    var isSalesActive = currentPath == "/";
     var isClosingActive = currentPath.StartsWith("/Closing", StringComparison.OrdinalIgnoreCase);
+    var isSalesHistoryActive = currentPath.StartsWith("/SalesHistory", StringComparison.OrdinalIgnoreCase);
     var isSettingsActive = currentPath.StartsWith("/Settings", StringComparison.OrdinalIgnoreCase);
     var bodyClass = isOrdersPage
         ? "order-terminal"
         : currentPath == "/" ? "sales-hub-page" : string.Empty;
+    var environmentBanner = AppOptionsAccessor.Value.EnvironmentBanner;
 }
 <!DOCTYPE html>
 <html lang="ja" data-bs-theme="@bootstrapTheme">
@@ -28,12 +32,18 @@
     <meta name="apple-mobile-web-app-title" content="店舗アプリ" />
     <meta name="apple-mobile-web-app-status-bar-style" content="@appleStatusBarStyle" />
     <title>@ViewData["Title"] - 店舗用アプリ</title>
-    <script type="importmap"></script>
     <link rel="manifest" href="~/site.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="~/icons/store-app-icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="~/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/base.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/opening.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/slips.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/orders.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/closing.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/sales-history.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/features/settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/layout.css" asp-append-version="true" />
     @if (isDarkTheme)
     {
         <link rel="stylesheet" href="~/css/dark-theme.css" asp-append-version="true" />
@@ -41,6 +51,10 @@
     <link rel="stylesheet" href="~/ProsperApp.styles.css" asp-append-version="true" />
 </head>
 <body class="@bodyClass">
+    @if (!string.IsNullOrWhiteSpace(environmentBanner))
+    {
+        <div class="app-environment-banner" role="status">@environmentBanner</div>
+    }
     @if (!isOrdersPage)
     {
         <header>
@@ -54,15 +68,28 @@
                     <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                         <ul class="navbar-nav flex-grow-1 app-main-nav__tabs">
                             <li class="nav-item">
-                                <a class="nav-link app-main-nav__link @(isSalesActive ? "is-active" : null)" asp-area="" asp-page="/Index">営業中</a>
+                                <a class="nav-link app-main-nav__link @(isSalesActive ? "is-active" : null)"
+                                   asp-area=""
+                                   asp-page="/Index"
+                                   data-loading-lock="false"
+                                   aria-current="@(isSalesActive ? "page" : null)">営業中</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link app-main-nav__link @(isClosingActive ? "is-active" : null)" asp-area="" asp-page="/Closing/Index">締め作業</a>
                             </li>
+                            @if (FeatureGate.IsEnabled(FeatureNames.SalesHistory))
+                            {
+                                <li class="nav-item">
+                                    <a class="nav-link app-main-nav__link @(isSalesHistoryActive ? "is-active" : null)"
+                                       asp-area=""
+                                       asp-page="/SalesHistory/Index"
+                                       aria-current="@(isSalesHistoryActive ? "page" : null)">営業履歴</a>
+                                </li>
+                            }
                             @if (FeatureGate.IsEnabled(FeatureNames.Opening))
                             {
                                 <li class="nav-item">
-                                    <a class="nav-link app-main-nav__link @(isManagementActive ? "is-active" : null)" asp-area="" asp-page="/Management/Index">マスタ設定</a>
+                                    <a class="nav-link app-main-nav__link @(isManagementActive ? "is-active" : null)" asp-area="" asp-page="/Management/Index">店舗設定</a>
                                 </li>
                             }
                             @if (FeatureGate.IsEnabled(FeatureNames.Settings))
@@ -117,7 +144,6 @@
         </footer>
     }
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         (() => {
@@ -146,6 +172,20 @@
         })();
     </script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/save-response.js" asp-append-version="true"></script>
+    <script src="~/js/local-state.js" asp-append-version="true"></script>
+    <script src="~/js/sync-store.js" asp-append-version="true"></script>
+    @if (isManagementActive)
+    {
+        <script>
+            window.ProsperManagementMasterConfig = {
+                departmentId: @localSettings.StoreDepartmentId,
+                snapshotUrl: '@Url.Page("/Management/Index", "MasterSnapshot")',
+                mutationUrl: '@Url.Page("/Management/Index", "MasterMutation")'
+            };
+        </script>
+        <script src="~/js/features/management-master.js" asp-append-version="true"></script>
+    }
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

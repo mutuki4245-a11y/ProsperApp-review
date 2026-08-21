@@ -1346,6 +1346,18 @@
   margin: 0;
 }
 
+.staff-admin-table__row {
+  grid-template-columns: 4rem minmax(9rem, 1fr) 7rem minmax(12rem, 1fr) auto;
+}
+
+.staff-admin-table__employment-form {
+  align-items: center;
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: minmax(7rem, 1fr) auto;
+  margin: 0;
+}
+
 @media (max-width: 767.98px) {
   .cast-admin-form {
     grid-template-columns: minmax(0, 1fr);
@@ -1369,6 +1381,15 @@
   .cast-admin-table__actions {
     grid-column: 2 / -1;
     justify-content: flex-start;
+  }
+
+  .staff-admin-table__row {
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+  }
+
+  .staff-admin-table__employment-form,
+  .staff-admin-table__actions {
+    grid-column: 2 / -1;
   }
 }
 
@@ -2529,9 +2550,9 @@
 }
 
 .business-slip-card__person--nomination {
-  background: #faf4f3;
-  border-color: #dbc1bd;
-  color: #724942;
+  background: #fff1f7;
+  border-color: #f9a8d4;
+  color: #9d174d;
 }
 
 .business-slip-card__person--overflow {

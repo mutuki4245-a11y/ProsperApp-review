@@ -9,7 +9,6 @@
     <div class="store-home__hero">
         <p class="store-home__eyebrow">管理者設定</p>
         <h1>管理者設定</h1>
-        <p>利用店舗、画面モード、配色をこの端末に保存します。このページだけをパスワードで保護します。</p>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
@@ -17,32 +16,12 @@
         <div class="alert alert-success">@Model.SuccessMessage</div>
     }
 
-    @if (!Model.IsUnlocked)
-    {
-        <form method="post" asp-page-handler="Unlock" class="settings-card settings-login">
-            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-            <h2>パスワード確認</h2>
-            <p class="text-muted">設定を開くには管理者パスワードを入力してください。解除状態は保存されません。</p>
-
-            <label asp-for="Password" class="form-label"></label>
-            <input asp-for="Password" class="form-control form-control-lg" type="password" inputmode="numeric" autocomplete="off" autofocus />
-            <span asp-validation-for="Password" class="text-danger"></span>
-
-            <div class="settings-actions">
-                <button class="btn btn-primary btn-lg" type="submit">管理者設定を開く</button>
-                <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">営業中へ戻る</a>
-            </div>
-        </form>
-    }
-    else
-    {
         <form method="post" asp-page-handler="Save" class="settings-form">
-            <input type="hidden" asp-for="SaveToken" />
             <input type="hidden" asp-for="Input.StoreName" />
             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
             <section class="settings-card">
-                <h2>店舗設定</h2>
+                <h2>利用店舗</h2>
                 <p class="text-muted mb-3">department_masterから利用店舗を選択します。選択した店舗は、この端末の営業日、伝票、領収書入力の参照・作成・更新に使われます。</p>
                 @if (Model.Departments.Count == 0)
                 {
@@ -76,91 +55,16 @@
                     }
                 </select>
                 <span asp-validation-for="Input.StoreDepartmentId" class="text-danger"></span>
-                <div class="form-text">Cookieがない場合だけ、appsettingsのSupabase:StoreDepartmentIdを使います。</div>
+                <div class="form-text">DBで割り当てられた店舗だけを選択できます。</div>
             </section>
 
             <section class="settings-card">
-                <h2>機能設定</h2>
-                <div class="settings-radio-grid">
-                    <label class="settings-radio">
-                        <input asp-for="Input.ScreenMode" type="radio" value="sales-management" />
-                        <span>
-                            <strong>営業管理用画面</strong>
-                            <small>営業中、締め作業、マスタ設定を使う店舗運用画面</small>
-                        </span>
-                    </label>
-                    <label class="settings-radio">
-                        <input asp-for="Input.ScreenMode" type="radio" value="order-entry" />
-                        <span>
-                            <strong>オーダー登録用画面</strong>
-                            <small>後続実装予定のオーダー登録専用画面で利用する設定</small>
-                        </span>
-                    </label>
+                <h2>管理者モード</h2>
+                <p class="text-muted mb-3">商品カテゴリの操作と、締め作業での締め条件無視を一時的に許可します。ログアウトまたは明示ロックで自動的に解除されます。</p>
+                <div class="form-check form-switch">
+                    <input asp-for="Input.AdminMode" class="form-check-input" type="checkbox" role="switch" />
+                    <label asp-for="Input.AdminMode" class="form-check-label">管理者モードを有効にする</label>
                 </div>
-                <span asp-validation-for="Input.ScreenMode" class="text-danger"></span>
-                <h3 class="h5 mt-4 mb-2">配色</h3>
-                <div class="settings-radio-grid settings-radio-grid--compact">
-                    <label class="settings-radio">
-                        <input asp-for="Input.ThemeMode" type="radio" value="@LocalSettings.ThemeModeQuietNavy" />
-                        <span>
-                            <strong>E案（夜レジ）</strong>
-                            <small>暗い青グレーに明るい水色を合わせた配色</small>
-                        </span>
-                    </label>
-                    <label class="settings-radio">
-                        <input asp-for="Input.ThemeMode" type="radio" value="@LocalSettings.ThemeModeWhite" />
-                        <span>
-                            <strong>白ベース</strong>
-                            <small>従来の明るい配色</small>
-                        </span>
-                    </label>
-                </div>
-                <span asp-validation-for="Input.ThemeMode" class="text-danger"></span>
-            </section>
-
-            <section class="settings-card">
-                <h2>アプリ内キャッシュ</h2>
-                @if (Model.CacheStatuses.Count == 0)
-                {
-                    <p class="text-muted mb-3">現在までに取得したキャッシュはありません。</p>
-                }
-                else
-                {
-                    <div class="table-responsive mb-3">
-                        <table class="table table-sm align-middle">
-                            <thead>
-                                <tr>
-                                    <th>区分</th>
-                                    <th>対象</th>
-                                    <th>状態</th>
-                                    <th>最終取得</th>
-                                    <th>期限</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var cache in Model.CacheStatuses)
-                                {
-                                    var fetchedAt = cache.LastFetchedAt.ToOffset(TimeSpan.FromHours(9));
-                                    var expiresAt = cache.ExpiresAt.ToOffset(TimeSpan.FromHours(9));
-                                    <tr>
-                                        <td>@cache.Category</td>
-                                        <td>@cache.DisplayName</td>
-                                        <td>@(cache.IsCached ? "保持中" : "破棄済み")</td>
-                                        <td>@fetchedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                                        <td>@expiresAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-                <button
-                    class="btn btn-outline-secondary"
-                    type="submit"
-                    formaction="?handler=ClearCache"
-                    formnovalidate>
-                    キャッシュをすべて削除
-                </button>
             </section>
 
             <section class="settings-card settings-card--danger">
@@ -214,7 +118,6 @@
                 <a class="btn btn-outline-secondary btn-lg" asp-page="/Index">営業中へ戻る</a>
             </div>
         </form>
-    }
 </section>
 
 @section Scripts {

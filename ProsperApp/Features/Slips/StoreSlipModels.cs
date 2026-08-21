@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using ProsperApp.Features.Shared;
 using ProsperApp.Services;
 
 namespace ProsperApp.Features.Slips;
@@ -36,72 +37,6 @@ public class CastOption
     public string SearchDisplayName => string.IsNullOrWhiteSpace(DepartmentName)
         ? DisplayName
         : $"{DisplayName}：{DepartmentName}";
-}
-
-public class CastOptionsLoadResult
-{
-    public bool Succeeded { get; init; }
-
-    public IReadOnlyList<CastOption> Casts { get; init; } = [];
-
-    public string? ErrorMessage { get; init; }
-
-    public static CastOptionsLoadResult Success(IReadOnlyList<CastOption> casts)
-    {
-        return new CastOptionsLoadResult { Succeeded = true, Casts = casts };
-    }
-
-    public static CastOptionsLoadResult Failed(string message)
-    {
-        return new CastOptionsLoadResult { Succeeded = false, ErrorMessage = message };
-    }
-}
-
-public class StoreCastAdminItem
-{
-    public long CastId { get; set; }
-    public string DisplayName { get; set; } = string.Empty;
-    public string? DrinkMemo { get; set; }
-    public DateOnly JoinedOn { get; set; }
-}
-
-public class StoreCastCreateInputModel
-{
-    [Display(Name = "キャスト名")]
-    [Required(ErrorMessage = "キャスト名を入力してください。")]
-    [StringLength(120, ErrorMessage = "キャスト名は120文字以内で入力してください。")]
-    public string DisplayName { get; set; } = string.Empty;
-
-    [Display(Name = "ドリンクメモ")]
-    [StringLength(30, ErrorMessage = "ドリンクメモは30文字以内で入力してください。")]
-    public string? DrinkMemo { get; set; }
-}
-
-public class StoreCastDrinkMemoInputModel
-{
-    [Range(1, long.MaxValue, ErrorMessage = "編集するキャストを選択してください。")]
-    public long CastId { get; set; }
-
-    [Display(Name = "ドリンクメモ")]
-    [StringLength(30, ErrorMessage = "ドリンクメモは30文字以内で入力してください。")]
-    public string? DrinkMemo { get; set; }
-}
-
-public class StoreCastSaveResult
-{
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-    public long? CastId { get; init; }
-
-    public static StoreCastSaveResult Success(long castId)
-    {
-        return new StoreCastSaveResult { Succeeded = true, CastId = castId };
-    }
-
-    public static StoreCastSaveResult Failed(string message)
-    {
-        return new StoreCastSaveResult { Succeeded = false, ErrorMessage = message };
-    }
 }
 
 public class CastNominationInputModel
@@ -173,7 +108,9 @@ public class BusinessSlipEditorOperationInput
 {
     public string OperationId { get; set; } = string.Empty;
 
-    public long SlipId { get; set; }
+    public string? ClientDraftId { get; set; }
+
+    public long? SlipId { get; set; }
 
     public string OperationType { get; set; } = string.Empty;
 
@@ -187,6 +124,12 @@ public class BusinessSlipEditorOperationInput
 public class BusinessHomeChangeFlushInput
 {
     public string BatchId { get; set; } = string.Empty;
+
+    public long? ExpectedBusinessDayId { get; set; }
+
+    public long? ExpectedBusinessDayRevision { get; set; }
+
+    public DateOnly? BusinessDate { get; set; }
 
     public List<BusinessSlipEditorOperationInput> Operations { get; set; } = [];
 
@@ -208,6 +151,14 @@ public class BusinessHomeChangeFlushResult
 
     public string? ErrorMessage { get; init; }
 
+    public ResultFailureKind? FailureKind { get; init; }
+
+    public string Status { get; init; } = "unavailable";
+
+    public JsonElement BusinessDay { get; init; }
+
+    public long BusinessDayRevision { get; init; }
+
     public JsonElement Snapshot { get; init; }
 
     public JsonElement OperationResults { get; init; }
@@ -215,40 +166,82 @@ public class BusinessHomeChangeFlushResult
     public JsonElement KaraokeResults { get; init; }
 
     public static BusinessHomeChangeFlushResult Success(
+        string status,
+        JsonElement businessDay,
+        long businessDayRevision,
         JsonElement snapshot,
         JsonElement operationResults,
         JsonElement karaokeResults) => new()
-        {
-            Succeeded = true,
-            Snapshot = snapshot,
-            OperationResults = operationResults,
-            KaraokeResults = karaokeResults
-        };
+    {
+        Succeeded = true,
+        Status = status,
+        BusinessDay = businessDay,
+        BusinessDayRevision = businessDayRevision,
+        Snapshot = snapshot,
+        OperationResults = operationResults,
+        KaraokeResults = karaokeResults
+    };
 
-    public static BusinessHomeChangeFlushResult Failed(string message) => new()
+    public static BusinessHomeChangeFlushResult Failed(
+        string message,
+        ResultFailureKind failureKind = ResultFailureKind.Unavailable,
+        string status = "unavailable") => new()
     {
         Succeeded = false,
-        ErrorMessage = message
+        ErrorMessage = message,
+        FailureKind = failureKind,
+        Status = status
     };
 }
 
-public class BusinessDaySnapshotResult
+public class BusinessHomeBootstrapResult
 {
     public bool Succeeded { get; init; }
 
     public string? ErrorMessage { get; init; }
 
-    public JsonElement Snapshot { get; init; }
+    public StoreContext? StoreContext { get; init; }
 
-    public static BusinessDaySnapshotResult Success(JsonElement snapshot)
-    {
-        return new BusinessDaySnapshotResult { Succeeded = true, Snapshot = snapshot };
-    }
+    public StoreBusinessDay? BusinessDay { get; init; }
 
-    public static BusinessDaySnapshotResult Failed(string message)
+    public IReadOnlyList<StoreTableOption> Tables { get; init; } = [];
+
+    public IReadOnlyList<NominationBackMasterItem> NominationOptions { get; init; } = [];
+
+    public IReadOnlyList<StoreOrderItemOption> OrderItems { get; init; } = [];
+
+    public IReadOnlyList<StoreOrderAttendanceCastOption> AttendanceCasts { get; init; } = [];
+
+    public IReadOnlyList<CheckoutPaymentMethod> PaymentMethods { get; init; } = [];
+
+    public JsonElement? Snapshot { get; init; }
+
+    public static BusinessHomeBootstrapResult Success(
+        StoreContext storeContext,
+        StoreBusinessDay? businessDay,
+        IReadOnlyList<StoreTableOption> tables,
+        IReadOnlyList<NominationBackMasterItem> nominationOptions,
+        IReadOnlyList<StoreOrderItemOption> orderItems,
+        IReadOnlyList<StoreOrderAttendanceCastOption> attendanceCasts,
+        IReadOnlyList<CheckoutPaymentMethod> paymentMethods,
+        JsonElement? snapshot) => new()
+        {
+            Succeeded = true,
+            StoreContext = storeContext,
+            BusinessDay = businessDay,
+            Tables = tables,
+            NominationOptions = nominationOptions,
+            OrderItems = orderItems,
+            AttendanceCasts = attendanceCasts,
+            PaymentMethods = paymentMethods,
+            Snapshot = snapshot?.Clone()
+        };
+
+    public static BusinessHomeBootstrapResult Failed(string message) => new()
     {
-        return new BusinessDaySnapshotResult { Succeeded = false, ErrorMessage = message };
-    }
+        Succeeded = false,
+        ErrorMessage = message
+    };
 }
 
 public class StoreBusinessDay
@@ -261,6 +254,7 @@ public class StoreBusinessDay
     public DateTimeOffset? ClosedAt { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Memo { get; set; }
+    public long BusinessUiRevision { get; set; }
 }
 
 public class BusinessDayOperationResult
@@ -283,6 +277,13 @@ public class BusinessDayOperationResult
 public class BusinessDayAttendanceInput
 {
     public long CastId { get; set; }
+    public bool IsSelected { get; set; } = true;
+    public string ClockInTime { get; set; } = string.Empty;
+}
+
+public class BusinessDayStaffAttendanceInput
+{
+    public long StaffId { get; set; }
     public bool IsSelected { get; set; } = true;
     public string ClockInTime { get; set; } = string.Empty;
 }

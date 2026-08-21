@@ -65,7 +65,7 @@ public class CreateSlipEditorTests
         Assert.Contains(edit.Errors, error =>
             error.Message == "前回営業日 2026-07-30 の締め作業が未完了です。締め作業を完了してから新しい営業入力を開始してください。");
         Assert.Contains(edit.Errors, error =>
-            error.Message == "卓番マスタが未登録です。store_table_masterにこの店舗の卓番を登録してください。");
+            error.Message == "卓番が未登録です。店舗設定の「卓番情報」から登録してください。");
         Assert.Contains(edit.Errors, error =>
             error.Message == CreateSlipEditor.AttendanceRequiredMessage);
     }

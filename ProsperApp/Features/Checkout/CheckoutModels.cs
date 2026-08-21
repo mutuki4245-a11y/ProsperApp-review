@@ -24,30 +24,54 @@ public class CheckoutPaymentInputModel
     public decimal Amount { get; set; }
 }
 
-public class ConfirmCheckoutResult
+public sealed record IssueCheckoutStatementV2Mutation(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    long SlipId,
+    DateTimeOffset ClosedAt);
+
+public sealed record ReleaseCheckoutReadyV2Mutation(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    long SlipId);
+
+public sealed record ConfirmCheckoutV2Mutation(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    long SlipId,
+    IReadOnlyList<CheckoutPaymentInputModel> Payments,
+    decimal? ReceivedAmount);
+
+public sealed record CancelCheckoutV2Mutation(
+    string OperationId,
+    long ExpectedBusinessDayId,
+    long ExpectedBusinessDayRevision,
+    long SlipId);
+
+public sealed record CheckoutMutationResult(
+    string OperationId,
+    string Status,
+    string? ErrorCode,
+    string? ErrorMessage,
+    long? SlipId,
+    long? CheckoutId,
+    long? BusinessDayId,
+    long BusinessDayRevision,
+    string? CurrentSlipStatus,
+    decimal ChangeAmount,
+    JsonElement? StatementPrintData,
+    JsonElement? StatementReviewData,
+    JsonElement? ReceiptPrintData,
+    JsonElement? BusinessSnapshot)
 {
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-    public long? CheckoutId { get; init; }
-    public decimal ChangeAmount { get; init; }
-    public JsonElement? ReceiptPrintData { get; init; }
-    public bool RequiresReload { get; init; }
+    public bool Confirmed => string.Equals(Status, "confirmed", StringComparison.Ordinal);
 
-    public static ConfirmCheckoutResult Success(long checkoutId, decimal changeAmount, JsonElement receiptPrintData)
-    {
-        return new ConfirmCheckoutResult
-        {
-            Succeeded = true,
-            CheckoutId = checkoutId,
-            ChangeAmount = changeAmount,
-            ReceiptPrintData = receiptPrintData.Clone()
-        };
-    }
+    public bool Conflict => string.Equals(Status, "conflict", StringComparison.Ordinal);
 
-    public static ConfirmCheckoutResult Failed(string message, bool requiresReload = false)
-    {
-        return new ConfirmCheckoutResult { Succeeded = false, ErrorMessage = message, RequiresReload = requiresReload };
-    }
+    public bool ValidationError => string.Equals(Status, "validation_error", StringComparison.Ordinal);
 }
 
 public class CheckoutStatementResult
@@ -71,15 +95,6 @@ public class CheckoutStatementResult
     };
 }
 
-public class ReleaseCheckoutReadyResult
-{
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-
-    public static ReleaseCheckoutReadyResult Success() => new() { Succeeded = true };
-    public static ReleaseCheckoutReadyResult Failed(string message) => new() { Succeeded = false, ErrorMessage = message };
-}
-
 public class ReceiptPrintDataResult
 {
     public bool Succeeded { get; init; }
@@ -99,21 +114,4 @@ public class ReceiptPrintDataResult
         Succeeded = false,
         ErrorMessage = message
     };
-}
-
-public class CancelCheckoutResult
-{
-    public bool Succeeded { get; init; }
-    public string? ErrorMessage { get; init; }
-    public long? CheckoutId { get; init; }
-
-    public static CancelCheckoutResult Success(long checkoutId)
-    {
-        return new CancelCheckoutResult { Succeeded = true, CheckoutId = checkoutId };
-    }
-
-    public static CancelCheckoutResult Failed(string message)
-    {
-        return new CancelCheckoutResult { Succeeded = false, ErrorMessage = message };
-    }
 }

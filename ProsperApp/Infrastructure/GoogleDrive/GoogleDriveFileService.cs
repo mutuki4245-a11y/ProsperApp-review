@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using ProsperApp.Infrastructure.Caching;
+using System.Diagnostics;
 
 namespace ProsperApp.Infrastructure.GoogleDrive;
 
@@ -8,21 +9,26 @@ public class GoogleDriveFileService(
     HttpClient httpClient,
     IGoogleDriveAuthService googleDriveAuthService,
     IReceiptRepository receiptRepository,
-    IApplicationCache cache) : IDriveFileService
+    IApplicationCache cache,
+    ILogger<GoogleDriveFileService> logger) : IDriveFileService
 {
     private readonly HttpClient _httpClient = httpClient;
     private readonly IGoogleDriveAuthService _googleDriveAuthService = googleDriveAuthService;
     private readonly IReceiptRepository _receiptRepository = receiptRepository;
     private readonly IApplicationCache _cache = cache;
+    private readonly ILogger<GoogleDriveFileService> _logger = logger;
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
 
     public async Task<DriveFileResult> GetFileWithDiagnosticsAsync(string driveFileId, CancellationToken ct)
     {
+        var requestId = Guid.NewGuid().ToString("N");
+        var startedAt = Stopwatch.GetTimestamp();
         if (string.IsNullOrWhiteSpace(driveFileId))
         {
             return DriveFileResult.Failed(
                 "not_allowed",
-                "The drive_file_id is empty or is not included in the current store pending list.");
+                "このファイルは表示できません。",
+                requestId);
         }
 
         var pendingAccess = await _receiptRepository.IsPendingDriveFileAllowedAsync(driveFileId, ct);
@@ -30,14 +36,16 @@ public class GoogleDriveFileService(
         {
             return DriveFileResult.Failed(
                 "pending_lookup_failed",
-                pendingAccess.ErrorMessage ?? "The pending receipt list could not be loaded.");
+                "領収書の確認処理を利用できません。",
+                requestId);
         }
 
         if (!pendingAccess.Value)
         {
             return DriveFileResult.Failed(
                 "not_allowed",
-                "The drive_file_id is empty or is not included in the current store pending list.");
+                "このファイルは表示できません。",
+                requestId);
         }
 
         if (_cache.TryGetValue(BuildCacheKey(driveFileId), out CachedDriveFile? cachedFile) &&
@@ -51,15 +59,17 @@ public class GoogleDriveFileService(
         {
             return DriveFileResult.Failed(
                 "missing_access_token",
-                "Google access token was not found. Sign in with Google again.");
+                "Googleへの再ログインが必要です。",
+                requestId);
         }
 
         var metadataResult = await GetMetadataAsync(driveFileId, accessToken, ct);
         if (metadataResult.Metadata is null)
         {
             return DriveFileResult.Failed(
-                metadataResult.ErrorCode ?? "metadata_failed",
-                metadataResult.ErrorMessage ?? "Drive metadata request failed. The Google account may not have access to this file.");
+                metadataResult.ErrorCode ?? "drive_upstream_failed",
+                "Google Driveからファイルを取得できません。",
+                requestId);
         }
 
         var metadata = metadataResult.Metadata;
@@ -72,10 +82,13 @@ public class GoogleDriveFileService(
         using var mediaResponse = await _httpClient.SendAsync(mediaRequest, ct);
         if (!mediaResponse.IsSuccessStatusCode)
         {
-            var errorBody = await mediaResponse.Content.ReadAsStringAsync(ct);
+            LogFailure(requestId, (int)mediaResponse.StatusCode, startedAt, "drive_media_failed");
             return DriveFileResult.Failed(
-                $"media_failed_{(int)mediaResponse.StatusCode}",
-                $"Drive media request failed: {errorBody}");
+                mediaResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "drive_auth_failed"
+                    : "drive_upstream_failed",
+                "Google Driveからファイルを取得できません。",
+                requestId);
         }
 
         var bytes = await mediaResponse.Content.ReadAsByteArrayAsync(ct);
@@ -92,6 +105,11 @@ public class GoogleDriveFileService(
             "Drive",
             cached.FileName);
 
+        _logger.LogInformation(
+            "Drive fetch status={Status} duration_ms={DurationMs} request_id={RequestId}",
+            200,
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+            requestId);
         return DriveFileResult.Success(ToDriveFileContent(cached));
     }
 
@@ -123,10 +141,14 @@ public class GoogleDriveFileService(
         using var response = await _httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
         {
-            var errorBody = await response.Content.ReadAsStringAsync(ct);
             return DriveMetadataResult.Failed(
-                $"metadata_failed_{(int)response.StatusCode}",
-                $"Drive metadata request failed: {errorBody}");
+                response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.Unauthorized => "drive_auth_failed",
+                    System.Net.HttpStatusCode.NotFound => "drive_not_found",
+                    _ => "drive_upstream_failed"
+                },
+                "Google Driveからファイルを取得できません。");
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
@@ -135,6 +157,16 @@ public class GoogleDriveFileService(
             new JsonSerializerOptions(JsonSerializerDefaults.Web),
             ct);
         return DriveMetadataResult.Success(metadata);
+    }
+
+    private void LogFailure(string requestId, int status, long startedAt, string errorCode)
+    {
+        _logger.LogWarning(
+            "Drive fetch status={Status} duration_ms={DurationMs} request_id={RequestId} error_code={ErrorCode}",
+            status,
+            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+            requestId,
+            errorCode);
     }
 
     private sealed class DriveMetadataResult

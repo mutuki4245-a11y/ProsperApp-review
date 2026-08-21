@@ -1,14 +1,16 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
 using ProsperApp.Options;
+using System.Globalization;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace ProsperApp.Infrastructure.GoogleDrive;
 
 public interface IGoogleDriveAuthService
 {
     bool IsGoogleAuthConfigured { get; }
-
-    bool HasAccessRestriction { get; }
 
     string? ConfigurationErrorMessage { get; }
 
@@ -20,21 +22,19 @@ public interface IGoogleDriveAuthService
 }
 
 public sealed class GoogleDriveAuthService(
+    HttpClient httpClient,
     IHttpContextAccessor httpContextAccessor,
     IOptions<GoogleDriveOptions> driveOptions,
-    IOptions<GoogleAuthOptions> authOptions) : IGoogleDriveAuthService
+    ILogger<GoogleDriveAuthService> logger) : IGoogleDriveAuthService
 {
-    private const string GoogleDriveAccessTokenSessionKey = "GoogleDriveAccessToken";
-
+    private readonly HttpClient _httpClient = httpClient;
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private readonly GoogleDriveOptions _driveOptions = driveOptions.Value;
-    private readonly GoogleAuthOptions _authOptions = authOptions.Value;
+    private readonly ILogger<GoogleDriveAuthService> _logger = logger;
 
     public bool IsGoogleAuthConfigured =>
         !string.IsNullOrWhiteSpace(_driveOptions.ClientId) &&
         !string.IsNullOrWhiteSpace(_driveOptions.ClientSecret);
-
-    public bool HasAccessRestriction => _authOptions.HasAccessRestriction;
 
     public string? ConfigurationErrorMessage
     {
@@ -43,11 +43,6 @@ public sealed class GoogleDriveAuthService(
             if (!IsGoogleAuthConfigured)
             {
                 return "Google認証設定が未設定です。Azure App Serviceの環境変数 GoogleDrive__ClientId / GoogleDrive__ClientSecret を設定してください。";
-            }
-
-            if (!HasAccessRestriction)
-            {
-                return "Googleログインの許可アカウントが未設定です。GoogleAuth__AllowedEmails または GoogleAuth__AllowedDomains を設定してください。";
             }
 
             return null;
@@ -62,13 +57,69 @@ public sealed class GoogleDriveAuthService(
             return null;
         }
 
-        var sessionToken = httpContext.Session.GetString(GoogleDriveAccessTokenSessionKey);
-        if (!string.IsNullOrWhiteSpace(sessionToken))
+        var authentication = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        var accessToken = authentication.Properties?.GetTokenValue("access_token");
+        var expiresAtText = authentication.Properties?.GetTokenValue("expires_at");
+        if (!string.IsNullOrWhiteSpace(accessToken) &&
+            DateTimeOffset.TryParse(expiresAtText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expiresAt) &&
+            expiresAt > DateTimeOffset.UtcNow.AddMinutes(1))
         {
-            return sessionToken;
+            return accessToken;
         }
 
-        return await httpContext.GetTokenAsync("access_token");
+        var refreshToken = authentication.Properties?.GetTokenValue("refresh_token");
+        if (string.IsNullOrWhiteSpace(refreshToken) || authentication.Principal is null || authentication.Properties is null)
+        {
+            await RejectTicketAsync(httpContext);
+            return null;
+        }
+
+        try
+        {
+            using var response = await _httpClient.PostAsync(
+                "https://oauth2.googleapis.com/token",
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"] = _driveOptions.ClientId,
+                    ["client_secret"] = _driveOptions.ClientSecret,
+                    ["refresh_token"] = refreshToken,
+                    ["grant_type"] = "refresh_token"
+                }),
+                httpContext.RequestAborted);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Google token refresh failed with status {Status}", (int)response.StatusCode);
+                await RejectTicketAsync(httpContext);
+                return null;
+            }
+
+            var token = await response.Content.ReadFromJsonAsync<GoogleTokenResponse>(
+                cancellationToken: httpContext.RequestAborted);
+            if (string.IsNullOrWhiteSpace(token?.AccessToken) || token.ExpiresIn <= 0)
+            {
+                await RejectTicketAsync(httpContext);
+                return null;
+            }
+
+            authentication.Properties.UpdateTokenValue("access_token", token.AccessToken);
+            authentication.Properties.UpdateTokenValue(
+                "expires_at",
+                DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn).ToString("O", CultureInfo.InvariantCulture));
+            authentication.Properties.UpdateTokenValue("refresh_token", refreshToken);
+            authentication.Properties.IsPersistent = true;
+            authentication.Properties.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(90);
+            await httpContext.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                authentication.Principal,
+                authentication.Properties);
+            return token.AccessToken;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogWarning(ex, "Google token refresh request failed");
+            await RejectTicketAsync(httpContext);
+            return null;
+        }
     }
 
     public async Task<bool> HasAccessTokenAsync()
@@ -78,6 +129,21 @@ public sealed class GoogleDriveAuthService(
 
     public void ClearAccessToken()
     {
-        _httpContextAccessor.HttpContext?.Session.Remove(GoogleDriveAccessTokenSessionKey);
+        _httpContextAccessor.HttpContext?.Session.Clear();
+    }
+
+    private static async Task RejectTicketAsync(HttpContext context)
+    {
+        context.Session.Clear();
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    }
+
+    private sealed class GoogleTokenResponse
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("access_token")]
+        public string? AccessToken { get; init; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("expires_in")]
+        public int ExpiresIn { get; init; }
     }
 }

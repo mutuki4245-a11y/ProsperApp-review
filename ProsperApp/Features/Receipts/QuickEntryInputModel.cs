@@ -4,13 +4,18 @@ namespace ProsperApp.Features.Receipts;
 
 public class QuickEntryInputModel
 {
+    public long? BusinessDayId { get; set; }
+
+    [Display(Name = "前渡し対象キャスト")]
+    public long? AdvanceCastId { get; set; }
+
     [Required]
     public string DocumentId { get; set; } = string.Empty;
 
     public string? DriveFileId { get; set; }
 
-    [Display(Name = "支払日")]
-    [Required(ErrorMessage = "支払日を入力してください。")]
+    [Display(Name = "取引日")]
+    [Required(ErrorMessage = "取引日を入力してください。")]
     public DateOnly? PaymentDate { get; set; }
 
     [Display(Name = "金額")]

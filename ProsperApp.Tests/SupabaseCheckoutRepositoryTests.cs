@@ -1,5 +1,7 @@
 using System.Text.Json;
 using ProsperApp.Features.Shared;
+using ProsperApp.Features.StoreBootstrap;
+using ProsperApp.Infrastructure.Caching;
 using ProsperApp.Services;
 
 namespace ProsperApp.Tests;
@@ -7,15 +9,11 @@ namespace ProsperApp.Tests;
 public class SupabaseCheckoutRepositoryTests
 {
     [Fact]
-    public async Task GetPaymentMethodsAsync_ReturnsSuccessfulEmptyListWhenRpcReturnsNoRows()
+    public async Task GetPaymentMethodsAsync_ReturnsSuccessfulEmptyListWhenBootstrapReturnsNoRows()
     {
-        var rpcClient = new FakeSupabaseRpcClient
-        {
-            ArrayResult = SupabaseRpcResult.Success("[]") with { Rows = [] }
-        };
-        var repository = new SupabaseCheckoutRepository(
-            rpcClient,
-            new FakeLocalSettingsProvider(42));
+        var rpcClient = new FakeSupabaseRpcClient();
+        var bootstrapper = FakeStoreMasterBootstrapper.Success("{\"payment_methods\":[]}");
+        var repository = CreateRepository(rpcClient, bootstrapper);
 
         var result = await repository.GetPaymentMethodsAsync(CancellationToken.None);
 
@@ -23,20 +21,18 @@ public class SupabaseCheckoutRepositoryTests
         Assert.Empty(result.Value);
         Assert.Null(result.FailureKind);
         Assert.Null(result.ErrorMessage);
-        Assert.Equal("store.get_payment_methods", rpcClient.FunctionName);
-        Assert.Equal(42, rpcClient.Payload.GetProperty("p_department_id").GetInt64());
+        Assert.Equal(1, bootstrapper.EnsureCallCount);
+        Assert.Null(rpcClient.FunctionName);
     }
 
     [Fact]
-    public async Task GetPaymentMethodsAsync_ReturnsUnavailableFailureWhenRpcFails()
+    public async Task GetPaymentMethodsAsync_ReturnsUnavailableFailureWhenBootstrapFails()
     {
-        var rpcClient = new FakeSupabaseRpcClient
-        {
-            ArrayResult = SupabaseRpcResult.Failed("HTTP 503 upstream unavailable")
-        };
-        var repository = new SupabaseCheckoutRepository(
-            rpcClient,
-            new FakeLocalSettingsProvider(42));
+        var rpcClient = new FakeSupabaseRpcClient();
+        var bootstrapper = FakeStoreMasterBootstrapper.Failure(
+            ResultFailureKind.Unavailable,
+            "HTTP 503 upstream unavailable");
+        var repository = CreateRepository(rpcClient, bootstrapper);
 
         var result = await repository.GetPaymentMethodsAsync(CancellationToken.None);
 
@@ -46,15 +42,13 @@ public class SupabaseCheckoutRepositoryTests
     }
 
     [Fact]
-    public async Task GetPaymentMethodsAsync_ReturnsPermissionDeniedForForbiddenRpc()
+    public async Task GetPaymentMethodsAsync_ReturnsPermissionDeniedWhenBootstrapIsForbidden()
     {
-        var rpcClient = new FakeSupabaseRpcClient
-        {
-            ArrayResult = SupabaseRpcResult.Failed("HTTP 403 forbidden")
-        };
-        var repository = new SupabaseCheckoutRepository(
-            rpcClient,
-            new FakeLocalSettingsProvider(42));
+        var rpcClient = new FakeSupabaseRpcClient();
+        var bootstrapper = FakeStoreMasterBootstrapper.Failure(
+            ResultFailureKind.PermissionDenied,
+            "Edge Function経由のRPC実行権限がありません。prosper-rpcのキー設定を確認してください。");
+        var repository = CreateRepository(rpcClient, bootstrapper);
 
         var result = await repository.GetPaymentMethodsAsync(CancellationToken.None);
 
@@ -66,12 +60,13 @@ public class SupabaseCheckoutRepositoryTests
     }
 
     [Fact]
-    public async Task GetPaymentMethodsAsync_ReturnsNotConfiguredWithoutRpcAccess()
+    public async Task GetPaymentMethodsAsync_ReturnsNotConfiguredWhenBootstrapIsNotConfigured()
     {
         var rpcClient = new FakeSupabaseRpcClient { HasAccess = false };
-        var repository = new SupabaseCheckoutRepository(
-            rpcClient,
-            new FakeLocalSettingsProvider(42));
+        var bootstrapper = FakeStoreMasterBootstrapper.Failure(
+            ResultFailureKind.NotConfigured,
+            "Supabase Edge Function設定が未設定です。");
+        var repository = CreateRepository(rpcClient, bootstrapper);
 
         var result = await repository.GetPaymentMethodsAsync(CancellationToken.None);
 
@@ -79,7 +74,17 @@ public class SupabaseCheckoutRepositoryTests
         Assert.Equal(ResultFailureKind.NotConfigured, result.FailureKind);
         Assert.Equal("Supabase Edge Function設定が未設定です。", result.ErrorMessage);
         Assert.Null(rpcClient.FunctionName);
+        Assert.Equal(1, bootstrapper.EnsureCallCount);
     }
+
+    private static SupabaseCheckoutRepository CreateRepository(
+        FakeSupabaseRpcClient rpcClient,
+        FakeStoreMasterBootstrapper bootstrapper) =>
+        new(
+            rpcClient,
+            new FakeLocalSettingsProvider(42),
+            new FakeApplicationCache(),
+            bootstrapper);
 
     private sealed class FakeSupabaseRpcClient : ISupabaseRpcClient
     {
@@ -117,5 +122,51 @@ public class SupabaseCheckoutRepositoryTests
         {
             return new LocalSettings { StoreDepartmentId = departmentId };
         }
+    }
+
+    private sealed class FakeStoreMasterBootstrapper(Result<StoreBootstrapPayload> result)
+        : IStoreMasterBootstrapper
+    {
+        public int EnsureCallCount { get; private set; }
+
+        public static FakeStoreMasterBootstrapper Success(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            return new FakeStoreMasterBootstrapper(Result<StoreBootstrapPayload>.Success(
+                new StoreBootstrapPayload(42, document.RootElement.Clone(), false)));
+        }
+
+        public static FakeStoreMasterBootstrapper Failure(ResultFailureKind kind, string message) =>
+            new(Result<StoreBootstrapPayload>.Failure(kind, message));
+
+        public Task<Result<StoreBootstrapPayload>> GetStoreBootstrapAsync(CancellationToken ct) =>
+            Task.FromResult(result);
+
+        public Task<Result<StoreBootstrapPayload>> EnsureAsync(CancellationToken ct)
+        {
+            EnsureCallCount++;
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class FakeApplicationCache : IApplicationCache
+    {
+        public bool TryGetValue<T>(string key, out T? value)
+        {
+            value = default;
+            return false;
+        }
+
+        public void Set<T>(string key, T value, TimeSpan? ttl, string category, string displayName)
+        {
+        }
+
+        public void Remove(string key)
+        {
+        }
+
+        public IReadOnlyList<ApplicationCacheStatus> GetStatuses() => [];
+
+        public int ClearAll() => 0;
     }
 }

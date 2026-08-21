@@ -4,20 +4,11 @@ namespace ProsperApp.Features.Closing;
 
 public interface IClosingApplicationService
 {
-    Task<Result<ClosingPageState>> LoadAsync(
-        bool includeReadiness,
-        bool includePendingReceipts,
-        bool forceRefresh,
+    Task<Result<CurrentClosingDashboard>> GetDashboardAsync(
+        string? knownCastMasterRevision,
         CancellationToken ct);
 
-    Task<Result<StoreBusinessDay>> CloseAsync(
-        long? submittedBusinessDayId,
-        string? memo,
-        bool includePendingReceipts,
+    Task<Result<CurrentBusinessDayCloseOutput>> CloseAsync(
+        CurrentBusinessDayCloseMutation input,
         CancellationToken ct);
 }
-
-public sealed record ClosingPageState(
-    StoreBusinessDay? BusinessDay,
-    BusinessDayClosingReadiness? Readiness,
-    DateTimeOffset? LastUpdatedAt);

@@ -1,0 +1,90 @@
+name: Prune merged branches
+
+# Delete branches whose commits are already reachable from the default branch.
+#
+# GitHub's own "automatically delete head branches" only fires when a pull
+# request is merged. Work that reaches the default branch by a local merge and
+# a direct push leaves its branch behind forever, so sweeping on a schedule is
+# what actually keeps the branch list short.
+#
+# Only ancestors of the default branch are deleted, so a branch holding work
+# the default branch does not have is never touched. The grace period keeps a
+# freshly cut branch alive while someone is still working on it, before its
+# first commit lands.
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be deleted without deleting it'
+        type: boolean
+        default: true
+      grace_days:
+        description: 'Keep branches whose last commit is newer than this many days'
+        type: string
+        default: '7'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prune-merged-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Delete merged branches
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          GRACE_DAYS: ${{ github.event_name == 'workflow_dispatch' && inputs.grace_days || '7' }}
+        run: |
+          set -euo pipefail
+
+          cutoff=$(( $(date +%s) - GRACE_DAYS * 86400 ))
+          matched=0
+          kept=0
+
+          echo "default branch: $DEFAULT_BRANCH"
+          echo "grace period:   $GRACE_DAYS days"
+          echo "dry run:        $DRY_RUN"
+          echo
+
+          while read -r committed branch; do
+            [ "$branch" = "$DEFAULT_BRANCH" ] && continue
+            [ "$branch" = "HEAD" ] && continue
+
+            if ! git merge-base --is-ancestor "refs/remotes/origin/$branch" "refs/remotes/origin/$DEFAULT_BRANCH"; then
+              echo "keep    $branch -- carries commits $DEFAULT_BRANCH does not have"
+              kept=$(( kept + 1 ))
+              continue
+            fi
+
+            if [ "$committed" -gt "$cutoff" ]; then
+              echo "keep    $branch -- last commit within the grace period"
+              kept=$(( kept + 1 ))
+              continue
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "would delete $branch"
+            else
+              git push origin --delete "$branch"
+              echo "deleted $branch"
+            fi
+            matched=$(( matched + 1 ))
+          done < <(git for-each-ref --format='%(committerdate:unix) %(refname:lstrip=3)' refs/remotes/origin)
+
+          verb=deleted
+          [ "$DRY_RUN" = "true" ] && verb="would be deleted"
+
+          echo
+          echo "$matched $verb, $kept kept" | tee -a "$GITHUB_STEP_SUMMARY"

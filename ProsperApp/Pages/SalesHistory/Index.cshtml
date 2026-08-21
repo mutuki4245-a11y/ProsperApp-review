@@ -1,0 +1,127 @@
+@page
+@model ProsperApp.Pages.SalesHistory.IndexModel
+@{
+    ViewData["Title"] = "営業履歴";
+    ViewData["HasCurrentBusinessDay"] = false;
+    var salesHistoryDailyReportModel = new ProsperApp.Features.DailyReports.DailyReportPartialViewModel
+    {
+        ReportUrl = Url.Page("/SalesHistory/Index", "DailyReport") ?? string.Empty,
+        TitleId = "salesHistoryDailyReportTitle",
+        AutoLoad = false
+    };
+}
+
+<section class="terminal-page sales-history"
+         data-sales-history
+         data-history-page-url="@Url.Page("/SalesHistory/Index", "HistoryPage")"
+         data-correction-editor-url="@Url.Page("/SalesHistory/Index", "CorrectionEditor")"
+         data-correction-save-url="@Url.Page("/SalesHistory/Index", "CorrectionSave")"
+         data-daily-report-url="@Url.Page("/SalesHistory/Index", "DailyReport")">
+    <header class="page-section-heading sales-history__heading">
+        <div>
+            <h1>営業履歴</h1>
+            <p>営業日ごとの確定内容と日報</p>
+        </div>
+        <span class="terminal-count-badge" data-history-count>取得中</span>
+    </header>
+
+    <form class="sales-history__filters" data-history-filter-form>
+        <div>
+            <label class="form-label" for="salesHistoryFromDate">開始日</label>
+            <input class="form-control" id="salesHistoryFromDate" type="date" data-history-from-date />
+        </div>
+        <div>
+            <label class="form-label" for="salesHistoryToDate">終了日</label>
+            <input class="form-control" id="salesHistoryToDate" type="date" data-history-to-date />
+        </div>
+        <div class="sales-history__filter-actions">
+            <button class="btn btn-primary" type="submit">絞り込む</button>
+            <button class="btn btn-outline-secondary" type="button" data-history-filter-clear>クリア</button>
+        </div>
+    </form>
+
+    <form class="d-none" aria-hidden="true" data-sales-history-token-form>
+        @Html.AntiForgeryToken()
+    </form>
+
+    <div class="alert alert-danger" role="alert" data-history-error hidden></div>
+
+    <div class="sales-history__workspace">
+        <aside class="sales-history__list-pane" aria-labelledby="salesHistoryListTitle">
+            <div class="sales-history__pane-heading">
+                <h2 id="salesHistoryListTitle">営業日</h2>
+                <span class="text-muted small">新しい順</span>
+            </div>
+            <div class="sales-history__loading" role="status" data-history-loading>
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span>営業履歴を取得しています。</span>
+            </div>
+            <div class="sales-history__empty" data-history-empty hidden>
+                指定した期間に営業履歴はありません。
+            </div>
+            <div class="alert alert-info py-2" role="status" data-history-preferred-not-found hidden>
+                指定された営業日は最初の5ページ内に見つかりませんでした。期間を絞り込んで再検索してください。
+            </div>
+            <div class="sales-history__list" data-history-list></div>
+            <button class="btn btn-outline-secondary sales-history__load-more" type="button" data-history-load-more hidden>
+                さらに表示
+            </button>
+        </aside>
+
+        <main class="sales-history__detail-pane">
+            <section class="sales-history__selection-empty" data-history-selection-empty>
+                <h2>営業日を選択</h2>
+                <p>左の一覧から閲覧する営業日を選択してください。</p>
+            </section>
+
+            <div data-history-detail hidden>
+                <header class="sales-history__detail-header">
+                    <div>
+                        <div class="sales-history__detail-state">
+                            <span class="badge text-bg-secondary" data-history-selected-status>状態</span>
+                            <span class="badge text-bg-info" data-history-selected-corrected hidden>補正済み</span>
+                        </div>
+                        <h2 data-history-selected-date></h2>
+                        <p data-history-selected-memo></p>
+                    </div>
+                    <div class="sales-history__detail-actions">
+                        <a class="btn btn-primary" asp-page="/Closing/Index" data-history-closing-link hidden>締め作業を開く</a>
+                        <button class="btn btn-primary" type="button" data-history-correction-open hidden>営業内容を補正</button>
+                    </div>
+                </header>
+
+                <dl class="sales-history__summary" aria-label="営業サマリー">
+                    <div>
+                        <dt>売上</dt>
+                        <dd data-history-selected-sales>0円</dd>
+                    </div>
+                    <div>
+                        <dt>客数</dt>
+                        <dd data-history-selected-customers>0名</dd>
+                    </div>
+                    <div>
+                        <dt>組数</dt>
+                        <dd data-history-selected-slips>0組</dd>
+                    </div>
+                </dl>
+
+                <div class="alert alert-warning sales-history__warning" role="alert" data-history-warning hidden></div>
+                <div class="alert alert-secondary sales-history__report-unavailable" role="status" data-history-report-unavailable hidden>
+                    この営業日は日報スナップショットがないため、日報を表示できません。
+                </div>
+
+                <div class="sales-history__report" data-history-report hidden>
+                    <partial name="_DailyReport" model="salesHistoryDailyReportModel" />
+                </div>
+            </div>
+        </main>
+    </div>
+
+    @* 補正タブ: 基本情報 / 勤怠 / ドリンクバック / キャスト売上。補正理由は maxlength="500"。 *@
+    <partial name="_CorrectionModal" />
+</section>
+
+@section Scripts {
+    <script src="~/js/features/daily-report.js" asp-append-version="true"></script>
+    <script src="~/js/features/sales-history.js" asp-append-version="true"></script>
+}

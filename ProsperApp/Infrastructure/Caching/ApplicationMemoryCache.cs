@@ -27,29 +27,53 @@ public sealed class ApplicationMemoryCache(
     public void Set<T>(
         string key,
         T value,
-        TimeSpan ttl,
+        TimeSpan? ttl,
         string category,
         string displayName)
     {
         var fetchedAt = _timeProvider.GetUtcNow();
-        _memoryCache.Set(
-            key,
-            value,
-            new MemoryCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = ttl,
-                Priority = CacheItemPriority.Normal
-            });
-        _registrations[key] = new CacheRegistration(
+        var registration = new CacheRegistration(
             category,
             displayName,
             fetchedAt,
-            fetchedAt.Add(ttl));
+            ttl is { } expiration ? fetchedAt.Add(expiration) : null);
+        var options = new MemoryCacheEntryOptions
+        {
+            Priority = CacheItemPriority.Normal
+        };
+        if (ttl is { } duration)
+        {
+            options.AbsoluteExpirationRelativeToNow = duration;
+        }
+
+        options.RegisterPostEvictionCallback((evictedKey, _, _, _) =>
+        {
+            if (evictedKey is string cacheKey)
+            {
+                RemoveRegistration(cacheKey, registration);
+            }
+        });
+
+        _registrations[key] = registration;
+        try
+        {
+            _memoryCache.Set(key, value, options);
+        }
+        catch
+        {
+            RemoveRegistration(key, registration);
+            throw;
+        }
     }
 
     public void Remove(string key)
     {
+        _registrations.TryGetValue(key, out var registration);
         _memoryCache.Remove(key);
+        if (registration is not null)
+        {
+            RemoveRegistration(key, registration);
+        }
     }
 
     public IReadOnlyList<ApplicationCacheStatus> GetStatuses()
@@ -71,22 +95,29 @@ public sealed class ApplicationMemoryCache(
     public int ClearAll()
     {
         var count = 0;
-        foreach (var key in _registrations.Keys)
+        foreach (var entry in _registrations.ToArray())
         {
-            if (_memoryCache.TryGetValue(key, out _))
+            if (_memoryCache.TryGetValue(entry.Key, out _))
             {
                 count++;
             }
 
-            _memoryCache.Remove(key);
+            _memoryCache.Remove(entry.Key);
+            RemoveRegistration(entry.Key, entry.Value);
         }
 
         return count;
+    }
+
+    private void RemoveRegistration(string key, CacheRegistration registration)
+    {
+        _registrations.TryRemove(
+            new KeyValuePair<string, CacheRegistration>(key, registration));
     }
 
     private sealed record CacheRegistration(
         string Category,
         string DisplayName,
         DateTimeOffset LastFetchedAt,
-        DateTimeOffset ExpiresAt);
+        DateTimeOffset? ExpiresAt);
 }

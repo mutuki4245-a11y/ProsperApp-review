@@ -7,11 +7,53 @@
 
     const createSlipForm = createSlipModalElement.querySelector('form');
     const createSlipSubmitButton = document.getElementById('businessCreateSlipSubmit');
+    const createSlipOpenButton = document.querySelector('[data-business-create-slip-button]');
+    const createSlipWarning = document.querySelector('[data-business-create-slip-warning]');
     let castOptions = Array.isArray(config.castOptions) ? config.castOptions : [];
+    if (Array.isArray(window.ProsperCurrentAttendanceCasts)) {
+        castOptions = window.ProsperCurrentAttendanceCasts.map((cast) => ({
+            id: cast.cast_id ?? cast.id,
+            name: cast.display_name ?? cast.name,
+            display: cast.search_display_name ?? cast.display ?? cast.display_name ?? cast.name,
+            department: cast.department_name ?? cast.department
+        }));
+    }
     let castOptionsLoaded = castOptions.length > 0;
     let castOptionsLoading = null;
-    const attendanceCastsUrl = config.attendanceCastsUrl || '';
     const showCreateSlipModal = Boolean(config.showCreateSlipModal);
+    const departmentId = window.ProsperBusinessHomeConfig?.departmentId;
+    const draftStorageKey = departmentId ? `prosper:create-slip-draft:v2:${departmentId}` : '';
+    const saveResponse = window.ProsperSaveResponse;
+    let pendingCreateCommand = null;
+    let isSubmitting = false;
+    let isRestoringDraft = false;
+    let persistCreateDraft = () => {};
+
+    const syncCreateAvailability = () => {
+        const available = castOptions.length > 0;
+        if (createSlipOpenButton) createSlipOpenButton.disabled = !available;
+        if (createSlipSubmitButton) {
+            createSlipSubmitButton.disabled = isSubmitting || !available ||
+                !document.getElementById('businessCreateSlipTableId')?.value;
+        }
+        if (createSlipWarning) createSlipWarning.hidden = available;
+    };
+
+    document.addEventListener('prosper:attendance-casts-updated', (event) => {
+        castOptions = Array.isArray(event.detail?.casts)
+            ? event.detail.casts.map((cast) => ({
+                id: cast.cast_id ?? cast.id,
+                name: cast.display_name ?? cast.name,
+                display: cast.search_display_name ?? cast.display ?? cast.display_name ?? cast.name,
+                department: cast.department_name ?? cast.department
+            }))
+            : [];
+        castOptionsLoaded = true;
+        castOptionsLoading = null;
+        syncCreateAvailability();
+    });
+
+    syncCreateAvailability();
     const tableIdInput = document.getElementById('businessCreateSlipTableId');
     const customerList = document.getElementById('businessCustomerList');
     const customerCountDisplay = document.getElementById('businessCustomerCount');
@@ -30,12 +72,7 @@
     const castModal = castModalElement ? bootstrap.Modal.getOrCreateInstance(castModalElement) : null;
     let castModalTargetRow = null;
     const nominationKindOptions = Array.isArray(config.nominationKindOptions) ? config.nominationKindOptions : [];
-    const escapeHtml = (value) => String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    const escapeHtml = window.ProsperHtml.escape;
     const nominationKindOptionsHtml = nominationKindOptions
         .map((option, index) => `<option value="${escapeHtml(option.value)}" ${index === 0 ? 'selected' : ''} data-companion="${option.isCompanion === true ? 'true' : 'false'}">${escapeHtml(option.label)}</option>`)
         .join('');
@@ -66,34 +103,7 @@
             return castOptions;
         }
 
-        if (!castOptionsLoading) {
-            castOptionsLoading = fetch(attendanceCastsUrl, {
-                headers: {
-                    'Accept': 'application/json'
-                }
-            })
-                .then((response) => {
-                    if (!response.ok) {
-                        throw new Error('Attendance casts load failed.');
-                    }
-
-                    return response.json();
-                })
-                .then((items) => {
-                    castOptions = Array.isArray(items) ? items : [];
-                    castOptionsLoaded = true;
-                    castOptionsLoading = null;
-                    return castOptions;
-                })
-                .catch(() => {
-                    castOptions = [];
-                    castOptionsLoaded = false;
-                    castOptionsLoading = null;
-                    return castOptions;
-                });
-        }
-
-        return castOptionsLoading;
+        return castOptions;
     };
 
     document.querySelectorAll('[data-business-slip-table-id]').forEach((button) => {
@@ -104,6 +114,8 @@
             document.querySelectorAll('[data-business-slip-table-id]').forEach((target) => {
                 target.classList.toggle('is-selected', target === button);
             });
+            persistCreateDraft();
+            syncCreateAvailability();
         });
     });
 
@@ -119,6 +131,7 @@
         hiddenName.value = cast.display;
         selected.textContent = cast.display;
         renumberNominationRows();
+        persistCreateDraft();
     };
 
     const getCustomerRows = () => customerList?.querySelectorAll('[data-business-customer-row]') ?? [];
@@ -151,7 +164,7 @@
         syncCustomerCountControls();
     };
 
-    const addCustomerRow = () => {
+    const addCustomerRow = (focus = true) => {
         if (!customerList) {
             return;
         }
@@ -168,8 +181,11 @@
             <input class="form-control form-control-lg" name="CreateSlipInput.CustomerLabels[${count}]" maxlength="100" placeholder="お客様名" />
         `;
         customerList.appendChild(row);
-        row.querySelector('input')?.focus();
+        if (focus) {
+            row.querySelector('input')?.focus();
+        }
         renumberCustomerRows();
+        persistCreateDraft();
     };
 
     const removeLastCustomerRow = () => {
@@ -180,6 +196,7 @@
 
         rows[rows.length - 1]?.remove();
         renumberCustomerRows();
+        persistCreateDraft();
     };
 
     const selectedNominationCastIds = () => new Set(
@@ -279,8 +296,9 @@
 
     const getNominationRows = () => nominationList?.querySelectorAll('[data-business-nomination-row]') ?? [];
 
-    const addNominationRow = () => {
-        if (!nominationList || nominationKindOptions.length === 0 || availableNominationCasts().length === 0) {
+    const addNominationRow = (allowUnavailable = false) => {
+        if (!nominationList || nominationKindOptions.length === 0 ||
+            (!allowUnavailable && availableNominationCasts().length === 0)) {
             return;
         }
 
@@ -310,6 +328,7 @@
         nominationList.appendChild(row);
         wireNominationRow(row);
         renumberNominationRows();
+        persistCreateDraft();
     };
 
     const removeLastNominationRow = () => {
@@ -320,14 +339,175 @@
 
         rows[rows.length - 1]?.remove();
         renumberNominationRows();
+        persistCreateDraft();
     };
 
     decreaseCustomerCountButton?.addEventListener('click', removeLastCustomerRow);
-    increaseCustomerCountButton?.addEventListener('click', addCustomerRow);
+    increaseCustomerCountButton?.addEventListener('click', () => addCustomerRow());
     decreaseNominationCountButton?.addEventListener('click', removeLastNominationRow);
-    increaseNominationCountButton?.addEventListener('click', addNominationRow);
+    increaseNominationCountButton?.addEventListener('click', () => addNominationRow());
 
-    let isExplicitCreateSlipSubmit = false;
+    const readCreateDraft = () => {
+        if (!draftStorageKey) {
+            return null;
+        }
+
+        try {
+            const draft = JSON.parse(localStorage.getItem(draftStorageKey) || 'null');
+            return draft?.version === 2 ? draft : null;
+        } catch {
+            try {
+                localStorage.removeItem(draftStorageKey);
+            } catch {
+                // localStorageを利用できない端末では画面内の入力だけを保持する。
+            }
+            return null;
+        }
+    };
+
+    const clearCreateDraft = () => {
+        if (!draftStorageKey) {
+            return;
+        }
+
+        try {
+            localStorage.removeItem(draftStorageKey);
+        } catch {
+            // localStorageを利用できない端末では画面内の入力だけを保持する。
+        }
+    };
+
+    const snapshotCreateDraft = () => ({
+        version: 2,
+        departmentId,
+        tableId: Number(tableIdInput?.value || 0) || null,
+        businessDate: createSlipForm?.querySelector('[data-business-create-date-input]')?.value || null,
+        openedTime: createSlipForm?.querySelector('[name="CreateSlipInput.OpenedTime"]')?.value || null,
+        customerLabels: Array.from(createSlipForm?.querySelectorAll('[data-business-customer-row] input') || [])
+            .map((input) => input.value),
+        nominations: Array.from(getNominationRows()).map((row) => ({
+            castId: Number(row.querySelector('[data-business-cast-id]')?.value || 0) || null,
+            castName: row.querySelector('[data-business-cast-name-hidden]')?.value || null,
+            nominationKind: row.querySelector('.nomination-row__kind')?.value || null,
+            nominationPrice: row.querySelector('.nomination-row__price')?.value || null
+        })),
+        memo: createSlipForm?.querySelector('[name="CreateSlipInput.Memo"]')?.value || '',
+        pendingCreateCommand
+    });
+
+    persistCreateDraft = () => {
+        if (!draftStorageKey || isRestoringDraft) {
+            return;
+        }
+
+        const draft = snapshotCreateDraft();
+        const hasInput = Boolean(
+            draft.pendingCreateCommand ||
+            draft.tableId ||
+            draft.memo.trim() ||
+            draft.nominations.length > 0 ||
+            draft.customerLabels.some((label) => label.trim()));
+        if (!hasInput) {
+            clearCreateDraft();
+            return;
+        }
+
+        try {
+            localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+        } catch {
+            // 保存できなくても現在の画面内入力はそのまま利用する。
+        }
+    };
+
+    const syncPendingCommandControls = () => {
+        const locked = pendingCreateCommand !== null;
+        createSlipForm?.querySelectorAll(
+            'input:not([type="hidden"]), select, textarea, [data-business-slip-table-id], [data-business-open-cast-modal]'
+        ).forEach((control) => {
+            control.disabled = locked;
+        });
+        decreaseCustomerCountButton && (decreaseCustomerCountButton.disabled = locked || getCustomerRows().length <= 1);
+        increaseCustomerCountButton && (increaseCustomerCountButton.disabled = locked || getCustomerRows().length >= 20);
+        decreaseNominationCountButton && (decreaseNominationCountButton.disabled = locked || getNominationRows().length === 0);
+        if (!locked) {
+            renumberNominationRows();
+        }
+        syncCreateAvailability();
+    };
+
+    const setPendingCreateCommand = (command) => {
+        pendingCreateCommand = command;
+        syncPendingCommandControls();
+        persistCreateDraft();
+    };
+
+    const restoreCreateDraft = () => {
+        const draft = readCreateDraft();
+        if (!draft || !createSlipForm) {
+            return;
+        }
+
+        isRestoringDraft = true;
+        try {
+            if (tableIdInput) {
+                tableIdInput.value = draft.tableId || '';
+            }
+            document.querySelectorAll('[data-business-slip-table-id]').forEach((button) => {
+                button.classList.toggle('is-selected', String(button.dataset.businessSlipTableId) === String(draft.tableId));
+            });
+
+            const openedTime = createSlipForm.querySelector('[name="CreateSlipInput.OpenedTime"]');
+            const businessDate = createSlipForm.querySelector('[data-business-create-date-input]');
+            const memo = createSlipForm.querySelector('[name="CreateSlipInput.Memo"]');
+            if (openedTime && draft.openedTime) openedTime.value = draft.openedTime;
+            if (businessDate && draft.businessDate) businessDate.value = draft.businessDate;
+            if (memo) memo.value = draft.memo || '';
+
+            const customerLabels = Array.isArray(draft.customerLabels) && draft.customerLabels.length > 0
+                ? draft.customerLabels.slice(0, 20)
+                : [''];
+            while (getCustomerRows().length < customerLabels.length) addCustomerRow(false);
+            while (getCustomerRows().length > customerLabels.length) getCustomerRows()[getCustomerRows().length - 1]?.remove();
+            Array.from(getCustomerRows()).forEach((row, index) => {
+                const input = row.querySelector('input');
+                if (input) input.value = customerLabels[index] || '';
+            });
+
+            nominationList?.querySelectorAll('[data-business-nomination-row]').forEach((row) => row.remove());
+            (Array.isArray(draft.nominations) ? draft.nominations.slice(0, 20) : []).forEach((nomination) => {
+                addNominationRow(true);
+                const row = getNominationRows()[getNominationRows().length - 1];
+                if (!row) return;
+                const kind = row.querySelector('.nomination-row__kind');
+                const price = row.querySelector('.nomination-row__price');
+                if (kind && nomination.nominationKind) kind.value = nomination.nominationKind;
+                if (price && nomination.nominationPrice) price.value = nomination.nominationPrice;
+                if (nomination.castId) {
+                    setSelectedCast(row, {
+                        id: nomination.castId,
+                        display: nomination.castName || `キャスト ${nomination.castId}`
+                    });
+                }
+            });
+            pendingCreateCommand = draft.pendingCreateCommand || null;
+        } finally {
+            isRestoringDraft = false;
+        }
+        renumberCustomerRows();
+        renumberNominationRows();
+        syncPendingCommandControls();
+    };
+
+    const resetCreateDraftForm = () => {
+        createSlipForm?.reset();
+        if (tableIdInput) tableIdInput.value = '';
+        document.querySelectorAll('[data-business-slip-table-id]').forEach((button) => button.classList.remove('is-selected'));
+        while (getCustomerRows().length > 1) getCustomerRows()[getCustomerRows().length - 1]?.remove();
+        nominationList?.querySelectorAll('[data-business-nomination-row]').forEach((row) => row.remove());
+        renumberCustomerRows();
+        renumberNominationRows();
+    };
+
     createSlipForm?.addEventListener('keydown', (event) => {
         const target = event.target;
         if (
@@ -342,29 +522,121 @@
 
         event.preventDefault();
     });
-    createSlipForm?.addEventListener('submit', (event) => {
-        if (!isExplicitCreateSlipSubmit) {
-            event.preventDefault();
-            return;
-        }
+    createSlipForm?.addEventListener('submit', (event) => event.preventDefault());
+    createSlipForm?.addEventListener('input', persistCreateDraft);
+    createSlipForm?.addEventListener('change', persistCreateDraft);
 
-        isExplicitCreateSlipSubmit = false;
-    });
-    createSlipSubmitButton?.addEventListener('click', () => {
+    const addBusinessDays = (dateText, days) => {
+        const date = new Date(`${dateText}T00:00:00+09:00`);
+        date.setUTCDate(date.getUTCDate() + days);
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(date);
+    };
+
+    const buildCreateCommand = () => {
+        const state = window.ProsperBusinessHomeState || {};
+        const tableId = Number(tableIdInput?.value || 0);
+        const openedTime = createSlipForm?.querySelector('[name="CreateSlipInput.OpenedTime"]')?.value || '';
+        const businessDate = createSlipForm?.querySelector('[data-business-create-date-input]')?.value || state.businessDate;
+        if (!tableId || !/^([01]\d|2[0-3]):[0-5]\d$/.test(openedTime) || !/^\d{4}-\d{2}-\d{2}$/.test(businessDate || '')) {
+            throw new Error('卓番と入店時刻を確認してください。');
+        }
+        const calendarDate = openedTime < '12:00' ? addBusinessDays(businessDate, 1) : businessDate;
+        const customerLabels = Array.from(createSlipForm.querySelectorAll('[data-business-customer-row] input'))
+            .map((input) => input.value.trim() || null);
+        const castNominations = Array.from(getNominationRows()).map((row) => ({
+            castId: Number(row.querySelector('[data-business-cast-id]')?.value || 0) || null,
+            nominationKind: row.querySelector('.nomination-row__kind')?.value || null,
+            nominationPrice: Number(row.querySelector('.nomination-row__price')?.value || 0)
+        }));
+        return {
+            operationId: crypto.randomUUID(),
+            clientDraftId: crypto.randomUUID(),
+            slipId: null,
+            operationType: 'create_slip',
+            businessDate,
+            payload: {
+                table_id: tableId,
+                opened_at: new Date(`${calendarDate}T${openedTime}:00+09:00`).toISOString(),
+                customer_labels: customerLabels,
+                cast_nominations: castNominations.map((nomination) => ({
+                    cast_id: nomination.castId,
+                    nomination_kind: nomination.nominationKind,
+                    nomination_price: nomination.nominationPrice
+                })),
+                memo: createSlipForm.querySelector('[name="CreateSlipInput.Memo"]')?.value?.trim() || null
+            }
+        };
+    };
+
+    const showCreateError = (message) => {
+        const summary = createSlipForm?.querySelector('[data-valmsg-summary="true"], .validation-summary-valid, .validation-summary-errors');
+        if (!summary) return;
+        summary.classList.remove('validation-summary-valid');
+        summary.classList.add('validation-summary-errors');
+        summary.replaceChildren(Object.assign(document.createElement('div'), { textContent: message }));
+    };
+
+    createSlipSubmitButton?.addEventListener('click', async () => {
         if (!createSlipForm) {
             return;
         }
-
-        isExplicitCreateSlipSubmit = true;
-        createSlipForm.requestSubmit();
-        window.queueMicrotask(() => {
-            isExplicitCreateSlipSubmit = false;
-        });
+        try {
+            if (!pendingCreateCommand) {
+                setPendingCreateCommand(buildCreateCommand());
+            }
+            isSubmitting = true;
+            syncCreateAvailability();
+            const result = await window.ProsperBusinessHome?.enqueueAndFlushOperation?.(pendingCreateCommand);
+            if (result?.status !== 'confirmed' || result?.operationResult?.succeeded !== true) {
+                const failedOperation = result?.operationResult ||
+                    result?.operationResults?.find?.((row) => row?.succeeded === false);
+                const definitive = saveResponse?.isRejectedStatus(result?.status) ||
+                    saveResponse?.isRejectedStatus(failedOperation?.status);
+                if (definitive) {
+                    window.ProsperBusinessHome?.discardOperation?.(pendingCreateCommand.operationId);
+                    setPendingCreateCommand(null);
+                }
+                throw new Error(
+                    result?.operationResult?.message ||
+                    result?.operationResults?.find?.((row) => row?.succeeded === false)?.message ||
+                    result?.message ||
+                    '伝票を作成できませんでした。');
+            }
+            setPendingCreateCommand(null);
+            clearCreateDraft();
+            createSlipModal.hide();
+            resetCreateDraftForm();
+        } catch (error) {
+            showCreateError(error?.message || '伝票を作成できませんでした。');
+        } finally {
+            isSubmitting = false;
+            syncCreateAvailability();
+        }
     });
 
     renumberCustomerRows();
     renumberNominationRows();
     nominationList?.querySelectorAll('[data-business-nomination-row]').forEach(wireNominationRow);
+    restoreCreateDraft();
+    document.addEventListener('prosper:business-home-flush-completed', (event) => {
+        const completedCreate = event.detail?.operations?.find((operation) =>
+            operation?.operationType === 'create_slip' &&
+            String(operation.operationId) === String(pendingCreateCommand?.operationId));
+        const confirmed = event.detail?.operationResults?.some((result) =>
+            result?.succeeded === true &&
+            String(result.operation_id) === String(completedCreate?.operationId));
+        if (!completedCreate || !confirmed) {
+            return;
+        }
+
+        pendingCreateCommand = null;
+        clearCreateDraft();
+        resetCreateDraftForm();
+        syncPendingCommandControls();
+        createSlipModal.hide();
+    });
     castModalElement?.addEventListener('hidden.bs.modal', () => {
         castModalTargetRow = null;
     });

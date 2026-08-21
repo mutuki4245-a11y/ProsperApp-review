@@ -1,0 +1,26 @@
+@page
+@model ManagementStaffsModel
+@{
+    ViewData["Title"] = "スタッフ情報";
+}
+
+<section class="opening-page">
+    <div class="page-section-heading">
+        <h1>スタッフ情報</h1>
+    </div>
+
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+        <div class="text-muted small" data-management-status role="status">管理マスタを確認しています。</div>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-management-refresh>再取得</button>
+    </div>
+
+    @Html.AntiForgeryToken()
+    <div data-management-editor aria-busy="true"></div>
+</section>
+
+@section Scripts {
+    <script>
+        window.ProsperManagementEditorConfig = { area: 'staffs', allowAdminActions: true };
+    </script>
+    <script src="~/js/features/management-editor.js" asp-append-version="true"></script>
+}
