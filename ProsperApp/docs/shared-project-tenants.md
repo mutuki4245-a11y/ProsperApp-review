@@ -7,7 +7,7 @@
 |---|---|---|---|
 | `public` / `store` / `accounting` | ProsperApp | ProsperApp | `Sql/` |
 | `nightqueen_gp` | NightQueenGP | NightQueenGP | 同リポジトリの `supabase/schema.sql` |
-| `cast_race` | CastRaceApp | **無し** | `Sql/tenants/` |
+| `cast_race` | CastRaceApp | CastRaceApp | 同リポジトリの `supabase/schema.sql` |
 
 `Sql/apply_all.sh` はProsperAppのスキーマだけを扱います。同居分は対象外です。
 
@@ -36,18 +36,15 @@ RLSポリシーが1件もなく、anonキーでは何も読めませんでした
 ProsperAppのテーブルは従来どおりanonから到達できません
 （`Sql/store_rpc/99_grants.sql` と各テーブルのRLS）。
 
-## CastRaceAppの定義がここにある理由
+## 同居分の定義はこのリポジトリにありません
 
-CastRaceAppにはリポジトリがありません。`Sql/tenants/` の2ファイルを消すと、
-`cast_race` スキーマの正本が本番DBの中だけになります。ProsperAppのSQLでは
-ありませんが、失わないためにここへ置いています。
-
-NightQueenGPは自分のリポジトリに `supabase/schema.sql` を持っており、
-冒頭に「共有プロジェクトで実行する」前提が明記されています。そちらが正本です。
+2つとも、それぞれのリポジトリの `supabase/schema.sql` が正本です。どちらも
+冒頭に共有プロジェクト前提であることが書いてあります。ProsperApp側に複製は
+置きません。二重管理になり、いずれ食い違うためです。
 
 ## 移管時に何をしたか
 
-1. `Sql/tenants/` と NightQueenGP の `supabase/schema.sql` を本番へ適用
+1. 各リポジトリの `supabase/schema.sql` を本番へ適用
 2. 旧プロジェクトのPostgREST経由でデータを取得し、本番へupsert
    （一時的に `http` 拡張を入れ、完了後に `drop extension http` で撤去）
 3. 全9テーブルについて、件数と内容のハッシュが移管元と一致することを確認
